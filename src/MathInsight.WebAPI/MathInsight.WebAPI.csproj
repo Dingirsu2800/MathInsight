@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.2.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.2" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MathInsight.Shared\MathInsight.Shared.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Identity\MathInsight.Modules.Identity.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.QuestionBank\MathInsight.Modules.QuestionBank.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Testing\MathInsight.Modules.Testing.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Grading\MathInsight.Modules.Grading.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Recommender\MathInsight.Modules.Recommender.csproj" />
+  </ItemGroup>
+</Project>
