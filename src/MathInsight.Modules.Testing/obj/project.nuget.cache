@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "U2tAWU97dfg=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Testing\\MathInsight.Modules.Testing.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Admin\\.nuget\\packages\\masstransit\\8.2.0\\masstransit.8.2.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\masstransit.abstractions\\8.2.0\\masstransit.abstractions.8.2.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\mediatr\\12.2.0\\mediatr.12.2.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\mediatr.contracts\\2.0.1\\mediatr.contracts.2.0.1.nupkg.sha512"
+  ],
+  "logs": []
+}

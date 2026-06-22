@@ -1,6 +1,6 @@
 namespace MathInsight.Shared.Events;
 
-public record TestSubmittedEvent
+public record TestSubmittedEvent : MediatR.INotification
 {
     public Guid SessionId { get; init; }
     public Guid StudentId { get; init; }

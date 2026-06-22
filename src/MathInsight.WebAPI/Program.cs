@@ -1,8 +1,8 @@
 using MassTransit;
-using MathInsight.Modules.Identity;
-using MathInsight.Modules.Grading.Consumers;
+using MathInsight.Modules.Identity_Access;
+using MathInsight.Modules.Grading_Analytics.Consumers;
 using MathInsight.Modules.Recommender.Consumers;
-using MathInsight.Modules.Grading.Handlers;
+using MathInsight.Modules.Grading_Analytics.Handlers;
 
 var builder = WebApplication.CreateBuilder(args);
 

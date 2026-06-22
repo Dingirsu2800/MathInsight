@@ -2,7 +2,7 @@ using MediatR;
 using MassTransit;
 using MathInsight.Shared.Events;
 
-namespace MathInsight.Modules.Grading.Handlers;
+namespace MathInsight.Modules.Grading_Analytics.Handlers;
 
 /// <summary>
 /// Handles the TestSubmittedEvent synchronously in-memory (for Practice mode)

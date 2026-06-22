@@ -2,7 +2,7 @@ using MassTransit;
 using MediatR;
 using MathInsight.Shared.Events;
 
-namespace MathInsight.Modules.Grading.Consumers;
+namespace MathInsight.Modules.Grading_Analytics.Consumers;
 
 /// <summary>
 /// Consumes the TestSubmittedEvent asynchronously from RabbitMQ (for Exam mode)

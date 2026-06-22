@@ -1,0 +1,16 @@
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\bin\Debug\net8.0\MathInsight.Modules.Gamification.deps.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\bin\Debug\net8.0\MathInsight.Modules.Gamification.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\bin\Debug\net8.0\MathInsight.Modules.Gamification.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\bin\Debug\net8.0\MathInsight.Shared.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\bin\Debug\net8.0\MathInsight.Shared.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.csproj.AssemblyReference.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.AssemblyInfoInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.AssemblyInfo.cs
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.sourcelink.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsi.1B633DB0.Up2Date
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\refint\MathInsight.Modules.Gamification.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\MathInsight.Modules.Gamification.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Gamification\obj\Debug\net8.0\ref\MathInsight.Modules.Gamification.dll

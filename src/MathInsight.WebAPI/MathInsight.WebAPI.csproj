@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -11,10 +11,13 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MathInsight.Shared\MathInsight.Shared.csproj" />
-    <ProjectReference Include="..\MathInsight.Modules.Identity\MathInsight.Modules.Identity.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Identity_Access\MathInsight.Modules.Identity_Access.csproj" />
     <ProjectReference Include="..\MathInsight.Modules.QuestionBank\MathInsight.Modules.QuestionBank.csproj" />
     <ProjectReference Include="..\MathInsight.Modules.Testing\MathInsight.Modules.Testing.csproj" />
-    <ProjectReference Include="..\MathInsight.Modules.Grading\MathInsight.Modules.Grading.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Grading_Analytics\MathInsight.Modules.Grading_Analytics.csproj" />
     <ProjectReference Include="..\MathInsight.Modules.Recommender\MathInsight.Modules.Recommender.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Gamification\MathInsight.Modules.Gamification.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Learning_Lecture\MathInsight.Modules.Learning_Lecture.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.Notification_Report\MathInsight.Modules.Notification_Report.csproj" />
   </ItemGroup>
 </Project>

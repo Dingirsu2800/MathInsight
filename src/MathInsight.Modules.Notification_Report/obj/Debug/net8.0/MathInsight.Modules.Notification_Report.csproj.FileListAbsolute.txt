@@ -1,0 +1,16 @@
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\bin\Debug\net8.0\MathInsight.Modules.Notification_Report.deps.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\bin\Debug\net8.0\MathInsight.Modules.Notification_Report.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\bin\Debug\net8.0\MathInsight.Modules.Notification_Report.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\bin\Debug\net8.0\MathInsight.Shared.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\bin\Debug\net8.0\MathInsight.Shared.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.csproj.AssemblyReference.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.AssemblyInfoInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.AssemblyInfo.cs
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.sourcelink.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsi.826E9291.Up2Date
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\refint\MathInsight.Modules.Notification_Report.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\MathInsight.Modules.Notification_Report.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Notification_Report\obj\Debug\net8.0\ref\MathInsight.Modules.Notification_Report.dll

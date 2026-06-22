@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 
-namespace MathInsight.Modules.Identity;
+namespace MathInsight.Modules.Identity_Access;
 
 public static class IdentityModuleExtensions
 {

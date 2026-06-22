@@ -1,0 +1,16 @@
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.csproj.AssemblyReference.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.AssemblyInfoInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.AssemblyInfo.cs
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.sourcelink.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\bin\Debug\net8.0\MathInsight.Modules.Grading_Analytics.deps.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\bin\Debug\net8.0\MathInsight.Modules.Grading_Analytics.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\bin\Debug\net8.0\MathInsight.Modules.Grading_Analytics.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\bin\Debug\net8.0\MathInsight.Shared.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\bin\Debug\net8.0\MathInsight.Shared.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsi.B686E2AA.Up2Date
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\refint\MathInsight.Modules.Grading_Analytics.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\MathInsight.Modules.Grading_Analytics.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.Grading_Analytics\obj\Debug\net8.0\ref\MathInsight.Modules.Grading_Analytics.dll
