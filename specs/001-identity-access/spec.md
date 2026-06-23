@@ -49,12 +49,12 @@
 ### Key Entities *(include if feature involves data)*
 
 - **Account**:  account_id, username, password_hash, email, first_name, last_name, phone_number, date_of_birth, avatar_url, role_id, is_active, created_time
-- **Expert**:  expert_id (FK -> Account)
+- **Expert**:  expert_id (FK -> Account), specialty
 - **Student**:  student_id (FK -> Account), gender, school, current_grade
-- **Teacher**:  teacher_id (FK -> Account), school, current_grade
-- **TeacherApplication**:  application_id, teacher_id, cv_file_path, status (PENDING, APPROVED, REJECTED), rejection_reason, created_time
+- **Teacher**:  teacher_id (FK -> Account), biography, is_verified
+- **TeacherApplication**:  application_id, teacher_id (FK), documents_url, status (PENDING, APPROVED, REJECTED), review_comments, applied_time, reviewed_time, reviewed_by (FK)
 - **Role**:  role_id, role_name, description
-- **Permission**:  permission_id, permission_name, description
+- **Permission**:  permission_id, permission_key, description
 - **RolePermission**:  role_id (FK), permission_id (FK)
 
 ## Success Criteria *(mandatory)*

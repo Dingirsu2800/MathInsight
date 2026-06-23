@@ -35,11 +35,11 @@ src/MathInsight.Modules.QuestionBank/
 ### Database Layer
   - Table: `questions`
   - Table: `answers`
-  - Table: `questionversions`
-  - Table: `questionreports`
-  - Table: `tagtopics`
-  - Table: `tagdifficultys`
-  - Table: `questiontopics`
+  - Table: `question_versions`
+  - Table: `question_reports`
+  - Table: `tag_topics`
+  - Table: `tag_difficulties`
+  - Table: `question_topics`
 
 ### Service & API Gateway
 - Controllers:

@@ -33,7 +33,7 @@ src/MathInsight.Modules.Grading_Analytics/
 ## Proposed Changes
 
 ### Database Layer
-  - Table: `uses test_sessions, test_answers, test_answer_options tables from the testing module for processing grading results.s`
+  - Uses `test_sessions`, `test_answers`, `test_answer_options` tables from the Testing module for processing grading results.
 
 ### Service & API Gateway
 - Controllers:

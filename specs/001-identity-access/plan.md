@@ -37,10 +37,10 @@ src/MathInsight.Modules.Identity_Access/
   - Table: `experts`
   - Table: `students`
   - Table: `teachers`
-  - Table: `teacherapplications`
+  - Table: `teacher_applications`
   - Table: `roles`
   - Table: `permissions`
-  - Table: `rolepermissions`
+  - Table: `role_permissions`
 
 ### Service & API Gateway
 - Controllers:

@@ -34,11 +34,11 @@ src/MathInsight.Modules.Testing/
 
 ### Database Layer
   - Table: `tests`
-  - Table: `testquestions`
-  - Table: `testsessions`
-  - Table: `testanswers`
-  - Table: `testansweroptions`
-  - Table: `testincidentss`
+  - Table: `test_questions`
+  - Table: `test_sessions`
+  - Table: `test_answers`
+  - Table: `test_answer_options`
+  - Table: `test_incidents`
 
 ### Service & API Gateway
 - Controllers:

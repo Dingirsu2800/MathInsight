@@ -15,13 +15,11 @@
 - **UC-55: View competency report**
 - **UC-56: View Individual Performance Analysis**
 - **UC-57: View Competency Heatmap**
-- **UC-58: View Leader board**
+- **UC-58: View Leaderboard**
 - **UC-59: View exam history**
-- **UC-85: Receive Score Suggestions**
-- **UC-89: Receive test result notification**
-- **UC-90: Receive progress notification**
-- **UC-91: Receive Streak Notification**
-- **UC-92: Receive system event notification**
+- **UC-88: Receive Score Suggestions**
+- **UC-89: Push System Notification**
+- **UC-90: Receive Discussion/Streak Notification**
 
 ### Edge Cases
 
@@ -38,7 +36,7 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Notification**:  notification_id, account_id (FK), title, content, type, status (UNREAD, READ), created_time
+- **Notification**:  notification_id, account_id (FK), title, content, link, is_read, created_time
 
 ## Success Criteria *(mandatory)*
 

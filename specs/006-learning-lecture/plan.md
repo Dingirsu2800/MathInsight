@@ -35,9 +35,9 @@ src/MathInsight.Modules.Learning_Lecture/
 ### Database Layer
   - Table: `lectures`
   - Table: `materials`
-  - Table: `discussionquestions`
-  - Table: `discussionanswers`
-  - Table: `discussionreports`
+  - Table: `discussion_questions`
+  - Table: `discussion_answers`
+  - Table: `discussion_reports`
 
 ### Service & API Gateway
 - Controllers:

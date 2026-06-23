@@ -54,13 +54,13 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Question**:  question_id, creator_id, question_content, explanation, question_type, grade, difficulty_id, is_active, status, created_time
+- **Question**:  question_id, question_content, picture_url, difficulty_id (FK), grade, status (PENDING, APPROVED, REJECTED), question_type, expert_id (FK), default_point, is_active
 - **Answer**:  answer_id, question_id (FK), answer_content, is_correct
-- **QuestionVersion**:  version_id, question_id (FK), content_snapshot, author_id, updated_time
-- **QuestionReport**:  report_id, question_id (FK), reporter_id, reporter_role, reason, status (PENDING, RESOLVED, DISMISSED), created_time
-- **TagTopic**:  topic_id, topic_name, parent_topic_id, grade
-- **TagDifficulty**:  difficulty_id, difficulty_level, name
-- **QuestionTopic**:  question_id (FK), topic_id (FK)
+- **QuestionVersion**:  version_id, question_id (FK), question_content, question_answer, answers_snapshot, picture_url, created_time, expert_id (FK)
+- **QuestionReport**:  report_id, question_id (FK), reporter_account_id (FK), reporter_role, report_reason, status (PENDING, RESOLVED, DISMISSED), created_time, resolved_time, resolved_by (FK)
+- **TagTopic**:  tag_id, parent_tag_id (FK), tag_name, description, grade, is_active, display_order
+- **TagDifficulty**:  difficulty_id, difficulty_name, description, level_value, display_order, is_active
+- **QuestionTopic**:  question_topic_id, question_id (FK), tag_id (FK), is_primary
 
 ## Success Criteria *(mandatory)*
 

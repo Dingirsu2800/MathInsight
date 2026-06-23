@@ -46,8 +46,8 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Blueprint**: blueprint_id (PK), creator_id (FK), name, total_questions, duration, grade, status (DRAFT, PENDING_REVIEW, APPROVED, REJECTED, ARCHIVED), approved_by (FK, Nullable), review_time (Nullable), review_note (Nullable), created_time
-- **BlueprintDetail**: detail_id (PK), blueprint_id (FK), topic_id (FK), difficulty_id (FK), percentage
+- **Blueprint**: blueprint_id (PK), blueprint_name, grade, total_questions, duration_minutes, expert_id (FK)
+- **BlueprintDetail**: blueprint_detail_id (PK), blueprint_id (FK), tag_id (FK), difficulty_id (FK), quantity
 
 ## Success Criteria *(mandatory)*
 

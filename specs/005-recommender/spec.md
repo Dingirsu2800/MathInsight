@@ -36,8 +36,8 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **CompetencyPoint**:  competency_id, student_id (FK), topic_id, points (P_tag), grade, updated_time
-- **TagsMastery**:  mastery_id, student_id (FK), topic_id, mastery_status (NOT_LEARNED, LEARNING, MASTERED), updated_time
+- **CompetencyPoint**:  competency_id, student_id (FK), grade, point
+- **TagsMastery**:  tags_mastery_id, student_id (FK), tag_id (FK), difficulty_id (FK), mastery_status (NOT_LEARNED, LEARNING, MASTERED), number_done, num_correct, accuracy_rate, last_practiced_time
 
 ## Success Criteria *(mandatory)*
 

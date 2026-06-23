@@ -33,11 +33,11 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Test**:  test_id, blueprint_id (FK), test_name, duration, test_status, created_time
+- **Test**:  test_id, blueprint_id (FK), test_status (ACTIVE, ARCHIVED), test_name, test_code, duration_minutes, total_questions, created_time
 - **TestQuestion**:  test_id (FK), question_id (FK), question_order
-- **TestSession**:  session_id, test_id (FK), student_id, test_format (PRACTICE, EXAM), status (IN_PROGRESS, COMPLETED, ABANDONED), start_time, end_time, total_question, num_correct, num_incorrect, num_abandoned, score
-- **TestAnswer**:  test_answer_id, session_id (FK), question_id (FK), is_answered, submitted_time
-- **TestAnswerOption**:  test_answer_id (FK), answer_id (FK) (Composite PK for unique selections)
+- **TestSession**:  session_id, test_id (FK), student_id (FK), test_format (PRACTICE, EXAM), status (IN_PROGRESS, SUBMITTED, FORCE_SUBMITTED, GRADED), duration, start_time, end_time, total_question, num_correct, num_incorrect, num_abandoned, score
+- **TestAnswer**:  test_answer_id, session_id (FK), question_id (FK), answer_id (FK, nullable), question_no, time_spent, first_choice_time, update_choice_time, short_answer_text, is_correct, points_earned
+- **TestAnswerOption**:  test_answer_id (FK), answer_id (FK)
 - **TestIncidents**:  incident_id, session_id (FK), type, time
 
 ## Success Criteria *(mandatory)*

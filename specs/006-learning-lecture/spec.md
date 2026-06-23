@@ -50,11 +50,11 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Lecture**:  lecture_id, teacher_id, title, content_url, description, status (DRAFT, PUBLISHED, ARCHIVED), created_time
-- **Material**:  material_id, teacher_id, material_name, file_url, status (ACTIVE, INACTIVE), created_time
-- **DiscussionQuestion**:  discussion_question_id, student_id, lecture_id, title, content, status (ACTIVE, REPORTED, HIDDEN, SOLVED), created_time
-- **DiscussionAnswer**:  discussion_answer_id, discussion_question_id (FK), user_id, content, status (ACTIVE, REPORTED, HIDDEN), created_time
-- **DiscussionReport**:  report_id, reporter_id, discussion_question_id (FK, nullable), discussion_answer_id (FK, nullable), reason, status (PENDING, RESOLVED, DISMISSED), created_time
+- **Lecture**:  lecture_id, title, content, video_url, thumbnail_url, teacher_id (FK), tag_id (FK), status (DRAFT, PUBLISHED, ARCHIVED), created_time, updated_time
+- **Material**:  material_id, material_name, file_url, file_type, teacher_id (FK), status (ACTIVE, INACTIVE), uploaded_time
+- **DiscussionQuestion**:  discussion_question_id, lecture_id (FK), student_id (FK), title, content, status (ACTIVE, REPORTED, HIDDEN, SOLVED), created_time, updated_time
+- **DiscussionAnswer**:  discussion_answer_id, discussion_question_id (FK), account_id (FK), content, created_time, status (ACTIVE, REPORTED, HIDDEN), updated_time
+- **DiscussionReport**:  report_id, discussion_question_id (FK, nullable), discussion_answer_id (FK, nullable), reporter_account_id (FK), report_reason, status (PENDING, RESOLVED, DISMISSED), created_time, resolved_time, resolver_account_id (FK, nullable)
 
 ## Success Criteria *(mandatory)*
 

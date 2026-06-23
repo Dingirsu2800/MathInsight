@@ -34,10 +34,10 @@ src/MathInsight.Modules.Gamification/
 
 ### Database Layer
   - Table: `badges`
-  - Table: `studentbadges`
-  - Table: `studystreaks`
-  - Table: `targetscores`
-  - Table: `activitylogs`
+  - Table: `student_badges`
+  - Table: `study_streaks`
+  - Table: `target_scores`
+  - Table: `activity_logs`
 
 ### Service & API Gateway
 - Controllers:

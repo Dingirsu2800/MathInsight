@@ -12,14 +12,15 @@
 
 ### Core Use Cases (Priority: P1)
 
-- **UC-80: View Study Streak**
-- **UC-81: Receive Streak Reminder**
+- **UC-80: Record learning activity**
+- **UC-81: View Study Streak**
 - **UC-82: View Badge List**
-- **UC-83: Track Badge Progress**
-- **UC-84: Achievement Badge Viewing**
-- **UC-86: Set Target Score**
-- **UC-87: Update Target**
-- **UC-88: View Target Progress**
+- **UC-83: Auto-Award Badge**
+- **UC-84: Track Badge Progress**
+- **UC-85: Set Target Score**
+- **UC-86: Update Target Score**
+- **UC-87: View Target Progress**
+- **UC-88: Receive Score Suggestions**
 
 ### Edge Cases
 
@@ -37,10 +38,10 @@
 ### Key Entities *(include if feature involves data)*
 
 - **Badge**:  badge_id, badge_name, description, icon_url, condition_type, condition_value, created_time
-- **StudentBadge**:  student_id (FK), badge_id (FK), unlock_time
+- **StudentBadge**:  student_id (FK), badge_id (FK), earned_time
 - **StudyStreak**:  streak_id, student_id (FK), current_streak, longest_streak, last_activity_date
-- **TargetScore**:  target_id, student_id (FK), topic_id, target_score, created_time
-- **ActivityLog**:  activity_log_id, student_id (FK), activity_type (PRACTICE, EXAM, VIEW_LECTURE, DOWNLOAD_MATERIAL), test_session_id (FK, nullable), lecture_id (FK, nullable), material_id (FK, nullable), duration_seconds, activity_date
+- **TargetScore**:  target_id, student_id (FK), tag_id (FK), target_point, created_time, updated_time
+- **ActivityLog**:  activity_log_id, student_id (FK), activity_type, test_session_id (FK, nullable), lecture_id (FK, nullable), material_id (FK, nullable), duration_seconds, activity_date
 
 ## Success Criteria *(mandatory)*
 
