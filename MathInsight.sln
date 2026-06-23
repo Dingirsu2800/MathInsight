@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.Learnin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.Notification_Report", "src\MathInsight.Modules.Notification_Report\MathInsight.Modules.Notification_Report.csproj", "{2111FB6C-5741-4532-A55E-9C633BF9D6C0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.TestGen", "src\MathInsight.Modules.TestGen\MathInsight.Modules.TestGen.csproj", "{7D297E22-BAD2-48B9-BDF5-09D6F729D268}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -147,6 +149,18 @@ Global
 		{2111FB6C-5741-4532-A55E-9C633BF9D6C0}.Release|x64.Build.0 = Release|Any CPU
 		{2111FB6C-5741-4532-A55E-9C633BF9D6C0}.Release|x86.ActiveCfg = Release|Any CPU
 		{2111FB6C-5741-4532-A55E-9C633BF9D6C0}.Release|x86.Build.0 = Release|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Debug|x64.Build.0 = Debug|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Debug|x86.Build.0 = Debug|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Release|x64.ActiveCfg = Release|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Release|x64.Build.0 = Release|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Release|x86.ActiveCfg = Release|Any CPU
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -157,5 +171,6 @@ Global
 		{E47F642B-6C0A-4B70-A48B-11E0B8F9DD4A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{79DB2AD5-97A8-473D-8CEB-D2C824ADFB3C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{2111FB6C-5741-4532-A55E-9C633BF9D6C0} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{7D297E22-BAD2-48B9-BDF5-09D6F729D268} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -1,5 +1,13 @@
 using MassTransit;
 using MathInsight.Modules.Identity_Access;
+using MathInsight.Modules.QuestionBank;
+using MathInsight.Modules.Testing;
+using MathInsight.Modules.TestGen;
+using MathInsight.Modules.Grading_Analytics;
+using MathInsight.Modules.Recommender;
+using MathInsight.Modules.Learning_Lecture;
+using MathInsight.Modules.Gamification;
+using MathInsight.Modules.Notification_Report;
 using MathInsight.Modules.Grading_Analytics.Consumers;
 using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
@@ -36,10 +44,14 @@ builder.Services.AddSignalR();
 
 // 4. Register Domain Modules (Composition Root)
 builder.Services.AddIdentityModule(builder.Configuration);
-// builder.Services.AddQuestionBankModule(builder.Configuration);
-// builder.Services.AddTestingModule(builder.Configuration);
-// builder.Services.AddGradingModule(builder.Configuration);
-// builder.Services.AddRecommenderModule(builder.Configuration);
+builder.Services.AddQuestionBankModule(builder.Configuration);
+builder.Services.AddTestingModule(builder.Configuration);
+builder.Services.AddTestGenModule(builder.Configuration);
+builder.Services.AddGradingModule(builder.Configuration);
+builder.Services.AddRecommenderModule(builder.Configuration);
+builder.Services.AddLearningModule(builder.Configuration);
+builder.Services.AddGamificationModule(builder.Configuration);
+builder.Services.AddNotificationModule(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

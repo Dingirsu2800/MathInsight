@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MathInsight.Modules.Recommender")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bd4ee889355d2dd3f1da4211527beb8dc76863ca")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b9ca90fc81d11d95a3a280a3b7ce1a402d911f43")]
 [assembly: System.Reflection.AssemblyProductAttribute("MathInsight.Modules.Recommender")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MathInsight.Modules.Recommender")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

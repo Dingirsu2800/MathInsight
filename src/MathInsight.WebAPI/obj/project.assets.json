@@ -815,6 +815,22 @@
           "bin/placeholder/MathInsight.Modules.Recommender.dll": {}
         }
       },
+      "MathInsight.Modules.TestGen/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "MathInsight.Shared": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/MathInsight.Modules.TestGen.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/MathInsight.Modules.TestGen.dll": {}
+        },
+        "frameworkReferences": [
+          "Microsoft.AspNetCore.App"
+        ]
+      },
       "MathInsight.Modules.Testing/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v10.0",
@@ -1882,6 +1898,11 @@
       "path": "../MathInsight.Modules.Recommender/MathInsight.Modules.Recommender.csproj",
       "msbuildProject": "../MathInsight.Modules.Recommender/MathInsight.Modules.Recommender.csproj"
     },
+    "MathInsight.Modules.TestGen/1.0.0": {
+      "type": "project",
+      "path": "../MathInsight.Modules.TestGen/MathInsight.Modules.TestGen.csproj",
+      "msbuildProject": "../MathInsight.Modules.TestGen/MathInsight.Modules.TestGen.csproj"
+    },
     "MathInsight.Modules.Testing/1.0.0": {
       "type": "project",
       "path": "../MathInsight.Modules.Testing/MathInsight.Modules.Testing.csproj",
@@ -1904,6 +1925,7 @@
       "MathInsight.Modules.Notification_Report >= 1.0.0",
       "MathInsight.Modules.QuestionBank >= 1.0.0",
       "MathInsight.Modules.Recommender >= 1.0.0",
+      "MathInsight.Modules.TestGen >= 1.0.0",
       "MathInsight.Modules.Testing >= 1.0.0",
       "MathInsight.Shared >= 1.0.0",
       "Microsoft.EntityFrameworkCore.SqlServer >= 8.0.2"
@@ -1961,6 +1983,9 @@
             },
             "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Recommender\\MathInsight.Modules.Recommender.csproj": {
               "projectPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Recommender\\MathInsight.Modules.Recommender.csproj"
+            },
+            "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.TestGen\\MathInsight.Modules.TestGen.csproj": {
+              "projectPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.TestGen\\MathInsight.Modules.TestGen.csproj"
             },
             "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Testing\\MathInsight.Modules.Testing.csproj": {
               "projectPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Testing\\MathInsight.Modules.Testing.csproj"

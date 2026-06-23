@@ -19,5 +19,6 @@
     <ProjectReference Include="..\MathInsight.Modules.Gamification\MathInsight.Modules.Gamification.csproj" />
     <ProjectReference Include="..\MathInsight.Modules.Learning_Lecture\MathInsight.Modules.Learning_Lecture.csproj" />
     <ProjectReference Include="..\MathInsight.Modules.Notification_Report\MathInsight.Modules.Notification_Report.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.TestGen\MathInsight.Modules.TestGen.csproj" />
   </ItemGroup>
 </Project>

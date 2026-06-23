@@ -17,6 +17,7 @@
           "MathInsight.Modules.Notification_Report": "1.0.0",
           "MathInsight.Modules.QuestionBank": "1.0.0",
           "MathInsight.Modules.Recommender": "1.0.0",
+          "MathInsight.Modules.TestGen": "1.0.0",
           "MathInsight.Modules.Testing": "1.0.0",
           "MathInsight.Shared": "1.0.0",
           "Microsoft.EntityFrameworkCore.SqlServer": "8.0.2"
@@ -611,6 +612,17 @@
           }
         }
       },
+      "MathInsight.Modules.TestGen/1.0.0": {
+        "dependencies": {
+          "MathInsight.Shared": "1.0.0"
+        },
+        "runtime": {
+          "MathInsight.Modules.TestGen.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
       "MathInsight.Modules.Testing/1.0.0": {
         "dependencies": {
           "MathInsight.Shared": "1.0.0"
@@ -932,6 +944,11 @@
       "sha512": ""
     },
     "MathInsight.Modules.Recommender/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "MathInsight.Modules.TestGen/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

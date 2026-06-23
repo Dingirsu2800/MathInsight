@@ -1,0 +1,16 @@
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\bin\Debug\net10.0\MathInsight.Modules.TestGen.deps.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\bin\Debug\net10.0\MathInsight.Modules.TestGen.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\bin\Debug\net10.0\MathInsight.Modules.TestGen.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\bin\Debug\net10.0\MathInsight.Shared.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\bin\Debug\net10.0\MathInsight.Shared.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.csproj.AssemblyReference.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.AssemblyInfoInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.AssemblyInfo.cs
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.sourcelink.json
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsi.C6AAB02F.Up2Date
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\refint\MathInsight.Modules.TestGen.dll
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\MathInsight.Modules.TestGen.pdb
+C:\Users\Admin\Documents\CODIN\ASP.net\MathInsight\src\MathInsight.Modules.TestGen\obj\Debug\net10.0\ref\MathInsight.Modules.TestGen.dll

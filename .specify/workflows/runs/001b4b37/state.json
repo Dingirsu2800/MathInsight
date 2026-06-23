@@ -1,0 +1,34 @@
+{
+  "run_id": "001b4b37",
+  "workflow_id": "speckit",
+  "status": "failed",
+  "current_step_index": 0,
+  "current_step_id": "specify",
+  "step_results": {
+    "specify": {
+      "type": "command",
+      "integration": "gemini",
+      "model": null,
+      "options": {},
+      "input": {
+        "args": "MathInsight"
+      },
+      "output": {
+        "command": "speckit.specify",
+        "integration": "gemini",
+        "model": null,
+        "options": {},
+        "input": {
+          "args": "MathInsight"
+        },
+        "exit_code": 41,
+        "stdout": "",
+        "stderr": "",
+        "dispatched": true
+      },
+      "status": "failed"
+    }
+  },
+  "created_at": "2026-06-23T14:46:04.703088+00:00",
+  "updated_at": "2026-06-23T14:46:06.793830+00:00"
+}
