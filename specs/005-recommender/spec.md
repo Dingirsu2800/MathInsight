@@ -32,7 +32,7 @@
   - **Model Training**: A background scheduler trains the SAR model on co-occurrence similarities of user tags.
   - **Predictions & Recommendations**: Predicts affinity scores for untaken or low-mastery tags.
   - **WeakTag Diagnosis**: Tags with calculated mastery index under 5.0 (P_tag < 5.0) are classified as `WeakTags`.
-- **Dynamic Test Generator Loop**: Exposes internal endpoints/interfaces for the `TestGen` module. When generating a test, `TestGen` calls this loop to retrieve the user's `WeakTags` and adapt the question candidate pool by biasing question selection weights toward those diagnosed tags.
+- **Dynamic Test Generator Loop**: Exposes internal endpoints/interfaces for the `TestGen` module. Returns the student's `WeakTags` mapped to a recommended practice difficulty (e.g., if diagnosed weak at `GEO_Polyhedrons_Hard`, the API recommends practicing at `GEO_Polyhedrons_Medium` to avoid fatigue) as well as any high-mastery topics suggested for upscaling (e.g., if $P_{\text{tag}} \ge 8.0$ at `GEO_Polyhedrons_Medium`, the API suggests upscaling to `GEO_Polyhedrons_Hard` to challenge the student).
 
 ### Key Entities *(include if feature involves data)*
 

@@ -42,7 +42,11 @@
 - **BR-Blueprint-03**: Rejection requires a non-empty ReviewNote describing corrective actions.
 - **BR-07**: The sum of all topic percentages in a blueprint matrix must equal exactly 100%.
 - **BR-09**: Cloning creates a completely independent entity with a new UUID.
-- **Dynamic WeakTag Adjustment Loop**: When generating a test for a student, the selection engine queries the Recommender module for the student's `WeakTags`. It adapts the question candidate pool by biasing question selection (70% probability of selecting a question tagged with a `WeakTag` that satisfies the blueprint slot, fallback to general pool if insufficient questions).
+- **Dynamic WeakTag Adjustment Loop**: When generating a test for a student, the selection engine queries the Recommender module for the student's `WeakTags`. It adapts the question candidate pool by biasing question selection with anti-fatigue and challenge rules:
+  - **WeakTag Cap**: The selection engine limits the maximum number of WeakTag-biased questions to **20%** of the total questions in the generated test to prevent student fatigue.
+  - **Adaptive Bias Probability**: Reduces the selection bias probability of WeakTag questions from 70% to **40%** per matching blueprint slot.
+  - **Difficulty Downscaling**: If a student's diagnosed WeakTag is at a `Hard` difficulty level, the engine downscales the difficulty to selection of a `Medium` question for that topic to rebuild confidence, scaling back up to `Hard` only after they achieve an accuracy rate > 70% on that topic.
+  - **Difficulty Upscaling (Challenge Mode)**: If a student's competency score for a topic-difficulty is high ($P_{\text{tag}} \ge 8.0$ and status is `MASTERED`), the engine upscales the difficulty by selecting questions of one level higher (e.g., from `Medium` to `Hard`) to challenge the student.
 
 ### Key Entities *(include if feature involves data)*
 
