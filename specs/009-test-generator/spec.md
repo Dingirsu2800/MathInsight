@@ -47,6 +47,7 @@
   - **Adaptive Bias Probability**: Reduces the selection bias probability of WeakTag questions from 70% to **40%** per matching blueprint slot.
   - **Difficulty Downscaling**: If a student's diagnosed WeakTag is at a `Hard` difficulty level, the engine downscales the difficulty to selection of a `Medium` question for that topic to rebuild confidence, scaling back up to `Hard` only after they achieve an accuracy rate > 70% on that topic.
   - **Difficulty Upscaling (Challenge Mode)**: If a student's competency score for a topic-difficulty is high ($P_{\text{tag}} \ge 8.0$ and status is `MASTERED`), the engine upscales the difficulty by selecting questions of one level higher (e.g., from `Medium` to `Hard`) to challenge the student.
+  - **Easy-Level Protection (Remedial Learning)**: If a student fails at the `Easy` level ($P_{\text{tag}} < 5.0$ at `Easy`), further downscaling is blocked. The engine automatically reduces the bias probability of this topic to **10%** in subsequent tests to prevent frustration, while the system prioritizes directing the student to foundational lectures and reading materials first.
 
 ### Key Entities *(include if feature involves data)*
 
