@@ -25,8 +25,8 @@
 - **UC-28: Report Question (Student)**
 - **UC-29: Report question (Expert)**
 - **UC-30: Views reported questions**
-- **UC-31: Approve question**
-- **UC-32: Reject question**
+- **UC-31: Approve question (Admin report flow only)**
+- **UC-32: Reject question (Admin report flow only)**
 - **UC-33: Handle question's report**
 - **UC-34: View tag list**
 - **UC-35: Create Tag for Topic**
@@ -51,6 +51,12 @@
 - **BR-62: True/False questions must have exactly 2 options (True and False) with exactly 1 correct answer selected.**
 - **BR-52: Topic tags are cascading: selecting a parent tag automatically filters and displays only its subtopics.**
 - **BR-54: Changes to published questions must capture snapshots in QuestionVersion table for audit trails.**
+- **BR-55: Newly created Expert questions are published/approved by default and do not require a normal approval workflow.**
+- **BR-56: UC-31 and UC-32 apply only to the Admin report/rejection flow. If Admin rejects a question, the original Expert must handle the issue and Admin must review it again before it becomes visible as approved.**
+- **BR-57: Question status semantics are defined as follows: APPROVED means published/visible, REJECTED means Admin-rejected and hidden until handled, and PENDING means the original Expert has handled an Admin rejection and the question is waiting for Admin review. PENDING must not be used for normal Expert-created questions.**
+- **BR-58: When a Student reports a question, the system creates a QuestionReport record but must not hide, deactivate, or change the status of the Question.**
+- **BR-59: Teacher accounts are not allowed to report questions. Attempts by Teacher accounts to report a question must be rejected with an authorization error.**
+- **BR-60: When an Expert reports another Expert's question, the original Expert may handle and resolve the report. After resolution, the question is automatically visible again without requiring approval from other Experts.**
 
 ### Key Entities *(include if feature involves data)*
 

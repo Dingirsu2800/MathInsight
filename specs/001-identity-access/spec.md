@@ -45,6 +45,8 @@
 - **BR-02: A Student account is restricted from logging in on multiple devices simultaneously; a new login terminates the previous session.**
 - **BR-03: Account is locked for 15 minutes after 5 consecutive failed login attempts within 10 minutes.**
 - **Teacher self-registration is locked (PENDING status) until Admin explicitly approves/verifies their application with certificate credentials.**
+- **BR-04: Student and Expert accounts created through self-registration must confirm their email before they can log in or use the system. Unconfirmed self-registered accounts remain inactive until email confirmation succeeds.**
+- **BR-05: Email confirmation may be implemented using a confirmation link/token flow and does not require a dedicated OTP table in the database schema.**
 
 ### Key Entities *(include if feature involves data)*
 
