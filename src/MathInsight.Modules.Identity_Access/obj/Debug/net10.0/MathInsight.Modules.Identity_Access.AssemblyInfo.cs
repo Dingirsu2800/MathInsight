@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MathInsight.Modules.Identity_Access")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b9ca90fc81d11d95a3a280a3b7ce1a402d911f43")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ca9e11c28b7140651da7d20d12a278ba352689d5")]
 [assembly: System.Reflection.AssemblyProductAttribute("MathInsight.Modules.Identity_Access")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MathInsight.Modules.Identity_Access")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

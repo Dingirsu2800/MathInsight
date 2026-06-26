@@ -1,0 +1,45 @@
+# .NET build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Visual Studio / Rider / VS Code local state
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# Local AI assistant / IDE agent state
+.codex/
+.gemini/
+.claude/
+.cursor/
+.continue/
+.aider*
+
+# Frontend dependencies and build outputs
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# OS generated files
+.DS_Store
+Thumbs.db

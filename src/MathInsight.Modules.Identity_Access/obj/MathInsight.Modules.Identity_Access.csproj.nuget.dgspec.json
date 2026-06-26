@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj": {}
+    "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj": {
+    "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj",
+        "projectUniqueName": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj",
         "projectName": "MathInsight.Modules.Identity_Access",
-        "projectPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj",
-        "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\obj\\",
+        "projectPath": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\MathInsight.Modules.Identity_Access.csproj",
+        "packagesPath": "C:\\Users\\Lenovo\\.nuget\\packages\\",
+        "outputPath": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Modules.Identity_Access\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Admin\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\Lenovo\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -30,10 +30,11 @@
         },
         "frameworks": {
           "net10.0": {
+            "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj": {
-                "projectPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj"
+              "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj": {
+                "projectPath": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj"
               }
             }
           }
@@ -48,10 +49,11 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.100"
+        "SdkAnalysisLevel": "10.0.300"
       },
       "frameworks": {
         "net10.0": {
+          "framework": "net10.0",
           "targetAlias": "net10.0",
           "imports": [
             "net461",
@@ -69,7 +71,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.109/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",
@@ -347,20 +349,20 @@
         }
       }
     },
-    "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj": {
+    "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj",
+        "projectUniqueName": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj",
         "projectName": "MathInsight.Shared",
-        "projectPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj",
-        "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Admin\\Documents\\CODIN\\ASP.net\\MathInsight\\src\\MathInsight.Shared\\obj\\",
+        "projectPath": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Shared\\MathInsight.Shared.csproj",
+        "packagesPath": "C:\\Users\\Lenovo\\.nuget\\packages\\",
+        "outputPath": "E:\\Summer_2026\\SEP409\\Implementation\\MathInsight\\src\\MathInsight.Shared\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Admin\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\Lenovo\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -373,6 +375,7 @@
         },
         "frameworks": {
           "net10.0": {
+            "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {}
           }
@@ -387,10 +390,11 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.100"
+        "SdkAnalysisLevel": "10.0.300"
       },
       "frameworks": {
         "net10.0": {
+          "framework": "net10.0",
           "targetAlias": "net10.0",
           "dependencies": {
             "MassTransit": {
@@ -418,7 +422,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.109/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",

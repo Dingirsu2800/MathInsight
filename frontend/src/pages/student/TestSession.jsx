@@ -1,27 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../../services/api';
 
 export default function TestSession({ sessionId, testId }) {
   const [answers, setAnswers] = useState({});
   const [tabSwitches, setTabSwitches] = useState(0);
 
-  // Exam Security: detect tab switching to warn the student (SC-01 requirement)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setTabSwitches((prev) => {
-          const updated = prev + 1;
-          
-          // Log tab switch incident to backend via API Ingress
-          api.post(`/testing/sessions/${sessionId}/incidents`, {
-            incidentType: 'TabSwitch',
-            details: `Student switched tabs. Total incidents: ${updated}`
-          }).catch(err => console.error('Error logging incident', err));
-
-          alert(`CẢNH BÁO AN TOÀN THI CỬ: Bạn vừa chuyển tab màn hình! Đây là lần vi phạm thứ ${updated}. Sự việc đã được lưu trữ để giám khảo hậu kiểm.`);
-          return updated;
-        });
+      if (!document.hidden) {
+        return;
       }
+
+      setTabSwitches((previousCount) => {
+        const updatedCount = previousCount + 1;
+
+        api.post(`/testing/sessions/${sessionId}/incidents`, {
+          incidentType: 'TabSwitch',
+          details: `Student switched tabs. Total incidents: ${updatedCount}`,
+        }).catch((error) => {
+          console.error('Error logging incident', error);
+        });
+
+        alert(
+          `Cảnh báo an toàn thi cử: bạn vừa rời tab làm bài. Đây là lần vi phạm thứ ${updatedCount}.`
+        );
+
+        return updatedCount;
+      });
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -31,40 +36,54 @@ export default function TestSession({ sessionId, testId }) {
   }, [sessionId]);
 
   const handleSelectAnswer = (questionId, optionValue) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: optionValue
+    setAnswers((currentAnswers) => ({
+      ...currentAnswers,
+      [questionId]: optionValue,
     }));
   };
 
   const handleSubmit = async (format) => {
     try {
       const response = await api.post('/testing/submit', {
-        studentId: "3fa85f64-5717-4562-b3fc-2c963f66afa6", // Mock user id
-        testId: testId,
-        testFormat: format, // "Practice" or "Exam"
-        answers: answers
+        studentId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        testId,
+        testFormat: format,
+        answers,
       });
-      alert(`Bài làm đã được nộp thành công! Phản hồi từ Server: ${response.data.status}`);
-    } catch (error) {
-      alert('Nộp bài thi thất bại! Vui lòng thử lại.');
+
+      alert(`Bài làm đã được nộp. Trạng thái server: ${response.data.status}`);
+    } catch {
+      alert('Nộp bài thất bại. Kiểm tra backend API rồi thử lại.');
     }
   };
 
   return (
-    <div style={{ padding: '20px', color: '#f8fafc', background: '#0b0f19', minHeight: '100vh' }}>
-      <h2>Trình làm bài thi trực tuyến MathInsight</h2>
-      <div style={{ color: '#ef4444' }}>Số lần rời tab làm bài: {tabSwitches} / 10</div>
-      
-      {/* Sample Question UI */}
-      <div style={{ border: '1px solid #1e293b', padding: '15px', borderRadius: '8px', margin: '20px 0' }}>
-        <p>Câu hỏi 1: Tìm họ nghiệm của phương trình sin(x) = sin(alpha)?</p>
-        <button onClick={() => handleSelectAnswer('q1', 'a')}>A. x = alpha + k2pi hoặc x = pi - alpha + k2pi</button><br/>
-        <button onClick={() => handleSelectAnswer('q1', 'b')}>B. x = alpha + kpi hoặc x = -alpha + kpi</button>
-      </div>
+    <main className="page">
+      <p className="eyebrow">Testing</p>
+      <h1>Phiên làm bài MathInsight</h1>
+      <p className="danger">Số lần rời tab: {tabSwitches} / 10</p>
 
-      <button onClick={() => handleSubmit('Practice')} style={{ marginRight: '10px' }}>Nộp bài luyện tập (Chấm ngay)</button>
-      <button onClick={() => handleSubmit('Exam')}>Nộp bài thi học kỳ (Xếp hàng chấm ngầm)</button>
-    </div>
+      <section className="card panel">
+        <h2>Câu hỏi mẫu</h2>
+        <p>Tìm họ nghiệm của phương trình sin(x) = sin(α).</p>
+        <div className="button-row">
+          <button type="button" onClick={() => handleSelectAnswer('q1', 'a')}>
+            A. x = α + k2π hoặc x = π - α + k2π
+          </button>
+          <button type="button" onClick={() => handleSelectAnswer('q1', 'b')}>
+            B. x = α + kπ hoặc x = -α + kπ
+          </button>
+        </div>
+      </section>
+
+      <div className="button-row" style={{ marginTop: 16 }}>
+        <button type="button" onClick={() => handleSubmit('Practice')}>
+          Nộp bài luyện tập
+        </button>
+        <button type="button" className="button-secondary" onClick={() => handleSubmit('Exam')}>
+          Nộp bài thi
+        </button>
+      </div>
+    </main>
   );
 }
