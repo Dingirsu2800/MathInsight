@@ -1,41 +1,119 @@
 # Implementation Plan: Grading & Analytics Module
 
-**Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/004-grading-analytics/spec.md)
+**Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
+**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/004-grading-analytics/spec.md)
 
 ## Summary
 
-This plan outlines the architecture and tasks required to build the `MathInsight.Modules.Grading_Analytics` project component. It registers the module with YARP gateway proxy routing and registers dependency lifecycles with the application program composition root.
+Builds `MathInsight.Modules.Grading` — handles real-time (PRACTICE) and deferred (EXAM) auto-grading, solution display, and AI chatbot assistance. Consumes `TestSubmittedEvent` from Testing module; publishes `GradeCalculatedEvent` to Recommender module.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 10.0
-
-**Primary Dependencies**: MediatR, EF Core, MassTransit (RabbitMQ client)
-
-**Storage**: SQL Server (Schema: `grd`)
-
-**Testing**: xUnit / Integration tests
-
-**Target Platform**: Windows / Linux (Docker containerized)
-
-**Project Type**: Modular Monolith Web API
+| Property | Value |
+|----------|-------|
+| Language | C# / .NET 10.0 |
+| Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ), Polly |
+| Storage | SQL Server (cross-reads from `tst` schema — no owned tables) |
+| External | OpenAI / Claude API (chatbot, UC-51) |
+| Queue | `background_grading_queue` (RabbitMQ via MassTransit) |
+| Testing | xUnit / Integration tests |
+| Project Type | Modular Monolith Web API |
 
 ## Project Structure
 
 ```text
-src/MathInsight.Modules.Grading_Analytics/
-├── Controllers/         # API Endpoint controllers
-├── Services/            # Business services and interfaces
-├── Persistence/         # DB Contexts, entity configurations
-└── MathInsight.Modules.Grading_AnalyticsExtensions.cs
+src/MathInsight.Modules.Grading/
+├── Consumers/
+│   └── TestSubmittedConsumer.cs    # MassTransit: consumes from Testing module
+├── Handlers/
+│   ├── GradePracticeSessionHandler.cs   # Real-time grading (< 2.0s)
+│   └── GradeExamSessionHandler.cs       # Deferred grading (RabbitMQ consumer)
+├── Services/
+│   ├── IGradingEngine.cs               # Grading algorithm interface
+│   ├── GradingEngine.cs                # Per-question-type grading logic
+│   ├── IChatbotService.cs
+│   └── ChatbotService.cs               # OpenAI/Claude REST client
+├── Events/
+│   └── GradeCalculatedEvent.cs         # MediatR notification → Recommender module
+├── Controllers/
+│   └── GradingController.cs            # UC-51: chatbot endpoint
+└── GradingModuleExtensions.cs
 ```
 
 ## Proposed Changes
 
-### Database Layer
-  - Uses `test_sessions`, `test_answers`, `test_answer_options` tables from the Testing module for processing grading results.
+### No Owned Database Tables
 
-### Service & API Gateway
-- Controllers:
-    - POST /api/v1/grading/sessions/{id}
-    - POST /api/v1/chatbot/assist
+This module reads/writes cross-schema:
+- **Reads**: `tst.test_sessions`, `tst.test_answers`, `tst.test_answer_options`, `qnb.questions`, `qnb.answers`
+- **Writes**: `tst.test_sessions` (status, score, counts), `tst.test_answers` (is_correct, points_earned)
+
+All writes are executed within a **single transaction** (DC-05).
+
+### Service & API Gateway — REST Endpoints
+
+```
+POST   /api/v1/chatbot/assist            # UC-51: send question + student answer to AI
+```
+
+> Grading itself is **not a REST endpoint** — it is triggered by `TestSubmittedEvent` (MediatR in-process or MassTransit queue).
+
+### Integration & Domain Events
+
+| Event | Direction | Details |
+|-------|-----------|---------|
+| `TestSubmittedEvent` | **Consumed** from Testing (003) | Triggers grading pipeline |
+| `GradeCalculatedEvent` | **Published** to Recommender (005) | Contains `session_id`, `student_id`, per-tag correctness summary |
+| `GradeCalculatedEvent` | **Published** to Notification (008) | Triggers "test graded" push notification |
+
+### Grading Pipeline
+
+```
+TestSubmittedEvent received
+        │
+        ├── test_format == PRACTICE?
+        │       ├── YES → GradePracticeSessionHandler (synchronous, < 2.0s)
+        │       └── NO  → Push to background_grading_queue → GradeExamSessionHandler (< 60s)
+        │
+GradingEngine.Grade(session):
+  foreach TestAnswer in session:
+    ├── SINGLE_CHOICE / TRUE_FALSE: compare answer_id to correct answer
+    ├── MULTIPLE_SELECT: compare selected options (TestAnswerOption) to correct set
+    └── SHORT_ANSWER: case-insensitive compare short_answer_text
+  Calculate: score = SUM(points_earned) / total_questions × 10.0
+  Update in single transaction (DC-05):
+    ├── TestAnswer: is_correct, points_earned
+    └── TestSession: status=GRADED, score, num_correct, num_incorrect, num_abandoned
+        │
+Publish GradeCalculatedEvent (MediatR in-process):
+  → Recommender module: update TagsMastery (DC-05 atomicity)
+  → Notification module: send push notification
+```
+
+### Chatbot Integration (UC-51)
+
+```csharp
+// ChatbotService.AskAsync(questionContent, studentAnswer):
+// POST https://api.openai.com/v1/chat/completions
+// System prompt: "You are a math tutor. Explain the solution step-by-step using LaTeX."
+// User message: questionContent + studentAnswer
+// Returns: string explanation (not persisted)
+```
+
+- API key injected via `Chatbot:ApiKey` environment variable.
+- Timeout: 10 seconds (Polly circuit breaker after 3 failures).
+- Rate limiting: 1 request per student per session (enforced in service layer).
+
+## Verification Plan
+
+1. `dotnet build` — zero compile errors.
+2. Integration tests (xUnit):
+   - PRACTICE grading completes in < 2.0s for a 40-question test.
+   - EXAM grading pushed to queue; consumer processes within 60s.
+   - SINGLE_CHOICE: correct answer selected → `is_correct = true`, `points_earned = default_point`.
+   - MULTIPLE_SELECT: all correct + no incorrect → `is_correct = true`.
+   - MULTIPLE_SELECT: partial selection → `is_correct = false`.
+   - SHORT_ANSWER: case-insensitive match → `is_correct = true`.
+   - Unanswered: `is_correct = false`, `points_earned = 0.00`.
+   - DC-05: Grading failure mid-transaction → rollback (session stays `SUBMITTED`).
+   - UC-51: Chatbot returns explanation within 10s.

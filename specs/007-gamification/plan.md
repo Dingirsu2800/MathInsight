@@ -1,49 +1,138 @@
 # Implementation Plan: Gamification Module
 
-**Branch**: `007-gamification` | **Date**: 2026-06-23 | **Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/007-gamification/spec.md)
+**Branch**: `007-gamification` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
+**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/007-gamification/spec.md)
 
 ## Summary
 
-This plan outlines the architecture and tasks required to build the `MathInsight.Modules.Gamification` project component. It registers the module with YARP gateway proxy routing and registers dependency lifecycles with the application program composition root.
+Builds `MathInsight.Modules.Gamification` managing study streaks, badge awards, target scores, and insert-only activity logs. Consumes `ActivityLoggedEvent` (from Learning) and `TestSubmittedEvent` (from Testing) via MediatR.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 10.0
-
-**Primary Dependencies**: MediatR, EF Core, MassTransit (RabbitMQ client)
-
-**Storage**: SQL Server (Schema: `gam`)
-
-**Testing**: xUnit / Integration tests
-
-**Target Platform**: Windows / Linux (Docker containerized)
-
-**Project Type**: Modular Monolith Web API
+| Property | Value |
+|----------|-------|
+| Language | C# / .NET 10.0 |
+| Primary Dependencies | MediatR, EF Core, MassTransit |
+| Storage | SQL Server (Schema: `gam`) |
+| Scheduler | Hangfire (optional: daily streak reminder check) |
+| Testing | xUnit / Integration tests |
+| Project Type | Modular Monolith Web API |
 
 ## Project Structure
 
 ```text
 src/MathInsight.Modules.Gamification/
-├── Controllers/         # API Endpoint controllers
-├── Services/            # Business services and interfaces
-├── Persistence/         # DB Contexts, entity configurations
-└── MathInsight.Modules.GamificationExtensions.cs
+├── Consumers/
+│   ├── ActivityLoggedConsumer.cs    # MediatR: handle ActivityLoggedEvent → log + streak + badges
+│   └── TestSubmittedConsumer.cs     # MediatR: handle TestSubmittedEvent → log PRACTICE/EXAM activity
+├── Services/
+│   ├── IStreakService.cs
+│   ├── StreakService.cs             # Calculate, update, reset streak
+│   ├── IBadgeService.cs
+│   └── BadgeService.cs             # Check badge conditions, award StudentBadge
+├── Commands/
+│   ├── SetTargetScore/             # UC-85: create TargetScore record
+│   └── UpdateTargetScore/          # UC-86: update existing TargetScore
+├── Queries/
+│   ├── GetStreak/                  # UC-81: current_streak, longest_streak, last_activity_date
+│   ├── GetBadgeList/               # UC-82: all badges + StudentBadge earned status
+│   ├── GetBadgeProgress/           # UC-84: progress toward each unearned badge
+│   └── GetTargetProgress/          # UC-87: target_point vs current competency per tag
+├── Persistence/
+│   ├── GamificationDbContext.cs    # `gam` schema
+│   ├── Configurations/
+│   │   ├── BadgeConfiguration.cs
+│   │   ├── StudentBadgeConfiguration.cs   # Composite PK; immutable (no update/delete)
+│   │   ├── StudyStreakConfiguration.cs     # UNIQUE student_id (1:1)
+│   │   ├── TargetScoreConfiguration.cs    # UNIQUE (student_id, tag_id)
+│   │   └── ActivityLogConfiguration.cs    # Insert-only; no PK for update/delete
+│   └── Migrations/
+├── Controllers/
+│   └── GamificationController.cs
+└── GamificationModuleExtensions.cs
 ```
 
 ## Proposed Changes
 
-### Database Layer
-  - Table: `badges`
-  - Table: `student_badges`
-  - Table: `study_streaks`
-  - Table: `target_scores`
-  - Table: `activity_logs`
+### Database Layer (Schema: `gam`)
 
-### Service & API Gateway
-- Controllers:
-    - GET /api/v1/gamification/streak
-    - GET /api/v1/gamification/badges
-    - GET /api/v1/gamification/badges/progress
-    - GET /api/v1/gamification/targets
-    - POST /api/v1/gamification/targets
-    - PUT /api/v1/gamification/targets/{id}
+| Table | Key Constraints |
+|-------|----------------|
+| `gam.badges` | UNIQUE `badge_name`; `condition_type` enum |
+| `gam.student_badges` | Composite PK `(student_id, badge_id)`; insert-only |
+| `gam.study_streaks` | UNIQUE `student_id` (1:1 per student) |
+| `gam.target_scores` | UNIQUE `(student_id, tag_id)`; CHECK `target_point` in [0, 10] |
+| `gam.activity_logs` | No update/delete; `activity_type` enum; indexed by `(student_id, activity_date)` |
+
+### Service & API Gateway — REST Endpoints
+
+**Student (StudentOnly policy)**
+```
+GET    /api/v1/gamification/streak           # UC-81: current + longest streak
+GET    /api/v1/gamification/badges           # UC-82: all badges (earned/locked)
+GET    /api/v1/gamification/badges/progress  # UC-84: % progress per locked badge
+POST   /api/v1/gamification/targets          # UC-85: set target (UNIQUE per tag)
+PUT    /api/v1/gamification/targets/{id}     # UC-86: update target_point
+GET    /api/v1/gamification/targets          # UC-87: target vs competency (cross-read rcm.competency_points)
+```
+
+### Integration & Domain Events (Consumed)
+
+| Event | Source | Action |
+|-------|--------|--------|
+| `ActivityLoggedEvent` (VIEW_LECTURE, DOWNLOAD_MATERIAL) | Learning (006) | Insert `ActivityLog`; update streak; check badges |
+| `TestSubmittedEvent` (PRACTICE/EXAM) | Testing (003) | Insert `ActivityLog`; update streak; check badges |
+
+### Streak Update Logic
+
+```csharp
+// StreakService.UpdateStreakAsync(studentId, activityDate, activityType, durationSeconds):
+// 1. Get or create StudyStreak for student
+// 2. Check if activity qualifies (BR-39):
+//    - PRACTICE or EXAM → qualifies
+//    - VIEW_LECTURE → qualifies only if duration_seconds >= 300 (5 min)
+//    - DOWNLOAD_MATERIAL → does NOT qualify
+// 3. If qualifies AND last_activity_date < today:
+//    - If last_activity_date == yesterday → current_streak++
+//    - If last_activity_date < yesterday → current_streak = 1 (reset, BR-41)
+//    - Update last_activity_date = today
+//    - If current_streak > longest_streak → update longest_streak (BR-42)
+// 4. If already logged today → skip (no double-count)
+```
+
+### Badge Check Logic
+
+```csharp
+// BadgeService.CheckAndAwardBadgesAsync(studentId):
+// Fetch all badges not yet earned by student
+// For each badge:
+//   if condition_type == TOTAL_CORRECT_ANSWERS:
+//     count = SELECT COUNT(*) FROM tst.test_answers WHERE student answers + is_correct=true
+//     if count >= condition_value → award
+//   if condition_type == STREAK_DAYS:
+//     if StudyStreak.current_streak >= condition_value → award
+//   if condition_type == TESTS_COMPLETED:
+//     count = SELECT COUNT(*) FROM tst.test_sessions WHERE student + status=GRADED
+//     if count >= condition_value → award
+// Insert StudentBadge if not exists; publish BadgeAwardedEvent → Notification
+```
+
+### Scheduled Jobs (Hangfire)
+
+| Job | Schedule | Purpose |
+|-----|----------|---------|
+| Streak Reminder Check | Daily `0 13 * * *` (20:00 VN time) | Send reminder to students without activity today (BR-45) |
+
+## Verification Plan
+
+1. `dotnet build` — zero compile errors.
+2. EF migration: `gam` schema tables created.
+3. Integration tests (xUnit):
+   - `ActivityLoggedEvent` → `ActivityLog` record inserted (insert-only, no update possible).
+   - UC-81: View streak → `current_streak = 3` after 3 consecutive days.
+   - Streak broken (gap 2 days) → `current_streak = 0`, `longest_streak` unchanged.
+   - UC-83: 100 correct answers → "Algebra Warrior" badge awarded; duplicate award blocked.
+   - UC-85: Set target for `tag_id` = Algebra → created.
+   - UC-85: Set second target for same `tag_id` → 409 (UNIQUE constraint).
+   - UC-86: Update target_point = 11 → 400 (DC-04).
+   - UC-87: Target progress shows correct vs `rcm.competency_points`.

@@ -2,51 +2,140 @@
 
 **Feature Branch**: `005-recommender`
 
-**Created**: 2026-06-23
+**Created**: 2026-06-23 | **Updated**: 2026-06-26 *(Dynamic Test Generator Loop added)*
 
 **Status**: Approved
 
-**Input**: User description: "Calculates student competency scores, performs weakness analysis based on tag mastery rules, and maps weak points to recommended lectures/materials."
+**Source Documents**: PRD §4 (FT-06), UCS UC-52–UC-54, TDS §2.2, §2.4 (Recommender layer)
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### Core Use Cases (Priority: P1)
 
-- **UC-52: View WeakTags**
-- **UC-53: View Recommended Lectures**
-- **UC-54: View Recommended Materials**
+| UC-ID | Name | Primary Actor | Trigger |
+|-------|------|---------------|---------|
+| UC-52 | View WeakTags | Student | Student views dashboard — queries current weak topics |
+| UC-53 | View Recommended Lectures | Student | Based on WeakTags → returns matching lectures |
+| UC-54 | View Recommended Materials | Student | Based on WeakTags → returns matching PDFs/materials |
+| — | Update Competency (internal) | System | `GradeCalculatedEvent` consumed from Grading module |
+| — | **Provide WeakTag Advice (internal)** | **TestGen module** | `IRecommenderService.GetStudentWeakTagAdviceAsync()` — supplies difficulty mapping + upscale suggestions |
 
 ### Edge Cases
 
-- Database integrity: Handled via soft deletes and transactional consistency checks.
-- Empty fields: Handled via DTO validation constraints on APIs (e.g. Model validation).
+- **No test history**: Student has no `TagsMastery` records → return empty WeakTags; recommend introductory lectures.
+- **All topics mastered**: No WeakTags (all `P_tag ≥ 5.0`) → return empty list; suggest challenge-level topics.
+- **Remedial Learning**: If `P_tag < 5.0` at `Easy` level → flag as `Remedial_Learning`; no further downscaling; representation in TestGen capped to **10%** bias; lecture/material recommendations switch to **high-priority foundational** mode (sorted first, tagged `priority: REMEDIAL`).
+- **SAR model not trained yet**: Fall back to rule-based WeakTag diagnosis from `TagsMastery` directly.
+- **Upscale suggestion with no harder difficulty available**: If student is already at the highest difficulty and `P_tag ≥ 8.0` → return `suggestUpscaleTo: null` with a `challengeMode: true` flag instead.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **DC-04: Competency points and mastery status must fall strictly within the range 0.0 to 10.0 (or 0% to 100%).**
-- **Competency updates are triggered immediately after test grading. Weak topics falling below the mastery threshold are flagged as WeakTags.**
-- **Collaborative Filtering Recommendation**: The recommender uses the SAR (Smart Adaptive Recommendation) algorithm from the `recommenders-team/recommenders` library:
-  - **Inputs**: User interaction matrices where rows represent `student_id`, columns represent `topic_tag_id`, and rating values are derived from correctness rates and attempt counts.
-  - **Model Training**: A background scheduler trains the SAR model on co-occurrence similarities of user tags.
-  - **Predictions & Recommendations**: Predicts affinity scores for untaken or low-mastery tags.
-  - **WeakTag Diagnosis**: Tags with calculated mastery index under 5.0 (P_tag < 5.0) are classified as `WeakTags`.
-- **Dynamic Test Generator Loop**: Exposes internal endpoints/interfaces for the `TestGen` module. Returns the student's `WeakTags` mapped to a recommended practice difficulty (e.g., if diagnosed weak at `GEO_Polyhedrons_Hard`, the API recommends practicing at `GEO_Polyhedrons_Medium` to avoid fatigue) as well as any high-mastery topics suggested for upscaling (e.g., if $P_{\text{tag}} \ge 8.0$ at `GEO_Polyhedrons_Medium`, the API suggests upscaling to `GEO_Polyhedrons_Hard` to challenge the student). If a WeakTag is already at the `Easy` level, the API flags it as a critical learning gap (`Remedial_Learning`), which halts further difficulty downgrading, limits its representation in test generation to prevent frustration, and triggers high-priority recommendations for foundational video lectures and basic reading materials.
+- **DC-04**: Competency points and mastery scores must fall strictly within **0.0 – 10.0** (or 0%–100%). Out-of-bounds values trigger error logs.
+- **BR-23**: Competency updates are triggered **immediately** after test grading via `GradeCalculatedEvent`. Not batch-processed.
+- **BR-24**: A topic-difficulty combination is classified as **WeakTag** when `P_tag < 5.0` (mastery index below threshold).
+- **BR-25**: `TagsMastery.mastery_status` transitions:
+  - `NOT_LEARNED` → `LEARNING` when `number_done >= 1`
+  - `LEARNING` → `MASTERED` when `accuracy_rate >= 70%` AND `number_done >= 5`
+- **BR-26 (Remedial Learning)**: If a student's `P_tag < 5.0` at `Easy` difficulty, it is flagged `Remedial_Learning`. This:
+  - Halts further difficulty downgrading for that topic.
+  - Reduces the topic's representation bias in TestGen to **10%**.
+  - Triggers high-priority recommendations for foundational video lectures and basic materials.
+- **BR-27 (Difficulty Upscaling)**: If `P_tag ≥ 8.0` and `mastery_status = MASTERED`, suggest upscaling to next difficulty level (e.g., `GEO_Polyhedrons_Medium` → `GEO_Polyhedrons_Hard`). This suggestion is surfaced via the internal API (`suggestUpscaleTo`) and used by TestGen to optionally challenge the student.
+- **BR-28 (SAR Recommendation)**: The SAR (Smart Adaptive Recommendation) algorithm from `recommenders` library:
+  - **Inputs**: User interaction matrix — rows=`student_id`, columns=`topic_tag_id`, values=`accuracy_rate`.
+  - **Model Training**: Background scheduler (Hangfire, weekly) trains SAR on historical data.
+  - **Output**: Affinity scores for untaken/low-mastery tags.
+  - **Cache**: Recommendations stored in Redis per student (`rcm:weak-tags:{student_id}`).
+- **BR-29 (Dynamic Test Generator Loop — Internal API)**: The Recommender module exposes `IRecommenderService` as an **in-process DI interface** for the TestGen module (009). This interface provides two distinct outputs:
+  1. **`GetStudentWeakTagAdviceAsync(Guid studentId)`** — returns a `WeakTagAdviceDto` list, where each entry contains:
+     - `tagId`, `tagName` — the topic.
+     - `currentDifficultyId`, `currentDifficultyName` — the difficulty at which the weakness was diagnosed (e.g., `Hard`).
+     - `recommendedPracticeDifficultyId`, `recommendedPracticeDifficultyName` — the difficulty TestGen should use to select questions (e.g., if diagnosed weak at `Hard` → recommend practicing at `Medium`; if diagnosed weak at `Medium` → recommend `Easy`). This prevents student fatigue from repeated failure at a difficulty they are not yet ready for.
+     - `isRemedial` (bool) — `true` if the weakness is at `Easy` level. When `true`: no further difficulty downgrading is applied; TestGen limits this topic's selection bias to **10%** of total questions; the content recommendation engine treats this as a critical gap and returns foundational lectures/materials first.
+     - `suggestUpscaleTo` (nullable) — populated when `P_tag ≥ 8.0` AND `mastery_status = MASTERED`. Contains the next difficulty level (e.g., `Hard`). Used by TestGen to optionally include harder questions for challenge mode.
+     - `challengeMode` (bool) — `true` when `suggestUpscaleTo` is populated, signaling TestGen to bias toward the harder tier.
+  2. **`GetStudentWeakTagsAsync(Guid studentId)`** — lightweight version returning raw `WeakTagDto` list (tagId, isRemedial) for simple lookup.
+- **BR-30**: Lecture/Material recommendations are derived by matching WeakTag `tag_id` to `lrn.lectures.tag_id` and material tags. When `isRemedial = true`, the result set is sorted with `priority: REMEDIAL` items first, ensuring foundational videos and reading materials appear at the top of UC-53 and UC-54 responses.
 
 ### Key Entities *(include if feature involves data)*
 
-- **CompetencyPoint**:  competency_id, student_id (FK), grade, point
-- **TagsMastery**:  tags_mastery_id, student_id (FK), tag_id (FK), difficulty_id (FK), mastery_status (NOT_LEARNED, LEARNING, MASTERED), number_done, num_correct, accuracy_rate, last_practiced_time
+- **CompetencyPoint**: `competency_id`, `student_id` (FK), `grade` (10/11/12), `point` (DECIMAL 5,2, range 0.00–10.00) — composite UNIQUE `(student_id, grade)`
+- **TagsMastery**: `tags_mastery_id`, `student_id` (FK), `tag_id` (FK → tag_topics), `difficulty_id` (FK → tag_difficulties), `mastery_status` (**NOT_LEARNED** | **LEARNING** | **MASTERED**), `number_done`, `num_correct`, `accuracy_rate` (DECIMAL 5,2), `last_practiced_time` — composite UNIQUE `(student_id, tag_id, difficulty_id)`
+
+### Enums
+
+| Entity | Field | Allowed Values |
+|--------|-------|----------------|
+| TagsMastery | mastery_status | `NOT_LEARNED`, `LEARNING`, `MASTERED` |
+| CompetencyPoint | grade | `10`, `11`, `12` |
+
+### WeakTag Diagnosis & Difficulty Mapping Logic
+
+```
+P_tag = accuracy_rate (from TagsMastery)
+
+─── WeakTag Classification ───────────────────────────────────────
+if P_tag < 5.0 AND difficulty = Hard
+    → WeakTag: recommendedPracticeDifficulty = Medium
+      (student practices at Medium to rebuild confidence)
+
+if P_tag < 5.0 AND difficulty = Medium
+    → WeakTag: recommendedPracticeDifficulty = Easy
+      (student practices at Easy before retrying Medium)
+
+if P_tag < 5.0 AND difficulty = Easy
+    → Remedial_Learning (CRITICAL GAP):
+        isRemedial = true
+        recommendedPracticeDifficulty = Easy (no further downscale)
+        TestGen bias cap = 10% of total questions for this topic
+        ContentRecommendation priority = REMEDIAL (foundational first)
+
+─── Upscale Suggestion ───────────────────────────────────────────
+if P_tag >= 8.0 AND mastery_status = MASTERED AND difficulty = Easy
+    → suggestUpscaleTo = Medium, challengeMode = true
+
+if P_tag >= 8.0 AND mastery_status = MASTERED AND difficulty = Medium
+    → suggestUpscaleTo = Hard, challengeMode = true
+
+if P_tag >= 8.0 AND mastery_status = MASTERED AND difficulty = Hard
+    → suggestUpscaleTo = null, challengeMode = true
+      (already at max difficulty; signal challenge mode only)
+```
+
+### WeakTagAdviceDto Contract (returned by BR-29 internal API)
+
+```csharp
+public record WeakTagAdviceDto
+(
+    Guid   TagId,
+    string TagName,
+    Guid   CurrentDifficultyId,
+    string CurrentDifficultyName,
+    Guid?  RecommendedPracticeDifficultyId,   // null only when isRemedial already at Easy
+    string RecommendedPracticeDifficultyName,
+    bool   IsRemedial,                         // true → Easy-level critical gap
+    Guid?  SuggestUpscaleToId,                 // null if no upscale or not MASTERED
+    string SuggestUpscaleToDifficultyName,
+    bool   ChallengeMode                       // true when SuggestUpscaleToId is set
+);
+```
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- All core API endpoints must return successful response within 2 seconds (NFR-P01).
-- Schema isolation per module is enforced under the `rcm` namespace.
+- Competency update completes within **5 seconds** of `GradeCalculatedEvent` received.
+- WeakTag API returns within **2 seconds** (served from Redis cache on cache-hit).
+- SAR model training completes weekly without blocking API.
+- `P_tag` values always within 0.00–10.00 (DC-04).
+- Schema isolation enforced under `rcm` namespace.
 
 ## Assumptions
 
-- Target database is SQL Server.
-- MediatR event handling provides decoupled async integration.
+- Target database is SQL Server; schema prefix is `rcm`.
+- Redis available for WeakTag cache (`rcm:weak-tags:{student_id}`).
+- SAR model executed via Python script runner (or microservice) — C# module calls Python subprocess or HTTP endpoint.
+- Grading module (004) publishes `GradeCalculatedEvent`; this module consumes it.
+- Learning module (006) owns `lectures` and `materials` tables — Recommender reads cross-schema.
