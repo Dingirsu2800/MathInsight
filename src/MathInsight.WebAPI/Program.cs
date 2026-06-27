@@ -1,4 +1,8 @@
 using MassTransit;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using MathInsight.Modules.Identity_Access;
 using MathInsight.Modules.QuestionBank;
 using MathInsight.Modules.Testing;
@@ -85,10 +89,88 @@ builder.Services.AddNotificationModule(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+//5 .Jwt
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
+    ?? throw new InvalidOperationException("Jwt:SigningKey is not configured.");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSigningKey)),
+
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1),
+
+            NameClaimType = ClaimTypes.NameIdentifier,
+            RoleClaimType = ClaimTypes.Role
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                if (principal is null)
+                {
+                    context.Fail("Missing principal.");
+                    return;
+                }
+
+                var role = principal.FindFirst(ClaimTypes.Role)?.Value
+                    ?? principal.FindFirst("role")?.Value;
+
+                // BR-02 applies to Student accounts.
+                if (role != "Student")
+                {
+                    return;
+                }
+
+                var accountId = principal.FindFirst("account_id")?.Value;
+                if (string.IsNullOrWhiteSpace(accountId))
+                {
+                    context.Fail("Missing account_id claim.");
+                    return;
+                }
+
+                var authorizationHeader = context.Request.Headers.Authorization.ToString();
+                const string bearerPrefix = "Bearer ";
+
+                if (!authorizationHeader.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Fail("Missing bearer token.");
+                    return;
+                }
+
+                var accessToken = authorizationHeader[bearerPrefix.Length..].Trim();
+
+                var authSessionService = context.HttpContext.RequestServices
+                    .GetRequiredService<MathInsight.Modules.Identity_Access.Services.Auth.IAuthSessionService>();
+
+                var isActiveSession = await authSessionService.IsActiveSessionAsync(accountId, accessToken);
+                if (!isActiveSession)
+                {
+                    context.Fail("Session is no longer active.");
+                }
+            }
+        };
+    });
+
 var app = builder.Build();
 
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
