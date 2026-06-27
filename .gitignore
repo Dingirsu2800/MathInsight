@@ -12,7 +12,9 @@ obj/
 !.vscode/settings.example.json
 
 # Local AI assistant / IDE agent state
-.codex/
+.codex/*
+!.codex/
+!.codex/README.md
 .gemini/
 .claude/
 .cursor/
