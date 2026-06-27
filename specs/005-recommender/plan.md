@@ -1,6 +1,6 @@
 # Implementation Plan: Recommender Module
 
-**Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-06-26 *(Dynamic Test Generator Loop)*
+**Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-06-27 *(formula & SAR input corrected; Redis ordering fixed)*
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -59,6 +59,11 @@ src/MathInsight.Modules.Recommender/
 | `CompetencyPoint` | UNIQUE `(StudentID, Grade)`; `Point` range check |
 | `TagsMastery` | UNIQUE `(StudentID, TagID, DifficultyID)` |
 
+> **SAR Item ID format — Combo Tag**: SAR treats each `(TagTopic, TagDifficulty)` pair as a single item.
+> Item ID is constructed as `"{TopicCode}_{DifficultyCode}"`, e.g. `CALC_Integration_Hard`, `GEO_Polyhedrons_Medium`.
+> This allows SAR to learn cross-difficulty similarity: a student weak at `CALC_Integration_Hard` will
+> have high co-occurrence with `CALC_Integration_Medium`, naturally driving the difficulty downscale recommendation.
+
 ### Service & API Gateway — REST Endpoints
 
 **Student (StudentOnly policy)**
@@ -88,7 +93,9 @@ public interface IRecommenderService
 //   RecommendedPracticeDifficultyId  — difficulty to use for question selection in this topic
 //   IsRemedial                        — if true: cap topic to 10% of test; recommend foundational content
 //   SuggestUpscaleToId               — non-null when P_tag >= 8.0 AND MASTERED → use harder tier
-//   ChallengeMode                     — true when upscale is suggested
+//   ChallengeMode                     — true when student is ready to be challenged:
+//                                         • SuggestUpscaleToId is non-null (next tier available), OR
+//                                         • already at Hard + MASTERED (max tier; challengeMode still true)
 ```
 
 ### Integration & Domain Events
@@ -110,10 +117,13 @@ public interface IRecommenderService
 //      NOT_LEARNED → LEARNING if number_done >= 1
 //      LEARNING → MASTERED if accuracy_rate >= 70% AND number_done >= 5
 // 2. Recalculate CompetencyPoint.point for student's grade
-// 3. Classify WeakTags (BR-24): P_tag < 5.0 → add to WeakTag list
-// 4. Check Remedial Learning (BR-26): P_tag < 5.0 at Easy → flag isRemedial = true
-// 5. Apply Difficulty Mapping (BR-29 — Dynamic Loop):
-//    - For each WeakTag: compute recommendedPracticeDifficulty via DifficultyMappingService
+//    (average accuracy_rate across tags with number_done >= 1, normalized to 0–10)
+// 3. INVALIDATE Redis cache BEFORE writing new results:
+//    DEL rcm:weak-tags:{student_id}
+//    DEL rcm:weak-tag-advice:{student_id}
+// 4. Run DiagnoseWeakTags (BR-24, BR-26, BR-27, BR-29):
+//    - Compute P_tag via exponential decay formula (β=0.8, k≤5 sessions) for each (student, tag, difficulty)
+//    - Classify WeakTags (P_tag < 5.0) and apply Difficulty Mapping
 //      Hard   → Medium
 //      Medium → Easy
 //      Easy   → Easy (Remedial: isRemedial=true, cap 10%)
@@ -121,10 +131,9 @@ public interface IRecommenderService
 //      Easy   → suggestUpscaleTo = Medium, challengeMode = true
 //      Medium → suggestUpscaleTo = Hard,   challengeMode = true
 //      Hard   → suggestUpscaleTo = null,   challengeMode = true
-// 6. Invalidate Redis cache:
-//    DEL rcm:weak-tags:{student_id}
-//    DEL rcm:weak-tag-advice:{student_id}
-// 7. Publish CompetencyUpdatedEvent
+//    - Write WeakTagAdviceDto list to rcm:weak-tag-advice:{student_id} (TTL 1h)
+//    - Write WeakTagDto list to rcm:weak-tags:{student_id} (TTL 1h)
+// 5. Publish CompetencyUpdatedEvent
 ```
 
 ### Redis Cache Keys
@@ -142,10 +151,25 @@ Cache is invalidated on every `GradeCalculatedEvent` for that student (both `wea
 
 ```
 Weekly Hangfire job:
-1. Export interaction matrix from `TagsMastery` (`StudentID` × `TagID` × `AccuracyRate`)
-2. Call Python script: python sar_train.py --input interactions.csv --output model.pkl
-3. Run predictions for all active students
-4. Write recommendation scores to Redis; do not add new DB table unless explicitly approved.
+1. Export implicit interaction event log from `TagsMastery` + session history:
+   - Rows: (StudentID, ComboTagId, EventTimestamp, EventWeight)
+   - ComboTagId = "{TopicCode}_{DifficultyCode}" (e.g. "CALC_Integration_Hard")
+   - WeakTag-triggered interactions carry w_e = 2.0; normal interactions w_e = 1.0
+2. Compute per-student Affinity scores (UNBOUNDED — A(u,i) ≥ 0, may exceed 1.0):
+   A(u,i) = Σ(w_e * 2^(-Δt / T_half))  for all events of student u on combo-tag i
+   (T_half default = 30 days; configurable)
+   Note: A(u,i) is used for RANKING only — do not apply absolute thresholds.
+3. Compute Tag–Tag Jaccard similarity matrix (S ∈ [0.0, 1.0]):
+   S(j,i) = |U_j ∩ U_i| / |U_j ∪ U_i|
+4. Compute recommendation scores (UNBOUNDED — R(u,i) ≥ 0):
+   R(u,i) = Σ_j A(u,j) * S(j,i)
+   Note: R(u,i) used for ranking only; select Top-K by score.
+5. POST-FILTER: Keep only combo-tags where P_tag < 5.0 (WeakTag).
+   Discard MASTERED tags (P_tag ≥ 5.0) from recommendation output.
+   This prevents the system from recommending topics the student has already mastered.
+6. Call Python script: python sar_train.py --input event_log.csv --output model.pkl
+7. Update Redis key: sar:model:trained_at = NOW
+8. Write Top-K filtered recommendation scores to Redis per student; do not add new DB table unless explicitly approved.
 ```
 
 ## Verification Plan
@@ -163,7 +187,9 @@ Weekly Hangfire job:
    - `P_tag >= 8.0` at Hard + MASTERED → `suggestUpscaleTo = null`, `challengeMode = true`.
    - `GetStudentWeakTagAdviceAsync()` → correct `WeakTagAdviceDto` list returned.
    - Redis `rcm:weak-tag-advice:{student_id}` set; cache-hit on second call (< 100ms).
-   - Both cache keys invalidated on new `GradeCalculatedEvent`.
+   - Both cache keys DEL-ed **before** `DiagnoseWeakTags()` writes on new `GradeCalculatedEvent`.
    - UC-52: GET /weak-tags returns correct WeakTags list.
    - UC-53: Remedial topics return lectures with `priority: REMEDIAL` sorted first.
    - UC-53/54: Non-remedial lectures/materials matched to WeakTag `tag_id`.
+   - SAR post-filter: MASTERED combo-tags (P_tag >= 5.0) are **not** present in recommendation output.
+   - Combo-tag ID format: `"{TopicCode}_{DifficultyCode}"` consistently applied across event log and recommendations.

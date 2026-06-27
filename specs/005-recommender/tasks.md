@@ -1,6 +1,6 @@
 **Branch**: `005-recommender` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
-> **Updated**: 2026-06-26 — Added Dynamic Test Generator Loop tasks (BR-29)
+> **Updated**: 2026-06-27 — Formula & SAR input corrected; Redis ordering fixed; LEARNING zone added
 
 ---
 
@@ -27,14 +27,19 @@
       - If `accuracy_rate >= 70` AND `number_done >= 5` → `MASTERED`
     - Update `last_practiced_time = NOW`
   - [ ] `UpdateCompetencyPoint(studentId, grade)`:
-    - Calculate average accuracy across all tags for that grade
+    - Calculate average `accuracy_rate` across all tags for that grade **where `number_done >= 1`** (exclude NOT_LEARNED tags with 0 attempts)
     - Normalize to 0.00–10.00 range (DC-04)
     - Upsert `CompetencyPoint` record
 
 - [ ] **WeakTag Diagnosis + Difficulty Mapping** (BR-29 — Dynamic Test Generator Loop):
   - [ ] `DiagnoseWeakTags(studentId)` — runs after each `CompetencyEngine.UpdateTagsMastery()` call:
-    - Query all `TagsMastery` where `student_id = studentId` AND `accuracy_rate < 50.0` (P_tag < 5.0)
-    - For each record, call `DifficultyMappingService.MapRecommendedDifficulty(currentDifficultyLevel)` (BR-29):
+    - For each (tag, difficulty) combo: compute `P_tag` via **exponential decay formula** (β=0.8, k≤5 sessions):
+      ```
+      P_tag = Σ(β^(j-1) * T_j) / Σ(β^(j-1))  [j=1..k, T_j in 0–10, j=1 = most recent]
+      Cold-start (k=1): P_tag = T_1
+      ```
+    - Query all (tag, difficulty) combos with `P_tag < 5.0` (WeakTag threshold)
+    - For each WeakTag, call `DifficultyMappingService.MapRecommendedDifficulty(currentDifficultyLevel)` (BR-29):
       - `Hard` → return `Medium` as `recommendedPracticeDifficulty`
       - `Medium` → return `Easy` as `recommendedPracticeDifficulty`
       - `Easy` → set `isRemedial = true`; `recommendedPracticeDifficulty = Easy` (no further downscale)
@@ -42,17 +47,17 @@
       - `Easy` → `suggestUpscaleTo = Medium`, `challengeMode = true`
       - `Medium` → `suggestUpscaleTo = Hard`, `challengeMode = true`
       - `Hard` → `suggestUpscaleTo = null`, `challengeMode = true` (already at max)
-    - Assemble `WeakTagAdviceDto` per tag and write to Redis `rcm:weak-tag-advice:{student_id}` (TTL 1 hour)
-    - Also write simplified `WeakTagDto` to Redis `rcm:weak-tags:{student_id}` (TTL 1 hour)
+    - Assemble `WeakTagAdviceDto` per tag
+    - Assemble `WeakTagDto` per tag
 
 - [ ] **GradeCalculatedConsumer** (MediatR `INotificationHandler<GradeCalculatedEvent>`):
   - [ ] For each tag-difficulty in `GradeCalculatedEvent.TagResults`:
     - Call `CompetencyEngine.UpdateTagsMastery()`
   - [ ] Call `CompetencyEngine.UpdateCompetencyPoint()` for student's grade
-  - [ ] Call `DiagnoseWeakTags()` (includes difficulty mapping — writes both Redis keys)
-  - [ ] Invalidate **both** Redis cache keys:
+  - [ ] **INVALIDATE Redis cache keys FIRST** (before writing new results):
     - `DEL rcm:weak-tags:{student_id}`
     - `DEL rcm:weak-tag-advice:{student_id}`
+  - [ ] Call `DiagnoseWeakTags()` (computes P_tag, applies difficulty mapping, writes both Redis keys)
   - [ ] Publish `CompetencyUpdatedEvent`
 
 - [ ] **DifficultyMappingService** (`IDifficultyMappingService`) — NEW (BR-29):
@@ -74,16 +79,20 @@
 - [ ] **Recommendation Queries** — UPDATED:
   - [ ] `GetWeakTagsQuery` — UC-52: call `GetStudentWeakTagsAsync()` (simplified DTO for frontend)
   - [ ] `GetRecommendedLecturesQuery` — UC-53:
-    - Cross-read `Lecture` WHERE `TagID IN (weakTagIds)` AND `Status = 'Published'`
-    - **Priority sort**: if `isRemedial = true` for a tag → its lectures get `priority = REMEDIAL` and appear first in result list (BR-30)
-    - Non-remedial WeakTag lectures appear next; general recommendations last
+    - Cross-read `Lecture` WHERE `TagID IN (weakTagIds + learningTagIds)` AND `Status = 'Published'`
+    - **Three-tier priority sort** (BR-30):
+      1. `priority = REMEDIAL`: lectures for tags with `isRemedial = true` (sorted first)
+      2. `priority = WEAK`: lectures for non-remedial WeakTags (`P_tag < 5.0`, not Remedial)
+      3. `priority = NORMAL`: lectures for LEARNING-zone tags (`5.0 ≤ P_tag < 8.0`, `number_done >= 1`) — still shown to reinforce progress, sorted last
   - [ ] `GetRecommendedMaterialsQuery` — UC-54:
     - Cross-read `Material` via `LectureMaterial` junction
-    - Apply same `REMEDIAL` priority sort for materials matching Remedial tags
+    - Apply same three-tier `REMEDIAL → WEAK → NORMAL` priority sort
 
 - [ ] **SAR Model Integration** (optional for MVP, fallback to rule-based):
-  - [ ] `SarModelRunner.TrainAsync()` — Hangfire weekly job; calls Python script
+  - [ ] `SarModelRunner.TrainAsync()` — Hangfire weekly job; exports event log (StudentID, TagID, EventTimestamp, EventWeight) and calls Python script
   - [ ] Configure Hangfire recurring job: `0 2 * * 0` (weekly, 2AM Sunday)
+  - [ ] After training, update Redis key `sar:model:trained_at = NOW`
+  - [ ] Fallback trigger: if `model.pkl` missing OR `sar:model:trained_at` older than 8 days → use rule-based `DiagnoseWeakTags()` instead
 
 ---
 
@@ -111,16 +120,21 @@
 - [ ] Integration tests (xUnit):
   - [ ] UC-52: Student with 3 WeakTags → correct list returned
   - [ ] UC-52: Redis cache hit → response < 100ms
-  - [ ] UC-52: Both cache keys (`weak-tags` + `weak-tag-advice`) invalidated after new `GradeCalculatedEvent`
+  - [ ] UC-52: Both cache keys (`weak-tags` + `weak-tag-advice`) invalidated **before** `DiagnoseWeakTags()` writes on new `GradeCalculatedEvent`
   - [ ] `GetStudentWeakTagAdviceAsync()` → correct `WeakTagAdviceDto` with `recommendedPracticeDifficultyId`, `isRemedial`, `suggestUpscaleToId`
+  - [ ] P_tag formula: 5 sessions `[10,10,5,0,0]` with β=0.8 → P_tag ≈ 7.26 (weighted, not simple average)
+  - [ ] P_tag formula: Cold-start k=1, T=8.0 → P_tag = 8.0
   - [ ] P_tag < 5.0 at Hard → `recommendedPracticeDifficulty = Medium`
   - [ ] P_tag < 5.0 at Medium → `recommendedPracticeDifficulty = Easy`
   - [ ] P_tag < 5.0 at Easy → `isRemedial = true`, `recommendedPracticeDifficulty = Easy`
   - [ ] P_tag >= 8.0 at Medium + MASTERED → `suggestUpscaleTo = Hard`, `challengeMode = true`
   - [ ] P_tag >= 8.0 at Hard + MASTERED → `suggestUpscaleTo = null`, `challengeMode = true`
-  - [ ] UC-53: Remedial tag lectures returned with `priority: REMEDIAL` sorted first (BR-30)
-  - [ ] UC-53: Non-remedial lectures after Remedial in response
-  - [ ] UC-54: Materials for Remedial tags sorted to top
+  - [ ] UC-53: Remedial tag lectures returned first (`priority: REMEDIAL`) (BR-30)
+  - [ ] UC-53: Non-remedial WeakTag lectures returned second (`priority: WEAK`)
+  - [ ] UC-53: LEARNING-zone tag lectures returned last (`priority: NORMAL`)
+  - [ ] UC-54: Materials follow same three-tier sort (REMEDIAL → WEAK → NORMAL)
   - [ ] DC-04: `accuracy_rate` > 100 → error logged, clamped to 10.0
   - [ ] BR-25: After 5 correct answers → `MASTERED`
   - [ ] BR-25: 70% correct, 4 attempts → still `LEARNING` (need ≥ 5)
+  - [ ] CompetencyPoint: tags with `number_done = 0` (NOT_LEARNED) excluded from average
+  - [ ] SAR fallback: if `sar:model:trained_at` > 8 days old → rule-based `DiagnoseWeakTags()` used
