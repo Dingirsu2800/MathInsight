@@ -15,12 +15,15 @@ using MathInsight.Modules.Notification_Report;
 using MathInsight.Modules.Grading_Analytics.Consumers;
 using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
+using System.IdentityModel.Tokens.Jwt;
+using MathInsight.Modules.Identity_Access.Services.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 const string CorsPolicyName = "MathInsightCors";
 
 // 1. Add MediatR (In-process Event Bus)
-builder.Services.AddMediatR(cfg => {
+builder.Services.AddMediatR(cfg =>
+{
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
     cfg.RegisterServicesFromAssembly(typeof(TestSubmittedHandler).Assembly); // Registers Grading Handlers
 });
@@ -39,7 +42,8 @@ builder.Services.AddMassTransit(x =>
     {
         x.UsingRabbitMq((context, cfg) =>
         {
-            cfg.Host(builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost", "/", h => {
+            cfg.Host(builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost", "/", h =>
+            {
                 h.Username(builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest");
                 h.Password(builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest");
             });
@@ -129,8 +133,27 @@ builder.Services
                 var role = principal.FindFirst(ClaimTypes.Role)?.Value
                     ?? principal.FindFirst("role")?.Value;
 
+                var tokenId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
+                    ?? principal.FindFirst("jti")?.Value;
+
+                if (string.IsNullOrWhiteSpace(tokenId))
+                {
+                    context.Fail("Missing jti claim.");
+                    return;
+                }
+
+                var authSessionService = context.HttpContext.RequestServices
+                    .GetRequiredService<IAuthSessionService>();
+
+                var isBlacklisted = await authSessionService.IsTokenBlacklistedAsync(tokenId);
+                if (isBlacklisted)
+                {
+                    context.Fail("Token has been revoked.");
+                    return;
+                }
+
                 // BR-02 applies to Student accounts.
-                if (role != "Student")
+                if (!string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
@@ -142,21 +165,7 @@ builder.Services
                     return;
                 }
 
-                var authorizationHeader = context.Request.Headers.Authorization.ToString();
-                const string bearerPrefix = "Bearer ";
-
-                if (!authorizationHeader.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    context.Fail("Missing bearer token.");
-                    return;
-                }
-
-                var accessToken = authorizationHeader[bearerPrefix.Length..].Trim();
-
-                var authSessionService = context.HttpContext.RequestServices
-                    .GetRequiredService<MathInsight.Modules.Identity_Access.Services.Auth.IAuthSessionService>();
-
-                var isActiveSession = await authSessionService.IsActiveSessionAsync(accountId, accessToken);
+                var isActiveSession = await authSessionService.IsActiveSessionAsync(accountId, tokenId);
                 if (!isActiveSession)
                 {
                     context.Fail("Session is no longer active.");

@@ -16,7 +16,7 @@ public class TokenService : ITokenService
         _configuration = configuration;
     }
 
-    public string CreateAccessToken(Account account, out DateTime expiresAt)
+    public string CreateAccessToken(Account account, out DateTime expiresAt, out string tokenId)
     {
         var signingKey = _configuration["Jwt:SigningKey"]
             ?? throw new InvalidOperationException("Jwt:SigningKey is not configured");
@@ -30,12 +30,15 @@ public class TokenService : ITokenService
 
         expiresAt = DateTime.UtcNow.AddMinutes(expirationMinutes);
 
+        tokenId = Guid.NewGuid().ToString("N");
+
         var claims = new List<Claim>
         {
             new("account_id",account.AccountId),
             new("role",account.Role.RoleName),
             new("email",account.Email),
 
+            new(JwtRegisteredClaimNames.Jti,tokenId),
             new(ClaimTypes.NameIdentifier, account.AccountId),
             new(ClaimTypes.Name, account.Username),
             new(ClaimTypes.Email, account.Email),

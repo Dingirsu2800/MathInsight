@@ -2,6 +2,9 @@
 using MathInsight.Modules.Identity_Access.Commands.Login;
 using MathInsight.Modules.Identity_Access.Contracts.Auth;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using MathInsight.Modules.Identity_Access.Commands.Logout;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MathInsight.Modules.Identity_Access.Controllers;
 
@@ -33,7 +36,37 @@ public class AuthController : ControllerBase
             });
 
         return Ok(result);
+    }
 
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        var tokenId = User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
+            ?? User.FindFirst("jti")?.Value;
+
+        var expirationValue = User.FindFirst(JwtRegisteredClaimNames.Exp)?.Value
+            ?? User.FindFirst("exp")?.Value;
+
+        if (string.IsNullOrWhiteSpace(tokenId) ||
+            !long.TryParse(expirationValue, out var expirationUnixSeconds))
+        {
+            return Unauthorized(new
+            {
+                code = "AUTH_INVALID_TOKEN",
+                message = "Invalid or missing token claims."
+            });
+        }
+
+        var expiresAtUtc = DateTimeOffset
+            .FromUnixTimeSeconds(expirationUnixSeconds)
+            .UtcDateTime;
+
+        await _mediator.Send(
+            new LogoutCommand(tokenId, expiresAtUtc),
+            cancellationToken);
+
+        return NoContent();
     }
 }
 

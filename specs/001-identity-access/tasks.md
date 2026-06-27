@@ -24,8 +24,8 @@
 ## Phase 2: Core Domain Logic
 
 - [ ] **Auth Commands**:
-  - [ ] `LoginCommand` / `LoginCommandHandler` — validate credentials, check `is_active`, BCrypt verify, issue JWT, enforce single-session (Redis)
-  - [ ] `LogoutCommandHandler` — add token to Redis blacklist (`jwt:blacklist:{jti}`)
+  - [x] `LoginCommand` / `LoginCommandHandler` — validate credentials, check `is_active`, BCrypt verify, issue JWT, enforce single-session (Redis)
+  - [x] `LogoutCommandHandler` — add token to Redis blacklist (`jwt:blacklist:{jti}`)
   - [ ] `StudentRegisterCommand` — create Account + Student, send confirmation email, `is_active = false`
   - [ ] `TeacherRegisterCommand` — create Account + Teacher + TeacherApplication (PENDING), `is_active = false`
   - [ ] `ConfirmEmailCommand` — validate Redis token, set `is_active = true`
@@ -55,7 +55,7 @@
 - [x] **Lock mechanism**: Redis `login:fail:{accountId}` counter with 10-min TTL; lock 15 min on 5 fails
 - [ ] **Auth session service**:
   - [x] Create `IAuthSessionService` under `Services/Auth`
-  - [ ] Create `RedisAuthSessionService` for login lockout, token blacklist, and Student active-session tracking
+  - [x] Create `RedisAuthSessionService` for login lockout, token blacklist, and Student active-session tracking
   - [ ] Optionally create `InMemoryAuthSessionService` for local development when Redis is disabled
   - [x] Register the selected implementation in `IdentityModuleExtensions.cs`
 
@@ -77,7 +77,7 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` — zero compile errors
+- [x] `dotnet build` — zero compile errors
 - [ ] EF mappings match the current SQL script tables and `dotnet build` succeeds
 - [ ] Integration tests (xUnit):
   - [ ] UC-01: Valid login → 200 + JWT with correct claims

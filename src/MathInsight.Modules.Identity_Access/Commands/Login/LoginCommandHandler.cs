@@ -53,13 +53,13 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse?>
 
         await _authSessionService.ResetFailedLoginAsync(account.AccountId);
 
-        var accessToken = _tokenService.CreateAccessToken(account, out DateTime expiresAt);
+        var accessToken = _tokenService.CreateAccessToken(account, out DateTime expiresAt, out var tokenId);
 
-        if (account.Role.RoleName == "Student")
+        if (string.Equals(account.Role.RoleName, "Student", StringComparison.OrdinalIgnoreCase))
         {
             await _authSessionService.StoreActiveSessionAsync(
                 account.AccountId,
-                accessToken,
+                tokenId,
                 expiresAt - DateTime.UtcNow);
         }
 

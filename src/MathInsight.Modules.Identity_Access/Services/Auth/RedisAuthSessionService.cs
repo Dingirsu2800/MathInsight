@@ -40,20 +40,30 @@ public class RedisAuthSessionService : IAuthSessionService
         await _database.KeyDeleteAsync(GetLockedKey(accountId));
     }
 
-    public async Task StoreActiveSessionAsync(string accountId, string accessToken, TimeSpan ttl)
+    public async Task StoreActiveSessionAsync(string accountId, string tokenId, TimeSpan ttl)
     {
         var activeSessionKey = GetActiveSessionKey(accountId);
 
-        // luu session/token hien tai cua user
-        await _database.StringSetAsync(activeSessionKey, accessToken, ttl);
+        var oldTokenId = await _database.StringGetAsync(activeSessionKey);
+        var oldTtl = await _database.KeyTimeToLiveAsync(activeSessionKey);
+
+        if (oldTokenId.HasValue &&
+            oldTokenId.ToString() != tokenId &&
+            oldTtl.HasValue &&
+            oldTtl.Value > TimeSpan.Zero)
+        {
+            await BlacklistTokenAsync(oldTokenId.ToString(), oldTtl.Value);
+        }
+
+        await _database.StringSetAsync(activeSessionKey, tokenId, ttl);
     }
 
-    public async Task<bool> IsActiveSessionAsync(string accountId, string accessToken)
+    public async Task<bool> IsActiveSessionAsync(string accountId, string tokenId)
     {
         var activeSessionKey = GetActiveSessionKey(accountId);
         var storedToken = await _database.StringGetAsync(activeSessionKey);
 
-        return storedToken.HasValue && storedToken == accessToken;
+        return storedToken.HasValue && storedToken == tokenId;
     }
 
     private static string GetFailedKey(string accountId)
@@ -64,5 +74,26 @@ public class RedisAuthSessionService : IAuthSessionService
 
     private static string GetActiveSessionKey(string accountId)
         => $"auth:active-session:{accountId}";
+
+    private static string GetBlacklistedTokenKey(string tokenId)
+    => $"jwt:blacklist:{tokenId}";
+
+    public async Task BlacklistTokenAsync(string tokenId, TimeSpan ttl)
+    {
+        if (ttl <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        await _database.StringSetAsync(
+            GetBlacklistedTokenKey(tokenId),
+            "blacklisted",
+            ttl);
+    }
+
+    public async Task<bool> IsTokenBlacklistedAsync(string tokenId)
+    {
+        return await _database.KeyExistsAsync(GetBlacklistedTokenKey(tokenId));
+    }
 }
 
