@@ -1,6 +1,6 @@
 # Implementation Plan: Identity & Access Module
 
-**Branch**: `001-identity-access` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
+**Branch**: `001-identity-access` | **Date**: 2026-06-23 | **Updated**: 2026-06-28
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -65,8 +65,12 @@ src/MathInsight.Modules.Identity_Access/
 │   ├── ITokenService.cs        # JWT issuance, blacklist check
 │   ├── TokenService.cs
 │   ├── IEmailService.cs        # Email confirmation dispatch
-│   └── EmailService.cs
-└── IdentityAccessModuleExtensions.cs   # AddIdentityAccessModule() DI registration
+│   ├── EmailService.cs
+│   └── Auth/
+│       ├── IAuthSessionService.cs        # Login lockout, active session, blacklist abstraction
+│       ├── RedisAuthSessionService.cs    # Redis-backed implementation
+│       └── InMemoryAuthSessionService.cs # Optional local fallback when Redis is disabled
+└── IdentityModuleExtensions.cs   # AddIdentityModule() DI registration
 ```
 
 ## Proposed Changes
@@ -86,10 +90,10 @@ src/MathInsight.Modules.Identity_Access/
 
 ### Service & API Gateway — REST Endpoints
 
-**Auth (Public, no JWT required)**
+**Auth**
 ```
 POST   /api/v1/auth/login                    # UC-01: Local login → returns JWT
-POST   /api/v1/auth/logout                   # UC-02: Invalidate JWT (Redis blacklist)
+POST   /api/v1/auth/logout                   # UC-02: JWT required; invalidate JWT (Redis blacklist)
 POST   /api/v1/auth/register/student         # UC-39: Student self-register
 POST   /api/v1/auth/register/teacher         # UC-08: Teacher self-register (→ PENDING)
 POST   /api/v1/auth/google                   # UC-07: Google OAuth initiate
@@ -97,6 +101,27 @@ GET    /api/v1/auth/google/callback          # UC-07: Google OAuth callback → 
 POST   /api/v1/auth/reset-password           # UC-06: Initiate reset (send email)
 POST   /api/v1/auth/confirm-email            # Email confirmation token validation
 ```
+
+### Auth API Contract
+
+Auth endpoints return stable error codes for frontend localization. The `message` field is developer-facing and may remain English; Vietnamese user-facing text is handled by frontend clients.
+
+Example error response:
+
+```json
+{
+  "code": "AUTH_INVALID_CREDENTIALS",
+  "message": "Invalid username/email or password."
+}
+```
+
+Backend exposes one role-agnostic login endpoint:
+
+```http
+POST /api/v1/auth/login
+```
+
+Frontend clients may split login UI by role group, but backend does not require separate login endpoints per role. Successful login responses must include the authenticated user's role, allowing frontend routing such as Student, Teacher, Expert, or Admin dashboards.
 
 **Account Self-Service (JWT required, any authenticated role)**
 ```
@@ -130,6 +155,7 @@ PUT    /api/v1/admin/roles/{roleId}          # UC-17: Update role name/descripti
 
 - **Notification module** listens to `AccountCreatedEvent`, `ApplicationResolvedEvent` via MassTransit.
 - **Redis** used for: JWT blacklist (`jwt:blacklist:{tokenId}`), email confirmation token (`email:confirm:{token}`), login failure counter (`login:fail:{accountId}`).
+- **Auth session service** abstracts login lockout, Student single-session enforcement, and token blacklist checks. Redis is the production/dev-cache implementation; an in-memory implementation may be used as a local fallback when Redis is disabled.
 - **MassTransit queue**: `excel_import_queue` — async bulk import processing.
 
 ## Verification Plan
