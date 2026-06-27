@@ -46,11 +46,20 @@
 - **BR-28 (SAR Recommendation)**: The SAR (Smart Adaptive Recommendation) algorithm from `recommenders` library:
   - **Inputs**: Implicit interaction event log — rows=`(student_id, tag_id, event_timestamp)`, weighted by event type (`w_e`). Affinity score per student–tag pair is computed as:
     $$A(u,i) = \sum_{\text{events}} w_e \cdot 2^{-\Delta t / T_{\text{half}}}$$
-    where $\Delta t$ is time elapsed since the event and $T_{\text{half}}$ is the half-life constant (configurable, default 30 days). WeakTag events carry boosted weight $w_e = 2.0$ to amplify recency signal for weak topics.
+    where $\Delta t$ is time elapsed since the event and $T_{\text{half}}$ is the half-life constant (configurable, default 30 days).
+  - **Event weight mapping** (`w_e`) — per business rules BR-15, BR-16, BR-28:
+
+    | Student behaviour | Business Rule | Weight `w_e` |
+    |-------------------|---------------|--------------|
+    | Answers a question **incorrectly** | BR-15 | **1.0** (strong signal) |
+    | Answers a question **correctly** | BR-16 | **0.5** (normal signal) |
+    | Watches lecture video **≥ 80%** | BR-28 | **2.0** (active engagement) |
+    | Watches lecture video **< 80%** | BR-28 | **0.3** (passive) |
+
   - **Tag–Tag Similarity**: Jaccard similarity between interaction sets:
     $$S(j,i) = \frac{|U_j \cap U_i|}{|U_j \cup U_i|}$$
   - **Recommendation Score**: $R(u,i) = \sum_j A(u,j) \cdot S(j,i)$ — propagates affinity through the tag similarity graph.
-  - **Model Training**: Background scheduler (Hangfire, weekly) trains SAR on historical event log data.
+  - **Model Training**: Background scheduler (Hangfire) trains SAR **nightly or when sufficient new interaction data has accumulated** (whichever comes first).
   - **Output**: Top-K recommendation scores per student for untaken/low-mastery tags; post-filtered to keep only tags where `P_tag < 5.0`.
   - **Cache**: Recommendations stored in Redis per student (`rcm:weak-tags:{student_id}`).
 - **BR-29 (Dynamic Test Generator Loop — Internal API)**: The Recommender module exposes `IRecommenderService` as an **in-process DI interface** for the TestGen module (009). This interface provides two distinct outputs:
