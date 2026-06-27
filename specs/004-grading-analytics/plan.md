@@ -1,7 +1,7 @@
 # Implementation Plan: Grading & Analytics Module
 
 **Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/004-grading-analytics/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds `MathInsight.Modules.Grading` — handles real-time (PRACTICE) and deferr
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ), Polly |
-| Storage | SQL Server (cross-reads from `tst` schema — no owned tables) |
+| Storage | SQL Server; cross-reads current DB script tables owned by Testing and QuestionBank |
 | External | OpenAI / Claude API (chatbot, UC-51) |
 | Queue | `background_grading_queue` (RabbitMQ via MassTransit) |
 | Testing | xUnit / Integration tests |
@@ -45,8 +45,8 @@ src/MathInsight.Modules.Grading/
 ### No Owned Database Tables
 
 This module reads/writes cross-schema:
-- **Reads**: `tst.test_sessions`, `tst.test_answers`, `tst.test_answer_options`, `qnb.questions`, `qnb.answers`
-- **Writes**: `tst.test_sessions` (status, score, counts), `tst.test_answers` (is_correct, points_earned)
+- **Reads**: `TestSession`, `TestAnswer`, `TestAnswerOption`, `Question`, `Answer`
+- **Writes**: `TestSession` (status, score, counts), `TestAnswer` (is_correct, points_earned)
 
 All writes are executed within a **single transaction** (DC-05).
 

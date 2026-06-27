@@ -93,12 +93,12 @@
 - All auth API endpoints return successful responses within **2 seconds** (NFR-P01).
 - Google OAuth callback completes within **3 seconds** (NFR-AC-FT01-02).
 - JWT validation at YARP layer adds < 10ms overhead.
-- Schema isolation enforced under `usr` namespace.
+- Backend maps Identity entities to the current SQL script tables; no separate `usr` schema is created for MVP.
 - All seed accounts (`admin`, `expert_01`, `teacher_01`, `student_01`, `student_02`) are testable end-to-end.
 
 ## Assumptions
 
-- Target database is SQL Server; schema prefix is `usr`.
+- Target database is SQL Server. Backend maps to current DB script tables (`Account`, `Role`, `Permission`, `RolePermission`, `Student`, `Teacher`, `Expert`, `TeacherApplication`) instead of schema-prefixed tables.
 - Redis is available for JWT blacklist and email confirmation token storage.
 - MediatR event handling provides decoupled async integration (e.g., `TeacherApplicationSubmittedEvent`).
 - Google OAuth 2.0 credentials are injected via environment variables (`GoogleOAuth:ClientId`, `GoogleOAuth:ClientSecret`).

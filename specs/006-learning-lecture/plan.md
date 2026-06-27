@@ -1,21 +1,22 @@
 # Implementation Plan: Learning & Lecture Module
 
-**Branch**: `006-learning-lecture` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/006-learning-lecture/spec.md)
+**Branch**: `006-learning-lecture` | **Date**: 2026-06-23 | **Updated**: 2026-06-27
+
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Builds `MathInsight.Modules.Learning_Lecture` managing lectures (video+text), downloadable materials (PDF/MP4/DOCX via Cloudinary), topic-based browsing, and discussion Q&A moderation. Registers with YARP and DI composition root.
+Build `MathInsight.Modules.Learning_Lecture` for lectures, lecture likes, downloadable materials, topic-based browsing, and discussion Q&A moderation. Register the module with the WebAPI composition root.
 
 ## Technical Context
 
 | Property | Value |
 |----------|-------|
 | Language | C# / .NET 10.0 |
-| Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ) |
-| Storage | SQL Server (Schema: `lrn`) |
-| Media Storage | Cloudinary (UC-66: file upload) |
-| Testing | xUnit / Integration tests |
+| Primary Dependencies | MediatR, EF Core, MassTransit abstraction already registered by WebAPI |
+| Storage | SQL Server; map explicitly to current DB script tables and columns |
+| Media Storage | Cloudinary |
+| Testing | xUnit / integration tests when test project exists |
 | Project Type | Modular Monolith Web API |
 
 ## Project Structure
@@ -23,126 +24,137 @@ Builds `MathInsight.Modules.Learning_Lecture` managing lectures (video+text), do
 ```text
 src/MathInsight.Modules.Learning_Lecture/
 ├── Commands/
-│   ├── CreateLecture/          # UC-61: Teacher creates DRAFT lecture
-│   ├── UpdateLecture/          # UC-62: update content/video (own lectures only)
-│   ├── PublishLecture/         # UC-63: DRAFT → PUBLISHED
-│   ├── ArchiveLecture/         # UC-64: PUBLISHED → ARCHIVED
-│   ├── UploadMaterial/         # UC-66: upload to Cloudinary → save Material
-│   ├── UpdateMaterial/         # UC-67
-│   ├── ArchiveMaterial/        # UC-68: ACTIVE → INACTIVE
-│   ├── AttachMaterialToLecture/# UC-69: insert LectureMaterial junction record
-│   ├── AskDiscussionQuestion/  # UC-73: Student posts question
+│   ├── CreateLecture/           # UC-61: Teacher creates Draft lecture
+│   ├── UpdateLecture/           # UC-62: update own lecture
+│   ├── PublishLecture/          # UC-63: Draft → Published
+│   ├── DeactivateLecture/       # UC-64: Published → Deactivated
+│   ├── LikeLecture/             # UC-80: Student likes a Published lecture
+│   ├── UnlikeLecture/           # UC-80: Student removes own like
+│   ├── UploadMaterial/          # UC-66: upload to Cloudinary → save Material
+│   ├── UpdateMaterial/          # UC-67
+│   ├── DeactivateMaterial/      # UC-68: Active → Deactivated
+│   ├── AttachMaterialToLecture/ # UC-69: insert LectureMaterial junction record
+│   ├── AskDiscussionQuestion/   # UC-73: Student posts question
 │   ├── AnswerDiscussionQuestion/# UC-74: Teacher/Admin posts answer
 │   ├── UpdateDiscussionComment/ # UC-77: own comment update
-│   ├── DeleteDiscussionComment/ # UC-78: own comment delete (or Teacher/Admin)
-│   ├── HideDiscussionComment/   # UC-79: Teacher/Admin hide
-│   └── ReportDiscussion/        # UC-76: Student reports question or answer
+│   ├── DeleteDiscussionComment/ # UC-78: set status Deleted
+│   ├── HideDiscussionComment/   # UC-79: set status Hidden
+│   └── ReportDiscussion/        # UC-76: create DiscussionReport
 ├── Queries/
-│   ├── GetLectureList/          # UC-60: paged, filter by status/tag/teacher
-│   ├── GetLecture/              # UC-71: single lecture + materials + discussion count
-│   ├── GetMaterialList/         # UC-65
-│   ├── GetTopicList/            # UC-70: hierarchical topic tree (TagTopic from qnb)
-│   ├── GetDiscussions/          # List questions for a lecture + answers
-│   └── GetModerationQueue/      # UC-75: Teacher/Admin pending reports list
+│   ├── GetLectureList/
+│   ├── GetLecture/
+│   ├── GetMaterialList/
+│   ├── GetTopicList/
+│   ├── GetDiscussions/
+│   └── GetModerationQueue/
 ├── Events/
-│   ├── ActivityLoggedEvent.cs           # Logged on lecture view / material download → Gamification
-│   ├── DiscussionQuestionPostedEvent.cs # → Notification module (notify Teacher)
-│   └── DiscussionAnsweredEvent.cs       # → Notification module (notify Student)
+│   ├── ActivityLoggedEvent.cs
+│   ├── DiscussionQuestionPostedEvent.cs
+│   └── DiscussionAnsweredEvent.cs
 ├── Services/
-│   └── CloudinaryService.cs    # Upload file → return file_url
+│   └── CloudinaryService.cs
 ├── Persistence/
-│   ├── LearningDbContext.cs    # `lrn` schema
-│   ├── Configurations/
-│   │   ├── LectureConfiguration.cs
-│   │   ├── MaterialConfiguration.cs
-│   │   ├── LectureMaterialConfiguration.cs  # M:N junction
-│   │   ├── DiscussionQuestionConfiguration.cs
-│   │   ├── DiscussionAnswerConfiguration.cs
-│   │   └── DiscussionReportConfiguration.cs
-│   └── Migrations/
+│   ├── LearningDbContext.cs
+│   └── Configurations/
+│       ├── LectureConfiguration.cs
+│       ├── LectureLikeConfiguration.cs
+│       ├── MaterialConfiguration.cs
+│       ├── LectureMaterialConfiguration.cs
+│       ├── DiscussionQuestionConfiguration.cs
+│       ├── DiscussionAnswerConfiguration.cs
+│       └── DiscussionReportConfiguration.cs
 ├── Controllers/
 │   ├── LecturesController.cs
 │   ├── MaterialsController.cs
 │   └── DiscussionsController.cs
-└── LearningLectureModuleExtensions.cs
+└── LearningModuleExtensions.cs
 ```
 
-## Proposed Changes
+## Database Layer (Current DB Script Tables)
 
-### Database Layer (Schema: `lrn`)
+| Table | Key Mapping / Constraints |
+|-------|---------------------------|
+| `Lecture` | `LectureID`, `TeacherID`, `TagID`, `Status` = `Draft`/`Published`/`Deactivated`, `Likes >= 0` |
+| `LectureLike` | Composite PK `(LectureID, StudentID)`; FK to `Lecture` + `Student` |
+| `Material` | `MaterialID`, `TeacherID`, `Status` = `Active`/`Deactivated` |
+| `LectureMaterial` | Composite PK `(LectureID, MaterialID)` |
+| `DiscussionQuestion` | `Status` = `Active`/`Hidden`/`Deleted` |
+| `DiscussionAnswer` | `Status` = `Active`/`Hidden`/`Deleted` |
+| `DiscussionReport` | `Status` = `Pending`/`Resolved`/`Dismissed`; exactly one target FK must be non-null |
 
-| Table | Key Indexes / Constraints |
-|-------|--------------------------|
-| `lrn.lectures` | `teacher_id` BTREE; `(status, tag_id)` composite; `status` enum |
-| `lrn.materials` | `teacher_id` BTREE; `file_type` enum; `status` enum |
-| `lrn.lecture_materials` | Composite PK `(lecture_id, material_id)` — M:N junction |
-| `lrn.discussion_questions` | `lecture_id` BTREE; `student_id`; `status` enum |
-| `lrn.discussion_answers` | `discussion_question_id` BTREE; `account_id` |
-| `lrn.discussion_reports` | CHECK exactly one of `discussion_question_id` / `discussion_answer_id` non-null (DC-06) |
+Do not create an `lrn` schema or EF migration for MVP implementation unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 
-### Service & API Gateway — REST Endpoints
+## REST Endpoints
 
-**Teacher (TeacherOnly + ownership check)**
-```
-GET    /api/v1/lectures                              # UC-60: own lecture list (paged + filter)
-POST   /api/v1/lectures                              # UC-61: create DRAFT lecture
-PUT    /api/v1/lectures/{id}                         # UC-62: update (own only)
-PUT    /api/v1/lectures/{id}/publish                 # UC-63: → PUBLISHED
-PUT    /api/v1/lectures/{id}/archive                 # UC-64: → ARCHIVED
-GET    /api/v1/materials                             # UC-65: own material list
-POST   /api/v1/materials/upload                      # UC-66: upload to Cloudinary
-PUT    /api/v1/materials/{id}                        # UC-67: update metadata
-PUT    /api/v1/materials/{id}/archive                # UC-68: → INACTIVE
-POST   /api/v1/lectures/{id}/materials/{materialId}  # UC-69: attach material to lecture
-POST   /api/v1/discussions/questions/{qId}/answers   # UC-74: Teacher answers
-PUT    /api/v1/discussions/comments/{id}             # UC-77: update own comment
-DELETE /api/v1/discussions/comments/{id}             # UC-78: delete own comment
-GET    /api/v1/teacher/discussions/moderation        # UC-75: pending reports
-POST   /api/v1/teacher/discussions/moderation/{reportId}/resolve  # UC-75: resolve report
-PUT    /api/v1/discussions/comments/{id}/hide        # UC-79: hide comment/question
-```
+**Teacher**
 
-**Student (StudentOnly)**
-```
-GET    /api/v1/lectures                              # UC-70/71: PUBLISHED lectures, topic tree view
-GET    /api/v1/lectures/{id}                         # UC-71: single lecture + materials
-GET    /api/v1/materials/{id}/download               # UC-72: download material (logs ActivityLoggedEvent)
-GET    /api/v1/discussions/{lectureId}               # List discussion questions
-POST   /api/v1/discussions/{lectureId}/questions     # UC-73: ask question
-POST   /api/v1/discussions/reports                   # UC-76: report question or answer (DC-06)
-PUT    /api/v1/discussions/comments/{id}             # UC-77: update own comment/answer
-DELETE /api/v1/discussions/comments/{id}             # UC-78: delete own comment
+```text
+GET    /api/v1/lectures
+POST   /api/v1/lectures
+PUT    /api/v1/lectures/{id}
+PUT    /api/v1/lectures/{id}/publish
+PUT    /api/v1/lectures/{id}/deactivate
+GET    /api/v1/materials
+POST   /api/v1/materials/upload
+PUT    /api/v1/materials/{id}
+PUT    /api/v1/materials/{id}/deactivate
+POST   /api/v1/lectures/{id}/materials/{materialId}
+POST   /api/v1/discussions/questions/{questionId}/answers
+PUT    /api/v1/discussions/comments/{id}
+DELETE /api/v1/discussions/comments/{id}
+GET    /api/v1/teacher/discussions/moderation
+POST   /api/v1/teacher/discussions/moderation/{reportId}/resolve
+PUT    /api/v1/discussions/comments/{id}/hide
 ```
 
-**Admin (AdminOnly)**
-```
-PUT    /api/v1/admin/lectures/{id}/archive            # UC-64: Admin can archive any lecture
-GET    /api/v1/admin/discussions/moderation           # UC-75: all pending reports
-POST   /api/v1/admin/discussions/moderation/{id}/resolve  # Resolve/dismiss report
-PUT    /api/v1/admin/discussions/comments/{id}/hide   # UC-79: Admin hides
+**Student**
+
+```text
+GET    /api/v1/lectures
+GET    /api/v1/lectures/{id}
+POST   /api/v1/lectures/{id}/like
+DELETE /api/v1/lectures/{id}/like
+GET    /api/v1/materials/{id}/download
+GET    /api/v1/discussions/{lectureId}
+POST   /api/v1/discussions/{lectureId}/questions
+POST   /api/v1/discussions/reports
+PUT    /api/v1/discussions/comments/{id}
+DELETE /api/v1/discussions/comments/{id}
 ```
 
-### Integration & Domain Events
+**Admin**
+
+```text
+PUT    /api/v1/admin/lectures/{id}/deactivate
+GET    /api/v1/admin/discussions/moderation
+POST   /api/v1/admin/discussions/moderation/{id}/resolve
+PUT    /api/v1/admin/discussions/comments/{id}/hide
+```
+
+## Integration & Domain Events
 
 | Event | Publisher | Consumer | Purpose |
 |-------|-----------|----------|---------|
 | `ActivityLoggedEvent` | Learning | Gamification (007) | Streak + badge tracking |
 | `DiscussionQuestionPostedEvent` | Learning | Notification (008) | Notify Teacher |
-| `DiscussionAnsweredEvent` | Learning | Notification (008) | Notify Student of answer |
+| `DiscussionAnsweredEvent` | Learning | Notification (008) | Notify Student |
 
 ## Verification Plan
 
-1. `dotnet build` — zero compile errors.
-2. EF migration: `lrn` schema tables created; M:N `lecture_materials` junction.
-3. Integration tests:
-   - UC-61: Create lecture → `status = DRAFT`.
-   - UC-63: Publish → `status = PUBLISHED`.
-   - UC-64: Archive → `status = ARCHIVED`; cannot revert.
-   - UC-62: Teacher edits another's lecture → 403 (BR-31).
-   - UC-66: Upload .exe → 415; upload 600MB → 413; valid PDF → Cloudinary URL saved.
-   - UC-69: Attach material to lecture → M:N record created.
+1. `dotnet build` succeeds.
+2. Database script verification confirms `Lecture.Likes`, `LectureLike`, and `LectureMaterial` exist.
+3. Integration behavior to verify:
+   - UC-61: Create lecture → `Status = 'Draft'`.
+   - UC-63: Publish → `Status = 'Published'`.
+   - UC-64: Deactivate → `Status = 'Deactivated'`; cannot publish again.
+   - UC-62: Teacher edits another Teacher's lecture → 403.
+   - UC-66: Upload `.exe` → 415; upload > 500MB → 413; valid PDF → Cloudinary URL saved.
+   - UC-69: Attach material to lecture → `LectureMaterial` row created.
+   - UC-80: Like lecture twice by same Student → no duplicate `LectureLike`.
+   - UC-80: Unlike lecture → `LectureLike` removed and `Lecture.Likes` decremented but never below zero.
    - UC-73: Student posts question → `DiscussionQuestionPostedEvent` published.
-   - UC-76: Report with both IDs set → 422 (DC-06).
-   - UC-76: Report with both null → 422 (DC-06).
-   - UC-79: Teacher hides question → `status = HIDDEN`.
+   - UC-76: Invalid report target payload → 422.
+   - UC-76: Valid report → `DiscussionReport.Status = 'Pending'`; target discussion status remains unchanged.
+   - UC-79: Teacher hides question/answer → `Status = 'Hidden'`.
+   - UC-78: Delete question/answer → `Status = 'Deleted'`.
    - UC-71: View lecture → `ActivityLoggedEvent` published.

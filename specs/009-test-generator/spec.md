@@ -89,12 +89,12 @@
 - Blueprint matrix validation (sum check) runs within **500ms**.
 - Pending blueprint list loads within **1.5 seconds** (NFR-P04).
 - Test generation from approved blueprint completes within **3 seconds** for 40-question tests.
-- Schema isolation enforced under shared `tst` namespace.
+- Backend maps TestGen entities to the current SQL script tables; no separate `tst` schema is created for MVP.
 - Self-approval is blocked 100% of the time (BR-Blueprint-01).
 
 ## Assumptions
 
-- Database is SQL Server; shared `tst` schema with Testing module (003).
+- Database is SQL Server. Backend maps to current DB script tables (`Blueprint`, `BlueprintDetail`, `Test`, `TestQuestion`) instead of schema-prefixed tables.
 - Expert accounts and roles verified via Identity module (001).
 - `IRecommenderService.GetStudentWeakTagsAsync()` is called in-process from Recommender module (005) during test generation.
-- Test generation creates `Test` + `TestQuestion` records in `tst` schema.
+- Test generation creates `Test` + `TestQuestion` records in current DB script tables.

@@ -58,10 +58,10 @@
 ### Key Entities *(read from Testing module)*
 
 This module does **not own** additional tables. It reads and writes to:
-- `tst.test_sessions` — updates `status`, `num_correct`, `num_incorrect`, `num_abandoned`, `score`
-- `tst.test_answers` — updates `is_correct`, `points_earned` per answer
-- `qnb.questions` — reads `default_point` for scoring
-- `qnb.answers` — reads `is_correct` flag for reference key
+- `TestSession` — updates `Status`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
+- `TestAnswer` — updates `IsCorrect`, `PointsEarned` per answer
+- `Question` — reads `DefaultPoint` for scoring
+- `Answer` — reads `IsCorrect` flag for reference key
 
 Delegates competency updates to **Recommender module (005)** via `GradeCalculatedEvent`.
 
@@ -73,7 +73,7 @@ Delegates competency updates to **Recommender module (005)** via `GradeCalculate
 - Exam grading completes in < **60 seconds** via RabbitMQ (BR-18, NFR-P03).
 - Grading transaction is atomic — no partial state on failure (DC-05).
 - Chatbot response returns within **10 seconds** (NFR for UC-51).
-- Schema isolation enforced under `grd` namespace (no owned tables — cross-reads only).
+- No separate `grd` schema is created for MVP; this module maps to current DB script tables owned by Testing and QuestionBank.
 
 ## Assumptions
 

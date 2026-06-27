@@ -14,7 +14,7 @@
 
 | UC-ID | Name | Primary Actor | Notes |
 |-------|------|---------------|-------|
-| UC-55 | View Competency Report | Student | Aggregated performance data from `rcm` |
+| UC-55 | View Competency Report | Student | Aggregated performance data from Recommender tables |
 | UC-56 | View Individual Performance Analysis | Student | Score trend charts (30-day history) |
 | UC-57 | View Competency Heatmap | Student | Topic × Difficulty mastery heatmap |
 | UC-58 | View Leaderboard | Student | Daily recalculated class ranking |
@@ -52,11 +52,11 @@
 
 | Report | Data Source | Update Frequency |
 |--------|-------------|-----------------|
-| Competency Report (UC-55) | `rcm.competency_points`, `rcm.tags_mastery` | Real-time (after each grade) |
-| Performance Analysis (UC-56) | `tst.test_sessions` (score history) | Real-time |
-| Competency Heatmap (UC-57) | `rcm.tags_mastery` (per topic-difficulty) | Real-time |
+| Competency Report (UC-55) | `CompetencyPoint`, `TagsMastery` | Real-time (after each grade) |
+| Performance Analysis (UC-56) | `TestSession` (score history) | Real-time |
+| Competency Heatmap (UC-57) | `TagsMastery` (per topic-difficulty) | Real-time |
 | Leaderboard (UC-58) | Hangfire daily cache (Redis or DB snapshot) | Daily 00:00 |
-| Exam History (UC-59) | `tst.test_sessions` (SUBMITTED, FORCE_SUBMITTED, GRADED) | Real-time |
+| Exam History (UC-59) | `TestSession` (submitted/graded sessions) | Real-time |
 
 ### Notification Template Types
 
@@ -82,13 +82,13 @@
 - Report APIs respond within **2 seconds** (NFR-P01).
 - Heatmap query responds within **2 seconds** (served from Redis cache fallback per TDS §9.2).
 - Leaderboard recalculation completes within **60 seconds** at 00:00 daily.
-- Schema isolation enforced under `ntf` namespace.
+- Backend maps Notification/Report entities to the current SQL script tables; no separate `ntf` schema is created for MVP.
 - 90-day notification pruning runs daily without performance impact.
 
 ## Assumptions
 
-- Target database is SQL Server; schema prefix is `ntf`.
+- Target database is SQL Server. Backend maps to current DB script tables (`Notification`, `CompetencyPoint`, `TagsMastery`, `TestSession`) instead of schema-prefixed tables.
 - SignalR Hub registered at `/hubs/notification`; JWT authentication required.
 - Redis used as fallback cache for heatmap and leaderboard data.
-- Report aggregation queries cross-read from `rcm`, `tst`, `gam` schemas.
+- Report aggregation queries cross-read current DB script tables owned by Recommender, Testing, and Gamification.
 - Email delivery (account activation, application result) via SMTP/SendGrid — injected via environment variables.

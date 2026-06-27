@@ -1,7 +1,7 @@
 # Implementation Plan: Identity & Access Module
 
 **Branch**: `001-identity-access` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/001-identity-access/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds the `MathInsight.Modules.Identity_Access` component handling authenticati
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client), BCrypt.Net-Next |
-| Storage | SQL Server (Schema: `usr`) |
+| Storage | SQL Server; map to current DB script tables |
 | Cache | Redis (JWT blacklist, email confirmation tokens) |
 | External | Google OAuth 2.0 via `AddGoogle()` |
 | Testing | xUnit / Integration tests |
@@ -46,7 +46,7 @@ src/MathInsight.Modules.Identity_Access/
 ├── Events/
 │   └── TeacherApplicationSubmittedEvent.cs   # MediatR domain event
 ├── Persistence/
-│   ├── IdentityDbContext.cs    # Shared connection, `usr` schema
+│   ├── IdentityDbContext.cs    # Shared connection, maps to current DB script table names
 │   ├── Configurations/         # EF IEntityTypeConfiguration per entity
 │   │   ├── AccountConfiguration.cs
 │   │   ├── RoleConfiguration.cs
@@ -71,18 +71,18 @@ src/MathInsight.Modules.Identity_Access/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `usr`)
+### Database Layer (Current DB Script Tables)
 
 | Table | Notes |
 |-------|-------|
-| `usr.accounts` | Core credential + profile table |
-| `usr.roles` | 4 seeded roles: Admin, Expert, Teacher, Student |
-| `usr.permissions` | Permission keys (e.g. `lecture:publish`, `test:generate`) |
-| `usr.role_permissions` | Composite PK junction table |
-| `usr.students` | 1:1 with accounts |
-| `usr.teachers` | 1:1 with accounts |
-| `usr.experts` | 1:1 with accounts |
-| `usr.teacher_applications` | Status lifecycle: PENDING → APPROVED/REJECTED |
+| `Account` | Core credential + profile table |
+| `Role` | 4 seeded roles: Admin, Expert, Teacher, Student |
+| `Permission` | Permission keys (e.g. `lecture:publish`, `test:generate`) |
+| `RolePermission` | Composite PK junction table |
+| `Student` | 1:1 with Account |
+| `Teacher` | 1:1 with Account |
+| `Expert` | 1:1 with Account |
+| `TeacherApplication` | Status lifecycle from the current DB script |
 
 ### Service & API Gateway — REST Endpoints
 
@@ -135,7 +135,7 @@ PUT    /api/v1/admin/roles/{roleId}          # UC-17: Update role name/descripti
 ## Verification Plan
 
 1. Run `dotnet build` — zero compile errors.
-2. Apply EF Core migration: `dotnet ef migrations add Init_Identity --project MathInsight.WebAPI`.
+2. Verify EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests:
    - Login with correct credentials → 200 + JWT.
    - Login with wrong password 5 times → 429/403 (locked).

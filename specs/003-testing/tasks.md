@@ -1,21 +1,21 @@
 # Tasks Checklist: Testing Module
 
-**Branch**: `003-testing` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `003-testing` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all 6 entities under `tst` schema:
+- [ ] Create EF `IEntityTypeConfiguration` for all 6 entities mapped to current DB script tables:
   - [ ] `TestConfiguration` — UNIQUE `test_code`; FK to `blueprints`
   - [ ] `TestQuestionConfiguration` — composite PK `(test_id, question_id)`, `question_order`
   - [ ] `TestSessionConfiguration` — composite index `(student_id, status)`; status enum constraint
   - [ ] `TestAnswerConfiguration` — composite UNIQUE `(session_id, question_id)`; `points_earned` default 0.00
   - [ ] `TestAnswerOptionConfiguration` — composite PK `(test_answer_id, answer_id)` (DC-07)
   - [ ] `TestIncidentConfiguration` — FK to `test_sessions`, `type` enum constraint
-- [ ] Create `TestingDbContext.cs` with shared connection, `tst` schema default
-- [ ] Coordinate with TestGen (009) on shared `tst` schema — same DbContext or separate registrations
-- [ ] Add EF migration: `dotnet ef migrations add Init_Testing --project MathInsight.WebAPI`
+- [ ] Create `TestingDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [ ] Coordinate with TestGen (009) on shared current DB script tables — same DbContext or separate registrations.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed: 2 tests (1 ACTIVE, 1 ARCHIVED), 3 test sessions per TDS §3.6
 
 ---

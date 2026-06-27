@@ -1,12 +1,12 @@
 # Tasks Checklist: Identity & Access Module
 
-**Branch**: `001-identity-access` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `001-identity-access` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all 8 entities under `usr` schema:
+- [ ] Create EF `IEntityTypeConfiguration` for all 8 entities mapped to current DB script tables:
   - [ ] `AccountConfiguration` — unique indexes on `username`, `email`; FK to `roles`
   - [ ] `RoleConfiguration` — seed 4 roles (Admin, Expert, Teacher, Student)
   - [ ] `PermissionConfiguration` — seed permission keys from Permission Matrix
@@ -15,8 +15,8 @@
   - [ ] `TeacherConfiguration` — 1:1 with Account
   - [ ] `ExpertConfiguration` — 1:1 with Account
   - [ ] `TeacherApplicationConfiguration` — status enum constraint
-- [ ] Create `IdentityDbContext.cs` with shared connection, `usr` schema default
-- [ ] Add EF migration: `dotnet ef migrations add Init_Identity --project MathInsight.WebAPI`
+- [ ] Create `IdentityDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Add seed data per TDS §3.6 (5 accounts + roles)
 
 ---
@@ -70,7 +70,7 @@
 ## Phase 4: Verification
 
 - [ ] `dotnet build` — zero compile errors
-- [ ] EF migration applies cleanly against dev SQL Server
+- [ ] EF mappings match the current SQL script tables and `dotnet build` succeeds
 - [ ] Integration tests (xUnit):
   - [ ] UC-01: Valid login → 200 + JWT with correct claims
   - [ ] UC-01: Wrong password × 5 → account locked (BR-03)

@@ -1,7 +1,7 @@
 # Implementation Plan: Testing Module
 
 **Branch**: `003-testing` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/003-testing/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds the `MathInsight.Modules.Testing` component managing student test session
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
-| Storage | SQL Server (Schema: `tst` — shared with TestGen module) |
+| Storage | SQL Server; map to current DB script tables shared with TestGen |
 | Real-time | SignalR (optional — for timer sync and incident alert) |
 | Testing | xUnit / Integration tests |
 | Project Type | Modular Monolith Web API |
@@ -36,7 +36,7 @@ src/MathInsight.Modules.Testing/
 ├── Events/
 │   └── TestSubmittedEvent.cs   # MediatR notification → Grading module consumes
 ├── Persistence/
-│   ├── TestingDbContext.cs     # Shared connection, `tst` schema
+│   ├── TestingDbContext.cs     # Shared connection, maps to current DB script table names
 │   ├── Configurations/
 │   │   ├── TestConfiguration.cs
 │   │   ├── TestQuestionConfiguration.cs
@@ -53,16 +53,16 @@ src/MathInsight.Modules.Testing/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `tst`)
+### Database Layer (Current DB Script Tables)
 
 | Table | Key Indexes |
 |-------|-------------|
-| `tst.tests` | `test_code` UNIQUE; `blueprint_id` FK |
-| `tst.test_questions` | Composite PK `(test_id, question_id)` |
-| `tst.test_sessions` | `student_id` BTREE; `(student_id, status)` composite |
-| `tst.test_answers` | Composite UNIQUE `(session_id, question_id)` |
-| `tst.test_answer_options` | Composite PK `(test_answer_id, answer_id)` |
-| `tst.test_incidents` | `session_id` BTREE |
+| `Test` | `TestCode` unique; `BlueprintID` FK |
+| `TestQuestion` | Composite PK `(TestID, QuestionID)` |
+| `TestSession` | `StudentID`; status fields from current DB script |
+| `TestAnswer` | `SessionID`, `QuestionID`, grading fields |
+| `TestAnswerOption` | Composite PK `(TestAnswerID, AnswerID)` |
+| `TestIncidents` | `SessionID` FK |
 
 ### Service & API Gateway — REST Endpoints
 
@@ -114,7 +114,7 @@ if (incidentCount >= 5)
 ## Verification Plan
 
 1. `dotnet build` — zero compile errors.
-2. EF migration applies cleanly against dev SQL Server.
+2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests (xUnit):
    - UC-47: Start session → TestSession `IN_PROGRESS`, TestAnswer stubs created.
    - UC-47: Auto-save → answers persisted, `update_choice_time` updated.

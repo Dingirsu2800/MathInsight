@@ -1,15 +1,15 @@
 # Tasks Checklist: Notification & Report Module
 
-**Branch**: `008-notification-report` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `008-notification-report` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for `Notification` entity under `ntf` schema:
+- [ ] Create EF `IEntityTypeConfiguration` for `Notification` entity mapped to current DB script table:
   - [ ] `NotificationConfiguration` — FK to `accounts`; composite index `(account_id, is_read)`; index `created_time` (for prune)
-- [ ] Create `NotificationDbContext.cs` with shared connection, `ntf` schema default
-- [ ] Add EF migration: `dotnet ef migrations add Init_Notification --project MathInsight.WebAPI`
+- [ ] Create `NotificationDbContext.cs` with shared connection and explicit `ToTable(...)` mapping.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed: 3 test notifications per TDS §3.6
 
 ---
@@ -18,7 +18,7 @@
 
 - [ ] **NotificationService**:
   - [ ] `SendAsync(accountId, title, content, link)`:
-    - Insert `Notification` record into `ntf.notifications`
+    - Insert `Notification` record into `Notification`
     - Push via SignalR `_hubContext.Clients.User(accountId).SendAsync("ReceiveNotification", payload)`
   - [ ] `MarkReadAsync(notificationId, accountId)` — validate ownership before update
 
@@ -38,20 +38,20 @@
 
 - [ ] **Report Queries**:
   - [ ] `GetCompetencyReportQuery` (UC-55):
-    - Cross-read `rcm.competency_points` for student grade scores
-    - Cross-read `rcm.tags_mastery` aggregate (count by `mastery_status`)
+    - Cross-read `CompetencyPoint` for student grade scores
+    - Cross-read `TagsMastery` aggregate
     - Return: `{ overallPoint, weakCount, learningCount, masteredCount, tagDetails[] }`
   - [ ] `GetPerformanceAnalysisQuery` (UC-56):
-    - Cross-read `tst.test_sessions` WHERE `student_id = current` AND `status = GRADED`
+    - Cross-read `TestSession` WHERE `StudentID = current` AND `Status = GRADED`
     - Last 30 days; group by date; return daily scores for chart
   - [ ] `GetCompetencyHeatmapQuery` (UC-57):
-    - Cross-read `rcm.tags_mastery` for all `(tag_id, difficulty_id)` combinations
+    - Cross-read `TagsMastery` for all `(TagID, DifficultyID)` combinations
     - Return matrix: `{ tagName, difficultyName, mastery_status, accuracy_rate }`
   - [ ] `GetLeaderboardQuery` (UC-58):
     - Read from Redis `ntf:leaderboard:{grade}`; fallback live query if cache miss
     - Return: `{ rank, studentName, grade, point }[]`
   - [ ] `GetExamHistoryQuery` (UC-59):
-    - Cross-read `tst.test_sessions` WHERE `student_id` AND `status != IN_PROGRESS`
+    - Cross-read `TestSession` WHERE `StudentID` AND `Status != IN_PROGRESS`
     - ORDER BY `start_time DESC`; paged; include `test_name`, `score`, `start_time`, `test_format`
 
 - [ ] **Mark Read Command**:
@@ -59,11 +59,11 @@
 
 - [ ] **Hangfire Jobs**:
   - [ ] `LeaderboardRecalculationJob` — cron `0 0 * * *`:
-    - Query all students' competency points from `rcm`
+    - Query all students' competency points from `CompetencyPoint`
     - Sort descending by `point`; assign rank
     - Cache in Redis `ntf:leaderboard:{grade}` (TTL 25 hours)
   - [ ] `NotificationPruneJob` — cron `0 1 * * *`:
-    - DELETE FROM `ntf.notifications` WHERE `created_time < DATEADD(day, -90, GETDATE())`
+    - DELETE FROM `Notification` WHERE `CreatedTime < DATEADD(day, -90, GETDATE())`
 
 - [ ] **EmailService**:
   - [ ] `SendWelcomeAsync(email, firstName)`

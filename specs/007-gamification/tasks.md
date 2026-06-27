@@ -1,19 +1,19 @@
 # Tasks Checklist: Gamification Module
 
-**Branch**: `007-gamification` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `007-gamification` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for 5 entities under `gam` schema:
+- [ ] Create EF `IEntityTypeConfiguration` for 5 entities mapped to current DB script tables:
   - [ ] `BadgeConfiguration` — UNIQUE `badge_name`; `condition_type` enum
   - [ ] `StudentBadgeConfiguration` — composite PK `(student_id, badge_id)`; no Update/Delete operations configured
   - [ ] `StudyStreakConfiguration` — UNIQUE `student_id` (1:1 per student); default `current_streak = 0`
   - [ ] `TargetScoreConfiguration` — UNIQUE `(student_id, tag_id)`; CHECK `target_point` in [0, 10] (DC-04)
   - [ ] `ActivityLogConfiguration` — no soft-delete, no update (BR-40); index `(student_id, activity_date)`
-- [ ] Create `GamificationDbContext.cs` with shared connection, `gam` schema default
-- [ ] Add EF migration: `dotnet ef migrations add Init_Gamification --project MathInsight.WebAPI`
+- [ ] Create `GamificationDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed badges: at minimum 3 badges (TOTAL_CORRECT_ANSWERS: 10, STREAK_DAYS: 7, TESTS_COMPLETED: 5)
 
 ---
@@ -43,9 +43,9 @@
 - [ ] **BadgeService**:
   - [ ] `CheckAndAwardBadgesAsync(studentId)`:
     - Fetch all unearned badges
-    - For `TOTAL_CORRECT_ANSWERS`: cross-read count from `tst.test_answers` where `is_correct = true`
+    - For `TOTAL_CORRECT_ANSWERS`: cross-read count from `TestAnswer` where `IsCorrect = true`
     - For `STREAK_DAYS`: read `StudyStreak.current_streak`
-    - For `TESTS_COMPLETED`: cross-read count from `tst.test_sessions` where `status = GRADED`
+    - For `TESTS_COMPLETED`: cross-read count from `TestSession` where `Status = GRADED`
     - If condition met AND `StudentBadge` not exists → insert (composite PK prevents duplicates)
     - Publish `BadgeAwardedEvent` → Notification module
 
@@ -57,7 +57,7 @@
   - [ ] `GetStreakQuery` (UC-81): return `current_streak`, `longest_streak`, `last_activity_date`
   - [ ] `GetBadgeListQuery` (UC-82): all badges + `earned = true/false` per student
   - [ ] `GetBadgeProgressQuery` (UC-84): for each unearned badge, calculate progress % vs condition_value
-  - [ ] `GetTargetProgressQuery` (UC-87): `TargetScore` list + cross-read `rcm.competency_points` for current vs target
+  - [ ] `GetTargetProgressQuery` (UC-87): `TargetScore` list + cross-read `CompetencyPoint` for current vs target
 
 - [ ] **Hangfire Scheduled Job** (streak reminder):
   - [ ] Register job: `0 13 * * *` (UTC, = 20:00 VN ICT)

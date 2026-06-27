@@ -1,7 +1,7 @@
 # Implementation Plan: Question Bank Module
 
 **Branch**: `002-question-bank` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/002-question-bank/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds the `MathInsight.Modules.QuestionBank` component managing the full lifecy
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
-| Storage | SQL Server (Schema: `qnb`) |
+| Storage | SQL Server; map to current DB script tables |
 | Media Storage | Cloudinary (image upload for UC-22) |
 | File Parsing | EPPlus (Excel), OpenXml SDK (Word) |
 | Testing | xUnit / Integration tests |
@@ -70,17 +70,17 @@ src/MathInsight.Modules.QuestionBank/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `qnb`)
+### Database Layer (Current DB Script Tables)
 
 | Table | Key Indexes |
 |-------|-------------|
-| `qnb.questions` | `(status, grade)` composite; `expert_id` BTREE |
-| `qnb.answers` | `question_id` FK BTREE |
-| `qnb.question_versions` | `question_id` FK BTREE |
-| `qnb.question_reports` | `question_id`, `reporter_account_id` |
-| `qnb.tag_topics` | `parent_tag_id` self-FK; `tag_name` UNIQUE |
-| `qnb.tag_difficulties` | `difficulty_name` UNIQUE, `level_value` UNIQUE |
-| `qnb.question_topics` | Composite UNIQUE `(question_id, tag_id)` |
+| `Question` | `(Status, IsActive)` index; `ExpertID` index |
+| `Answer` | `QuestionID` FK |
+| `QuestionVersion` | `QuestionID` FK |
+| `QuestionReport` | `QuestionID`, `ReporterAccountID` |
+| `TagTopic` | `ParentTagID` self-FK; `TagName` unique |
+| `TagDifficulty` | `DifficultyName`, `LevelValue` |
+| `QuestionTopic` | Question-topic junction |
 
 ### Service & API Gateway — REST Endpoints
 
@@ -130,7 +130,7 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
 
 ### Cross-Module Dependencies
 
-- **TestGen module** reads from `qnb.questions` (APPROVED, is_active=true) for blueprint generation.
+- **TestGen module** reads from `Question` (`Status = Approved`, `IsActive = true`) for blueprint generation.
 - **Testing module** references `question_id` in `test_questions` — questions cannot be hard-deleted if referenced.
 - **Cloudinary** integration for image upload (UC-22): REST call returns `picture_url`.
 - **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
@@ -138,7 +138,7 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
 ## Verification Plan
 
 1. `dotnet build` — zero compile errors.
-2. EF migration applies cleanly.
+2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests:
    - Create SingleChoice question with 2 answers, 1 correct → 201.
    - Create with no Topic tag → 400 (BR-05).

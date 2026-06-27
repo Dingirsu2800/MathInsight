@@ -1,12 +1,12 @@
 # Tasks Checklist: Question Bank Module
 
-**Branch**: `002-question-bank` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `002-question-bank` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all 7 entities under `qnb` schema:
+- [ ] Create EF `IEntityTypeConfiguration` for all 7 entities mapped to current DB script tables:
   - [ ] `QuestionConfiguration` — composite index `(status, grade)`, FK to `experts`, `tag_difficulties`
   - [ ] `AnswerConfiguration` — FK to `questions`, validate `is_correct`
   - [ ] `QuestionVersionConfiguration` — FK to `questions`, `experts`; `answers_snapshot` as TEXT/JSON
@@ -14,8 +14,8 @@
   - [ ] `TagTopicConfiguration` — self-referencing FK `parent_tag_id`; UNIQUE `tag_name`
   - [ ] `TagDifficultyConfiguration` — UNIQUE `difficulty_name`, UNIQUE `level_value`
   - [ ] `QuestionTopicConfiguration` — composite UNIQUE `(question_id, tag_id)`, `is_primary` flag
-- [ ] Create `QuestionBankDbContext.cs` with shared connection, `qnb` schema default
-- [ ] Add EF migration: `dotnet ef migrations add Init_QuestionBank --project MathInsight.WebAPI`
+- [ ] Create `QuestionBankDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed: 3 topic tags, 3 difficulty levels, 5 questions (3 APPROVED, 2 PENDING) per TDS §3.6
 
 ---

@@ -1,17 +1,17 @@
 # Tasks Checklist: Test Generator Module
 
-**Branch**: `009-test-generator` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `009-test-generator` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] Coordinate `tst` schema with Testing module (003) — same DbContext or separate registration
+- [ ] Coordinate current DB script table mappings with Testing module (003) — same DbContext or separate registration.
 - [ ] Create EF `IEntityTypeConfiguration` for 2 entities:
   - [ ] `BlueprintConfiguration` — `status` enum; `expert_id` FK; `reviewed_by` FK (nullable)
   - [ ] `BlueprintDetailConfiguration` — composite UNIQUE `(blueprint_id, tag_id, difficulty_id)`; `quantity >= 1` CHECK
-- [ ] Create `TestGenDbContext.cs` with shared connection, `tst` schema default
-- [ ] Add EF migration: `dotnet ef migrations add Init_TestGen --project MathInsight.WebAPI`
+- [ ] Create `TestGenDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed: 2 blueprints (1 APPROVED, 1 DRAFT), with detail slots per TDS §3.6
 
 ---
@@ -60,7 +60,7 @@
     - Bias probability 40% for WeakTag slots (reduced from 70%)
     - Difficulty downscale: Hard → Medium if WeakTag; Easy + P_tag < 5.0 → Remedial (10% bias)
     - Dedup: exclude `question_id`s from student's last 7 days of sessions
-    - Random sample from `qnb.questions` matching criteria
+    - Random sample from `Question` matching criteria
   - [ ] Create `Test` with unique `test_code` (e.g., 8-char nanoid)
   - [ ] Create `TestQuestion` records ordered by `question_order`
   - [ ] Transition Blueprint to `ACTIVE` on first generation (BR-48)

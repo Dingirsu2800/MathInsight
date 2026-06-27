@@ -57,7 +57,7 @@
      - `suggestUpscaleTo` (nullable) — populated when `P_tag ≥ 8.0` AND `mastery_status = MASTERED`. Contains the next difficulty level (e.g., `Hard`). Used by TestGen to optionally include harder questions for challenge mode.
      - `challengeMode` (bool) — `true` when `suggestUpscaleTo` is populated, signaling TestGen to bias toward the harder tier.
   2. **`GetStudentWeakTagsAsync(Guid studentId)`** — lightweight version returning raw `WeakTagDto` list (tagId, isRemedial) for simple lookup.
-- **BR-30**: Lecture/Material recommendations are derived by matching WeakTag `tag_id` to `lrn.lectures.tag_id` and material tags. When `isRemedial = true`, the result set is sorted with `priority: REMEDIAL` items first, ensuring foundational videos and reading materials appear at the top of UC-53 and UC-54 responses.
+- **BR-30**: Lecture/Material recommendations are derived by matching WeakTag `TagID` to `Lecture.TagID` and materials through `LectureMaterial`. When `isRemedial = true`, the result set is sorted with `priority: REMEDIAL` items first, ensuring foundational videos and reading materials appear at the top of UC-53 and UC-54 responses.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -130,12 +130,12 @@ public record WeakTagAdviceDto
 - WeakTag API returns within **2 seconds** (served from Redis cache on cache-hit).
 - SAR model training completes weekly without blocking API.
 - `P_tag` values always within 0.00–10.00 (DC-04).
-- Schema isolation enforced under `rcm` namespace.
+- Backend maps Recommender entities to the current SQL script tables; no separate `rcm` schema is created for MVP.
 
 ## Assumptions
 
-- Target database is SQL Server; schema prefix is `rcm`.
+- Target database is SQL Server. Backend maps to current DB script tables (`CompetencyPoint`, `TagsMastery`, `Lecture`, `Material`, `LectureMaterial`) instead of schema-prefixed tables.
 - Redis available for WeakTag cache (`rcm:weak-tags:{student_id}`).
 - SAR model executed via Python script runner (or microservice) — C# module calls Python subprocess or HTTP endpoint.
 - Grading module (004) publishes `GradeCalculatedEvent`; this module consumes it.
-- Learning module (006) owns `lectures` and `materials` tables — Recommender reads cross-schema.
+- Learning module (006) owns `Lecture`, `Material`, and `LectureMaterial`; Recommender reads those current DB script tables.

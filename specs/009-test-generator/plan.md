@@ -1,7 +1,7 @@
 # Implementation Plan: Test Generator Module
 
 **Branch**: `009-test-generator` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/009-test-generator/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds `MathInsight.Modules.TestGen` managing blueprint lifecycle (CRUD, peer re
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
-| Storage | SQL Server (Schema: `tst` — shared with Testing module 003) |
+| Storage | SQL Server; map to current DB script tables shared with Testing |
 | Internal API | `IRecommenderService` from Recommender module (005) |
 | Testing | xUnit / Integration tests |
 | Project Type | Modular Monolith Web API |
@@ -40,7 +40,7 @@ src/MathInsight.Modules.TestGen/
 ├── Events/
 │   └── BlueprintRejectedEvent.cs # MediatR → Notification module (notify creator)
 ├── Persistence/
-│   ├── TestGenDbContext.cs       # Shared `tst` schema connection
+│   ├── TestGenDbContext.cs       # maps to current DB script table names
 │   ├── Configurations/
 │   │   ├── BlueprintConfiguration.cs
 │   │   └── BlueprintDetailConfiguration.cs
@@ -53,14 +53,14 @@ src/MathInsight.Modules.TestGen/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `tst` — shared with Testing module)
+### Database Layer (Current DB Script Tables)
 
 | Table | Key Constraints |
 |-------|----------------|
-| `tst.blueprints` | UNIQUE `blueprint_name` (optional, or per expert); `status` enum; `expert_id` FK |
-| `tst.blueprint_details` | Composite UNIQUE `(blueprint_id, tag_id, difficulty_id)`; `quantity >= 1` |
+| `Blueprint` | Blueprint metadata; status check from DB script; `ExpertID` FK |
+| `BlueprintDetail` | Blueprint slot details; `BlueprintID`, `TagID`, `DifficultyID`, `Quantity` |
 
-**Note**: Tables `tst.tests` and `tst.test_questions` are owned by this module (created during test generation) and read by Testing module (003).
+**Note**: Tables `Test` and `TestQuestion` are created during test generation and read by Testing module (003).
 
 ### Service & API Gateway — REST Endpoints
 
@@ -103,7 +103,7 @@ POST   /api/v1/tests/generate                 # Generate test from approved blue
 //         * Difficulty downscale: if WeakTag at Hard → query Medium instead
 //         * Remedial: if WeakTag at Easy AND P_tag < 5.0 → bias = 10%, no downscale
 //       - NO or MASTERED: standard selection
-//    c. Query qnb.questions WHERE:
+//    c. Query Question WHERE:
 //       - question_id NOT IN (previous test sessions for this student, last 7 days) — dedup
 //       - tag_id = slot.tag_id (or adjusted difficulty)
 //       - difficulty_id = slot.difficulty_id (adjusted if WeakTag)
@@ -134,7 +134,7 @@ POST   /api/v1/tests/generate                 # Generate test from approved blue
 ## Verification Plan
 
 1. `dotnet build` — zero compile errors.
-2. EF migration: `tst.blueprints` and `tst.blueprint_details` tables created (coordinated with 003).
+2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests (xUnit):
    - UC-43: Create blueprint with 3 slots summing to 40 questions → DRAFT.
    - Submit for review → PENDING_REVIEW; slots summing to 39 → 422 (BR-07).

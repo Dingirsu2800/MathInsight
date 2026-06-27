@@ -99,14 +99,14 @@
 ### Measurable Outcomes
 
 - All core API endpoints return responses within **2 seconds** (NFR-P01).
-- Schema isolation enforced under `qnb` namespace.
+- Backend maps Question Bank entities to the current SQL script tables; no separate `qnb` schema is created for MVP.
 - Version snapshot captured on every update to an `APPROVED` question.
 - File import pipeline processes 100-question batch within 30 seconds.
 - Tag cascade filtering returns correct subtopics within 500ms.
 
 ## Assumptions
 
-- Target database is SQL Server; schema prefix is `qnb`.
+- Target database is SQL Server. Backend maps to current DB script tables (`Question`, `Answer`, `QuestionVersion`, `QuestionReport`, `TagTopic`, `TagDifficulty`, `QuestionTopic`) instead of schema-prefixed tables.
 - Cloudinary is used for image upload (picture_url from UC-22).
 - MediatR domain events handle async version snapshot creation.
 - LaTeX rendering is handled client-side (KaTeX/MathJax); backend stores raw LaTeX strings.

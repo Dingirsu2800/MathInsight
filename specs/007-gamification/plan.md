@@ -1,7 +1,7 @@
 # Implementation Plan: Gamification Module
 
 **Branch**: `007-gamification` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/007-gamification/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds `MathInsight.Modules.Gamification` managing study streaks, badge awards, 
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit |
-| Storage | SQL Server (Schema: `gam`) |
+| Storage | SQL Server; map to current DB script tables |
 | Scheduler | Hangfire (optional: daily streak reminder check) |
 | Testing | xUnit / Integration tests |
 | Project Type | Modular Monolith Web API |
@@ -39,7 +39,7 @@ src/MathInsight.Modules.Gamification/
 │   ├── GetBadgeProgress/           # UC-84: progress toward each unearned badge
 │   └── GetTargetProgress/          # UC-87: target_point vs current competency per tag
 ├── Persistence/
-│   ├── GamificationDbContext.cs    # `gam` schema
+│   ├── GamificationDbContext.cs    # maps to current DB script table names
 │   ├── Configurations/
 │   │   ├── BadgeConfiguration.cs
 │   │   ├── StudentBadgeConfiguration.cs   # Composite PK; immutable (no update/delete)
@@ -54,15 +54,15 @@ src/MathInsight.Modules.Gamification/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `gam`)
+### Database Layer (Current DB Script Tables)
 
 | Table | Key Constraints |
 |-------|----------------|
-| `gam.badges` | UNIQUE `badge_name`; `condition_type` enum |
-| `gam.student_badges` | Composite PK `(student_id, badge_id)`; insert-only |
-| `gam.study_streaks` | UNIQUE `student_id` (1:1 per student) |
-| `gam.target_scores` | UNIQUE `(student_id, tag_id)`; CHECK `target_point` in [0, 10] |
-| `gam.activity_logs` | No update/delete; `activity_type` enum; indexed by `(student_id, activity_date)` |
+| `Badge` | Unique badge name; condition type check from DB script |
+| `StudentBadge` | Composite PK `(StudentID, BadgeID)`; insert-only |
+| `StudyStreak` | Student streak state |
+| `TargetScore` | Target per `(StudentID, TagID)`; target point in [0, 10] |
+| `ActivityLog` | Insert-only activity history |
 
 ### Service & API Gateway — REST Endpoints
 
@@ -73,7 +73,7 @@ GET    /api/v1/gamification/badges           # UC-82: all badges (earned/locked)
 GET    /api/v1/gamification/badges/progress  # UC-84: % progress per locked badge
 POST   /api/v1/gamification/targets          # UC-85: set target (UNIQUE per tag)
 PUT    /api/v1/gamification/targets/{id}     # UC-86: update target_point
-GET    /api/v1/gamification/targets          # UC-87: target vs competency (cross-read rcm.competency_points)
+GET    /api/v1/gamification/targets          # UC-87: target vs competency (cross-read CompetencyPoint)
 ```
 
 ### Integration & Domain Events (Consumed)
@@ -107,12 +107,12 @@ GET    /api/v1/gamification/targets          # UC-87: target vs competency (cros
 // Fetch all badges not yet earned by student
 // For each badge:
 //   if condition_type == TOTAL_CORRECT_ANSWERS:
-//     count = SELECT COUNT(*) FROM tst.test_answers WHERE student answers + is_correct=true
+//     count = SELECT COUNT(*) FROM TestAnswer WHERE student answers + IsCorrect=true
 //     if count >= condition_value → award
 //   if condition_type == STREAK_DAYS:
 //     if StudyStreak.current_streak >= condition_value → award
 //   if condition_type == TESTS_COMPLETED:
-//     count = SELECT COUNT(*) FROM tst.test_sessions WHERE student + status=GRADED
+//     count = SELECT COUNT(*) FROM TestSession WHERE student + Status=GRADED
 //     if count >= condition_value → award
 // Insert StudentBadge if not exists; publish BadgeAwardedEvent → Notification
 ```
@@ -126,7 +126,7 @@ GET    /api/v1/gamification/targets          # UC-87: target vs competency (cros
 ## Verification Plan
 
 1. `dotnet build` — zero compile errors.
-2. EF migration: `gam` schema tables created.
+2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests (xUnit):
    - `ActivityLoggedEvent` → `ActivityLog` record inserted (insert-only, no update possible).
    - UC-81: View streak → `current_streak = 3` after 3 consecutive days.
@@ -135,4 +135,4 @@ GET    /api/v1/gamification/targets          # UC-87: target vs competency (cros
    - UC-85: Set target for `tag_id` = Algebra → created.
    - UC-85: Set second target for same `tag_id` → 409 (UNIQUE constraint).
    - UC-86: Update target_point = 11 → 400 (DC-04).
-   - UC-87: Target progress shows correct vs `rcm.competency_points`.
+   - UC-87: Target progress shows correct vs `CompetencyPoint`.

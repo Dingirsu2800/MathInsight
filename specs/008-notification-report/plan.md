@@ -1,7 +1,7 @@
 # Implementation Plan: Notification & Report Module
 
 **Branch**: `008-notification-report` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/008-notification-report/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds `MathInsight.Modules.Notification_Report` managing real-time SignalR push
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, SignalR, Hangfire |
-| Storage | SQL Server (Schema: `ntf`) + cross-reads from `rcm`, `tst`, `gam` |
+| Storage | SQL Server; map to current DB script tables and cross-read Recommender/Testing/Gamification tables |
 | Real-time | SignalR Hub at `/hubs/notification` |
 | Cache | Redis (heatmap, leaderboard fallback) |
 | Email | SMTP / SendGrid |
@@ -52,7 +52,7 @@ src/MathInsight.Modules.Notification_Report/
 │   ├── LeaderboardRecalculationJob.cs    # Hangfire: daily 00:00 (BR-19)
 │   └── NotificationPruneJob.cs           # Hangfire: daily 01:00 (prune > 90 days)
 ├── Persistence/
-│   ├── NotificationDbContext.cs          # `ntf` schema
+│   ├── NotificationDbContext.cs          # maps to current DB script table names
 │   ├── Configurations/
 │   │   └── NotificationConfiguration.cs
 │   └── Migrations/
@@ -64,11 +64,11 @@ src/MathInsight.Modules.Notification_Report/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `ntf`)
+### Database Layer (Current DB Script Tables)
 
 | Table | Key Indexes |
 |-------|-------------|
-| `ntf.notifications` | `(account_id, is_read)` composite; `created_time` BTREE for pruning |
+| `Notification` | `(UserID, IsRead)` query pattern; `CreatedTime` for pruning |
 
 ### Service & API Gateway — REST Endpoints
 
@@ -109,7 +109,7 @@ Method: ReceiveNotification(payload)         # Client-side event handler name
 
 ```csharp
 // NotificationService.SendAsync(accountId, title, content, link):
-// 1. Insert Notification record into ntf.notifications
+// 1. Insert Notification record into Notification
 // 2. Get SignalR connectionId for accountId from Redis/Hub context
 // 3. If connected: _hubContext.Clients.User(accountId).SendAsync("ReceiveNotification", payload)
 // 4. If offline: payload stored in DB; client fetches on reconnect/page load
@@ -119,19 +119,19 @@ Method: ReceiveNotification(payload)         # Client-side event handler name
 
 | Job | Cron | Action |
 |-----|------|--------|
-| `LeaderboardRecalculationJob` | `0 0 * * *` (00:00 daily) | Query `rcm.competency_points` for all students → sort → cache in Redis `ntf:leaderboard:{grade}` |
-| `NotificationPruneJob` | `0 1 * * *` (01:00 daily) | DELETE FROM `ntf.notifications` WHERE `created_time < NOW - 90 days` |
+| `LeaderboardRecalculationJob` | `0 0 * * *` (00:00 daily) | Query `CompetencyPoint` for all students → sort → cache in Redis `ntf:leaderboard:{grade}` |
+| `NotificationPruneJob` | `0 1 * * *` (01:00 daily) | DELETE FROM `Notification` WHERE `CreatedTime` older than 90 days |
 
 ### Report Query Data Sources
 
 ```
 GET /api/v1/reports/competency:
-  → JOIN rcm.competency_points ON student_id
-  → JOIN rcm.tags_mastery ON student_id GROUP BY grade
+  → JOIN CompetencyPoint ON StudentID
+  → JOIN TagsMastery ON StudentID GROUP BY Grade
   → Return: overall point, weak count, mastered count
 
 GET /api/v1/reports/heatmap:
-  → rcm.tags_mastery WHERE student_id = current
+  → TagsMastery WHERE StudentID = current
   → Return matrix: tag_name × difficulty_name → mastery_status + accuracy_rate
 
 GET /api/v1/reports/leaderboard:
@@ -139,14 +139,14 @@ GET /api/v1/reports/leaderboard:
   → Fallback: live query if Redis miss
 
 GET /api/v1/reports/exam-history:
-  → tst.test_sessions WHERE student_id + status IN (SUBMITTED, FORCE_SUBMITTED, GRADED)
+  → TestSession WHERE StudentID + Status IN submitted/graded states
   → ORDER BY start_time DESC; PAGE
 ```
 
 ## Verification Plan
 
 1. `dotnet build` — zero compile errors.
-2. EF migration: `ntf` schema.
+2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests:
    - SignalR hub connects with valid JWT → `ReceiveNotification` fires on event.
    - `GradeCalculatedEvent` → Notification record created + SignalR push.

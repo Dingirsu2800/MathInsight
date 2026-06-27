@@ -1,7 +1,7 @@
 # Implementation Plan: Recommender Module
 
 **Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-06-26 *(Dynamic Test Generator Loop)*
-**Spec**: [spec.md](file:///c:/Users/Admin/Documents/CODIN/ASP.net/MathInsight/specs/005-recommender/spec.md)
+**Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Builds `MathInsight.Modules.Recommender` — handles competency tracking (`Compe
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
-| Storage | SQL Server (Schema: `rcm`) |
+| Storage | SQL Server; map to current DB script tables |
 | Cache | Redis (`rcm:weak-tags:{student_id}`, TTL 1 hour) |
 | SAR Engine | Python `recommenders` library (subprocess or separate service) |
 | Scheduler | Hangfire (weekly SAR model training) |
@@ -37,10 +37,10 @@ src/MathInsight.Modules.Recommender/
 │   └── SarModelRunner.cs               # Python subprocess caller for SAR training/prediction
 ├── Queries/
 │   ├── GetWeakTags/                    # UC-52: return WeakTags from Redis or DB
-│   ├── GetRecommendedLectures/         # UC-53: match weak tag_id to lrn.lectures.tag_id
-│   └── GetRecommendedMaterials/        # UC-54: match weak tag_id to lrn.materials
+│   ├── GetRecommendedLectures/         # UC-53: match WeakTag TagID to Lecture.TagID
+│   └── GetRecommendedMaterials/        # UC-54: match through LectureMaterial and Material
 ├── Persistence/
-│   ├── RecommenderDbContext.cs         # `rcm` schema
+│   ├── RecommenderDbContext.cs         # maps to current DB script table names
 │   ├── Configurations/
 │   │   ├── CompetencyPointConfiguration.cs  # UNIQUE (student_id, grade)
 │   │   └── TagsMasteryConfiguration.cs      # UNIQUE (student_id, tag_id, difficulty_id)
@@ -52,12 +52,12 @@ src/MathInsight.Modules.Recommender/
 
 ## Proposed Changes
 
-### Database Layer (Schema: `rcm`)
+### Database Layer (Current DB Script Tables)
 
 | Table | Key Indexes |
 |-------|-------------|
-| `rcm.competency_points` | UNIQUE `(student_id, grade)`; `point` CHECK 0.00–10.00 |
-| `rcm.tags_mastery` | UNIQUE `(student_id, tag_id, difficulty_id)` |
+| `CompetencyPoint` | UNIQUE `(StudentID, Grade)`; `Point` range check |
+| `TagsMastery` | UNIQUE `(StudentID, TagID, DifficultyID)` |
 
 ### Service & API Gateway — REST Endpoints
 
@@ -142,16 +142,16 @@ Cache is invalidated on every `GradeCalculatedEvent` for that student (both `wea
 
 ```
 Weekly Hangfire job:
-1. Export interaction matrix from rcm.tags_mastery (student_id × tag_id × accuracy_rate)
+1. Export interaction matrix from `TagsMastery` (`StudentID` × `TagID` × `AccuracyRate`)
 2. Call Python script: python sar_train.py --input interactions.csv --output model.pkl
 3. Run predictions for all active students
-4. Write recommendation scores to Redis or temporary rcm.sar_recommendations table
+4. Write recommendation scores to Redis; do not add new DB table unless explicitly approved.
 ```
 
 ## Verification Plan
 
 1. `dotnet build` — zero compile errors.
-2. EF migration applies cleanly.
+2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests (xUnit):
    - `GradeCalculatedEvent` → `TagsMastery` updated correctly for each tag.
    - `accuracy_rate < 50%` after 5 attempts → `mastery_status = LEARNING` (not MASTERED).

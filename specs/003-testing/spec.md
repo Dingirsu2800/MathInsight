@@ -90,12 +90,12 @@ IN_PROGRESS ──(submit)──────────────▶ SUBMITTE
 - All test session API endpoints respond within **2 seconds** (NFR-P01).
 - Auto-save completes within **1 second** of trigger.
 - Force-submit on tab switch #5 triggers within **500ms**.
-- Schema isolation enforced under `tst` namespace.
+- Backend maps Testing entities to the current SQL script tables; no separate `tst` schema is created for MVP.
 - Session recovery after network disconnection resumes within **3 seconds** of reconnect.
 
 ## Assumptions
 
-- Target database is SQL Server; schema prefix is `tst` (shared with TestGen module).
+- Target database is SQL Server. Backend maps to current DB script tables (`Test`, `TestQuestion`, `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestIncidents`) instead of schema-prefixed tables.
 - MediatR event `TestSubmittedEvent` is published by this module and consumed by Grading module (004).
 - Real-time timer sync may use SignalR or server-side session expiry check on every auto-save request.
 - `TestGen` module (009) is responsible for creating the `Test` and `TestQuestion` records before session start.

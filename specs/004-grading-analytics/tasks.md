@@ -1,14 +1,14 @@
 # Tasks Checklist: Grading & Analytics Module
 
-**Branch**: `004-grading-analytics` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `004-grading-analytics` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
 ## Phase 1: Persistence Setup
 
-- [ ] No owned tables — this module cross-reads from `tst` and `qnb` schemas
-- [ ] Configure read access to `tst.test_sessions`, `tst.test_answers`, `tst.test_answer_options`
-- [ ] Configure read access to `qnb.questions` (default_point), `qnb.answers` (is_correct)
+- [ ] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
+- [ ] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
+- [ ] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
 - [ ] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules
 
 ---

@@ -1,4 +1,4 @@
-**Branch**: `005-recommender` | **Spec**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md)
+**Branch**: `005-recommender` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 > **Updated**: 2026-06-26 — Added Dynamic Test Generator Loop tasks (BR-29)
 
@@ -6,11 +6,11 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for 2 entities under `rcm` schema:
+- [ ] Create EF `IEntityTypeConfiguration` for 2 entities mapped to current DB script tables:
   - [ ] `CompetencyPointConfiguration` — UNIQUE `(student_id, grade)`; CHECK constraint `point` in [0.00, 10.00]
   - [ ] `TagsMasteryConfiguration` — UNIQUE `(student_id, tag_id, difficulty_id)`; `mastery_status` enum constraint; `accuracy_rate` in [0.00, 100.00]
-- [ ] Create `RecommenderDbContext.cs` with shared connection, `rcm` schema default
-- [ ] Add EF migration: `dotnet ef migrations add Init_Recommender --project MathInsight.WebAPI`
+- [ ] Create `RecommenderDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed: 5 TagsMastery records for `student_01` (mix of statuses)
 
 ---
@@ -58,7 +58,7 @@
 - [ ] **DifficultyMappingService** (`IDifficultyMappingService`) — NEW (BR-29):
   - [ ] `MapRecommendedDifficulty(currentDifficultyLevel)` — returns `recommendedPracticeDifficultyId`:
     - Hard → Medium; Medium → Easy; Easy → Easy (Remedial, no further change)
-    - Look up difficulty IDs from `qnb.tag_difficulties` (ordered by `level_value`)
+    - Look up difficulty IDs from `TagDifficulty` ordered by `LevelValue`
   - [ ] `MapUpscale(currentDifficultyLevel)` — returns `suggestUpscaleTo` (nullable):
     - Easy → Medium; Medium → Hard; Hard → null
     - Always sets `challengeMode = true`
@@ -74,11 +74,11 @@
 - [ ] **Recommendation Queries** — UPDATED:
   - [ ] `GetWeakTagsQuery` — UC-52: call `GetStudentWeakTagsAsync()` (simplified DTO for frontend)
   - [ ] `GetRecommendedLecturesQuery` — UC-53:
-    - Cross-read `lrn.lectures` WHERE `tag_id IN (weakTagIds)` AND `status = PUBLISHED`
+    - Cross-read `Lecture` WHERE `TagID IN (weakTagIds)` AND `Status = 'Published'`
     - **Priority sort**: if `isRemedial = true` for a tag → its lectures get `priority = REMEDIAL` and appear first in result list (BR-30)
     - Non-remedial WeakTag lectures appear next; general recommendations last
   - [ ] `GetRecommendedMaterialsQuery` — UC-54:
-    - Cross-read `lrn.materials` via `lecture_materials` junction
+    - Cross-read `Material` via `LectureMaterial` junction
     - Apply same `REMEDIAL` priority sort for materials matching Remedial tags
 
 - [ ] **SAR Model Integration** (optional for MVP, fallback to rule-based):
