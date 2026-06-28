@@ -22,11 +22,16 @@ For local development, infrastructure that is not required for the active featur
 
 Before a change is considered ready, the affected application must build successfully. Backend changes require `dotnet build`. Frontend changes require `npm run build`. Warnings about vulnerable packages, broken contracts, or schema drift must be reported instead of ignored. Generated outputs such as `bin`, `obj`, `node_modules`, and `dist` must not be committed.
 
+### VI. Stable API Contracts and Client Localization
+
+Backend APIs must return stable machine-readable error codes for client handling. Developer-facing messages may be written in English, but user-facing localization belongs to frontend clients. Frontend UI structure, such as role-specific pages or workflow-specific screens, must not force duplicated backend endpoints unless a spec explicitly requires different business rules, authorization, or validation.
+
 ## Product Decisions
 
 - Frontend stack: React with JavaScript and Vite. Do not migrate to TypeScript unless the team explicitly changes the stack.
 - Backend stack: ASP.NET Core on .NET 10, deployed to Azure App Service or an equivalent Azure-hosted backend.
 - Database: Azure SQL / SQL Server. Connection strings and secrets must come from environment variables, user secrets, or Azure configuration, never committed files.
+- Backend endpoints should remain role-agnostic when business behavior is shared. Frontend clients may split UI by role or workflow, but backend APIs should expose separate endpoints only when behavior, authorization, or validation materially differs.
 - Student and Expert self-registration accounts start inactive and become usable only after email confirmation.
 - Teacher registration requires an admin approval flow before activation.
 - Question Bank: Expert-created questions are published by default. Student reports do not hide a question or change its status. Teachers cannot report questions. Admin rejection requires the original Expert to handle it and Admin to re-review it.
@@ -45,4 +50,4 @@ Before a change is considered ready, the affected application must build success
 
 This constitution has higher priority than placeholder implementation details and lower priority than explicit team decisions recorded in accepted specs or approved issue comments. Amendments require a short rationale, impact note, and approval from the team lead or project owner. Any change that affects submitted reports, ERD, or database schema must be called out before implementation.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-26 | **Last Amended**: 2026-06-26
+**Version**: 1.1.0 | **Ratified**: 2026-06-26 | **Last Amended**: 2026-06-28

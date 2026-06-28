@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-identity-access`
 
-**Created**: 2026-06-23 | **Updated**: 2026-06-26
+**Created**: 2026-06-23 | **Updated**: 2026-06-28
 
 **Status**: Approved
 
@@ -56,10 +56,12 @@
 - **BR-08**: Password must be minimum **8 characters**, maximum **128 characters**. Stored as BCrypt hash (strength 12). Plaintext storage is strictly prohibited.
 - **BR-09**: JWT token contains: `account_id`, `role`, `email`. Token validated by YARP Gateway on every request.
 - **BR-10**: On logout, the JWT is immediately blacklisted in Redis to prevent reuse.
+- **BR-11**: Authentication APIs must return stable machine-readable error `code` values in addition to developer-facing `message` text. Frontend clients are responsible for localizing these codes into Vietnamese user-facing messages.
+- **BR-12**: Login is exposed as a single backend endpoint (`POST /api/v1/auth/login`) for all roles. Frontend clients may provide role-specific login pages, but backend authentication remains role-agnostic and returns the authenticated user's role for client-side routing and access handling.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Account**: `account_id` (VARCHAR 36, PK), `username` (VARCHAR 50, UNIQUE), `password_hash` (VARCHAR 255), `email` (VARCHAR 100, UNIQUE), `first_name`, `last_name`, `phone_number`, `date_of_birth`, `avatar_url`, `role_id` (FK → roles), `is_active` (BOOLEAN, DEFAULT TRUE), `created_time`
+- **Account**: `account_id` (VARCHAR 36, PK), `username` (VARCHAR 50, UNIQUE), `password_hash` (VARCHAR 255), `email` (VARCHAR 100, UNIQUE), `first_name`, `last_name`, `phone_number`, `date_of_birth`, `avatar_url`, `role_id` (FK → roles), `is_active` (BOOLEAN, DEFAULT FALSE), `created_time`
 - **Expert**: `expert_id` (PK, FK → accounts), `specialty`
 - **Student**: `student_id` (PK, FK → accounts), `gender`, `school`, `current_grade`
 - **Teacher**: `teacher_id` (PK, FK → accounts), `biography`, `is_verified` (BOOLEAN)
@@ -94,6 +96,8 @@
 - Google OAuth callback completes within **3 seconds** (NFR-AC-FT01-02).
 - JWT validation at YARP layer adds < 10ms overhead.
 - Backend maps Identity entities to the current SQL script tables; no separate `usr` schema is created for MVP.
+- Auth error responses include stable `code` values that frontend clients can map to Vietnamese messages.
+- Successful login responses include the authenticated user's role for frontend routing.
 - All seed accounts (`admin`, `expert_01`, `teacher_01`, `student_01`, `student_02`) are testable end-to-end.
 
 ## Assumptions

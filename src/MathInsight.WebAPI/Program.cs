@@ -1,4 +1,8 @@
 using MassTransit;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using MathInsight.Modules.Identity_Access;
 using MathInsight.Modules.QuestionBank;
 using MathInsight.Modules.Testing;
@@ -11,12 +15,15 @@ using MathInsight.Modules.Notification_Report;
 using MathInsight.Modules.Grading_Analytics.Consumers;
 using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
+using System.IdentityModel.Tokens.Jwt;
+using MathInsight.Modules.Identity_Access.Services.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 const string CorsPolicyName = "MathInsightCors";
 
 // 1. Add MediatR (In-process Event Bus)
-builder.Services.AddMediatR(cfg => {
+builder.Services.AddMediatR(cfg =>
+{
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
     cfg.RegisterServicesFromAssembly(typeof(TestSubmittedHandler).Assembly); // Registers Grading Handlers
 });
@@ -35,7 +42,8 @@ builder.Services.AddMassTransit(x =>
     {
         x.UsingRabbitMq((context, cfg) =>
         {
-            cfg.Host(builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost", "/", h => {
+            cfg.Host(builder.Configuration.GetValue<string>("RabbitMQ:Host") ?? "localhost", "/", h =>
+            {
                 h.Username(builder.Configuration.GetValue<string>("RabbitMQ:Username") ?? "guest");
                 h.Password(builder.Configuration.GetValue<string>("RabbitMQ:Password") ?? "guest");
             });
@@ -85,10 +93,93 @@ builder.Services.AddNotificationModule(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+//5 .Jwt
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
+    ?? throw new InvalidOperationException("Jwt:SigningKey is not configured.");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSigningKey)),
+
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1),
+
+            NameClaimType = ClaimTypes.NameIdentifier,
+            RoleClaimType = ClaimTypes.Role
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                if (principal is null)
+                {
+                    context.Fail("Missing principal.");
+                    return;
+                }
+
+                var role = principal.FindFirst(ClaimTypes.Role)?.Value
+                    ?? principal.FindFirst("role")?.Value;
+
+                var tokenId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
+                    ?? principal.FindFirst("jti")?.Value;
+
+                if (string.IsNullOrWhiteSpace(tokenId))
+                {
+                    context.Fail("Missing jti claim.");
+                    return;
+                }
+
+                var authSessionService = context.HttpContext.RequestServices
+                    .GetRequiredService<IAuthSessionService>();
+
+                var isBlacklisted = await authSessionService.IsTokenBlacklistedAsync(tokenId);
+                if (isBlacklisted)
+                {
+                    context.Fail("Token has been revoked.");
+                    return;
+                }
+
+                // BR-02 applies to Student accounts.
+                if (!string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var accountId = principal.FindFirst("account_id")?.Value;
+                if (string.IsNullOrWhiteSpace(accountId))
+                {
+                    context.Fail("Missing account_id claim.");
+                    return;
+                }
+
+                var isActiveSession = await authSessionService.IsActiveSessionAsync(accountId, tokenId);
+                if (!isActiveSession)
+                {
+                    context.Fail("Session is no longer active.");
+                }
+            }
+        };
+    });
+
 var app = builder.Build();
 
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
