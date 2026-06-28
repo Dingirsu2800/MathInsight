@@ -22,8 +22,16 @@ public static class IdentityModuleExtensions
 
         services.AddScoped<ITokenService, TokenService>();
 
-        services.AddSharedRedis(configuration);
-        services.AddScoped<IAuthSessionService, RedisAuthSessionService>();
+        var redisEnabled = configuration.GetValue<bool>("Redis:Enabled");
+        if (redisEnabled)
+        {
+            services.AddSharedRedis(configuration);
+            services.AddScoped<IAuthSessionService, RedisAuthSessionService>();
+        }
+        else
+        {
+            services.AddSingleton<IAuthSessionService, InMemoryAuthSessionService>();
+        }
 
         return services;
     }

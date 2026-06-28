@@ -3,6 +3,7 @@
 		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>4c1b0a00-c521-499e-adeb-45bcf670890b</UserSecretsId>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="MassTransit.RabbitMQ" Version="8.2.0" />

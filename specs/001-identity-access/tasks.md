@@ -56,7 +56,7 @@
 - [ ] **Auth session service**:
   - [x] Create `IAuthSessionService` under `Services/Auth`
   - [x] Create `RedisAuthSessionService` for login lockout, token blacklist, and Student active-session tracking
-  - [ ] Optionally create `InMemoryAuthSessionService` for local development when Redis is disabled
+  - [x] Optionally create `InMemoryAuthSessionService` for local development when Redis is disabled
   - [x] Register the selected implementation in `IdentityModuleExtensions.cs`
 
 ---
