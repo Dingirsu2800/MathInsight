@@ -34,6 +34,7 @@ coverage/
 !.env.example
 appsettings.Development.json
 appsettings.Local.json
+TEAM_SECRETS.local.md
 
 # Logs and temporary files
 *.log

@@ -30,7 +30,7 @@ Backend APIs must return stable machine-readable error codes for client handling
 
 - Frontend stack: React with JavaScript and Vite. Do not migrate to TypeScript unless the team explicitly changes the stack.
 - Backend stack: ASP.NET Core on .NET 10, deployed to Azure App Service or an equivalent Azure-hosted backend.
-- Database: Azure SQL / SQL Server. Connection strings and secrets must come from environment variables, user secrets, or Azure configuration, never committed files.
+- Database: Azure SQL / SQL Server. Connection strings and secrets must come from environment variables, .NET User Secrets, or Azure configuration, never committed files.
 - Backend endpoints should remain role-agnostic when business behavior is shared. Frontend clients may split UI by role or workflow, but backend APIs should expose separate endpoints only when behavior, authorization, or validation materially differs.
 - Student and Expert self-registration accounts start inactive and become usable only after email confirmation.
 - Teacher registration requires an admin approval flow before activation.
@@ -43,11 +43,12 @@ Backend APIs must return stable machine-readable error codes for client handling
 1. Confirm the relevant spec before coding.
 2. Keep each pull request focused on one feature slice or one foundation change.
 3. Update documentation only when it is part of the approved scope.
-4. Keep local configuration in ignored files such as `.env` or `appsettings.Development.json`.
-5. Do not commit generated build outputs, dependency folders, local database files, or secrets.
+4. For backend local development, store sensitive values with `.NET User Secrets` using `dotnet user-secrets` and the WebAPI project path, for example `--project src/MathInsight.WebAPI`. Do not rely on committed files for database passwords, JWT secrets, Redis connection strings, email credentials, or third-party API keys.
+5. Keep non-sensitive local configuration in ignored files such as `.env` or `appsettings.Development.json`.
+6. Do not commit generated build outputs, dependency folders, local database files, or secrets.
 
 ## Governance
 
 This constitution has higher priority than placeholder implementation details and lower priority than explicit team decisions recorded in accepted specs or approved issue comments. Amendments require a short rationale, impact note, and approval from the team lead or project owner. Any change that affects submitted reports, ERD, or database schema must be called out before implementation.
 
-**Version**: 1.1.0 | **Ratified**: 2026-06-26 | **Last Amended**: 2026-06-28
+**Version**: 1.1.1 | **Ratified**: 2026-06-26 | **Last Amended**: 2026-06-30
