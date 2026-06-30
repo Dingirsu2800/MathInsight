@@ -1,11 +1,11 @@
 # Implementation Plan: Question Bank Module
 
-**Branch**: `002-question-bank` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
+**Branch**: `002-question-bank` | **Date**: 2026-06-23 | **Updated**: 2026-06-30
 **Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Builds the `MathInsight.Modules.QuestionBank` component managing the full lifecycle of math questions (LaTeX-based), tag taxonomy (topics + difficulties), expert peer reporting, version history, and bulk import parsing. Registers with YARP and DI composition root.
+Builds the `MathInsight.Modules.QuestionBank` component managing the full lifecycle of math questions authored through a rich-text/WYSIWYG editor, tag taxonomy (topics + difficulties), expert peer reporting, version history, and bulk import parsing. Registers with YARP and DI composition root.
 
 ## Technical Context
 

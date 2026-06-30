@@ -46,7 +46,7 @@
 
 - [ ] **ChatbotService** (UC-51):
   - [ ] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
-  - [ ] POST to OpenAI/Claude API with system prompt: "math tutor, explain step-by-step in LaTeX"
+  - [ ] POST to OpenAI/Claude API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
   - [ ] Apply 10-second timeout, Polly circuit breaker (3 fails = open 30s)
   - [ ] Enforce 1 request per student per session (in-memory rate limiter or Redis key)
   - [ ] Return explanation string — do NOT persist to database (BR-21)

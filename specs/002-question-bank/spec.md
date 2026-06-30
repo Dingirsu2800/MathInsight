@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-question-bank`
 
-**Created**: 2026-06-23 | **Updated**: 2026-06-26
+**Created**: 2026-06-23 | **Updated**: 2026-06-30
 
 **Status**: Approved
 
@@ -42,17 +42,17 @@
 - **Empty answers list**: SingleChoice / MultipleSelect must have at least one correct answer → HTTP 400.
 - **Tag not found**: Assigning a non-existent `tag_id` → HTTP 422.
 - **Question in active test**: Cannot hard-delete or deactivate a question used in existing `TestQuestion` records → HTTP 409.
-- **LaTeX invalid**: If `question_content` contains invalid LaTeX → reject with HTTP 422 (frontend pre-validates; backend logs).
+- **Unsupported content format**: If `question_content` contains unsafe HTML, unsupported embedded content, or malformed rich-text payload → reject with HTTP 422 (frontend pre-validates; backend sanitizes/logs).
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **DC-02**: Entities cannot be hard-deleted if referenced in test sessions or blueprints. Soft delete enforced via `is_active = false` or `status = REJECTED/ARCHIVED`.
-- **BR-04**: All mathematical questions and solutions must be formatted using LaTeX. Static images for formulas are not permitted.
+- **BR-04**: Mathematical questions and solutions must be entered through a user-friendly rich-text/WYSIWYG editor. Experts are not required to know or type technical markup syntax. The editor may provide toolbar-based math symbols, superscript/subscript, fractions, tables, and optional image upload for diagrams or complex formulas.
 - **BR-05**: A newly created question must be assigned at least one **Topic** tag and one **Difficulty** tag before saving.
 - **BR-50**: Each `SINGLE_CHOICE` question must have **exactly one** correct answer. `MULTIPLE_SELECT` must have **at least one** correct answer.
-- **BR-61**: The correct answer for a `SHORT_ANSWER` question must be plain text or numeric (max 100 chars), must not contain LaTeX.
+- **BR-61**: The correct answer for a `SHORT_ANSWER` question must be plain text or numeric (max 100 chars), without rich-text formatting or images.
 - **BR-62**: `TRUE_FALSE` questions must have **exactly 2** options (True / False) with **exactly 1** correct answer.
 - **BR-52**: Topic tags are cascading: selecting a parent tag automatically filters child subtopics only.
 - **BR-54**: Changes to `APPROVED` questions must capture a `QuestionVersion` snapshot **before** applying the update.
@@ -78,7 +78,7 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Question**: `question_id`, `question_content` (TEXT, LaTeX), `picture_url`, `difficulty_id` (FK → tag_difficulties), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER**), `expert_id` (FK → experts), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
+- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK → tag_difficulties), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER**), `expert_id` (FK → experts), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
 - **Answer**: `answer_id`, `question_id` (FK), `answer_content` (TEXT), `is_correct` (BOOLEAN)
 - **QuestionVersion**: `version_id`, `question_id` (FK), `question_content`, `question_answer`, `answers_snapshot` (JSON), `picture_url`, `created_time`, `expert_id` (FK)
 - **QuestionReport**: `report_id`, `question_id` (FK), `reporter_account_id` (FK), `reporter_role` (**STUDENT** | **EXPERT** | **ADMIN**), `report_reason`, `status` (**PENDING** | **RESOLVED** | **DISMISSED**), `created_time`, `resolved_time`, `resolved_by` (FK → experts)
@@ -109,4 +109,4 @@
 - Target database is SQL Server. Backend maps to current DB script tables (`Question`, `Answer`, `QuestionVersion`, `QuestionReport`, `TagTopic`, `TagDifficulty`, `QuestionTopic`) instead of schema-prefixed tables.
 - Cloudinary is used for image upload (picture_url from UC-22).
 - MediatR domain events handle async version snapshot creation.
-- LaTeX rendering is handled client-side (KaTeX/MathJax); backend stores raw LaTeX strings.
+- Question and solution authoring is handled by a rich-text/WYSIWYG editor so non-technical Experts can input math content without technical markup syntax. Backend stores sanitized content and associated media URLs; frontend renders the stored rich text directly.

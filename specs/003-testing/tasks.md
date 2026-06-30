@@ -57,7 +57,7 @@
 
 - [ ] **GetDetailedSolution Query** (UC-50):
   - [ ] Validate session `status = GRADED` (reject with 403 if not)
-  - [ ] Return: questions with `question_content`, `answers`, `is_correct` per answer, `points_earned`, LaTeX explanation
+  - [ ] Return: questions with `question_content`, `answers`, `is_correct` per answer, `points_earned`, and rich-text/plain-text explanation
   - [ ] Include `TestAnswer.short_answer_text` for SHORT_ANSWER type
 
 ---

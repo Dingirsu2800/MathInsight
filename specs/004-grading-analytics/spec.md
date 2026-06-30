@@ -2,7 +2,7 @@
 
 **Feature Branch**: `004-grading-analytics`
 
-**Created**: 2026-06-23 | **Updated**: 2026-06-26
+**Created**: 2026-06-23 | **Updated**: 2026-06-30
 
 **Status**: Approved
 
@@ -43,7 +43,7 @@
 - **BR-18 (Exam grading)**: For EXAM mode, grading is processed asynchronously via RabbitMQ `background_grading_queue`. Must complete within **60 seconds**.
 - **BR-19**: After grading completes, the `TestSession.status` is updated to `GRADED`; `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
 - **BR-20**: Score formula: `score = SUM(points_earned) / total_questions × 10.0` — normalized to a 0–10 scale.
-- **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the question content (LaTeX) + student's selected answer. Response includes step-by-step explanation. Chatbot response is **not persisted** to the database.
+- **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
 - **BR-22**: Competency recalculation is delegated to the Recommender module (005) via `GradeCalculatedEvent` published after grading completes.
 
 ### Grading Algorithm per Question Type

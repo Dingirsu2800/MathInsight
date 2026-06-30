@@ -95,7 +95,8 @@ Publish GradeCalculatedEvent (MediatR in-process):
 ```csharp
 // ChatbotService.AskAsync(questionContent, studentAnswer):
 // POST https://api.openai.com/v1/chat/completions
-// System prompt: "You are a math tutor. Explain the solution step-by-step using LaTeX."
+// System prompt: "You are a math tutor. Explain the solution step-by-step in clear natural language.
+// Use simple Unicode/plain-text math notation where needed; do not require technical markup syntax."
 // User message: questionContent + studentAnswer
 // Returns: string explanation (not persisted)
 ```

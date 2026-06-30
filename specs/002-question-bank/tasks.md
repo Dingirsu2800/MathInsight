@@ -23,7 +23,7 @@
 ## Phase 2: Core Domain Logic
 
 - [ ] **Question Commands**:
-  - [ ] `CreateQuestionCommand` — validate LaTeX presence, ≥1 Topic + ≥1 Difficulty tag, answer constraints per type, set `status = APPROVED` for Expert creator (BR-55)
+  - [ ] `CreateQuestionCommand` — validate non-empty sanitized content, ≥1 Topic + ≥1 Difficulty tag, answer constraints per type, set `status = APPROVED` for Expert creator (BR-55)
   - [ ] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` (BR-54); validate constraints
   - [ ] `ToggleQuestionActiveCommand` — check no active `TestQuestion` references (DC-02)
   - [ ] `DeleteQuestionCommand` — hard-delete if no test references; soft-delete otherwise (DC-02)
@@ -71,7 +71,7 @@
   - [ ] UC-20/21: Create SINGLE_CHOICE → `status = APPROVED`, 4 answers, 1 correct
   - [ ] UC-21: Create with 0 Topic tags → 400 (BR-05)
   - [ ] UC-21: Create TRUE_FALSE with 3 answers → 400 (BR-62)
-  - [ ] UC-21: Create SHORT_ANSWER with LaTeX in correct field → 400 (BR-61)
+  - [ ] UC-21: Create SHORT_ANSWER with rich-text/image content in correct field → 400 (BR-61)
   - [ ] UC-25: Update APPROVED question → QuestionVersion created before update (BR-54)
   - [ ] UC-27: Delete question used in test_questions → 409 (DC-02)
   - [ ] UC-28: Student report → QuestionReport created, question status unchanged (BR-58)
