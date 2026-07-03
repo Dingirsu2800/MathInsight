@@ -116,11 +116,12 @@ Therefore:
 
 - Do not remove `Question.DifficultyID` or `TagDifficulty`.
 - `TagDifficulty.LevelValue` must be unique and stable because it maps recommender output to concrete questions.
-- TestGen should filter generated questions by both topic and difficulty:
+- TestGen should filter generated questions by topic, difficulty, and section question type when a `BlueprintSection` is used:
 
 ```sql
 QuestionTopic.TagID = @tagId
 Question.DifficultyID = @difficultyId
+Question.QuestionType = @sectionQuestionType
 Question.Status = 'Approved'
 Question.IsActive = 1
 ```

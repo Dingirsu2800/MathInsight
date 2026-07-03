@@ -45,7 +45,7 @@
     - Fetch all unearned badges
     - For `TOTAL_CORRECT_ANSWERS`: cross-read count from `TestAnswer` where `IsCorrect = true`
     - For `STREAK_DAYS`: read `StudyStreak.current_streak`
-    - For `TESTS_COMPLETED`: cross-read count from `TestSession` where `Status = GRADED`
+    - For `TESTS_COMPLETED`: cross-read count from `TestSession` where `Status = Graded`
     - If condition met AND `StudentBadge` not exists → insert (composite PK prevents duplicates)
     - Publish `BadgeAwardedEvent` → Notification module
 

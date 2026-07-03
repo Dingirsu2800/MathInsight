@@ -47,7 +47,7 @@
   - [ ] `GetReportedQuestionsQuery` — filter by `reporter_account_id` = current Expert's questions
   - [ ] `GetTagListQuery` — return hierarchical topic tree + flat difficulty list
 - [ ] **Cross-module read contract**:
-  - [ ] Provide/query by `QuestionTopic.TagID` + `Question.DifficultyID` for TestGen.
+  - [ ] Provide/query by `QuestionTopic.TagID` + `Question.DifficultyID` + optional `Question.QuestionType` for TestGen.
   - [ ] For `Composite` questions, provide `QuestionPart` rows to Testing/Grading, but hide `correct_*` answer-key fields from student-facing test payloads before grading.
   - [ ] Ensure `TagDifficulty.LevelValue` can resolve Recommender v2 `RecommendedDifficultyLevel` to a concrete `DifficultyID`.
   - [ ] Do not couple QuestionBank to `TagsMastery`; QuestionBank only exposes question/topic/difficulty data.
@@ -90,4 +90,4 @@
   - [ ] UC-23: Import 10 questions from Excel → all created, invalid rows rejected
   - [ ] UC-38: Delete tag with linked questions → 409 (DC-02)
   - [ ] Recommender/TestGen contract: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2` and returns matching `Question.DifficultyID`
-  - [ ] TestGen query contract: approved active questions can be filtered by both `QuestionTopic.TagID` and `Question.DifficultyID`
+  - [ ] TestGen query contract: approved active questions can be filtered by `QuestionTopic.TagID`, `Question.DifficultyID`, and section `Question.QuestionType`

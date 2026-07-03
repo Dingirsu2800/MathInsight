@@ -132,7 +132,7 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
 
 - **TestGen module** reads from `Question` (`Status = Approved`, `IsActive = true`) for blueprint generation.
 - **Testing/Grading modules** read `QuestionPart` for `Composite` questions and write per-part student answers to `TestAnswerPart`.
-- **Recommender/TestGen v2 contract**: Recommender stores Ptag by `StudentID + TagID` only. TestGen maps `TagsMastery.RecommendedDifficultyLevel` to `TagDifficulty.LevelValue`, then filters `Question.DifficultyID` plus `QuestionTopic.TagID`. Do not remove `Question.DifficultyID` or `TagDifficulty` from QuestionBank.
+- **Recommender/TestGen v2 contract**: Recommender stores Ptag by `StudentID + TagID` only. TestGen maps `TagsMastery.RecommendedDifficultyLevel` to `TagDifficulty.LevelValue`, then filters `Question.DifficultyID` plus `QuestionTopic.TagID`. If a `BlueprintSection` is used, TestGen also filters `Question.QuestionType` by the section's `QuestionType`. Do not remove `Question.DifficultyID`, `Question.QuestionType`, or `TagDifficulty` from QuestionBank.
 - **Testing module** references `question_id` in `test_questions` — questions cannot be hard-deleted if referenced.
 - **Cloudinary** integration for image upload (UC-22): REST call returns `picture_url`.
 - **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
@@ -151,5 +151,5 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
    - Update APPROVED question → `QuestionVersion` snapshot created before save (BR-54).
    - Delete question used in active test → 409 (DC-02).
    - Expert question created → status = APPROVED (BR-55).
-   - Recommender/TestGen mapping: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2`, then selects only approved active questions with the matching `Question.DifficultyID` and `QuestionTopic.TagID`.
+   - Recommender/TestGen mapping: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2`, then selects only approved active questions with the matching `Question.DifficultyID`, `QuestionTopic.TagID`, and section `Question.QuestionType` when provided.
    - API enum mapping persists correct DB values: `TRUE_FALSE` -> `TrueFalse`, `MULTIPLE_SELECT` -> `MultipleChoice`, `COMPOSITE` -> `Composite`.

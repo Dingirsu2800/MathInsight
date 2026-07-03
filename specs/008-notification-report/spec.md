@@ -54,9 +54,9 @@
 |--------|-------------|-----------------|
 | Competency Report (UC-55) | `CompetencyPoint`, `TagsMastery` | Real-time (after each grade) |
 | Performance Analysis (UC-56) | `TestSession` (score history) | Real-time |
-| Competency Heatmap (UC-57) | `TagsMastery` (per topic-difficulty) | Real-time |
+| Competency Heatmap (UC-57) | `TagsMastery` (per topic/Ptag) | Real-time |
 | Leaderboard (UC-58) | Hangfire daily cache (Redis or DB snapshot) | Daily 00:00 |
-| Exam History (UC-59) | `TestSession` (submitted/graded sessions) | Real-time |
+| Exam History (UC-59) | `TestSession` (`Graded`/historical sessions) | Real-time |
 
 ### Notification Template Types
 
