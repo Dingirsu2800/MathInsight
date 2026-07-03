@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-question-bank`
 
-**Created**: 2026-06-23 | **Updated**: 2026-06-30
+**Created**: 2026-06-23 | **Updated**: 2026-07-03
 
 **Status**: Approved
 
@@ -66,25 +66,63 @@
 - **BR-59**: Teacher accounts are **not allowed** to report questions. Attempts → HTTP 403.
 - **BR-60**: When an Expert reports another Expert's question (UC-29), after the original Expert resolves it (UC-33), the question becomes visible again **automatically** without requiring additional Admin approval.
 - **BR-53**: File import (Excel/Word) must validate: question stem present, at least 2 answers, one marked correct, at least one Topic tag assigned.
+- **BR-63**: `TagDifficulty.LevelValue` is the stable cross-module difficulty contract. Values should be unique and normally map to Recommender v2 `RecommendedDifficultyLevel` values `1..4`. Question Bank owns `Question.DifficultyID`; Recommender v2 owns only student-topic mastery and does not store Ptag per difficulty.
 
 ### Accepted Question Types
 
-| Type | Enum Value | Constraint |
-|------|-----------|-----------|
-| Single Choice | `SINGLE_CHOICE` | Exactly 1 correct answer |
-| Multiple Select | `MULTIPLE_SELECT` | ≥ 1 correct answer |
-| True/False | `TRUE_FALSE` | Exactly 2 options, 1 correct |
-| Short Answer | `SHORT_ANSWER` | Plain text/numeric, max 100 chars |
+| Type | API Enum Value | DB Value | Constraint |
+|------|----------------|----------|------------|
+| Single Choice | `SINGLE_CHOICE` | `SingleChoice` | Exactly 1 correct answer |
+| Multiple Select | `MULTIPLE_SELECT` | `MultipleChoice` | >= 1 correct answer |
+| True/False | `TRUE_FALSE` | `TrueFalse` | Exactly 2 options, 1 correct |
+| Short Answer | `SHORT_ANSWER` | `ShortAnswer` | Plain text/numeric, max 100 chars |
 
 ### Key Entities *(include if feature involves data)*
 
-- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK → tag_difficulties), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER**), `expert_id` (FK → experts), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
+- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK to `TagDifficulty`), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER**, mapped to DB values above), `expert_id` (FK to `Expert`), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
 - **Answer**: `answer_id`, `question_id` (FK), `answer_content` (TEXT), `is_correct` (BOOLEAN)
 - **QuestionVersion**: `version_id`, `question_id` (FK), `question_content`, `question_answer`, `answers_snapshot` (JSON), `picture_url`, `created_time`, `expert_id` (FK)
 - **QuestionReport**: `report_id`, `question_id` (FK), `reporter_account_id` (FK), `reporter_role` (**STUDENT** | **EXPERT** | **ADMIN**), `report_reason`, `status` (**PENDING** | **RESOLVED** | **DISMISSED**), `created_time`, `resolved_time`, `resolved_by` (FK → experts)
 - **TagTopic**: `tag_id`, `parent_tag_id` (self-FK, nullable), `tag_name` (UNIQUE), `description`, `grade`, `is_active`, `display_order`
-- **TagDifficulty**: `difficulty_id`, `difficulty_name` (UNIQUE), `description`, `level_value`, `display_order`, `is_active`
+- **TagDifficulty**: `difficulty_id`, `difficulty_name` (UNIQUE), `description`, `level_value` (UNIQUE, stable `1..4` mapping for Recommender/TestGen), `display_order`, `is_active`
 - **QuestionTopic**: `question_topic_id`, `question_id` (FK), `tag_id` (FK), `is_primary` (BOOLEAN) — supports Many-to-Many
+
+### Cross-Module Contract: Recommender/TestGen v2
+
+Recommender v2 stores student mastery at the **student + topic** level:
+
+```text
+TagsMastery = StudentID + TagID
+WeakTag = TagsMastery.OfficialPoint < 5.0
+```
+
+It does **not** store Ptag per difficulty. This does not remove difficulty from Question Bank. Difficulty remains a property of each question and is required for TestGen selection.
+
+Adaptive question selection should use this contract:
+
+```text
+TagsMastery.TagID
+TagsMastery.RecommendedDifficultyLevel
+  -> TagDifficulty.LevelValue
+  -> TagDifficulty.DifficultyID
+  -> Question.DifficultyID
+  -> QuestionTopic.TagID
+```
+
+Therefore:
+
+- Do not remove `Question.DifficultyID` or `TagDifficulty`.
+- `TagDifficulty.LevelValue` must be unique and stable because it maps recommender output to concrete questions.
+- TestGen should filter generated questions by both topic and difficulty:
+
+```sql
+QuestionTopic.TagID = @tagId
+Question.DifficultyID = @difficultyId
+Question.Status = 'Approved'
+Question.IsActive = 1
+```
+
+> Schema alignment note: the current DB script must allow `Pending` in `Question.Status` before implementing the Admin rejection/re-review flow in BR-56. If the DB keeps only `Approved/Rejected/Reported/Deactivated`, handlers must not persist `Pending` until the constraint is updated.
 
 ### File Import Rules (UC-23)
 

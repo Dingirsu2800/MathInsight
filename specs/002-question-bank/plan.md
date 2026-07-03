@@ -1,6 +1,6 @@
 # Implementation Plan: Question Bank Module
 
-**Branch**: `002-question-bank` | **Date**: 2026-06-23 | **Updated**: 2026-06-30
+**Branch**: `002-question-bank` | **Date**: 2026-06-23 | **Updated**: 2026-07-03
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -79,7 +79,7 @@ src/MathInsight.Modules.QuestionBank/
 | `QuestionVersion` | `QuestionID` FK |
 | `QuestionReport` | `QuestionID`, `ReporterAccountID` |
 | `TagTopic` | `ParentTagID` self-FK; `TagName` unique |
-| `TagDifficulty` | `DifficultyName`, `LevelValue` |
+| `TagDifficulty` | `DifficultyName` unique; `LevelValue` unique/stable for Recommender/TestGen v2 mapping |
 | `QuestionTopic` | Question-topic junction |
 
 ### Service & API Gateway — REST Endpoints
@@ -131,6 +131,7 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
 ### Cross-Module Dependencies
 
 - **TestGen module** reads from `Question` (`Status = Approved`, `IsActive = true`) for blueprint generation.
+- **Recommender/TestGen v2 contract**: Recommender stores Ptag by `StudentID + TagID` only. TestGen maps `TagsMastery.RecommendedDifficultyLevel` to `TagDifficulty.LevelValue`, then filters `Question.DifficultyID` plus `QuestionTopic.TagID`. Do not remove `Question.DifficultyID` or `TagDifficulty` from QuestionBank.
 - **Testing module** references `question_id` in `test_questions` — questions cannot be hard-deleted if referenced.
 - **Cloudinary** integration for image upload (UC-22): REST call returns `picture_url`.
 - **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
@@ -148,3 +149,5 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
    - Update APPROVED question → `QuestionVersion` snapshot created before save (BR-54).
    - Delete question used in active test → 409 (DC-02).
    - Expert question created → status = APPROVED (BR-55).
+   - Recommender/TestGen mapping: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2`, then selects only approved active questions with the matching `Question.DifficultyID` and `QuestionTopic.TagID`.
+   - API enum mapping persists correct DB values: `TRUE_FALSE` -> `TrueFalse`, `MULTIPLE_SELECT` -> `MultipleChoice`.
