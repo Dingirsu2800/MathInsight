@@ -71,6 +71,7 @@ GradingEngine.Grade(session):
   foreach TestAnswer in session:
     ├── SINGLE_CHOICE / TRUE_FALSE: compare answer_id to correct answer
     ├── MULTIPLE_SELECT: compare selected options (TestAnswerOption) to correct set
+    ├── COMPOSITE: grade each QuestionPart via TestAnswerPart; parent score = sum of part points
     └── SHORT_ANSWER: case-insensitive compare short_answer_text
   Calculate: score = SUM(points_earned) / total_questions × 10.0
   Update in single transaction (DC-05):
