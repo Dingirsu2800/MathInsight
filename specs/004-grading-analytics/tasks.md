@@ -6,10 +6,10 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
-- [ ] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
-- [ ] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
-- [ ] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules
+- [x] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
+- [x] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
+- [x] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
+- [x] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules
 
 ---
 

@@ -1,42 +1,30 @@
 using MediatR;
-using MassTransit;
 using MathInsight.Shared.Events;
 
 namespace MathInsight.Modules.Grading_Analytics.Handlers;
 
 /// <summary>
-/// Handles the TestSubmittedEvent synchronously in-memory (for Practice mode)
+/// Placeholder handler for TestSubmittedEvent (MediatR in-process).
+/// 
+/// NOTE: In MVP, grading runs synchronously inside the Testing submit flow.
+/// This handler is kept as a thin stub; full GradeSubmittedSessionHandler
+/// (Phase 2) will replace the grading logic here.
+/// 
+/// No MassTransit / RabbitMQ queue is used — see spec BR-18, Assumptions.
 /// </summary>
 public class TestSubmittedHandler : INotificationHandler<TestSubmittedEvent>
 {
-    private readonly IPublishEndpoint _publishEndpoint;
+    // Phase 2 will inject: IGradingEngine, GradingDbContext, IMediator (for GradeCalculatedEvent)
 
-    public TestSubmittedHandler(IPublishEndpoint publishEndpoint)
+    public Task Handle(TestSubmittedEvent notification, CancellationToken cancellationToken)
     {
-        _publishEndpoint = publishEndpoint;
-    }
+        // TODO (Phase 2): Replace with real GradeSubmittedSessionHandler logic:
+        //   1. Validate TestSession.Status == InProgress
+        //   2. Run GradingEngine.Grade(session) synchronously
+        //   3. Write TestAnswer results + update TestSession in single transaction (DC-05)
+        //   4. Set TestSession.Status = Graded; persist SubmissionType
+        //   5. Publish GradeCalculatedEvent (to Recommender + Notification modules)
 
-    public async Task Handle(TestSubmittedEvent notification, CancellationToken cancellationToken)
-    {
-        // Simulating immediate grading logic...
-        double score = 9.0;
-        int correct = 18;
-        int incorrect = 2;
-        var weakTags = new List<string> { "Calculus" };
-
-        // Save result to "grd.GradingResults" database schema
-
-        // Publish GradeCalculated event so that the gamification and recommender modules can react
-        await _publishEndpoint.Publish(new GradeCalculatedEvent
-        {
-            SessionId = notification.SessionId,
-            StudentId = notification.StudentId,
-            TestId = notification.TestId,
-            Score = score,
-            NumCorrect = correct,
-            NumIncorrect = incorrect,
-            WeakTags = weakTags,
-            GradedTime = DateTime.UtcNow
-        }, cancellationToken);
+        return Task.CompletedTask;
     }
 }

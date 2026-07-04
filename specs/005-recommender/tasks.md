@@ -8,13 +8,13 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for current DB script tables:
-  - [ ] `CompetencyPointConfiguration` - unique `(student_id, grade)`; `point` range `0.00..10.00`
-  - [ ] `TagsMasteryConfiguration` - unique `(student_id, tag_id)`; no `difficulty_id`
-  - [ ] `StudentTopicSessionResultConfiguration` - unique `(session_id, tag_id)`; values non-negative; `topic_score` range `0.00..10.00`
-- [ ] Map `TagsMastery` fields: `official_point`, `practice_point`, `exam_anchor`, `exam_history`, `series_answer_count`, `recommended_difficulty_level`, `last_calculated_at`.
-- [ ] Create `RecommenderDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
-- [ ] Do not add EF migration unless the team switches from SQL script source-of-truth to EF migration source-of-truth.
+- [x] Create EF `IEntityTypeConfiguration` for current DB script tables:
+  - [x] `CompetencyPointConfiguration` - unique `(student_id, grade)`; `point` range `0.00..10.00`
+  - [x] `TagsMasteryConfiguration` - unique `(student_id, tag_id)`; no `difficulty_id`
+  - [x] `StudentTopicSessionResultConfiguration` - unique `(session_id, tag_id)`; values non-negative; `topic_score` range `0.00..10.00`
+- [x] Map `TagsMastery` fields: `official_point`, `practice_point`, `exam_anchor`, `exam_history`, `series_answer_count`, `recommended_difficulty_level`, `last_calculated_at`.
+- [x] Create `RecommenderDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [x] Do not add EF migration unless the team switches from SQL script source-of-truth to EF migration source-of-truth.
 - [ ] Seed sample mastery rows at grain `(student_id, tag_id)`.
 
 ---
