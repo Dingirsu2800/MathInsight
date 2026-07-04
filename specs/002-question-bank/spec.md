@@ -65,8 +65,9 @@
 - **BR-58**: When a Student reports a question (UC-28), system creates a `QuestionReport` record but **must not hide, deactivate, or change the `status` of the Question**.
 - **BR-59**: Teacher accounts are **not allowed** to report questions. Attempts → HTTP 403.
 - **BR-60**: When an Expert reports another Expert's question (UC-29), after the original Expert resolves it (UC-33), the question becomes visible again **automatically** without requiring additional Admin approval.
-- **BR-53**: File import (Excel/Word) must validate: question stem present, at least 2 answers, one marked correct, at least one Topic tag assigned.
+- **BR-53**: File import (Excel/Word) must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows.
 - **BR-63**: `TagDifficulty.LevelValue` is the stable cross-module difficulty contract. Values should be unique and normally map to Recommender v2 `RecommendedDifficultyLevel` values `1..4`. Question Bank owns `Question.DifficultyID`; Recommender v2 owns only student-topic mastery and does not store Ptag per difficulty.
+- **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.
 
 ### Accepted Question Types
 
@@ -76,11 +77,13 @@
 | Multiple Select | `MULTIPLE_SELECT` | `MultipleChoice` | >= 1 correct answer |
 | True/False | `TRUE_FALSE` | `TrueFalse` | Exactly 2 options, 1 correct |
 | Short Answer | `SHORT_ANSWER` | `ShortAnswer` | Plain text/numeric, max 100 chars |
+| Composite / Multi-part | `COMPOSITE` | `Composite` | Parent question with one or more `QuestionPart` rows |
 
 ### Key Entities *(include if feature involves data)*
 
-- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK to `TagDifficulty`), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER**, mapped to DB values above), `expert_id` (FK to `Expert`), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
+- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK to `TagDifficulty`), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER** | **COMPOSITE**, mapped to DB values above), `expert_id` (FK to `Expert`), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
 - **Answer**: `answer_id`, `question_id` (FK), `answer_content` (TEXT), `is_correct` (BOOLEAN)
+- **QuestionPart**: `part_id`, `question_id` (FK), `part_order`, `part_label` (nullable, e.g. `a`, `b`, `c`, `d`), `part_content`, `part_type` (**TRUE_FALSE** | **SHORT_ANSWER** | **NUMERIC_ANSWER**, mapped to DB values `TrueFalse`, `ShortAnswer`, `NumericAnswer`), `correct_boolean`, `correct_text`, `correct_numeric`, `numeric_tolerance`, `explanation` (nullable), `default_point`. The `correct_*` fields are answer keys and must be hidden from student-facing APIs before grading.
 - **QuestionVersion**: `version_id`, `question_id` (FK), `question_content`, `question_answer`, `answers_snapshot` (JSON), `picture_url`, `created_time`, `expert_id` (FK)
 - **QuestionReport**: `report_id`, `question_id` (FK), `reporter_account_id` (FK), `reporter_role` (**STUDENT** | **EXPERT** | **ADMIN**), `report_reason`, `status` (**PENDING** | **RESOLVED** | **DISMISSED**), `created_time`, `resolved_time`, `resolved_by` (FK → experts)
 - **TagTopic**: `tag_id`, `parent_tag_id` (self-FK, nullable), `tag_name` (UNIQUE), `description`, `grade`, `is_active`, `display_order`
@@ -113,11 +116,12 @@ Therefore:
 
 - Do not remove `Question.DifficultyID` or `TagDifficulty`.
 - `TagDifficulty.LevelValue` must be unique and stable because it maps recommender output to concrete questions.
-- TestGen should filter generated questions by both topic and difficulty:
+- TestGen should filter generated questions by topic, difficulty, and section question type when a `BlueprintSection` is used:
 
 ```sql
 QuestionTopic.TagID = @tagId
 Question.DifficultyID = @difficultyId
+Question.QuestionType = @sectionQuestionType
 Question.Status = 'Approved'
 Question.IsActive = 1
 ```

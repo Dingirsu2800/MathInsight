@@ -23,25 +23,18 @@
   - [ ] Calculate `score = SUM(points_earned) / total_questions × 10.0` (BR-20)
   - [ ] Count `num_correct`, `num_incorrect`, `num_abandoned` (null answer = abandoned)
 
-- [ ] **GradePracticeSessionHandler** (real-time):
-  - [ ] Consume `TestSubmittedEvent` in-process (MediatR `INotificationHandler`)
-  - [ ] Only process if `test_format = PRACTICE`
-  - [ ] Run `GradingEngine.Grade()` synchronously
-  - [ ] Write results in single transaction (DC-05): update `test_answers` + `test_sessions`
+- [ ] **GradeSubmittedSessionHandler** (MVP synchronous):
+  - [ ] Called in-process by Testing submit/force-submit flow
+  - [ ] Validate `TestSession.status = InProgress`
+  - [ ] Run `GradingEngine.Grade()` synchronously for `Practice` and `Exam`
+  - [ ] Write results in the same transaction as submission (DC-05): update `test_answers` + `test_sessions`
+  - [ ] Set `TestSession.status = Graded`; preserve `submission_type` from Testing (`StudentSubmit`, `TimeoutSubmit`, `SystemSubmit`)
   - [ ] Publish `GradeCalculatedEvent` after commit
-  - [ ] SLA: complete within 2.0 seconds (BR-17)
-
-- [ ] **GradeExamSessionHandler** (deferred):
-  - [ ] `TestSubmittedConsumer` (MassTransit): if `test_format = EXAM`, push to `background_grading_queue`
-  - [ ] `GradeExamSessionHandler` is the queue consumer
-  - [ ] Run `GradingEngine.Grade()` asynchronously
-  - [ ] Write results in single transaction with Polly retry (3 retries, exponential backoff)
-  - [ ] Publish `GradeCalculatedEvent` after commit
-  - [ ] SLA: complete within 60 seconds (BR-18)
+  - [ ] SLA: `Practice` < 2.0 seconds, `Exam` target < 5.0 seconds
 
 - [ ] **Transactional Atomicity** (DC-05):
   - [ ] Wrap grading writes + session status update in single `using var tx = db.BeginTransaction()`
-  - [ ] On failure: rollback → session stays `SUBMITTED`, not `GRADED`
+  - [ ] On failure: rollback → session stays `InProgress`, not `Graded`
   - [ ] Log failure with structured logging (session_id, error)
 
 - [ ] **ChatbotService** (UC-51):
@@ -61,7 +54,7 @@
   - [ ] Returns `{ explanation: "..." }` as JSON
 
 - [ ] Register inside `GradingModuleExtensions.cs`:
-  - GradingEngine, ChatbotService, MassTransit consumers, MediatR handlers
+  - GradingEngine, ChatbotService, MediatR handlers
 
 ---
 
@@ -69,12 +62,12 @@
 
 - [ ] `dotnet build` — zero compile errors
 - [ ] Integration tests (xUnit):
-  - [ ] PRACTICE: 40-question session graded in < 2.0s
-  - [ ] EXAM: session pushed to queue, graded within 60s
+  - [ ] Practice: 40-question session graded in < 2.0s
+  - [ ] Exam: session graded synchronously and persisted as `Graded`
   - [ ] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
   - [ ] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
   - [ ] SHORT_ANSWER case-insensitive match → `is_correct = true`
   - [ ] Null answer (abandoned) → `is_correct = false`, counted in `num_abandoned`
-  - [ ] DC-05: Simulated DB failure mid-grade → rollback, session stays `SUBMITTED`
+  - [ ] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
   - [ ] UC-51: Chatbot returns explanation JSON within 10s
   - [ ] UC-51: Second chatbot call same session → rate limited (429)

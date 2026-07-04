@@ -42,16 +42,16 @@
     - Cross-read `TagsMastery` aggregate
     - Return: `{ overallPoint, weakCount, learningCount, masteredCount, tagDetails[] }`
   - [ ] `GetPerformanceAnalysisQuery` (UC-56):
-    - Cross-read `TestSession` WHERE `StudentID = current` AND `Status = GRADED`
+    - Cross-read `TestSession` WHERE `StudentID = current` AND `Status = Graded`
     - Last 30 days; group by date; return daily scores for chart
   - [ ] `GetCompetencyHeatmapQuery` (UC-57):
-    - Cross-read `TagsMastery` for all `(TagID, DifficultyID)` combinations
-    - Return matrix: `{ tagName, difficultyName, mastery_status, accuracy_rate }`
+    - Cross-read `TagsMastery` by `(StudentID, TagID)` using `official_point` and `recommended_difficulty_level`
+    - Return matrix: `{ tagName, mastery_status, official_point, recommended_difficulty_level }`
   - [ ] `GetLeaderboardQuery` (UC-58):
     - Read from Redis `ntf:leaderboard:{grade}`; fallback live query if cache miss
     - Return: `{ rank, studentName, grade, point }[]`
   - [ ] `GetExamHistoryQuery` (UC-59):
-    - Cross-read `TestSession` WHERE `StudentID` AND `Status != IN_PROGRESS`
+    - Cross-read `TestSession` WHERE `StudentID` AND `Status != InProgress`
     - ORDER BY `start_time DESC`; paged; include `test_name`, `score`, `start_time`, `test_format`
 
 - [ ] **Mark Read Command**:
@@ -99,6 +99,6 @@
   - [ ] UC-55: Competency report aggregation returns accurate totals
   - [ ] UC-57: Heatmap returns correct matrix for student
   - [ ] UC-58: Leaderboard served from Redis after Hangfire job runs
-  - [ ] UC-59: Exam history returns paginated sessions (no IN_PROGRESS)
+  - [ ] UC-59: Exam history returns paginated sessions (no `InProgress`)
   - [ ] Prune job: Notifications 91 days old are deleted; 89-day-old retained
   - [ ] Mark read: `is_read = true`; attempt to mark another user's notification → 403

@@ -112,7 +112,7 @@ GET    /api/v1/gamification/targets          # UC-87: target vs competency (cros
 //   if condition_type == STREAK_DAYS:
 //     if StudyStreak.current_streak >= condition_value → award
 //   if condition_type == TESTS_COMPLETED:
-//     count = SELECT COUNT(*) FROM TestSession WHERE student + Status=GRADED
+//     count = SELECT COUNT(*) FROM TestSession WHERE student + Status=Graded
 //     if count >= condition_value → award
 // Insert StudentBadge if not exists; publish BadgeAwardedEvent → Notification
 ```

@@ -5,14 +5,14 @@
 
 ## Summary
 
-Builds the `MathInsight.Modules.Testing` component managing student test sessions: starting sessions, answering questions, auto-save, incident tracking, and submission flow. Publishes `TestSubmittedEvent` consumed by the Grading module.
+Builds the `MathInsight.Modules.Testing` component managing student test sessions: starting sessions, answering questions, auto-save, incident tracking, and submission flow. Submit invokes the Grading module in-process for MVP and persists only durable session states.
 
 ## Technical Context
 
 | Property | Value |
 |----------|-------|
 | Language | C# / .NET 10.0 |
-| Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
+| Primary Dependencies | MediatR, EF Core |
 | Storage | SQL Server; map to current DB script tables shared with TestGen |
 | Real-time | SignalR (optional — for timer sync and incident alert) |
 | Testing | xUnit / Integration tests |
@@ -23,18 +23,18 @@ Builds the `MathInsight.Modules.Testing` component managing student test session
 ```text
 src/MathInsight.Modules.Testing/
 ├── Commands/
-│   ├── StartSession/           # UC-47: create TestSession (IN_PROGRESS), create TestAnswer stubs
+│   ├── StartSession/           # UC-47: create TestSession (InProgress), create TestAnswer stubs
 │   ├── AutoSave/               # UC-47: batch update TestAnswer selections
 │   ├── RecordIncident/         # UC-47: create TestIncident; force-submit if count >= 5
-│   ├── SubmitSession/          # UC-49: normal submit → SUBMITTED → publish TestSubmittedEvent
-│   ├── ForceSubmitSession/     # UC-49: timer/incident force → FORCE_SUBMITTED → publish event
+│   ├── SubmitSession/          # UC-49: normal submit → StudentSubmit → Graded
+│   ├── ForceSubmitSession/     # UC-49: timer/system submit → TimeoutSubmit/SystemSubmit → Graded
 │   └── ReportSessionQuestion/  # UC-48: create QuestionReport during session
 ├── Queries/
 │   ├── GetSessionStatus/       # Current session state + remaining time
 │   ├── GetSessionAnswers/      # Load saved answers for session resume
-│   └── GetDetailedSolution/    # UC-50: post-grading solution view (only if GRADED)
+│   └── GetDetailedSolution/    # UC-50: post-grading solution view (only if Graded)
 ├── Events/
-│   └── TestSubmittedEvent.cs   # MediatR notification → Grading module consumes
+│   └── TestSubmittedEvent.cs   # Optional transient notification inside submit flow
 ├── Persistence/
 │   ├── TestingDbContext.cs     # Shared connection, maps to current DB script table names
 │   ├── Configurations/
@@ -57,9 +57,9 @@ src/MathInsight.Modules.Testing/
 
 | Table | Key Indexes |
 |-------|-------------|
-| `Test` | `TestCode` unique; `BlueprintID` FK |
+| `Test` | `TestCode` nullable with filtered unique index when not null; `BlueprintID` FK |
 | `TestQuestion` | Composite PK `(TestID, QuestionID)` |
-| `TestSession` | `StudentID`; status fields from current DB script |
+| `TestSession` | `(StudentID, Status)` index; durable status values `InProgress`, `Graded`, `Abandoned`; `SubmissionType` captures submit reason |
 | `TestAnswer` | `SessionID`, `QuestionID`, grading fields |
 | `TestAnswerOption` | Composite PK `(TestAnswerID, AnswerID)` |
 | `TestIncidents` | `SessionID` FK |
@@ -75,21 +75,19 @@ POST   /api/v1/tests/sessions/{id}/auto-save     # UC-47: save answer selections
 POST   /api/v1/tests/sessions/{id}/incident      # UC-47: log tab switch incident
 POST   /api/v1/tests/sessions/{id}/submit        # UC-49: normal submit
 POST   /api/v1/tests/sessions/{id}/questions/{qId}/report  # UC-48: report question in session
-GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if GRADED)
+GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if Graded)
 ```
 
 ### Integration & Domain Events
 
 | Event | Publisher | Consumer | Purpose |
 |-------|-----------|----------|---------|
-| `TestSubmittedEvent` | Testing module | Grading module (004) | Trigger grading pipeline |
-| `TestSubmittedEvent` | Testing module | Gamification module (007) | Log activity, update streak |
-| `TestSubmittedEvent` | Testing module | Notification module (008) | Send "test submitted" push |
+| `GradeCalculatedEvent` | Grading module (004) | Recommender/Gamification/Notification | Trigger competency update, activity, and "test graded" notification |
 
 ### Cross-Module Dependencies
 
 - **TestGen module (009)**: Creates `Test` + `TestQuestion` records before session start.
-- **Grading module (004)**: Consumes `TestSubmittedEvent` via MediatR; populates `TestAnswer.is_correct`, `points_earned`, session score.
+- **Grading module (004)**: Called in-process during submit; populates `TestAnswer.is_correct`, `points_earned`, session score, and sets `TestSession.status = Graded`.
 - **QuestionBank module (002)**: `question_id` references in `TestAnswer`; question content queried for solution display.
 - **Recommender module (005)**: Reads session results after grading for competency updates.
 
@@ -97,7 +95,7 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
 - Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText }] }`.
-- Handler validates `session_id` is `IN_PROGRESS`, updates `TestAnswer` records in batch.
+- Handler validates `session_id` is `InProgress`, updates `TestAnswer` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
 
 ### Incident Force-Submit Logic
@@ -116,11 +114,11 @@ if (incidentCount >= 5)
 1. `dotnet build` — zero compile errors.
 2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
 3. Integration tests (xUnit):
-   - UC-47: Start session → TestSession `IN_PROGRESS`, TestAnswer stubs created.
+   - UC-47: Start session → TestSession `InProgress`, TestAnswer stubs created.
    - UC-47: Auto-save → answers persisted, `update_choice_time` updated.
    - UC-47: Log 4 incidents → no force-submit.
-   - UC-47: Log 5th incident → session force-submitted, `status = FORCE_SUBMITTED`.
-   - UC-49: Normal submit → `status = SUBMITTED`, `TestSubmittedEvent` published.
-   - UC-49: Submit already-submitted session → 409 (DC-03).
-   - UC-50: View solution before GRADED → 403.
-   - UC-50: View solution after GRADED → returns questions + correct answers + explanations.
+   - UC-47: Log 5th incident → session force-submitted, `status = Graded`, `submission_type = SystemSubmit`.
+   - UC-49: Normal submit → `status = Graded`, `submission_type = StudentSubmit`, grading fields populated.
+   - UC-49: Submit already-graded session → 409 (DC-03).
+   - UC-50: View solution before `Graded` → 403.
+   - UC-50: View solution after `Graded` → returns questions + correct answers + explanations.

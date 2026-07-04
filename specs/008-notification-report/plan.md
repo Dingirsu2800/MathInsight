@@ -43,9 +43,9 @@ src/MathInsight.Modules.Notification_Report/
 │   ├── GetNotifications/                  # List unread/all notifications for account
 │   ├── GetCompetencyReport/               # UC-55: competency_points + tags_mastery summary
 │   ├── GetPerformanceAnalysis/            # UC-56: score history (30-day) from test_sessions
-│   ├── GetCompetencyHeatmap/              # UC-57: tags_mastery per topic × difficulty
+│   ├── GetCompetencyHeatmap/              # UC-57: tags_mastery per topic/Ptag
 │   ├── GetLeaderboard/                    # UC-58: cached daily leaderboard
-│   └── GetExamHistory/                   # UC-59: paginated test_sessions (SUBMITTED+)
+│   └── GetExamHistory/                   # UC-59: paginated non-InProgress test_sessions
 ├── Commands/
 │   └── MarkNotificationRead/             # PUT /api/v1/notifications/{id}/read
 ├── Jobs/

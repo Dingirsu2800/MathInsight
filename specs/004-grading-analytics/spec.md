@@ -14,34 +14,34 @@
 
 | UC-ID | Name | Primary Actor | Trigger |
 |-------|------|---------------|---------|
-| UC-49 | Submit Test/Question (Auto-grading trigger) | System | `TestSubmittedEvent` consumed from Testing module |
-| UC-50 | View Detailed Solution | Student | After session `status = GRADED` |
+| UC-49 | Submit Test/Question (Auto-grading trigger) | System | Called by Testing submit flow |
+| UC-50 | View Detailed Solution | Student | After session `status = Graded` |
 | UC-51 | Ask Chatbot for Assistance | Student | Student requests AI explanation |
 
 ### Grading Modes
 
 | Mode | When | Mechanism | SLA |
 |------|------|-----------|-----|
-| **Practice** | `test_format = PRACTICE` | Real-time (synchronous, in-process) | < 2.0 seconds |
-| **Exam** | `test_format = EXAM` | Deferred (RabbitMQ `background_grading_queue`) | < 60.0 seconds |
+| **Practice** | `test_format = Practice` | Synchronous, in-process | < 2.0 seconds |
+| **Exam** | `test_format = Exam` | Synchronous for MVP | < 5.0 seconds |
 
 ### Edge Cases
 
 - **Partial submission**: Questions with null `answer_id` are graded as incorrect (`is_correct = false`, `points_earned = 0.00`).
 - **Multiple-select grading**: All correct options must be selected AND no incorrect options — otherwise `is_correct = false`.
 - **Short answer grading**: Case-insensitive string match against `correct_answer` stored in `Answer.answer_content`.
-- **Grading failure**: If grading fails mid-transaction → rollback entire state (DC-05). Retry via Polly.
-- **Double-grading prevention**: If `TestSession.status = GRADED` already → skip; log warning.
+- **Grading failure**: If grading fails mid-transaction → rollback entire submit transaction (DC-05). The session remains `InProgress` so the student can retry submit.
+- **Double-grading prevention**: If `TestSession.status = Graded` already → skip/reject; log warning.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **DC-03**: Submitted/force-submitted test answers are read-only. Grading only **reads** `TestAnswer` records and **writes** grading result fields (`is_correct`, `points_earned`).
-- **DC-05**: Auto-grading, updating `TagsMastery` competency points, and logging activity must execute as a **single database transaction**. Any failure triggers full rollback.
-- **BR-17 (Practice grading)**: For PRACTICE mode, grading must complete within **2.0 seconds** end-to-end from receiving `TestSubmittedEvent`.
-- **BR-18 (Exam grading)**: For EXAM mode, grading is processed asynchronously via RabbitMQ `background_grading_queue`. Must complete within **60 seconds**.
-- **BR-19**: After grading completes, the `TestSession.status` is updated to `GRADED`; `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
+- **DC-03**: Once a session leaves `InProgress`, test answers are read-only. Grading writes only grading result fields (`is_correct`, `points_earned`) inside the submit transaction.
+- **DC-05**: Auto-grading writes (`TestAnswer` result fields and `TestSession` score/status) must execute as a **single database transaction**. Recommender updates are triggered after successful grading and must be idempotent through `StudentTopicSessionResult`.
+- **BR-17 (Practice grading)**: For `Practice` mode, grading must complete within **2.0 seconds** end-to-end from submit.
+- **BR-18 (Exam grading MVP)**: For `Exam` mode, grading is synchronous in MVP because `Submitted` is not persisted as a durable DB state. If the team later needs async grading, add a `PendingGrading` status or a separate grading job table first.
+- **BR-19**: After grading completes, `TestSession.status` is updated to `Graded`; `submission_type`, `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
 - **BR-20**: Score formula: `score = SUM(points_earned) / total_questions × 10.0` — normalized to a 0–10 scale.
 - **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
 - **BR-22**: Competency recalculation is delegated to the Recommender module (005) via `GradeCalculatedEvent` published after grading completes.
@@ -53,6 +53,7 @@
 | `SINGLE_CHOICE` | `is_correct = (student_answer_id == correct_answer_id)` |
 | `MULTIPLE_SELECT` | `is_correct = (all correct options selected AND no incorrect options selected)` |
 | `TRUE_FALSE` | Same as SINGLE_CHOICE |
+| `COMPOSITE` | Grade each `QuestionPart` through `TestAnswerPart`; parent answer score is the sum of part points |
 | `SHORT_ANSWER` | Case-insensitive string match: `LOWER(short_answer_text) == LOWER(correct_answer_content)` |
 
 ### Key Entities *(read from Testing module)*
@@ -70,7 +71,7 @@ Delegates competency updates to **Recommender module (005)** via `GradeCalculate
 ### Measurable Outcomes
 
 - Practice grading completes in < **2.0 seconds** (BR-17, NFR-P02).
-- Exam grading completes in < **60 seconds** via RabbitMQ (BR-18, NFR-P03).
+- Exam grading completes synchronously for MVP, target < **5.0 seconds** (BR-18).
 - Grading transaction is atomic — no partial state on failure (DC-05).
 - Chatbot response returns within **10 seconds** (NFR for UC-51).
 - No separate `grd` schema is created for MVP; this module maps to current DB script tables owned by Testing and QuestionBank.
@@ -78,7 +79,7 @@ Delegates competency updates to **Recommender module (005)** via `GradeCalculate
 ## Assumptions
 
 - Target database is SQL Server.
-- MediatR publishes `TestSubmittedEvent` from Testing module (003) — this module is the consumer.
-- `background_grading_queue` is provisioned in RabbitMQ via MassTransit.
+- Testing module (003) calls Grading in-process during submit; `TestSubmittedEvent` is optional/transient and must not imply a persisted `Submitted` status.
+- No RabbitMQ grading queue is required for MVP under the current `TestSession.Status` design.
 - Polly retry policy: 3 retries with exponential backoff for grading transaction failures.
 - Chatbot integration uses OpenAI or Claude API; credentials injected via environment variables.
