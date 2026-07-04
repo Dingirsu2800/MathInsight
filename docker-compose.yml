@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: mathinsight-redis
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - redis_data:/data
+
+  webapi:
+    image: mathinsight-webapi:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mathinsight-webapi
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Redis__Enabled=true
+      - Redis__ConnectionString=redis:6379
+      # Bạn có thể truyền ConnectionStrings__DefaultConnection từ file .env hoặc command line
+      - ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection:-}
+      - Jwt__Issuer=MathInsight
+      - Jwt__Audience=MathInsightClient
+      - Jwt__SigningKey=CHANGE_ME_DEV_SECRET_KEY_AT_LEAST_32_CHARS
+    restart: on-failure
+
+volumes:
+  redis_data:
