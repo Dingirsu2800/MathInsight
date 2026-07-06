@@ -46,6 +46,16 @@
   - [ ] Enforce 1 request per student per session (in-memory rate limiter or Redis key)
   - [ ] Return explanation string — do NOT persist to database (BR-21)
 
+- [ ] **Polly Retry Policy** (U2 — per Assumptions:L96):
+  - [ ] Configure Polly retry on grading DB transaction: 3 retries with exponential backoff (1s, 2s, 4s)
+  - [ ] On all retries exhausted: rollback transaction, log structured error, return failure to caller (session stays `InProgress`)
+
+- [ ] **GradeCalculatedEvent Contract** (G3):
+  - [ ] Use `MathInsight.Shared.Events.GradeCalculatedEvent` — do NOT define a separate local copy
+  - [ ] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct tag in session
+  - [ ] Populate `NumAbandoned` from count of `TestAnswer` where `answer_id IS NULL`
+  - [ ] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
+
 ---
 
 ## Phase 3: Controller and Routing
@@ -77,5 +87,6 @@
   - [ ] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
   - [ ] COMPOSITE general (mixed parts) — parent score = sum of part points earned
   - [ ] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
-  - [ ] UC-51: Chatbot returns explanation JSON within 10s
+  - [ ] UC-51: Chatbot returns explanation JSON within 10s (happy path)
+  - [ ] UC-51: Chatbot API times out after 10s → endpoint returns structured error (e.g. 503); student session is NOT affected (U1)
   - [ ] UC-51: Second chatbot call same session → rate limited (429)

@@ -44,7 +44,25 @@
 - **BR-19**: After grading completes, `TestSession.status` is updated to `Graded`; `submission_type`, `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
 - **BR-20**: Score formula: `score = SUM(points_earned) / total_questions × 10.0` — normalized to a 0–10 scale.
 - **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
-- **BR-22**: Competency recalculation is delegated to the Recommender module (005) via `GradeCalculatedEvent` published after grading completes.
+- **BR-22**: After grading completes, `GradeCalculatedEvent` is published in-process (MediatR). It has **two consumers**:
+  1. **Recommender module (005)** — updates `StudentTopicSessionResult` and `TagsMastery` per topic (idempotent).
+  2. **Notification module (008)** — sends a "test graded" push notification to the student.
+
+  Event payload (`MathInsight.Shared.Events.GradeCalculatedEvent`):
+
+  | Field | Type | Description |
+  |-------|------|-------------|
+  | `SessionId` | `Guid` | Graded session |
+  | `StudentId` | `Guid` | Owner student |
+  | `TestId` | `Guid` | Parent test |
+  | `Score` | `decimal` | 0.00–10.00 normalized score (BR-20) |
+  | `NumCorrect` | `int` | Count of correct answers |
+  | `NumIncorrect` | `int` | Count of incorrect answers |
+  | `NumAbandoned` | `int` | Count of unanswered questions |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per TagId: `(TagId, TopicScore, CorrectCount, TotalCount)` |
+  | `GradedAt` | `DateTime` | UTC timestamp |
+
+  Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
 - **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):
 
   | Correct parts | Points earned |

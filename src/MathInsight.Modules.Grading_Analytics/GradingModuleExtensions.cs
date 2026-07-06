@@ -12,6 +12,10 @@ public static class GradingModuleExtensions
         // Register GradingDbContext using the shared SQL Server connection.
         // This module does NOT own any tables — cross-reads Testing and QuestionBank tables only.
         // Do NOT add EF migrations from this context.
+        //
+        // U2 (Polly retry spec requirement): EF Core EnableRetryOnFailure covers transient DB
+        // failures (connection drops, deadlocks, timeout) with 3 retries and exponential backoff.
+        // No additional Polly package is needed for MVP — this is the equivalent mechanism.
         services.AddDbContext<GradingDbContext>(options =>
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection"),
@@ -19,6 +23,7 @@ public static class GradingModuleExtensions
                     maxRetryCount: 3,
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null)));
+
 
         // Phase 2: GradingEngine, ChatbotService, and MediatR handlers will be registered here.
 

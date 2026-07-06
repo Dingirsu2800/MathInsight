@@ -44,12 +44,24 @@
     - Update `mastery_status`: `NotLearned`, `Learning`, `Mastered`.
     - Update `last_calculated_at`.
   - [ ] Clamp all points to `0.00..10.00`.
+  - [ ] **Lazy-create** `TagsMastery` when no row exists for `(student_id, tag_id)` (U3 — RCM no-history rule):
+    - Insert with `official_point = 5.00`, `practice_point = 5.00`, `exam_anchor = 5.00`.
+    - Set `mastery_status = NotLearned`, `number_done = 0`, `series_answer_count = 0`.
+  - [ ] Update `mastery_status` using RCM-13 thresholds after each update:
+    - `number_done = 0` → `NotLearned`
+    - `number_done > 0` AND `official_point < 7.50` → `Learning`
+    - `official_point >= 7.50` → `Mastered`
 
 - [ ] **Practice Series Logic**:
   - [ ] When `series_answer_count >= 10`, blend:
     - `official_point = 0.7 * exam_anchor + 0.3 * practice_point`
     - `practice_point = official_point`
     - `series_answer_count = 0`
+
+- [ ] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
+  - [ ] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level.
+  - [ ] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
+  - [ ] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
 
 - [ ] **DifficultyMappingService**:
   - [ ] `MapFromOfficialPoint(officialPoint)` returns level `1..4`.
@@ -74,6 +86,7 @@
   - [ ] `GET /api/v1/recommender/weak-tags`
   - [ ] `GET /api/v1/recommender/lectures`
   - [ ] `GET /api/v1/recommender/materials`
+  - [ ] Enforce `[Authorize(Roles = "Student")]` on all three endpoints (G2).
 - [ ] Register inside `RecommenderModuleExtensions.cs`:
   - DbContext, CompetencyEngine, DifficultyMappingService, RecommenderService, MediatR handlers.
 - [ ] Do not require Redis, Python, SAR, Hangfire, or separate recommender service for MVP.
@@ -106,3 +119,5 @@
   - [ ] WeakTags query returns only rows with `official_point < 5.00`.
   - [ ] Lecture/material recommendations prioritize remedial weak topics first.
   - [ ] SQL-only recommender works without Redis/SAR configured.
+  - [ ] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
+  - [ ] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
