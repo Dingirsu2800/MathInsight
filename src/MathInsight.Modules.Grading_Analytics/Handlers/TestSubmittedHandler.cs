@@ -23,7 +23,7 @@ public class TestSubmittedHandler : INotificationHandler<TestSubmittedEvent>
         //   2. Run GradingEngine.Grade(session) synchronously
         //   3. Write TestAnswer results + update TestSession in single transaction (DC-05)
         //   4. Set TestSession.Status = Graded; persist SubmissionType
-        //   5. Publish GradeCalculatedEvent (to Recommender + Notification modules)
+        //   5. Publish GradeCalculatedEvent with TestFormat and Answers details (to Recommender + Notification modules)
 
         return Task.CompletedTask;
     }

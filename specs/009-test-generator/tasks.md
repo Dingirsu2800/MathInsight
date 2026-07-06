@@ -6,14 +6,14 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Coordinate current DB script table mappings with Testing module (003) — same DbContext or separate registration.
-- [ ] Create EF `IEntityTypeConfiguration` for 3 entities:
-  - [ ] `BlueprintConfiguration` — `status` enum; `expert_id` FK; `reviewed_by` FK (nullable)
-  - [ ] `BlueprintSectionConfiguration` — FK to `Blueprint`, UNIQUE `(blueprint_id, section_order)`, `question_type` constraint, composite section metadata constraint
-  - [ ] `BlueprintDetailConfiguration` — FK to `BlueprintSection`, composite UNIQUE `(blueprint_section_id, tag_id, difficulty_id)`; `quantity >= 1` CHECK
-- [ ] Create `TestGenDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
-- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
-- [ ] Seed: 2 blueprints (1 APPROVED, 1 DRAFT), each with at least one section and detail slots per TDS §3.6
+- [x] Coordinate current DB script table mappings with Testing module (003) — same DbContext or separate registration.
+- [x] Create EF `IEntityTypeConfiguration` for 3 entities:
+  - [x] `BlueprintConfiguration` — `status` enum; `expert_id` FK; `reviewed_by` FK (nullable)
+  - [x] `BlueprintSectionConfiguration` — FK to `Blueprint`, UNIQUE `(blueprint_id, section_order)`, `question_type` constraint, composite section metadata constraint
+  - [x] `BlueprintDetailConfiguration` — FK to `BlueprintSection`, composite UNIQUE `(blueprint_section_id, tag_id, difficulty_id)`; `quantity >= 1` CHECK
+- [x] Create `TestGenDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [x] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
+- [x] Seed: 2 blueprints (1 APPROVED, 1 DRAFT), each with at least one section and detail slots per TDS §3.6
 
 ---
 

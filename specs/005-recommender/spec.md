@@ -41,7 +41,7 @@
 official_point = 0.7 * exam_anchor + 0.3 * practice_point
 ```
 
-- **RCM-05**: `exam_anchor` is updated from official/graded sessions using an **Exponential Decay weighted average** over the `k ≤ 5` most recent per-topic session scores:
+- **RCM-05**: `exam_anchor` is updated from Exam format sessions (using `GradeCalculatedEvent.TestFormat == "Exam"`) using an **Exponential Decay weighted average** over the `k ≤ 5` most recent per-topic session scores:
 
   ```text
   exam_anchor = Σ(j=1→k) [β^(j-1) × T_j]  /  Σ(j=1→k) [β^(j-1)]
@@ -59,7 +59,7 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   - This ordering is mandatory — the formula's weight assignment depends on it.
 
   Decay weights: β⁰ = 1.0 → β¹ = 0.8 → β² = 0.64 → β³ = 0.512 → β⁴ = 0.410
-- **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a practice/adaptive session is submitted and graded (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` or `update_choice_time`, using the detailed answers provided in `GradeCalculatedEvent.Answers` (F1 resolution):
+- **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a Practice format session is submitted and graded (using `GradeCalculatedEvent.TestFormat == "Practice"`) (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` or `update_choice_time`, using the detailed answers provided in `GradeCalculatedEvent.Answers` (F1 resolution):
 
   ```text
   If CORRECT:  practice_point(t+1) = min(10.0,  practice_point(t) + α × w_D × γ_time)
@@ -70,7 +70,7 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   - `α = 0.05` — base learning rate (K-factor, inspired by Elo rating system)
   - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` — difficulty weight for levels 1–4 (inspired by IRT)
   - `γ_time = 1.0` — normal time multiplier
-  - `γ_time_penalty = 1.5` — guessing penalty when answer time `t < 5 seconds`
+  - `γ_time_penalty = 1.5` — guessing penalty when answer time `t < 5 seconds` and the student actively selected an answer or input short answer text. For unanswered/abandoned questions (no student selection), `γ_time_penalty = 1.0` (no penalty).
 
   After `series_answer_count` reaches **10** for a topic, the accumulated practice gains are incorporated into `official_point`, then `practice_point` is reset to the new baseline:
 

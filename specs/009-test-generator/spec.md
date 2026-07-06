@@ -89,7 +89,7 @@
 - **Blueprint**: `blueprint_id` (PK), `blueprint_name` (VARCHAR 100), `grade` (10/11/12), `total_questions` (INT), `duration_minutes` (INT), `expert_id` (FK → experts), `status` (**DRAFT** | **PENDING_REVIEW** | **APPROVED** | **REJECTED** | **ACTIVE**), `review_note` (VARCHAR 255, nullable), `reviewed_by` (FK → experts, nullable), `reviewed_time` (nullable), `created_time`
 - **BlueprintSection**: `blueprint_section_id` (PK), `blueprint_id` (FK), `section_order`, `section_code`, `section_name`, `question_type`, `instruction_text`, `total_questions`, `default_point_per_question`, `default_point_per_part`, `part_count_per_question`
 - **BlueprintDetail**: `blueprint_detail_id` (PK), `blueprint_id`, `blueprint_section_id` (FK), `tag_id` (FK → tag_topics), `difficulty_id` (FK → tag_difficulties), `quantity` (INT) — composite UNIQUE `(blueprint_section_id, tag_id, difficulty_id)`
-- **Test**: `test_id` (PK), `blueprint_id` (nullable FK), `test_mode`, `generated_for_student_id` (nullable), `generated_by` (`System` by default), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`
+- **Test**: `test_id` (PK), `blueprint_id` (nullable FK), `test_format` (**Practice** | **Exam**), `generated_for_student_id` (nullable FK → students), `generated_by` (`System` by default), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`
 
 ### Enums
 
@@ -98,6 +98,7 @@
 | Blueprint | status | `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `ACTIVE` |
 | Blueprint | grade | `10`, `11`, `12` |
 | BlueprintSection | question_type | `SingleChoice`, `MultipleChoice`, `TrueFalse`, `ShortAnswer`, `Composite` |
+| Test | test_format | `Practice`, `Exam` |
 
 ## Success Criteria *(mandatory)*
 

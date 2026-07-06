@@ -43,6 +43,7 @@ src/MathInsight.Modules.Testing/
 │   │   ├── TestSessionConfiguration.cs
 │   │   ├── TestAnswerConfiguration.cs
 │   │   ├── TestAnswerOptionConfiguration.cs
+│   │   ├── TestAnswerPartConfiguration.cs
 │   │   └── TestIncidentConfiguration.cs
 │   └── Migrations/
 ├── Controllers/
@@ -57,11 +58,12 @@ src/MathInsight.Modules.Testing/
 
 | Table | Key Indexes |
 |-------|-------------|
-| `Test` | `TestCode` nullable with filtered unique index when not null; `BlueprintID` FK |
+| `Test` | `TestCode` nullable with filtered unique index when not null; `BlueprintID` nullable FK; `TestFormat` (Practice | Exam); `GeneratedForStudentID` nullable FK; `GeneratedBy` |
 | `TestQuestion` | Composite PK `(TestID, QuestionID)` |
 | `TestSession` | `(StudentID, Status)` index; durable status values `InProgress`, `Graded`, `Abandoned`; `SubmissionType` captures submit reason |
 | `TestAnswer` | `SessionID`, `QuestionID`, grading fields |
 | `TestAnswerOption` | Composite PK `(TestAnswerID, AnswerID)` |
+| `TestAnswerPart` | `TestAnswerPartID` PK; `TestAnswerID` FK; `QuestionPartID` FK; `AnswerID` FK (nullable); `ShortAnswerText` (nullable); `IsCorrect` (nullable); `PointsEarned` |
 | `TestIncidents` | `SessionID` FK |
 
 ### Service & API Gateway — REST Endpoints
@@ -94,8 +96,8 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 ### Auto-Save Mechanics
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
-- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText }] }`.
-- Handler validates `session_id` is `InProgress`, updates `TestAnswer` records in batch.
+- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, parts: [{ questionPartId, answerId, selectedOptions, shortAnswerText }] }] }`.
+- Handler validates `session_id` is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
 
 ### Incident Force-Submit Logic

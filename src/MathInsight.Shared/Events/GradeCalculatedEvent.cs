@@ -14,6 +14,7 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
     public Guid SessionId { get; init; }
     public Guid StudentId { get; init; }
     public Guid TestId { get; init; }
+    public string TestFormat { get; init; } = string.Empty;
 
     /// <summary>
     /// Normalized score 0.00–10.00. Formula: SUM(points_earned) / total_questions × 10.0 (BR-20).
@@ -34,7 +35,25 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
     /// </summary>
     public IReadOnlyList<TopicGradeResult> PerTagResults { get; init; } = [];
 
+    /// <summary>
+    /// Detailed list of graded answers for Elo calculation.
+    /// </summary>
+    public IReadOnlyList<GradedAnswerDto> Answers { get; init; } = [];
+
     public DateTime GradedAt { get; init; }
+}
+
+/// <summary>
+/// Detailed answer info for Elo calculation.
+/// </summary>
+public sealed record GradedAnswerDto
+{
+    public Guid QuestionId { get; init; }
+    public Guid TagId { get; init; }
+    public bool IsCorrect { get; init; }
+    public decimal PointsEarned { get; init; }
+    public int TimeSpent { get; init; }
+    public byte DifficultyLevel { get; init; }
 }
 
 /// <summary>

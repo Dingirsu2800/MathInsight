@@ -55,6 +55,7 @@
   | `SessionId` | `Guid` | Graded session |
   | `StudentId` | `Guid` | Owner student |
   | `TestId` | `Guid` | Parent test |
+  | `TestFormat` | `string` | Test format (`Practice` or `Exam`) |
   | `Score` | `decimal` | 0.00–10.00 normalized score (BR-20) |
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |

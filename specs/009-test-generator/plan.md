@@ -118,7 +118,7 @@ POST   /api/v1/tests/generate                 # Generate test from approved blue
 //       - question_type = section.question_type
 //       - status = APPROVED AND is_active = true
 //    c. Random sample `quantity` questions from candidate pool
-// 5. Create Test record with generated_by = System, test_mode = Exam, generated_for_student_id = studentId
+// 5. Create Test record with generated_by = System, test_format = Exam, generated_for_student_id = studentId
 // 6. Create TestQuestion records (ordered by section_order, then slot order)
 // 7. Return Test entity with session-start URL
 
@@ -131,7 +131,7 @@ POST   /api/v1/tests/generate                 # Generate test from approved blue
 //       - difficulty_id = matching target difficulty_level
 //       - status = APPROVED AND is_active = true
 // 5. Random sample 10 questions
-// 6. Create Test record with generated_by = System, test_mode = Practice, total_questions = 10, generated_for_student_id = studentId
+// 6. Create Test record with generated_by = System, test_format = Practice, total_questions = 10, generated_for_student_id = studentId
 // 7. Create TestQuestion records
 // 8. Return Test entity with session-start URL
 ```

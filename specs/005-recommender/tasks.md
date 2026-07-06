@@ -15,7 +15,7 @@
 - [x] Map `TagsMastery` fields: `official_point`, `practice_point`, `exam_anchor`, `exam_history`, `series_answer_count`, `recommended_difficulty_level`, `last_calculated_at`.
 - [x] Create `RecommenderDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
 - [x] Do not add EF migration unless the team switches from SQL script source-of-truth to EF migration source-of-truth.
-- [ ] Seed sample mastery rows at grain `(student_id, tag_id)`.
+- [x] Seed sample mastery rows at grain `(student_id, tag_id)`.
 
 ---
 
