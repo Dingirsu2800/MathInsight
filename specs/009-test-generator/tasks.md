@@ -57,35 +57,51 @@
   - [ ] If `status = ACTIVE` or linked Tests exist → HTTP 409 (cannot delete active blueprint)
   - [ ] `APPROVED` with no linked tests → allow hard-delete (admin decision; expert must confirm)
 
-- [ ] **GenerateTestCommand** (internal — called by Student via `/api/v1/tests/generate`):
-  - [ ] Validate `blueprint.status = APPROVED` or `ACTIVE`
-  - [ ] Call `IRecommenderService.GetStudentWeakTagsAsync(studentId)` for adaptive bias
-  - [ ] Implement `GenerationEngine.GenerateAsync()` per plan:
-    - WeakTag cap: `weakTagQuestions <= 0.20 * total_questions`
-    - Bias probability 40% for WeakTag slots (reduced from 70%)
-    - Difficulty downscale: Hard → Medium if WeakTag; Easy + P_tag < 5.0 → Remedial (10% bias)
-    - Dedup: exclude `question_id`s from student's last 7 days of sessions
-    - Query per section and filter `Question.QuestionType = BlueprintSection.QuestionType`
-    - Random sample from `Question` matching topic, difficulty, section question type, status, and active flag
-  - [ ] Create `Test`; generate unique `test_code` only for shareable/code-entry tests, keep `NULL` for personal adaptive/recommendation tests
-  - [ ] Set `Test.generated_by = System`; do not require an Expert CRUD flow for `Test`
-  - [ ] Create `TestQuestion` records ordered by `section_order`, then slot order; set `SourceBlueprintDetailID`
-  - [ ] Transition Blueprint to `ACTIVE` on first generation (BR-48)
-  - [ ] Return `{ test_id, test_code, duration_minutes, total_questions }`; `test_code` may be `NULL`
+- [ ] **GenerateTestCommand** (internal — called by Student via `POST /api/v1/tests/generate` for Exam Mode):
+  - [ ] Validate `blueprint.status = APPROVED` or `ACTIVE`.
+  - [ ] Call `IRecommenderService.GetStudentWeakTagsAsync(studentId)` for adaptive bias.
+  - [ ] Implement `GenerationEngine.GenerateTestFromBlueprintAsync()` per plan:
+    - WeakTag cap: `weakTagQuestions <= 0.20 * total_questions`.
+    - Bias probability 40% for WeakTag slots (reduced from 70%).
+    - Difficulty downscale (F2 resolution): Hard/Very Hard → Medium if WeakTag; Medium → Easy if `official_point < 3.00` (Level 1).
+    - Remedial (F6 resolution): Easy + `official_point < 5.0` → Remedial (10% bias, no downscale).
+    - Rollback downscale (F3 resolution): Scale back to slot difficulty when `official_point >= 5.00`.
+    - Dedup: exclude `question_id`s from student's last 7 days of sessions.
+    - Query per section and filter `Question.QuestionType = BlueprintSection.QuestionType`.
+    - Random sample from `Question` matching topic, difficulty, section question type, status, and active flag.
+  - [ ] Create `Test`; generate unique `test_code` only for shareable/code-entry tests, keep `NULL` for personal adaptive/recommendation tests.
+  - [ ] Set `Test.generated_by = System`; `test_mode = Exam`.
+  - [ ] Create `TestQuestion` records ordered by `section_order`, then slot order; set `SourceBlueprintDetailID`.
+  - [ ] Transition Blueprint to `ACTIVE` on first generation (BR-48).
+  - [ ] Return `{ test_id, test_code, duration_minutes, total_questions }`; `test_code` may be `NULL`.
+
+- [ ] **GeneratePracticeSeriesCommand** (internal — called by Student via `POST /api/v1/tests/generate-practice` for Practice Mode — BR-54):
+  - [ ] Accepts `tagId` and `studentId`.
+  - [ ] Call `IRecommenderService.GetStudentWeakTagAdviceAsync(studentId)` to get target difficulty level.
+  - [ ] Validate: `tagId` is a WeakTag for the student (`official_point < 5.00`).
+  - [ ] Query 10 candidate questions from `Question` where:
+    - `tag_id = tagId`
+    - `difficulty_id` matches `WeakTagAdviceDto.RecommendedDifficultyLevel` (1 or 2)
+    - `status = APPROVED` AND `is_active = true`.
+  - [ ] Exclude `question_id`s from student's last 7 days of sessions (dedup).
+  - [ ] Create `Test` session with `test_mode = Practice`, `total_questions = 10`, `generated_by = System`, `generated_for_student_id = studentId`.
+  - [ ] Create `TestQuestion` records.
+  - [ ] Return `{ test_id, duration_minutes, total_questions }`.
 
 - [ ] **Queries**:
-  - [ ] `GetBlueprintListQuery` (UC-42): paged; filter by `status`, `grade`, `expert_id`; include section count and detail slot count
-  - [ ] `GetPendingBlueprintsQuery` (UC-40): `status = PENDING_REVIEW` AND `expert_id != currentUserId` (BR-Blueprint-01)
-  - [ ] `GetBlueprintByIdQuery`: full blueprint + all `BlueprintSection` rows + all `BlueprintDetail` rows
+  - [ ] `GetBlueprintListQuery` (UC-42): paged; filter by `status`, `grade`, `expert_id`; include section count and detail slot count.
+  - [ ] `GetPendingBlueprintsQuery` (UC-40): `status = PENDING_REVIEW` AND `expert_id != currentUserId` (BR-Blueprint-01).
+  - [ ] `GetBlueprintByIdQuery`: full blueprint + all `BlueprintSection` rows + all `BlueprintDetail` rows.
 
 ---
 
 ## Phase 3: Controller and Routing
 
 - [ ] `BlueprintsController` — ExpertOnly:
-  - [ ] GET list, GET pending, GET by ID, POST create, POST submit, POST review, POST clone, PUT update, DELETE
+  - [ ] GET list, GET pending, GET by ID, POST create, POST submit, POST review, POST clone, PUT update, DELETE.
 - [ ] `TestGenerationController` — StudentOnly:
-  - [ ] `POST /api/v1/tests/generate` — calls `GenerateTestCommand`
+  - [ ] `POST /api/v1/tests/generate` — calls `GenerateTestCommand`.
+  - [ ] `POST /api/v1/tests/generate-practice` — calls `GeneratePracticeSeriesCommand` (BR-54).
 - [ ] Do not add an Expert `TestsController` for MVP; expert workflow stops at question bank + blueprint management
 - [ ] Self-approval middleware/guard: inject check in `ReviewBlueprintHandler`
 - [ ] Register inside `TestGenModuleExtensions.cs`:

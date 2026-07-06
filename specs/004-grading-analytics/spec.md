@@ -60,7 +60,16 @@
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered questions |
   | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per TagId: `(TagId, TopicScore, CorrectCount, TotalCount)` |
+  | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradedAt` | `DateTime` | UTC timestamp |
+
+  `GradedAnswerDto` contains:
+  - `QuestionId` (`Guid`)
+  - `TagId` (`Guid`)
+  - `IsCorrect` (`bool`)
+  - `PointsEarned` (`decimal`)
+  - `TimeSpent` (`int`)
+  - `DifficultyLevel` (`byte` - value 1..4)
 
   Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
 - **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):

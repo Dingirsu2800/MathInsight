@@ -27,14 +27,14 @@
   - [ ] Skip duplicate `(session_id, tag_id)` rows to keep update idempotent.
 
 - [ ] **CompetencyEngine**:
-  - [ ] `UpdateTagsMasteryFromSessionResult(studentId, tagId, topicScore, testMode)`:
+  - [ ] `UpdateTagsMasteryFromSessionResult(studentId, tagId, topicScore, testMode, answers)`:
     - Upsert `TagsMastery(student_id, tag_id)`.
     - Update `number_done`, `num_correct`, `accuracy_rate`.
     - If official/exam result: update `exam_anchor` using Exponential Decay (RCM-05):
       - Prepend `topic_score` to `exam_history` (JSON array), keep at most 5 entries.
       - **Ordering contract (I2)**: `exam_history[0]` = most recent score (j=1); `exam_history[k-1]` = oldest. Always prepend new score; truncate last entry when `len > 5`. This ordering is mandatory for the Exponential Decay formula where j=1 must be the latest.
       - `exam_anchor = Σ(β^(j-1) × T_j) / Σ(β^(j-1))` with `β = 0.8`, `j=1` = latest (`history[0]`).
-    - If practice/adaptive result (per-answer): update `practice_point` using Elo formula (RCM-06):
+    - If practice/adaptive result: update `practice_point` using Elo formula (RCM-06) sequentially and retrospectively for each answer in the provided `answers` list (F1 & F4 resolution):
       - Correct: `practice_point = min(10.0, practice_point + 0.05 × w_D × γ_time)`
       - Wrong:   `practice_point = max(0.0,  practice_point − 0.05 × (5 − w_D) × γ_time_penalty)`
       - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` for difficulty levels 1–4.
@@ -60,7 +60,7 @@
     - `series_answer_count = 0`
 
 - [ ] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
-  - [ ] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level.
+  - [ ] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level. Query `Student.current_grade` from the Identity module cross-schema (F5 resolution).
   - [ ] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
   - [ ] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
 

@@ -59,7 +59,7 @@ POST   /api/v1/chatbot/assist            # UC-51: send question + student answer
 
 | Event | Direction | Details |
 |-------|-----------|---------|
-| `GradeCalculatedEvent` | **Published** to Recommender (005) | Contains `session_id`, `student_id`, per-tag correctness summary |
+| `GradeCalculatedEvent` | **Published** to Recommender (005) | Contains `session_id`, `student_id`, per-tag correctness summary, and detailed answers list (F1 resolution) |
 | `GradeCalculatedEvent` | **Published** to Notification (008) | Triggers "test graded" push notification |
 
 ### Grading Pipeline
