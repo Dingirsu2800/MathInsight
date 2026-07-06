@@ -30,8 +30,15 @@
   - [ ] `UpdateTagsMasteryFromSessionResult(studentId, tagId, topicScore, testMode)`:
     - Upsert `TagsMastery(student_id, tag_id)`.
     - Update `number_done`, `num_correct`, `accuracy_rate`.
-    - If official/exam result: update `exam_anchor`.
-    - If practice/adaptive result: update `practice_point` and increment `series_answer_count`.
+    - If official/exam result: update `exam_anchor` using Exponential Decay (RCM-05):
+      - Prepend `topic_score` to `exam_history` (JSON array), keep at most 5 entries.
+      - `exam_anchor = Σ(β^(j-1) × T_j) / Σ(β^(j-1))` with `β = 0.8`, `j=1` = latest.
+    - If practice/adaptive result (per-answer): update `practice_point` using Elo formula (RCM-06):
+      - Correct: `practice_point = min(10.0, practice_point + 0.05 × w_D × γ_time)`
+      - Wrong:   `practice_point = max(0.0,  practice_point − 0.05 × (5 − w_D) × γ_time_penalty)`
+      - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` for difficulty levels 1–4.
+      - `γ_time_penalty = 1.5` when answer time `t < 5 seconds`; otherwise `γ_time = 1.0`.
+      - Increment `series_answer_count`.
     - Recalculate `official_point = 0.7 * exam_anchor + 0.3 * practice_point`.
     - Recalculate `recommended_difficulty_level`.
     - Update `mastery_status`: `NotLearned`, `Learning`, `Mastered`.
@@ -81,6 +88,17 @@
   - [ ] `official_point < 5.00` returns WeakTag.
   - [ ] Difficulty mapping: `2.99 -> 1`, `3.00 -> 2`, `4.99 -> 2`, `5.00 -> 3`, `7.49 -> 3`, `7.50 -> 4`.
   - [ ] Practice series count `10` resets `practice_point` and `series_answer_count`.
+  - [ ] **exam_anchor — Exponential Decay**:
+    - 1 result: `exam_anchor = T1`.
+    - 2 results: `exam_anchor = (T1 + 0.8×T2) / (1 + 0.8)`.
+    - 5 results: weights `1.0, 0.8, 0.64, 0.512, 0.410`; older result beyond k=5 is ignored.
+    - `exam_history` is capped at 5 entries after each update.
+  - [ ] **practice_point — Elo formula**:
+    - Correct, level 2 (`w_D=1.0`), normal time: `Δ = +0.05`.
+    - Wrong, level 1 (`w_D=0.5`), normal time: `Δ = −0.05×(5−0.5) = −0.225`.
+    - Wrong, level 4 (`w_D=2.0`), normal time: `Δ = −0.05×(5−2.0) = −0.150`.
+    - Wrong, level 1 (`w_D=0.5`), `t < 5s` (guessing): `Δ = −0.05×4.5×1.5 = −0.3375`.
+    - Result never exceeds `10.0` or drops below `0.0`.
 - [ ] Integration tests:
   - [ ] Duplicate `(session_id, tag_id)` result does not double-update `TagsMastery`.
   - [ ] Graded session updates `StudentTopicSessionResult` and `TagsMastery`.

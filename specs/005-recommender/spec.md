@@ -41,8 +41,37 @@
 official_point = 0.7 * exam_anchor + 0.3 * practice_point
 ```
 
-- **RCM-05**: `exam_anchor` is updated from official/graded sessions using recent per-topic session results. MVP may use the latest result or a weighted average of up to 5 recent results.
-- **RCM-06**: `practice_point` is updated during practice/adaptive sessions. After each practice series reaches 10 answers for a topic, blend into `official_point`, reset `practice_point = official_point`, and reset `series_answer_count = 0`.
+- **RCM-05**: `exam_anchor` is updated from official/graded sessions using an **Exponential Decay weighted average** over the `k ≤ 5` most recent per-topic session scores:
+
+  ```text
+  exam_anchor = Σ(j=1→k) [β^(j-1) × T_j]  /  Σ(j=1→k) [β^(j-1)]
+  ```
+
+  Where:
+  - `T_j` — topic score (0–10) of the j-th most recent graded session (j=1 is the latest)
+  - `k ≤ 5` — sliding window of up to 5 recent sessions stored in `exam_history` (JSON array)
+  - `β = 0.8` — exponential decay factor (Ebbinghaus Forgetting Curve)
+
+  Decay weights: β⁰ = 1.0 → β¹ = 0.8 → β² = 0.64 → β³ = 0.512 → β⁴ = 0.410
+- **RCM-06**: `practice_point` is updated **per-answer** during practice/adaptive sessions using an Elo-inspired formula:
+
+  ```text
+  If CORRECT:  practice_point(t+1) = min(10.0,  practice_point(t) + α × w_D × γ_time)
+  If WRONG:    practice_point(t+1) = max(0.0,   practice_point(t) − α × (5 − w_D) × γ_time_penalty)
+  ```
+
+  Where:
+  - `α = 0.05` — base learning rate (K-factor, inspired by Elo rating system)
+  - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` — difficulty weight for levels 1–4 (inspired by IRT)
+  - `γ_time = 1.0` — normal time multiplier
+  - `γ_time_penalty = 1.5` — guessing penalty when answer time `t < 5 seconds`
+
+  After `series_answer_count` reaches **10** for a topic, blend `practice_point` into `official_point`, then reset:
+
+  ```text
+  practice_point ← official_point
+  series_answer_count ← 0
+  ```
 - **RCM-07**: `recommended_difficulty_level` is derived from `official_point`:
 
 | official_point | recommended_difficulty_level |
