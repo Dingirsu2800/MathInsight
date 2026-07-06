@@ -97,19 +97,62 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
 
         decimal pointBefore = mastery.OfficialPoint;
 
-        // ── RCM-05: Update ExamAnchor using Exponential Decay ───────────────────
-        var history = DeserializeHistory(mastery.ExamHistory);
-        history.Insert(0, tagResult.TopicScore); // prepend — newest first
-        if (history.Count > MaxExamHistory)
-            history.RemoveAt(history.Count - 1); // drop oldest
+        if (string.Equals(evt.TestFormat, "Exam", StringComparison.OrdinalIgnoreCase))
+        {
+            // ── RCM-05: Update ExamAnchor using Exponential Decay ───────────────────
+            var history = DeserializeHistory(mastery.ExamHistory);
+            history.Insert(0, tagResult.TopicScore); // prepend — newest first
+            if (history.Count > MaxExamHistory)
+                history.RemoveAt(history.Count - 1); // drop oldest
 
-        mastery.ExamAnchor = CalculateExamAnchor(history);
-        mastery.ExamHistory = JsonSerializer.Serialize(history);
+            mastery.ExamAnchor = CalculateExamAnchor(history);
+            mastery.ExamHistory = JsonSerializer.Serialize(history);
 
-        // ── RCM-04: Recalculate OfficialPoint ────────────────────────────────────
-        mastery.OfficialPoint = Math.Clamp(
-            0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
-            0.00m, 10.00m);
+            // ── RCM-04: Recalculate OfficialPoint ────────────────────────────────────
+            mastery.OfficialPoint = Math.Clamp(
+                0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
+                0.00m, 10.00m);
+        }
+        else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
+        {
+            // ── RCM-06: Update PracticePoint using Elo formula sequentially ─────────
+            var tagAnswers = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
+                .Where(a => a.TagId == tagResult.TagId)
+                .OrderBy(a => a.QuestionNo)
+                .ToList();
+
+            foreach (var ans in tagAnswers)
+            {
+                mastery.SeriesAnswerCount++;
+
+                decimal wD = ans.DifficultyLevel switch
+                {
+                    1 => 0.5m,
+                    2 => 1.0m,
+                    3 => 1.5m,
+                    4 => 2.0m,
+                    _ => 1.0m
+                };
+
+                decimal timePenalty = (ans.TimeSpent < 5 && !ans.IsAbandoned) ? 1.5m : 1.0m;
+
+                decimal delta = ans.IsCorrect
+                    ? 0.05m * wD
+                    : -0.05m * (5.0m - wD) * timePenalty;
+
+                mastery.PracticePoint = Math.Clamp(mastery.PracticePoint + delta, 0.00m, 10.00m);
+
+                mastery.OfficialPoint = Math.Clamp(
+                    0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
+                    0.00m, 10.00m);
+
+                if (mastery.SeriesAnswerCount >= 10)
+                {
+                    mastery.PracticePoint = mastery.OfficialPoint;
+                    mastery.SeriesAnswerCount = 0;
+                }
+            }
+        }
 
         // ── RCM-07: Map RecommendedDifficultyLevel ────────────────────────────────
         mastery.RecommendedDifficultyLevel = MapDifficultyLevel(mastery.OfficialPoint);

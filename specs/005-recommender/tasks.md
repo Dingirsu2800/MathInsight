@@ -30,15 +30,15 @@
   - [ ] `UpdateTagsMasteryFromSessionResult(studentId, tagId, topicScore, testMode, answers)`:
     - Upsert `TagsMastery(student_id, tag_id)`.
     - Update `number_done`, `num_correct`, `accuracy_rate`.
-    - If official/exam result: update `exam_anchor` using Exponential Decay (RCM-05):
+    - If official/exam result (TestFormat == "Exam"): update `exam_anchor` using Exponential Decay (RCM-05):
       - Prepend `topic_score` to `exam_history` (JSON array), keep at most 5 entries.
       - **Ordering contract (I2)**: `exam_history[0]` = most recent score (j=1); `exam_history[k-1]` = oldest. Always prepend new score; truncate last entry when `len > 5`. This ordering is mandatory for the Exponential Decay formula where j=1 must be the latest.
       - `exam_anchor = Σ(β^(j-1) × T_j) / Σ(β^(j-1))` with `β = 0.8`, `j=1` = latest (`history[0]`).
-    - If practice/adaptive result: update `practice_point` using Elo formula (RCM-06) sequentially and retrospectively for each answer in the provided `answers` list (F1 & F4 resolution):
+    - If practice/adaptive result (TestFormat == "Practice"): update `practice_point` using Elo formula (RCM-06) sequentially and retrospectively for each answer in the provided `answers` list (ordered by `QuestionNo`) (F1 & F4 resolution):
       - Correct: `practice_point = min(10.0, practice_point + 0.05 × w_D × γ_time)`
       - Wrong:   `practice_point = max(0.0,  practice_point − 0.05 × (5 − w_D) × γ_time_penalty)`
       - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` for difficulty levels 1–4.
-      - `γ_time_penalty = 1.5` when answer time `t < 5 seconds`; otherwise `γ_time = 1.0`.
+      - `γ_time_penalty = 1.5` when answer time `t < 5 seconds` and not abandoned (`!IsAbandoned`); otherwise `γ_time = 1.0`.
       - Increment `series_answer_count`.
     - Recalculate `official_point = 0.7 * exam_anchor + 0.3 * practice_point`.
     - Recalculate `recommended_difficulty_level`.

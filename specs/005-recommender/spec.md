@@ -59,7 +59,7 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   - This ordering is mandatory — the formula's weight assignment depends on it.
 
   Decay weights: β⁰ = 1.0 → β¹ = 0.8 → β² = 0.64 → β³ = 0.512 → β⁴ = 0.410
-- **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a Practice format session is submitted and graded (using `GradeCalculatedEvent.TestFormat == "Practice"`) (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` or `update_choice_time`, using the detailed answers provided in `GradeCalculatedEvent.Answers` (F1 resolution):
+- **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a Practice format session is submitted and graded (using `GradeCalculatedEvent.TestFormat == "Practice"`) (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` (using the detailed answers provided in `GradeCalculatedEvent.Answers` which includes `QuestionNo` and `IsAbandoned` fields) (F1 resolution):
 
   ```text
   If CORRECT:  practice_point(t+1) = min(10.0,  practice_point(t) + α × w_D × γ_time)

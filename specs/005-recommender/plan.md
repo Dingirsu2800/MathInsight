@@ -77,7 +77,9 @@ TestGen uses `WeakTagAdviceDto.RecommendedDifficultyLevel` to select questions. 
 TestSession becomes Graded
   -> Grading emits GradeCalculatedEvent containing detailed answers list (F1 resolution)
   -> Recommender upserts StudentTopicSessionResult
-  -> Recommender updates TagsMastery (practice_point is updated sequentially & retrospectively using event's Answers list) (F4 resolution)
+  -> Recommender updates TagsMastery:
+       - If Exam format: update exam_anchor using Exponential Decay (RCM-05)
+       - If Practice format: update practice_point sequentially using Elo formula (RCM-06)
   -> Recommender recalculates OfficialPoint
   -> Recommender queries Student.current_grade (F5 resolution) and updates CompetencyPoint
   -> Recommender maps RecommendedDifficultyLevel

@@ -54,6 +54,8 @@ public sealed record GradedAnswerDto
     public decimal PointsEarned { get; init; }
     public int TimeSpent { get; init; }
     public byte DifficultyLevel { get; init; }
+    public int QuestionNo { get; init; }
+    public bool IsAbandoned { get; init; }
 }
 
 /// <summary>

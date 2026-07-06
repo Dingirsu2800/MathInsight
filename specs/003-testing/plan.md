@@ -63,7 +63,7 @@ src/MathInsight.Modules.Testing/
 | `TestSession` | `(StudentID, Status)` index; durable status values `InProgress`, `Graded`, `Abandoned`; `SubmissionType` captures submit reason |
 | `TestAnswer` | `SessionID`, `QuestionID`, grading fields |
 | `TestAnswerOption` | Composite PK `(TestAnswerID, AnswerID)` |
-| `TestAnswerPart` | `TestAnswerPartID` PK; `TestAnswerID` FK; `QuestionPartID` FK; `AnswerID` FK (nullable); `ShortAnswerText` (nullable); `IsCorrect` (nullable); `PointsEarned` |
+| `TestAnswerPart` | `TestAnswerPartID` PK; `TestAnswerID` FK; `QuestionPartID` FK; `StudentAnswer` (nullable); `IsCorrect` (nullable); `PointsEarned` |
 | `TestIncidents` | `SessionID` FK |
 
 ### Service & API Gateway — REST Endpoints
@@ -96,7 +96,7 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 ### Auto-Save Mechanics
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
-- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, parts: [{ questionPartId, answerId, selectedOptions, shortAnswerText }] }] }`.
+- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, parts: [{ questionPartId, studentAnswer }] }] }`.
 - Handler validates `session_id` is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
 

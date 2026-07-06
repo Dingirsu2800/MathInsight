@@ -60,7 +60,7 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 - **TestSession**: `session_id`, `test_id` (FK), `student_id` (FK), `test_format` (**Practice** | **Exam**), `status` (**InProgress** | **Graded** | **Abandoned**), `submission_type` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `duration`, `start_time`, `end_time`, `total_question`, `num_correct`, `num_incorrect`, `num_abandoned`, `score`
 - **TestAnswer**: `test_answer_id`, `session_id` (FK), `question_id` (FK), `answer_id` (FK, nullable for MultipleSelect/ShortAnswer), `question_no`, `time_spent`, `first_choice_time`, `update_choice_time`, `short_answer_text`, `is_correct` (nullable until graded), `points_earned` (0.00 until graded)
 - **TestAnswerOption**: `test_answer_id` (FK, PK), `answer_id` (FK, PK) — for MultipleSelect
-- **TestAnswerPart**: `test_answer_part_id` (PK), `test_answer_id` (FK), `question_part_id` (FK), `answer_id` (FK, nullable for ShortAnswer), `short_answer_text` (nullable), `is_correct` (nullable until graded), `points_earned` (0.00 until graded) — for Composite parts
+- **TestAnswerPart**: `test_answer_part_id` (PK), `test_answer_id` (FK), `question_part_id` (FK), `student_answer` (nullable string), `is_correct` (nullable until graded), `points_earned` (0.00 until graded) — for Composite parts
 - **TestIncident**: `incident_id`, `session_id` (FK), `type` (TAB_SWITCH | FOCUS_LOSS), `time`
 
 

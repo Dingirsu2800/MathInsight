@@ -42,8 +42,8 @@ src/MathInsight.Modules.Grading/
 ### No Owned Database Tables
 
 This module reads/writes cross-schema:
-- **Reads**: `TestSession`, `TestAnswer`, `TestAnswerOption`, `Question`, `Answer`
-- **Writes**: `TestSession` (status, score, counts), `TestAnswer` (is_correct, points_earned)
+- **Reads**: `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestAnswerPart`, `Question`, `QuestionPart`, `Answer`
+- **Writes**: `TestSession` (status, score, counts), `TestAnswer` (is_correct, points_earned), `TestAnswerPart` (is_correct, points_earned)
 
 All writes are executed within a **single transaction** (DC-05).
 
@@ -74,11 +74,13 @@ GradingEngine.Grade(session):
     ├── COMPOSITE:
     │     ├── if ALL QuestionParts are TRUE_FALSE → apply BR-23 non-linear table
     │     │     (0 correct=0, 1=0.10×dp, 2=0.25×dp, 3=0.50×dp, N=1.00×dp)
-    │     └── otherwise → grade each QuestionPart; parent score = sum of part points
+    │     │     (update each TestAnswerPart.is_correct and points_earned)
+    │     └── otherwise → grade each QuestionPart and update TestAnswerPart (is_correct, points_earned); parent score = sum of part points
     └── SHORT_ANSWER: case-insensitive compare short_answer_text
-  Calculate: score = SUM(points_earned) / total_questions × 10.0
+  Calculate: score = SUM(points_earned) / total_question × 10.0
   Update in single transaction (DC-05):
     ├── TestAnswer: is_correct, points_earned
+    ├── TestAnswerPart: is_correct, points_earned (for Composite parts)
     └── TestSession: status=Graded, score, num_correct, num_incorrect, num_abandoned
         │
 Publish GradeCalculatedEvent (MediatR in-process):
