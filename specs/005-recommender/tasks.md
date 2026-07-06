@@ -32,7 +32,8 @@
     - Update `number_done`, `num_correct`, `accuracy_rate`.
     - If official/exam result: update `exam_anchor` using Exponential Decay (RCM-05):
       - Prepend `topic_score` to `exam_history` (JSON array), keep at most 5 entries.
-      - `exam_anchor = Σ(β^(j-1) × T_j) / Σ(β^(j-1))` with `β = 0.8`, `j=1` = latest.
+      - **Ordering contract (I2)**: `exam_history[0]` = most recent score (j=1); `exam_history[k-1]` = oldest. Always prepend new score; truncate last entry when `len > 5`. This ordering is mandatory for the Exponential Decay formula where j=1 must be the latest.
+      - `exam_anchor = Σ(β^(j-1) × T_j) / Σ(β^(j-1))` with `β = 0.8`, `j=1` = latest (`history[0]`).
     - If practice/adaptive result (per-answer): update `practice_point` using Elo formula (RCM-06):
       - Correct: `practice_point = min(10.0, practice_point + 0.05 × w_D × γ_time)`
       - Wrong:   `practice_point = max(0.0,  practice_point − 0.05 × (5 − w_D) × γ_time_penalty)`

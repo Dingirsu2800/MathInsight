@@ -52,6 +52,12 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   - `k ≤ 5` — sliding window of up to 5 recent sessions stored in `exam_history` (JSON array)
   - `β = 0.8` — exponential decay factor (Ebbinghaus Forgetting Curve)
 
+  **`exam_history` ordering contract (I2)**: `exam_history` is a JSON array stored on `TagsMastery`.
+  - `exam_history[0]` = most recent session score (j=1, weight β⁰ = 1.0).
+  - `exam_history[k-1]` = oldest session score in the window.
+  - On each update: **prepend** the new score; if `len > 5`, remove the last element.
+  - This ordering is mandatory — the formula's weight assignment depends on it.
+
   Decay weights: β⁰ = 1.0 → β¹ = 0.8 → β² = 0.64 → β³ = 0.512 → β⁴ = 0.410
 - **RCM-06**: `practice_point` is updated **per-answer** during practice/adaptive sessions using an Elo-inspired formula:
 

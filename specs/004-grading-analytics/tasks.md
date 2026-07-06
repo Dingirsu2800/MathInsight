@@ -43,7 +43,9 @@
   - [ ] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
   - [ ] POST to OpenAI/Claude API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
   - [ ] Apply 10-second timeout, Polly circuit breaker (3 fails = open 30s)
-  - [ ] Enforce 1 request per student per session (in-memory rate limiter or Redis key)
+  - [ ] Enforce 1 request per student per session using **in-memory rate limiter** (A2 — MVP only).
+    - Keyed by `(studentId, sessionId)`; TTL-based or flag per request scope.
+    - **Do NOT use Redis** for this in MVP — Constitution §IV prohibits Redis unless spec-backed. Redis becomes relevant only under multi-instance deployment (post-MVP).
   - [ ] Return explanation string — do NOT persist to database (BR-21)
 
 - [ ] **Polly Retry Policy** (U2 — per Assumptions:L96):

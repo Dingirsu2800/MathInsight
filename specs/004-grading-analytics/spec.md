@@ -113,3 +113,4 @@ Delegates competency updates to **Recommender module (005)** via `GradeCalculate
 - No RabbitMQ grading queue is required for MVP under the current `TestSession.Status` design.
 - Polly retry policy: 3 retries with exponential backoff for grading transaction failures.
 - Chatbot integration uses OpenAI or Claude API; credentials injected via environment variables.
+- Chatbot rate limiter (UC-51): **in-memory only for MVP** — keyed by `(studentId, sessionId)`. Redis is explicitly excluded per Constitution §IV; it may be introduced only when multi-instance deployment becomes a spec-backed requirement.
