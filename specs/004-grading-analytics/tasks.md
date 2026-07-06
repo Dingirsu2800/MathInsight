@@ -18,7 +18,9 @@
 - [ ] **GradingEngine** (`IGradingEngine`):
   - [ ] `SINGLE_CHOICE` grading: compare `TestAnswer.answer_id` to the correct `Answer.answer_id`
   - [ ] `MULTIPLE_SELECT` grading: compare selected `TestAnswerOption` set to the full correct answer set — all correct + no incorrect = true
-  - [ ] `TRUE_FALSE` grading: same as SINGLE_CHOICE
+  - [ ] `TRUE_FALSE` grading (standalone): same as `SINGLE_CHOICE`
+  - [ ] `COMPOSITE` grading — general: grade each `QuestionPart`; `points_earned` = sum of correct part points
+  - [ ] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually
   - [ ] `SHORT_ANSWER` grading: `LOWER(short_answer_text) == LOWER(Answer.answer_content)` where `Answer.is_correct = true`
   - [ ] Calculate `score = SUM(points_earned) / total_questions × 10.0` (BR-20)
   - [ ] Count `num_correct`, `num_incorrect`, `num_abandoned` (null answer = abandoned)
@@ -68,6 +70,12 @@
   - [ ] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
   - [ ] SHORT_ANSWER case-insensitive match → `is_correct = true`
   - [ ] Null answer (abandoned) → `is_correct = false`, counted in `num_abandoned`
+  - [ ] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
+  - [ ] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
+  - [ ] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)
+  - [ ] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × default_point` (BR-23)
+  - [ ] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
+  - [ ] COMPOSITE general (mixed parts) — parent score = sum of part points earned
   - [ ] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
   - [ ] UC-51: Chatbot returns explanation JSON within 10s
   - [ ] UC-51: Second chatbot call same session → rate limited (429)

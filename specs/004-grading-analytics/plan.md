@@ -69,9 +69,12 @@ Testing submit flow calls GradeSubmittedSessionHandler
         │
 GradingEngine.Grade(session):
   foreach TestAnswer in session:
-    ├── SINGLE_CHOICE / TRUE_FALSE: compare answer_id to correct answer
+    ├── SINGLE_CHOICE / TRUE_FALSE (standalone): compare answer_id to correct answer
     ├── MULTIPLE_SELECT: compare selected options (TestAnswerOption) to correct set
-    ├── COMPOSITE: grade each QuestionPart via TestAnswerPart; parent score = sum of part points
+    ├── COMPOSITE:
+    │     ├── if ALL QuestionParts are TRUE_FALSE → apply BR-23 non-linear table
+    │     │     (0 correct=0, 1=0.10×dp, 2=0.25×dp, 3=0.50×dp, N=1.00×dp)
+    │     └── otherwise → grade each QuestionPart; parent score = sum of part points
     └── SHORT_ANSWER: case-insensitive compare short_answer_text
   Calculate: score = SUM(points_earned) / total_questions × 10.0
   Update in single transaction (DC-05):

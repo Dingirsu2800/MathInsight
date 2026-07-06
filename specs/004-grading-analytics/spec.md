@@ -45,6 +45,17 @@
 - **BR-20**: Score formula: `score = SUM(points_earned) / total_questions × 10.0` — normalized to a 0–10 scale.
 - **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
 - **BR-22**: Competency recalculation is delegated to the Recommender module (005) via `GradeCalculatedEvent` published after grading completes.
+- **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):
+
+  | Correct parts | Points earned |
+  |---------------|---------------|
+  | 0             | 0.00          |
+  | 1             | 0.10 × `default_point` |
+  | 2             | 0.25 × `default_point` |
+  | 3             | 0.50 × `default_point` |
+  | N (all)       | 1.00 × `default_point` |
+
+  This rule applies regardless of **which** specific parts are correct. `is_correct` on the parent `TestAnswer` is `true` only when all parts are correct. Each child `TestAnswerPart.is_correct` is still recorded individually for solution display.
 
 ### Grading Algorithm per Question Type
 
@@ -52,8 +63,9 @@
 |------|---------------|
 | `SINGLE_CHOICE` | `is_correct = (student_answer_id == correct_answer_id)` |
 | `MULTIPLE_SELECT` | `is_correct = (all correct options selected AND no incorrect options selected)` |
-| `TRUE_FALSE` | Same as SINGLE_CHOICE |
-| `COMPOSITE` | Grade each `QuestionPart` through `TestAnswerPart`; parent answer score is the sum of part points |
+| `TRUE_FALSE` | Same as `SINGLE_CHOICE` — standalone single-answer True/False question |
+| `COMPOSITE (general)` | Grade each `QuestionPart` individually; `points_earned` = sum of part points earned |
+| `COMPOSITE (all-TRUE_FALSE parts)` | Apply BR-23 non-linear scoring table based on count of correct parts |
 | `SHORT_ANSWER` | Case-insensitive string match: `LOWER(short_answer_text) == LOWER(correct_answer_content)` |
 
 ### Key Entities *(read from Testing module)*
