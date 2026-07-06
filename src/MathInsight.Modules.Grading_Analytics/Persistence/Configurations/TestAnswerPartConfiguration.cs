@@ -8,7 +8,7 @@ public class TestAnswerPartConfiguration : IEntityTypeConfiguration<TestAnswerPa
 {
     public void Configure(EntityTypeBuilder<TestAnswerPart> builder)
     {
-        builder.ToTable("TestAnswerParts");
+        builder.ToTable("TestAnswerPart");
         builder.HasKey(x => x.TestAnswerPartId);
 
         builder.Property(x => x.TestAnswerPartId).HasColumnName("test_answer_part_id");

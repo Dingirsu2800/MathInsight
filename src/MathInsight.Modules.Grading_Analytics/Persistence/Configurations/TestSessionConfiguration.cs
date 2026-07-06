@@ -8,7 +8,7 @@ public class TestSessionConfiguration : IEntityTypeConfiguration<TestSession>
 {
     public void Configure(EntityTypeBuilder<TestSession> builder)
     {
-        builder.ToTable("TestSessions");
+        builder.ToTable("TestSession");
         builder.HasKey(x => x.SessionId);
 
         builder.Property(x => x.SessionId).HasColumnName("session_id");

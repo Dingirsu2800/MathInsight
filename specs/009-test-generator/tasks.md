@@ -67,11 +67,11 @@
     - Remedial (F6 resolution): Easy + `official_point < 5.0` → Remedial (10% bias, no downscale).
     - Rollback downscale (F3 resolution): Scale back to slot difficulty when `official_point >= 5.00`.
     - Dedup: exclude `question_id`s from student's last 7 days of sessions.
-    - Query per section and filter `Question.QuestionType = BlueprintSection.QuestionType`.
+    - Query per section and filter Question.QuestionType matching BlueprintSection.QuestionType (mapped: SingleChoice -> SINGLE_CHOICE, MultipleChoice -> MULTIPLE_SELECT, TrueFalse -> TRUE_FALSE, ShortAnswer -> SHORT_ANSWER, Composite -> COMPOSITE).
     - Random sample from `Question` matching topic, difficulty, section question type, status, and active flag.
   - [ ] Create `Test`; generate unique `test_code` only for shareable/code-entry tests, keep `NULL` for personal adaptive/recommendation tests.
   - [ ] Set `Test.generated_by = System`; `test_mode = Exam`.
-  - [ ] Create `TestQuestion` records ordered by `section_order`, then slot order; set `SourceBlueprintDetailID`.
+  - [ ] Create `TestQuestion` records ordered by `section_order`, then slot order.
   - [ ] Transition Blueprint to `ACTIVE` on first generation (BR-48).
   - [ ] Return `{ test_id, test_code, duration_minutes, total_questions }`; `test_code` may be `NULL`.
 

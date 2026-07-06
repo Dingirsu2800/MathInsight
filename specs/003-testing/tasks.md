@@ -32,7 +32,7 @@
 
 - [ ] **AutoSave Command**:
   - [ ] Validate session `status = InProgress` (reject if `Graded` or `Abandoned`)
-  - [ ] Batch update `TestAnswer`: `answer_id`, `selected_options`, `short_answer_text`
+  - [ ] Batch update `TestAnswer`: `answer_id`, `selected_options`, `short_answer_text`, `time_spent` (received from Client payload for guessing penalty)
   - [ ] Update `update_choice_time`; set `first_choice_time` if null
   - [ ] Return `{ savedAt, remainingSeconds }` — remaining time from `start_time + duration_minutes`
 

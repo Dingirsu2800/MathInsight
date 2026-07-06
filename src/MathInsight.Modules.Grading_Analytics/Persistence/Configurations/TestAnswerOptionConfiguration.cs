@@ -8,7 +8,7 @@ public class TestAnswerOptionConfiguration : IEntityTypeConfiguration<TestAnswer
 {
     public void Configure(EntityTypeBuilder<TestAnswerOption> builder)
     {
-        builder.ToTable("TestAnswerOptions");
+        builder.ToTable("TestAnswerOption");
 
         // Composite PK: (test_answer_id, answer_id)
         builder.HasKey(x => new { x.TestAnswerId, x.AnswerId });

@@ -96,7 +96,7 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 ### Auto-Save Mechanics
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
-- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, parts: [{ questionPartId, studentAnswer }] }] }`.
+- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ questionPartId, studentAnswer }] }] }`.
 - Handler validates `session_id` is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
 
