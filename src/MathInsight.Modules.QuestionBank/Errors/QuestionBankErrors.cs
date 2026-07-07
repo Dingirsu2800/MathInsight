@@ -16,6 +16,10 @@ public static class QuestionBankErrors
         "QUESTION_INVALID_TYPE",
         "Invalid question type.");
 
+    public static readonly Error QuestionStatusInvalid = new(
+        "QUESTION_STATUS_INVALID",
+        "Invalid question status.");
+
     public static readonly Error QuestionDifficultyRequired = new(
         "QUESTION_DIFFICULTY_REQUIRED",
         "Difficulty is required.");

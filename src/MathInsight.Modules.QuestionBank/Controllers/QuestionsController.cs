@@ -2,6 +2,7 @@
 using MathInsight.Modules.QuestionBank.Commands.CreateQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionList;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -20,6 +21,36 @@ public class QuestionsController : ControllerBase
     public QuestionsController(IMediator mediator)
     {
         _mediator = mediator;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetQuestions(
+        [FromQuery] int pageIndex,
+        [FromQuery] int pageSize,
+        [FromQuery] string? status,
+        [FromQuery] int? grade,
+        [FromQuery] string? tagId,
+        [FromQuery] string? difficultyId,
+        [FromQuery] string? questionType,
+        [FromQuery] string? expertId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetQuestionListQuery(
+                pageIndex,
+                pageSize,
+                status,
+                grade,
+                tagId,
+                difficultyId,
+                questionType,
+                expertId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return BadRequest(new ApiErrorResponse(result.Error!));
+
+        return Ok(result.Value);
     }
 
     [HttpPost]

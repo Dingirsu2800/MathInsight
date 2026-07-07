@@ -42,7 +42,7 @@
   - [ ] `DeleteTagCommand` — check no linked `question_topics` records (DC-02)
 - [ ] **Queries**:
   - [ ] `GetDashboardQuery` — count by `status`, `question_type`, `grade`; return last 5 reports
-  - [ ] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
+  - [x] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
   - [ ] `GetQuestionVersionsQuery` — ordered by `created_time` DESC
   - [ ] `GetReportedQuestionsQuery` — filter by `reporter_account_id` = current Expert's questions
   - [ ] `GetTagListQuery` — return hierarchical topic tree + flat difficulty list
