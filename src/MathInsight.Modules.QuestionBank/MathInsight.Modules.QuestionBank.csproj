@@ -13,11 +13,4 @@
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
-	<ItemGroup>
-		<Folder Include="Controllers\" />
-		<Folder Include="Contracts\" />
-		<Folder Include="Commands\" />
-		<Folder Include="Queries\" />
-		<Folder Include="Persistence\Configurations\" />
-	</ItemGroup>
 </Project>

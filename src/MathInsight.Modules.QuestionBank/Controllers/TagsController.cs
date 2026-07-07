@@ -1,11 +1,13 @@
 ﻿using MathInsight.Modules.QuestionBank.Queries.GetTagDifficulties;
 using MathInsight.Modules.QuestionBank.Queries.GetTagTopics;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MathInsight.Modules.QuestionBank.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Expert")]
 [Route("api/question-bank/tags")]
 public class TagsController : ControllerBase
 {

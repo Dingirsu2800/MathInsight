@@ -25,7 +25,7 @@
 ## Phase 2: Core Domain Logic
 
 - [ ] **Question Commands**:
-  - [ ] `CreateQuestionCommand` — validate non-empty sanitized content, ≥1 Topic + ≥1 Difficulty tag, answer constraints per type, `Composite` part constraints, set `status = APPROVED` for Expert creator (BR-55)
+  - [x] `CreateQuestionCommand` — validate non-empty sanitized content, ≥1 Topic + ≥1 Difficulty tag, answer constraints per type, `Composite` part constraints, set `status = APPROVED` for Expert creator (BR-55)
   - [ ] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` (BR-54); validate constraints
   - [ ] `ToggleQuestionActiveCommand` — check no active `TestQuestion` references (DC-02)
   - [ ] `DeleteQuestionCommand` — hard-delete if no test references; soft-delete otherwise (DC-02)
@@ -73,7 +73,7 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` — zero compile errors
+- [x] `dotnet build` — zero compile errors
 - [ ] Integration tests (xUnit):
   - [ ] UC-20/21: Create SINGLE_CHOICE → `status = APPROVED`, 4 answers, 1 correct
   - [ ] UC-21: Create with 0 Topic tags → 400 (BR-05)
