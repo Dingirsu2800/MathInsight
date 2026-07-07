@@ -23,7 +23,7 @@
   - [ ] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually
   - [ ] `SHORT_ANSWER` grading: `LOWER(short_answer_text) == LOWER(Answer.answer_content)` where `Answer.is_correct = true`
   - [ ] Calculate `score = SUM(points_earned) / total_question × 10.0` (BR-20)
-  - [ ] Count `num_correct`, `num_incorrect`, `num_abandoned` (null answer = abandoned)
+  - [ ] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
 
 - [ ] **GradeSubmittedSessionHandler** (MVP synchronous):
   - [ ] Called in-process by Testing submit/force-submit flow
@@ -55,7 +55,7 @@
 - [ ] **GradeCalculatedEvent Contract** (G3):
   - [ ] Use `MathInsight.Shared.Events.GradeCalculatedEvent` — do NOT define a separate local copy
   - [ ] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct tag in session
-  - [ ] Populate `NumAbandoned` from count of `TestAnswer` where `answer_id IS NULL`
+  - [ ] Populate `NumAbandoned` from count of unanswered/abandoned answers per BR-16b
   - [ ] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
 
 ---
@@ -81,7 +81,7 @@
   - [ ] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
   - [ ] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
   - [ ] SHORT_ANSWER case-insensitive match → `is_correct = true`
-  - [ ] Null answer (abandoned) → `is_correct = false`, counted in `num_abandoned`
+  - [ ] Abandoned answer (per BR-16b) → `is_correct = false`, counted in `num_abandoned`
   - [ ] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
   - [ ] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
   - [ ] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)

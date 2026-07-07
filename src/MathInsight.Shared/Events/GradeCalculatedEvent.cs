@@ -25,7 +25,11 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
     public int NumIncorrect { get; init; }
 
     /// <summary>
-    /// Questions where the student did not submit any answer (answer_id = null).
+    /// Questions where the student did not submit any answer (abandoned per BR-16b:
+    ///   - SINGLE_CHOICE/TRUE_FALSE: answer_id is null
+    ///   - MULTIPLE_SELECT: no options selected (no associated TestAnswerOption records)
+    ///   - SHORT_ANSWER: short_answer_text is null or whitespace
+    ///   - COMPOSITE: all child parts are unanswered/abandoned (all TestAnswerPart.student_answer are null/empty)
     /// </summary>
     public int NumAbandoned { get; init; }
 
@@ -55,6 +59,9 @@ public sealed record GradedAnswerDto
     public int TimeSpent { get; init; }
     public byte DifficultyLevel { get; init; }
     public int QuestionNo { get; init; }
+    /// <summary>
+    /// True if the student did not submit any answer for this question (abandoned per BR-16b).
+    /// </summary>
     public bool IsAbandoned { get; init; }
 }
 

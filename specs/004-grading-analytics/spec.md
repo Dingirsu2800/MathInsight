@@ -27,7 +27,7 @@
 
 ### Edge Cases
 
-- **Partial submission**: Questions with null `answer_id` are graded as incorrect (`is_correct = false`, `points_earned = 0.00`).
+- **Partial submission**: Abandoned questions (where no answer is provided, per BR-16b) are graded as incorrect (`is_correct = false`, `points_earned = 0.00`).
 - **Multiple-select grading**: All correct options must be selected AND no incorrect options — otherwise `is_correct = false`.
 - **Short answer grading**: Case-insensitive string match against `correct_answer` stored in `Answer.answer_content`.
 - **Grading failure**: If grading fails mid-transaction → rollback entire submit transaction (DC-05). The session remains `InProgress` so the student can retry submit.
@@ -59,7 +59,7 @@
   | `Score` | `decimal` | 0.00–10.00 normalized score (BR-20) |
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
-  | `NumAbandoned` | `int` | Count of unanswered questions |
+  | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
   | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per TagId: `(TagId, TopicScore, CorrectCount, TotalCount)` |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradedAt` | `DateTime` | UTC timestamp |
@@ -72,7 +72,7 @@
   - `TimeSpent` (`int`)
   - `DifficultyLevel` (`byte` - value 1..4)
   - `QuestionNo` (`int`)
-  - `IsAbandoned` (`bool`)
+  - `IsAbandoned` (`bool`) — true if the question is abandoned/unanswered (per BR-16b)
 
   Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
 - **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):

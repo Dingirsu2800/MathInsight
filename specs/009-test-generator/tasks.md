@@ -70,7 +70,7 @@
     - Query per section and filter Question.QuestionType matching BlueprintSection.QuestionType (mapped: SingleChoice -> SINGLE_CHOICE, MultipleChoice -> MULTIPLE_SELECT, TrueFalse -> TRUE_FALSE, ShortAnswer -> SHORT_ANSWER, Composite -> COMPOSITE).
     - Random sample from `Question` matching topic, difficulty, section question type, status, and active flag.
   - [ ] Create `Test`; generate unique `test_code` only for shareable/code-entry tests, keep `NULL` for personal adaptive/recommendation tests.
-  - [ ] Set `Test.generated_by = System`; `test_mode = Exam`.
+  - [ ] Set `Test.generated_by = System`; `test_format = Exam`.
   - [ ] Create `TestQuestion` records ordered by `section_order`, then slot order.
   - [ ] Transition Blueprint to `ACTIVE` on first generation (BR-48).
   - [ ] Return `{ test_id, test_code, duration_minutes, total_questions }`; `test_code` may be `NULL`.
@@ -84,7 +84,7 @@
     - `difficulty_id` matches `WeakTagAdviceDto.RecommendedDifficultyLevel` (1 or 2)
     - `status = APPROVED` AND `is_active = true`.
   - [ ] Exclude `question_id`s from student's last 7 days of sessions (dedup).
-  - [ ] Create `Test` session with `test_mode = Practice`, `total_questions = 10`, `generated_by = System`, `generated_for_student_id = studentId`.
+  - [ ] Create `Test` session with `test_format = Practice`, `total_questions = 10`, `generated_by = System`, `generated_for_student_id = studentId`.
   - [ ] Create `TestQuestion` records.
   - [ ] Return `{ test_id, duration_minutes, total_questions }`.
 

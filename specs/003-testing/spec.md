@@ -52,6 +52,13 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 - **BR-15**: A Student may have at most one `InProgress` session for the same `test_id` at any given time.
 - **BR-16**: `TestAnswer.points_earned` is populated during grading (module 004). Submit returns only after grading succeeds and `status = Graded`.
 - **BR-16a**: `TestSession.submission_type` stores how the session was submitted: `StudentSubmit`, `TimeoutSubmit`, or `SystemSubmit`. It is required when `status = Graded` and must be null while `status = InProgress` or `Abandoned`.
+- **BR-16b**: An answer is considered "unanswered/abandoned" (which determines `TestSession.num_abandoned` and `GradeCalculatedEvent.Answers.IsAbandoned`) based on its `QuestionType`:
+  - `SINGLE_CHOICE`: `answer_id IS NULL`
+  - `TRUE_FALSE`: `answer_id IS NULL`
+  - `MULTIPLE_SELECT`: No options selected (i.e., no entries in `TestAnswerOption`)
+  - `SHORT_ANSWER`: `short_answer_text` is null or consists only of whitespace
+  - `COMPOSITE`: All child parts are unanswered/abandoned (i.e., all child parts have null or whitespace-only `student_answer` values in `TestAnswerPart`)
+
 
 ### Key Entities *(include if feature involves data)*
 

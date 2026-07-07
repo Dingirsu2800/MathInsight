@@ -45,7 +45,7 @@
   - [ ] Lock answer writes inside the submit transaction
   - [ ] Set `end_time = NOW`, `submission_type = StudentSubmit`
   - [ ] Calculate `duration = (end_time - start_time).TotalSeconds`
-  - [ ] Count `num_abandoned` (questions with null answer)
+  - [ ] Count `num_abandoned` (unanswered/abandoned questions per BR-16b)
   - [ ] Invoke Grading module in-process; commit only after grading updates `status = Graded`
   - [ ] Publish `GradeCalculatedEvent` after successful grading
 
@@ -84,6 +84,6 @@
   - [ ] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `submission_type = SystemSubmit`
   - [ ] UC-49: Normal submit → `Graded`, `submission_type = StudentSubmit`, grading fields populated
   - [ ] UC-49: Submit `Graded` session → 409 (DC-03)
-  - [ ] UC-49: Submit with unanswered questions → `num_abandoned` = correct count
+  - [ ] UC-49: Submit with unanswered questions → `num_abandoned` = unanswered count
   - [ ] UC-50: View solution before `Graded` → 403
   - [ ] UC-50: View solution after `Graded` → full question/answer data returned
