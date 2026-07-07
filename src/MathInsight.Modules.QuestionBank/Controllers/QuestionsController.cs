@@ -5,6 +5,7 @@ using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionList;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionVersions;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -61,6 +62,24 @@ public class QuestionsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(new GetQuestionDetailQuery(questionId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error == QuestionBankErrors.QuestionNotFound)
+                return NotFound(new ApiErrorResponse(result.Error!));
+
+            return BadRequest(new ApiErrorResponse(result.Error!));
+        }
+
+        return Ok(result.Value);
+    }
+
+    [HttpGet("{questionId}/versions")]
+    public async Task<IActionResult> GetQuestionVersions(
+        string questionId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new GetQuestionVersionsQuery(questionId), cancellationToken);
 
         if (result.IsFailure)
         {
