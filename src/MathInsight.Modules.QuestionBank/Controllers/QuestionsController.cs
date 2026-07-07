@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using MathInsight.Modules.QuestionBank.Commands.CreateQuestion;
+using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
@@ -92,5 +93,38 @@ public class QuestionsController : ControllerBase
             return BadRequest(new ApiErrorResponse(result.Error!));
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpPut("{questionId}")]
+    public async Task<IActionResult> UpdateQuestion(
+        string questionId,
+        [FromBody] UpdateQuestionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(QuestionBankErrors.QuestionRequestInvalid));
+
+        var expertId = User.FindFirst("account_id")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new UpdateQuestionCommand(questionId, request, expertId),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error == QuestionBankErrors.QuestionNotFound)
+                return NotFound(new ApiErrorResponse(result.Error!));
+
+            if (result.Error == QuestionBankErrors.QuestionUpdateForbidden)
+                return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(result.Error!));
+
+            return BadRequest(new ApiErrorResponse(result.Error!));
+        }
+
+        return Ok(result.Value);
     }
 }

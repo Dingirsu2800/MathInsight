@@ -16,6 +16,10 @@ public static class QuestionBankErrors
         "QUESTION_NOT_FOUND",
         "Question was not found.");
 
+    public static readonly Error QuestionUpdateForbidden = new(
+        "QUESTION_UPDATE_FORBIDDEN",
+        "You are not allowed to update this question.");
+
     public static readonly Error QuestionContentRequired = new(
         "QUESTION_CONTENT_REQUIRED",
         "Question content is required.");
@@ -32,6 +36,10 @@ public static class QuestionBankErrors
         "QUESTION_DIFFICULTY_REQUIRED",
         "Difficulty is required.");
 
+    public static readonly Error QuestionDifficultyNotFound = new(
+        "QUESTION_DIFFICULTY_NOT_FOUND",
+        "Question difficulty was not found.");
+
     public static readonly Error QuestionGradeInvalid = new(
         "QUESTION_GRADE_INVALID",
         "Question grade must be 10, 11, or 12.");
@@ -43,6 +51,10 @@ public static class QuestionBankErrors
     public static readonly Error QuestionTopicRequired = new(
         "QUESTION_TOPIC_REQUIRED",
         "At least one topic is required.");
+
+    public static readonly Error QuestionTopicNotFound = new(
+        "QUESTION_TOPIC_NOT_FOUND",
+        "Question topic was not found.");
 
     public static readonly Error QuestionPrimaryTopicRequired = new(
         "QUESTION_PRIMARY_TOPIC_REQUIRED",
