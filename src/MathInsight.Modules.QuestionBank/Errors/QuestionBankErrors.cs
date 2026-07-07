@@ -8,6 +8,14 @@ public static class QuestionBankErrors
         "QUESTION_REQUEST_INVALID",
         "Request body is required.");
 
+    public static readonly Error QuestionIdRequired = new(
+        "QUESTION_ID_REQUIRED",
+        "Question id is required.");
+
+    public static readonly Error QuestionNotFound = new(
+        "QUESTION_NOT_FOUND",
+        "Question was not found.");
+
     public static readonly Error QuestionContentRequired = new(
         "QUESTION_CONTENT_REQUIRED",
         "Question content is required.");

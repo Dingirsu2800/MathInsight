@@ -2,6 +2,7 @@
 using MathInsight.Modules.QuestionBank.Commands.CreateQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionList;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -49,6 +50,24 @@ public class QuestionsController : ControllerBase
 
         if (result.IsFailure)
             return BadRequest(new ApiErrorResponse(result.Error!));
+
+        return Ok(result.Value);
+    }
+
+    [HttpGet("{questionId}")]
+    public async Task<IActionResult> GetQuestionDetail(
+        string questionId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new GetQuestionDetailQuery(questionId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error == QuestionBankErrors.QuestionNotFound)
+                return NotFound(new ApiErrorResponse(result.Error!));
+
+            return BadRequest(new ApiErrorResponse(result.Error!));
+        }
 
         return Ok(result.Value);
     }
