@@ -1,3 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-on-secondary-fixed: #1a1b22;
+  --color-inverse-on-surface: #eff0fa;
+  --color-primary: #0058be;
+  --color-on-secondary-container: #63646c;
+  --color-inverse-primary: #adc6ff;
+  --color-on-tertiary-container: #fffbff;
+  --color-primary-fixed-dim: #adc6ff;
+  --color-surface-container-low: #f2f3fd;
+  --color-secondary-container: #e3e1ec;
+  --color-on-error: #ffffff;
+  --color-secondary: #5d5e66;
+  --color-tertiary: #924700;
+  --color-surface-bright: #f9f9ff;
+  --color-outline-variant: #c2c6d6;
+  --color-background: #f9f9ff;
+  --color-error-container: #ffdad6;
+  --color-primary-container: #2170e4;
+  --color-tertiary-fixed: #ffdcc6;
+  --color-amber-warning: #F59E0B;
+  --color-on-secondary: #ffffff;
+  --color-whisper-border: rgba(226, 232, 240, 0.5);
+  --color-emerald-success: #10B981;
+  --color-on-tertiary-fixed-variant: #723600;
+  --color-error: #ba1a1a;
+  --color-surface-dim: #d8d9e3;
+  --color-secondary-fixed: #e3e1ec;
+  --color-inverse-surface: #2e3038;
+  --color-on-tertiary-fixed: #311400;
+  --color-on-surface-variant: #424754;
+  --color-canvas-white: #F9FAFB;
+  --color-on-primary: #ffffff;
+  --color-deep-rose: #E11D48;
+  --color-on-primary-container: #fefcff;
+  --color-surface-variant: #e1e2ec;
+  --color-charcoal-ink: #18181B;
+  --color-on-background: #191b23;
+  --color-on-primary-fixed: #001a42;
+  --color-surface-container: #ecedf7;
+  --color-tertiary-fixed-dim: #ffb786;
+  --color-on-error-container: #93000a;
+  --color-on-secondary-fixed-variant: #46464e;
+  --color-surface: #f9f9ff;
+  --color-surface-container-highest: #e1e2ec;
+  --color-surface-tint: #005ac2;
+  --color-on-tertiary: #ffffff;
+  --color-primary-fixed: #d8e2ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-outline: #727785;
+  --color-surface-container-high: #e6e7f2;
+  --color-pure-surface: #FFFFFF;
+  --color-on-surface: #191b23;
+  --color-on-primary-fixed-variant: #004395;
+  --color-tertiary-container: #b75b00;
+  --color-secondary-fixed-dim: #c6c5cf;
+
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2.5xl: 2.5rem;
+
+  --spacing-gutter: 1.5rem;
+  --spacing-sidebar-width: 280px;
+  --spacing-header-height: 64px;
+  --spacing-density-unit: 4px;
+  --spacing-container-margin: 2rem;
+
+  --font-body: Geist, sans-serif;
+  --font-mono: JetBrains Mono, monospace;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-on-background);
+  font-family: var(--font-body);
+}
+
+.diffused-shadow { box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.05); }
+.glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(226, 232, 240, 0.5); }
+
+/* Keep existing MVP styles for backwards compatibility with student views */
 :root {
   color: #e2e8f0;
   background: #080c14;
@@ -10,43 +93,9 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
 a {
   color: inherit;
   text-decoration: none;
-}
-
-button,
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  border: 0;
-  border-radius: 12px;
-  padding: 0 16px;
-  background: #2563eb;
-  color: #ffffff;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-button:hover,
-.button:hover {
-  background: #1d4ed8;
-}
-
-.button-secondary {
-  background: #1e293b;
-}
-
-.button-secondary:hover {
-  background: #334155;
 }
 
 .button-row {
@@ -103,4 +152,3 @@ button:hover,
 .danger {
   color: #f87171;
 }
-
