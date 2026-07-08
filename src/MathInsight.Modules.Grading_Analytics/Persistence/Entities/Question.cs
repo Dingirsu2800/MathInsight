@@ -13,6 +13,9 @@ public class Question
 
     public decimal DefaultPoint { get; set; }
 
+    /// <summary>Difficulty level value (1..4) from TagDifficulty, for GradeCalculatedEvent.</summary>
+    public byte DifficultyLevel { get; set; }
+
     // Navigation
     public ICollection<Answer> Answers { get; set; } = new List<Answer>();
     public ICollection<QuestionPart> Parts { get; set; } = new List<QuestionPart>();

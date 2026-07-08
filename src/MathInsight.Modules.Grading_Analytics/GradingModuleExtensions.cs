@@ -24,12 +24,14 @@ public static class GradingModuleExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null)));
 
-
-        // GradingEngine: per-question-type grading algorithm (Phase 2)
+        // GradingEngine: per-question-type grading algorithm
         services.AddScoped<Services.IGradingEngine, Services.GradingEngine>();
 
-        // Phase 2 (remaining): ChatbotService, GradeSubmittedSessionHandler will be registered here.
+        // MediatR handlers (GradeSubmittedSessionHandler) are registered via
+        // AddMediatR in WebAPI's Program.cs scanning all module assemblies.
+        // No explicit registration needed here if the assembly is included in the scan.
 
         return services;
     }
 }
+

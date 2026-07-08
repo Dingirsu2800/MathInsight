@@ -14,6 +14,7 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(x => x.QuestionId).HasColumnName("question_id");
         builder.Property(x => x.QuestionType).HasColumnName("question_type").HasMaxLength(30).IsRequired();
         builder.Property(x => x.DefaultPoint).HasColumnName("default_point").HasPrecision(5, 2);
+        builder.Property(x => x.DifficultyLevel).HasColumnName("difficulty_level");
 
         builder.HasMany(x => x.Answers)
                .WithOne(a => a.Question)
@@ -22,5 +23,9 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.HasMany(x => x.Parts)
                .WithOne(p => p.Question)
                .HasForeignKey(p => p.QuestionId);
+
+        builder.HasMany(x => x.QuestionTopics)
+               .WithOne(qt => qt.Question)
+               .HasForeignKey(qt => qt.QuestionId);
     }
 }

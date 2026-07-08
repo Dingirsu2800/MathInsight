@@ -27,19 +27,19 @@
   - [x] Calculate `score = SUM(points_earned) / SUM(max_points) × 10.0` (BR-20)
   - [x] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
 
-- [ ] **GradeSubmittedSessionHandler** (MVP synchronous):
-  - [ ] Called in-process by Testing submit/force-submit flow
-  - [ ] Validate `TestSession.status = InProgress`
-  - [ ] Run `GradingEngine.Grade()` synchronously for `Practice` and `Exam`
-  - [ ] Write results in the same transaction as submission (DC-05): update `test_answers` + `test_sessions`
-  - [ ] Set `TestSession.status = Graded`; preserve `submission_type` from Testing (`StudentSubmit`, `TimeoutSubmit`, `SystemSubmit`)
-  - [ ] Publish `GradeCalculatedEvent` after commit
-  - [ ] SLA: `Practice` < 2.0 seconds, `Exam` target < 5.0 seconds
+- [x] **GradeSubmittedSessionHandler** (MVP synchronous):
+  - [x] Called in-process by Testing submit/force-submit flow
+  - [x] Validate `TestSession.status = InProgress`
+  - [x] Run `GradingEngine.Grade()` synchronously for `Practice` and `Exam`
+  - [x] Write results in the same transaction as submission (DC-05): update `test_answers` + `test_sessions`
+  - [x] Set `TestSession.status = Graded`; preserve `submission_type` from Testing (`StudentSubmit`, `TimeoutSubmit`, `SystemSubmit`)
+  - [x] Publish `GradeCalculatedEvent` after commit
+  - [x] SLA: `Practice` < 2.0 seconds, `Exam` target < 5.0 seconds
 
-- [ ] **Transactional Atomicity** (DC-05):
-  - [ ] Wrap grading writes + session status update in single `using var tx = db.BeginTransaction()`
-  - [ ] On failure: rollback → session stays `InProgress`, not `Graded`
-  - [ ] Log failure with structured logging (session_id, error)
+- [x] **Transactional Atomicity** (DC-05):
+  - [x] Wrap grading writes + session status update in single `using var tx = db.BeginTransaction()`
+  - [x] On failure: rollback → session stays `InProgress`, not `Graded`
+  - [x] Log failure with structured logging (session_id, error)
 
 - [ ] **ChatbotService** (UC-51):
   - [ ] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
@@ -50,16 +50,16 @@
     - **Do NOT use Redis** for this in MVP — Constitution §IV prohibits Redis unless spec-backed. Redis becomes relevant only under multi-instance deployment (post-MVP).
   - [ ] Return explanation string — do NOT persist to database (BR-21)
 
-- [ ] **Polly Retry Policy** (U2 — per Assumptions:L96):
-  - [ ] Configure Polly retry on grading DB transaction: 3 retries with exponential backoff (1s, 2s, 4s)
-  - [ ] On all retries exhausted: rollback transaction, log structured error, return failure to caller (session stays `InProgress`)
+- [x] **Polly Retry Policy** (U2 — per Assumptions:L96):
+  - [x] Configure Polly retry on grading DB transaction: 3 retries with exponential backoff (1s, 2s, 4s)
+  - [x] On all retries exhausted: rollback transaction, log structured error, return failure to caller (session stays `InProgress`)
 
-- [ ] **GradeCalculatedEvent Contract** (G3):
-  - [ ] Use `MathInsight.Shared.Events.GradeCalculatedEvent` — do NOT define a separate local copy
-  - [ ] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct **primary** tag in session. Use `QuestionTopic.TagID WHERE IsPrimary = true` for each question. Multi-tag analytics deferred post-MVP.
-  - [ ] Populate `GradedAnswerDto.TagId` with the question's **primary** topic tag (`QuestionTopic.TagID WHERE IsPrimary = true`).
-  - [ ] Populate `NumAbandoned` from count of unanswered/abandoned answers per BR-16b
-  - [ ] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
+- [x] **GradeCalculatedEvent Contract** (G3):
+  - [x] Use `MathInsight.Shared.Events.GradeCalculatedEvent` — do NOT define a separate local copy
+  - [x] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct **primary** tag in session. Use `QuestionTopic.TagID WHERE IsPrimary = true` for each question. Multi-tag analytics deferred post-MVP.
+  - [x] Populate `GradedAnswerDto.TagId` with the question's **primary** topic tag (`QuestionTopic.TagID WHERE IsPrimary = true`).
+  - [x] Populate `NumAbandoned` from count of unanswered/abandoned answers per BR-16b
+  - [x] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
 
 ---
 

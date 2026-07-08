@@ -25,7 +25,7 @@ const string CorsPolicyName = "MathInsightCors";
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
-    cfg.RegisterServicesFromAssembly(typeof(TestSubmittedHandler).Assembly); // Registers Grading Handlers
+    cfg.RegisterServicesFromAssembly(typeof(GradeSubmittedSessionHandler).Assembly); // Registers Grading Handlers
 });
 
 // 2. Add MassTransit.
