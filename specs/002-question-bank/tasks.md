@@ -25,7 +25,7 @@
 ## Phase 2: Core Domain Logic
 
 - [ ] **Question Commands**:
-  - [ ] `CreateQuestionCommand` — validate non-empty sanitized content, ≥1 Topic + ≥1 Difficulty tag, answer constraints per type, `Composite` part constraints, set `status = APPROVED` for Expert creator (BR-55)
+  - [x] `CreateQuestionCommand` — validate non-empty sanitized content, ≥1 Topic + ≥1 Difficulty tag, answer constraints per type, `Composite` part constraints, set `status = APPROVED` for Expert creator (BR-55)
   - [ ] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` (BR-54); validate constraints
   - [ ] `ToggleQuestionActiveCommand` — check no active `TestQuestion` references (DC-02)
   - [ ] `DeleteQuestionCommand` — hard-delete if no test references; soft-delete otherwise (DC-02)
@@ -42,7 +42,7 @@
   - [ ] `DeleteTagCommand` — check no linked `question_topics` records (DC-02)
 - [ ] **Queries**:
   - [ ] `GetDashboardQuery` — count by `status`, `question_type`, `grade`; return last 5 reports
-  - [ ] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
+  - [x] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
   - [ ] `GetQuestionVersionsQuery` — ordered by `created_time` DESC
   - [ ] `GetReportedQuestionsQuery` — filter by `reporter_account_id` = current Expert's questions
   - [ ] `GetTagListQuery` — return hierarchical topic tree + flat difficulty list
@@ -73,7 +73,7 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` — zero compile errors
+- [x] `dotnet build` — zero compile errors
 - [ ] Integration tests (xUnit):
   - [ ] UC-20/21: Create SINGLE_CHOICE → `status = APPROVED`, 4 answers, 1 correct
   - [ ] UC-21: Create with 0 Topic tags → 400 (BR-05)
