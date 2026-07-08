@@ -9,6 +9,8 @@
 - [x] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
 - [x] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
 - [x] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
+- [x] Configure read/write access to `TestAnswerPart` (`is_correct`, `points_earned`).
+- [x] Configure read access to `QuestionPart` (`part_type`, `answer_key`, `default_point`).
 - [x] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules
 
 ---
@@ -20,7 +22,7 @@
   - [ ] `MULTIPLE_SELECT` grading: compare selected `TestAnswerOption` set to the full correct answer set — all correct + no incorrect = true
   - [ ] `TRUE_FALSE` grading (standalone): same as `SINGLE_CHOICE`
   - [ ] `COMPOSITE` grading — general: grade each `QuestionPart`; `points_earned` = sum of correct part points
-  - [ ] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually
+  - [ ] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually for solution display; `TestAnswerPart.points_earned = 0` (parent `TestAnswer.points_earned` is the source of truth — do NOT distribute non-linear parent score to child parts)
   - [ ] `SHORT_ANSWER` grading: `LOWER(short_answer_text) == LOWER(Answer.answer_content)` where `Answer.is_correct = true`
   - [ ] Calculate `score = SUM(points_earned) / SUM(max_points) × 10.0` (BR-20)
   - [ ] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
@@ -54,7 +56,8 @@
 
 - [ ] **GradeCalculatedEvent Contract** (G3):
   - [ ] Use `MathInsight.Shared.Events.GradeCalculatedEvent` — do NOT define a separate local copy
-  - [ ] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct tag in session
+  - [ ] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct **primary** tag in session. Use `QuestionTopic.TagID WHERE IsPrimary = true` for each question. Multi-tag analytics deferred post-MVP.
+  - [ ] Populate `GradedAnswerDto.TagId` with the question's **primary** topic tag (`QuestionTopic.TagID WHERE IsPrimary = true`).
   - [ ] Populate `NumAbandoned` from count of unanswered/abandoned answers per BR-16b
   - [ ] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
 

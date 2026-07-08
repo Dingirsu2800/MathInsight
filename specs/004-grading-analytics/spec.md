@@ -61,13 +61,13 @@
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
-  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per TagId: `(TagId, TopicScore, CorrectCount, TotalCount)` |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per primary TagId: `(TagId, TopicScore, CorrectCount, TotalCount)`. **MVP rule**: group by `QuestionTopic.TagID WHERE IsPrimary = true` only. Multi-tag analytics deferred post-MVP. |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradedAt` | `DateTime` | UTC timestamp |
 
   `GradedAnswerDto` contains:
   - `QuestionId` (`Guid`)
-  - `TagId` (`Guid`)
+  - `TagId` (`Guid`) — **primary topic tag** of the question (`QuestionTopic.TagID WHERE IsPrimary = true`). MVP uses one tag per question for grading/recommender; multi-tag support is post-MVP.
   - `IsCorrect` (`bool`)
   - `PointsEarned` (`decimal`)
   - `TimeSpent` (`int`)
@@ -87,6 +87,8 @@
   | N (all)       | 1.00 × `default_point` |
 
   This rule applies regardless of **which** specific parts are correct. `is_correct` on the parent `TestAnswer` is `true` only when all parts are correct. Each child `TestAnswerPart.is_correct` is still recorded individually for solution display.
+
+  **Child part scoring rule (all-TRUE_FALSE)**: `TestAnswer.points_earned` is the **source of truth** for score calculation (per the non-linear table above). `TestAnswerPart.is_correct` is recorded individually for solution display purposes. `TestAnswerPart.points_earned` is set to **0** for all parts — it is **not** used for score calculation in this mode. This avoids the ambiguity of trying to distribute the non-linear parent score back to individual parts.
 
 ### Grading Algorithm per Question Type
 

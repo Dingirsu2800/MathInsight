@@ -44,7 +44,9 @@ src/MathInsight.Modules.TestGen/
 │   ├── Configurations/
 │   │   ├── BlueprintConfiguration.cs
 │   │   ├── BlueprintSectionConfiguration.cs
-│   │   └── BlueprintDetailConfiguration.cs
+│   │   ├── BlueprintDetailConfiguration.cs
+│   │   ├── TestConfiguration.cs
+│   │   └── TestQuestionConfiguration.cs
 │   └── Migrations/
 ├── Controllers/
 │   ├── BlueprintsController.cs
@@ -61,6 +63,8 @@ src/MathInsight.Modules.TestGen/
 | `Blueprint` | Blueprint metadata; status check from DB script; `ExpertID` FK |
 | `BlueprintSection` | Exam part structure; `BlueprintID`, `SectionOrder`, `QuestionType`, `TotalQuestions`; UNIQUE `(BlueprintID, SectionOrder)` |
 | `BlueprintDetail` | Section slot details; `BlueprintSectionID`, `BlueprintID`, `TagID`, `DifficultyID`, `Quantity`; UNIQUE `(BlueprintSectionID, TagID, DifficultyID)` |
+| `Test` | Generated test; `BlueprintID` FK (nullable); `TestFormat` (`Practice`/`Exam`); `GeneratedForStudentID` FK (nullable); `TestCode` UNIQUE when not null |
+| `TestQuestion` | Test-question mapping; FK to `Test` and `Question`; ordered by `QuestionNo` |
 
 **Note**: Tables `Test` and `TestQuestion` are system-generated artifacts created during test generation and read by Testing module (003). Experts do not get direct CRUD over `Test` in MVP.
 
@@ -84,6 +88,7 @@ DELETE /api/v1/blueprints/{id}               # UC-46: hard/soft delete
 **Student (StudentOnly policy)**
 ```
 POST   /api/v1/tests/generate                 # Generate test from approved blueprint for student
+POST   /api/v1/tests/generate-practice         # Generate 10-question WeakTag practice session (BR-54)
 ```
 
 ### Integration & Domain Events

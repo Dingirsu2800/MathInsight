@@ -22,7 +22,7 @@
 
 ### Edge Cases
 
-- **No history**: If a student has no `TagsMastery` row for a topic, **lazy-create** it with `official_point = 5.00` (neutral/unknown). The row is inserted with `mastery_status = NotLearned`, `number_done = 0`, and `series_answer_count = 0`. Do not exclude new topics from WeakTags evaluation before the first data point exists; the neutral 5.00 keeps them above the weak threshold until real data arrives.
+- **No history**: If the grading pipeline encounters a `(student_id, tag_id)` pair with no existing `TagsMastery` row, **lazy-create** it with `official_point = 5.00` (neutral/unknown). The row is inserted with `mastery_status = NotLearned`, `number_done = 0`, and `series_answer_count = 0`. **Trigger**: lazy-create happens only when the Recommender processes a `GradeCalculatedEvent` that references a tag the student has never been graded on before. Topics with no `TagsMastery` row stay neutral and are **not** treated as weak — `GetStudentWeakTagsAsync` only returns rows where `official_point < 5.00`, so topics without a row are correctly excluded until real graded data arrives.
 - **All topics strong**: If no topic has `official_point < 5.00`, WeakTags is empty; TestGen may use normal blueprint/topic practice.
 - **Repeated grade event**: Recommender update must be idempotent per `(session_id, tag_id)` by using `StudentTopicSessionResult`.
 - **Low point at easiest mapped difficulty**: Keep recommended difficulty at level 1 and mark `is_remedial = true`.

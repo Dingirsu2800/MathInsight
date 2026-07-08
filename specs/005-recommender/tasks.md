@@ -76,6 +76,7 @@
 - [ ] **RecommenderService**:
   - [ ] `GetStudentWeakTagsAsync(studentId)` reads `TagsMastery` where `official_point < 5.00`.
     - **WeakTag tag type**: `TagsMastery.TagId` refers to `TagTopic` (topic tags). WeakTag evaluation is always per-topic, not per-difficulty.
+    - **No-row behavior (MVP)**: Topics with no `TagsMastery` row are **not** returned as weak. They stay neutral until the first graded data point triggers lazy-create (see Phase 2 → CompetencyEngine → Lazy-create task). A newly created row starts at `official_point = 5.00` (above the `< 5.00` weak threshold), so it will not appear in WeakTags until real grading data lowers the score.
   - [ ] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
   - [ ] Keep SQL-only implementation for MVP; Redis cache is optional later.
 

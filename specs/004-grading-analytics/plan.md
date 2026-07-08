@@ -74,7 +74,7 @@ GradingEngine.Grade(session):
     ├── COMPOSITE:
     │     ├── if ALL QuestionParts are TRUE_FALSE → apply BR-23 non-linear table
     │     │     (0 correct=0, 1=0.10×dp, 2=0.25×dp, 3=0.50×dp, N=1.00×dp)
-    │     │     (update each TestAnswerPart.is_correct and points_earned)
+    │     │     (update each TestAnswerPart.is_correct for solution display; set TestAnswerPart.points_earned = 0 — parent TestAnswer.points_earned is the source of truth)
     │     └── otherwise → grade each QuestionPart and update TestAnswerPart (is_correct, points_earned); parent score = sum of part points
     └── SHORT_ANSWER: case-insensitive compare short_answer_text
   Calculate: score = SUM(points_earned) / SUM(max_points) × 10.0 (where max_points is Question.default_point for each parent question)
