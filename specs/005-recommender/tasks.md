@@ -65,12 +65,17 @@
   - [ ] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
 
 - [ ] **DifficultyMappingService**:
-  - [ ] `MapFromOfficialPoint(officialPoint)` returns level `1..4`.
+  - [ ] `MapFromOfficialPoint(officialPoint)` returns level `1..4` (RCM-07).
   - [ ] `IsWeak(officialPoint)` returns true when `< 5.00`.
   - [ ] `IsRemedial(recommendedDifficultyLevel)` returns true when level `1` and weak.
+  - [ ] Cross-module contract: `WeakTagAdviceDto.RecommendedDifficultyLevel` is a level integer `1..4`.
+    - Consumers (TestGen) **must not** use this value directly as a `difficulty_id` (PK of `TagDifficulty`).
+    - Resolution: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`.
+    - This mapping is stable because `TagDifficulty.LevelValue` has a UNIQUE constraint (BR-63).
 
 - [ ] **RecommenderService**:
   - [ ] `GetStudentWeakTagsAsync(studentId)` reads `TagsMastery` where `official_point < 5.00`.
+    - **WeakTag tag type**: `TagsMastery.TagId` refers to `TagTopic` (topic tags). WeakTag evaluation is always per-topic, not per-difficulty.
   - [ ] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
   - [ ] Keep SQL-only implementation for MVP; Redis cache is optional later.
 

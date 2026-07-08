@@ -151,6 +151,12 @@ public sealed record WeakTagAdviceDto(
 
 `Reason` is for audit/debugging, for example `OfficialPointBelow5`, `RemedialLevel1`, or `NormalPractice`.
 
+> **Cross-module resolution contract**: `WeakTagAdviceDto.RecommendedDifficultyLevel` is a **level integer** (`1..4`, see RCM-07). It is **not** a `difficulty_id` (the PK of `TagDifficulty` table in QuestionBank module). Consumers such as TestGen **must** resolve this level to an actual `DifficultyID` by querying:
+> ```sql
+> SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = @RecommendedDifficultyLevel
+> ```
+> This resolution is stable because `TagDifficulty.LevelValue` has a UNIQUE constraint (BR-63 in module 002).
+
 ## Success Criteria *(mandatory)*
 
 - WeakTag API returns within **2 seconds** from SQL Server without Redis.

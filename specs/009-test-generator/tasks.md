@@ -79,9 +79,13 @@
   - [ ] Accepts `tagId` and `studentId`.
   - [ ] Call `IRecommenderService.GetStudentWeakTagAdviceAsync(studentId)` to get target difficulty level.
   - [ ] Validate: `tagId` is a WeakTag for the student (`official_point < 5.00`).
+  - [ ] Resolve target `difficulty_id` from `WeakTagAdviceDto.RecommendedDifficultyLevel`:
+    - Lookup `TagDifficulty WHERE LevelValue == WeakTagAdviceDto.RecommendedDifficultyLevel`.
+    - Use the resulting `TagDifficulty.DifficultyID` to filter questions.
+    - **Note**: `RecommendedDifficultyLevel` is a level integer `1..4`; it is NOT a `difficulty_id`. `difficulty_id` is the primary key of the `TagDifficulty` table. They must NOT be compared directly.
   - [ ] Query 10 candidate questions from `Question` where:
     - `tag_id = tagId`
-    - `difficulty_id` matches `WeakTagAdviceDto.RecommendedDifficultyLevel` (1 or 2)
+    - `difficulty_id` = resolved `TagDifficulty.DifficultyID` (from step above)
     - `status = APPROVED` AND `is_active = true`.
   - [ ] Exclude `question_id`s from student's last 7 days of sessions (dedup).
   - [ ] Create `Test` session with `test_format = Practice`, `total_questions = 10`, `generated_by = System`, `generated_for_student_id = studentId`.

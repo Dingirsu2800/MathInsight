@@ -77,7 +77,7 @@ GradingEngine.Grade(session):
     │     │     (update each TestAnswerPart.is_correct and points_earned)
     │     └── otherwise → grade each QuestionPart and update TestAnswerPart (is_correct, points_earned); parent score = sum of part points
     └── SHORT_ANSWER: case-insensitive compare short_answer_text
-  Calculate: score = SUM(points_earned) / total_question × 10.0
+  Calculate: score = SUM(points_earned) / SUM(max_points) × 10.0 (where max_points is Question.default_point for each parent question)
   Update in single transaction (DC-05):
     ├── TestAnswer: is_correct, points_earned
     ├── TestAnswerPart: is_correct, points_earned (for Composite parts)

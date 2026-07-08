@@ -17,7 +17,7 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
     public string TestFormat { get; init; } = string.Empty;
 
     /// <summary>
-    /// Normalized score 0.00–10.00. Formula: SUM(points_earned) / total_questions × 10.0 (BR-20).
+    /// Normalized score 0.00–10.00. Formula: SUM(points_earned) / SUM(max_points) × 10.0 (BR-20).
     /// </summary>
     public decimal Score { get; init; }
 
@@ -36,6 +36,7 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
     /// <summary>
     /// Per-topic grading summary. Required by Recommender (005) to update TagsMastery.
     /// One entry per distinct TagId covered in the session.
+    /// <b>TagId here is a TagTopic (topic tag) ID, not a TagDifficulty DifficultyID.</b>
     /// </summary>
     public IReadOnlyList<TopicGradeResult> PerTagResults { get; init; } = [];
 

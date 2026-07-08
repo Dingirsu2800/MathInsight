@@ -42,7 +42,8 @@
 - **BR-17 (Practice grading)**: For `Practice` mode, grading must complete within **2.0 seconds** end-to-end from submit.
 - **BR-18 (Exam grading MVP)**: For `Exam` mode, grading is synchronous in MVP because `Submitted` is not persisted as a durable DB state. If the team later needs async grading, add a `PendingGrading` status or a separate grading job table first.
 - **BR-19**: After grading completes, `TestSession.status` is updated to `Graded`; `submission_type`, `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
-- **BR-20**: Score formula: `score = SUM(points_earned) / total_question × 10.0` — normalized to a 0–10 scale.
+- **BR-20**: Score formula: `score = SUM(points_earned) / SUM(max_points) × 10.0` — normalized to a 0–10 scale.
+  `max_points` for each parent question is defined as `Question.default_point`.
 - **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
 - **BR-22**: After grading completes, `GradeCalculatedEvent` is published in-process (MediatR). It has **two consumers**:
   1. **Recommender module (005)** — updates `StudentTopicSessionResult` and `TagsMastery` per topic (idempotent).

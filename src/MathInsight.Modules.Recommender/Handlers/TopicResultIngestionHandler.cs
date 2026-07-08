@@ -51,6 +51,9 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         // Full grade resolution from Identity module is deferred to a later phase.
         const int defaultGrade = 0;
 
+        // PerTagResults.TagId is a TagTopic (topic tag) ID, not a TagDifficulty ID.
+        // WeakTag evaluation is always per-topic. Difficulty is derived separately
+        // via RecommendedDifficultyLevel → TagDifficulty.LevelValue → DifficultyID.
         foreach (var tagResult in notification.PerTagResults)
         {
             await IngestTopicResultAsync(notification, tagResult, cancellationToken);

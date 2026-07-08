@@ -71,6 +71,10 @@ public interface IRecommenderService
 
 TestGen uses `WeakTagAdviceDto.RecommendedDifficultyLevel` to select questions. It does not need `BlueprintSectionID`.
 
+> **Resolution required**: `RecommendedDifficultyLevel` is a level integer `1..4`, **not** a `difficulty_id` PK.
+> TestGen must resolve it via: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`
+> before filtering `Question.DifficultyID`. This is documented as a task for `DifficultyMappingService` (module 005).
+
 ### Ptag Update Pipeline
 
 ```text

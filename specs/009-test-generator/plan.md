@@ -125,15 +125,19 @@ POST   /api/v1/tests/generate                 # Generate test from approved blue
 // Path B: GeneratePracticeSeriesAsync(tagId, studentId): (Practice Mode - BR-54)
 // 1. Call IRecommenderService.GetStudentWeakTagAdviceAsync(studentId)
 // 2. Validate tagId is indeed a WeakTag for the student (official_point < 5.00)
-// 3. Determine target difficulty_level = WeakTagAdviceDto.RecommendedDifficultyLevel (1 or 2)
-// 4. Query candidate Questions WHERE:
+// 3. Determine target difficulty level = WeakTagAdviceDto.RecommendedDifficultyLevel (1 or 2)
+// 4. Resolve difficulty_id: lookup TagDifficulty WHERE LevelValue == RecommendedDifficultyLevel
+//    → use TagDifficulty.DifficultyID for the Question query.
+//    NOTE: RecommendedDifficultyLevel is a level integer 1..4, NOT a DifficultyID (PK).
+//          Direct comparison between these two values is semantically incorrect.
+// 5. Query candidate Questions WHERE:
 //       - tag_id = tagId
-//       - difficulty_id = matching target difficulty_level
+//       - difficulty_id = resolved TagDifficulty.DifficultyID
 //       - status = APPROVED AND is_active = true
-// 5. Random sample 10 questions
-// 6. Create Test record with generated_by = System, test_format = Practice, total_questions = 10, generated_for_student_id = studentId
-// 7. Create TestQuestion records
-// 8. Return Test entity with session-start URL
+// 6. Random sample 10 questions
+// 7. Create Test record with generated_by = System, test_format = Practice, total_questions = 10, generated_for_student_id = studentId
+// 8. Create TestQuestion records
+// 9. Return Test entity with session-start URL
 ```
 
 ### Blueprint Validation (BR-07)
