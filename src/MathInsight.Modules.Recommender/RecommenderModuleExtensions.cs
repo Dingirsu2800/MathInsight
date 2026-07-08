@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MathInsight.Modules.Recommender.Persistence;
+using MathInsight.Modules.Recommender.Services;
 
 namespace MathInsight.Modules.Recommender;
 
@@ -20,8 +21,16 @@ public static class RecommenderModuleExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null)));
 
-        // Phase 2: CompetencyEngine, DifficultyMappingService, RecommenderService, MediatR handlers.
+        // MediatR in-process handlers (replaces deleted MassTransit GradeCalculatedConsumer).
+        // TopicResultIngestionHandler handles GradeCalculatedEvent from Grading module (004).
+        services.AddMediatR(cfg =>
+            cfg.RegisterServicesFromAssembly(typeof(RecommenderModuleExtensions).Assembly));
+
+        // Domain services
+        services.AddScoped<ICompetencyEngine, CompetencyEngine>();
+
         // Phase 3: RecommenderController registered via MapControllers in WebAPI.
+        // Phase 2 remaining: IRecommenderService, IDifficultyMappingService (queries).
 
         return services;
     }

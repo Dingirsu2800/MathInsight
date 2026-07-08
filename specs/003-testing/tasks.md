@@ -6,12 +6,13 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all 6 entities mapped to current DB script tables:
+- [ ] Create EF `IEntityTypeConfiguration` for all 7 entities mapped to current DB script tables:
   - [ ] `TestConfiguration` — nullable `test_code` with filtered UNIQUE index when not null; FK to `blueprints`
   - [ ] `TestQuestionConfiguration` — composite PK `(test_id, question_id)`, `question_order`
   - [ ] `TestSessionConfiguration` — composite index `(student_id, status)`; status enum constraint
   - [ ] `TestAnswerConfiguration` — composite UNIQUE `(session_id, question_id)`; `points_earned` default 0.00
   - [ ] `TestAnswerOptionConfiguration` — composite PK `(test_answer_id, answer_id)` (DC-07)
+  - [ ] `TestAnswerPartConfiguration` — FK to `test_answers`, FK to `question_parts`, `student_answer` (max length 1000)
   - [ ] `TestIncidentConfiguration` — FK to `test_sessions`, `type` enum constraint
 - [ ] Create `TestingDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
 - [ ] Coordinate with TestGen (009) on shared current DB script tables — same DbContext or separate registrations.
@@ -31,7 +32,7 @@
 
 - [ ] **AutoSave Command**:
   - [ ] Validate session `status = InProgress` (reject if `Graded` or `Abandoned`)
-  - [ ] Batch update `TestAnswer`: `answer_id`, `selected_options`, `short_answer_text`
+  - [ ] Batch update `TestAnswer`: `answer_id`, `selected_options`, `short_answer_text`, `time_spent` (received from Client payload for guessing penalty)
   - [ ] Update `update_choice_time`; set `first_choice_time` if null
   - [ ] Return `{ savedAt, remainingSeconds }` — remaining time from `start_time + duration_minutes`
 
@@ -44,7 +45,7 @@
   - [ ] Lock answer writes inside the submit transaction
   - [ ] Set `end_time = NOW`, `submission_type = StudentSubmit`
   - [ ] Calculate `duration = (end_time - start_time).TotalSeconds`
-  - [ ] Count `num_abandoned` (questions with null answer)
+  - [ ] Count `num_abandoned` (unanswered/abandoned questions per BR-16b)
   - [ ] Invoke Grading module in-process; commit only after grading updates `status = Graded`
   - [ ] Publish `GradeCalculatedEvent` after successful grading
 
@@ -83,6 +84,6 @@
   - [ ] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `submission_type = SystemSubmit`
   - [ ] UC-49: Normal submit → `Graded`, `submission_type = StudentSubmit`, grading fields populated
   - [ ] UC-49: Submit `Graded` session → 409 (DC-03)
-  - [ ] UC-49: Submit with unanswered questions → `num_abandoned` = correct count
+  - [ ] UC-49: Submit with unanswered questions → `num_abandoned` = unanswered count
   - [ ] UC-50: View solution before `Graded` → 403
   - [ ] UC-50: View solution after `Graded` → full question/answer data returned

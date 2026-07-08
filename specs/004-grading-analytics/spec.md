@@ -27,7 +27,7 @@
 
 ### Edge Cases
 
-- **Partial submission**: Questions with null `answer_id` are graded as incorrect (`is_correct = false`, `points_earned = 0.00`).
+- **Partial submission**: Abandoned questions (where no answer is provided, per BR-16b) are graded as incorrect (`is_correct = false`, `points_earned = 0.00`).
 - **Multiple-select grading**: All correct options must be selected AND no incorrect options — otherwise `is_correct = false`.
 - **Short answer grading**: Case-insensitive string match against `correct_answer` stored in `Answer.answer_content`.
 - **Grading failure**: If grading fails mid-transaction → rollback entire submit transaction (DC-05). The session remains `InProgress` so the student can retry submit.
@@ -42,9 +42,50 @@
 - **BR-17 (Practice grading)**: For `Practice` mode, grading must complete within **2.0 seconds** end-to-end from submit.
 - **BR-18 (Exam grading MVP)**: For `Exam` mode, grading is synchronous in MVP because `Submitted` is not persisted as a durable DB state. If the team later needs async grading, add a `PendingGrading` status or a separate grading job table first.
 - **BR-19**: After grading completes, `TestSession.status` is updated to `Graded`; `submission_type`, `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
-- **BR-20**: Score formula: `score = SUM(points_earned) / total_questions × 10.0` — normalized to a 0–10 scale.
+- **BR-20**: Score formula: `score = SUM(points_earned) / total_question × 10.0` — normalized to a 0–10 scale.
 - **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
-- **BR-22**: Competency recalculation is delegated to the Recommender module (005) via `GradeCalculatedEvent` published after grading completes.
+- **BR-22**: After grading completes, `GradeCalculatedEvent` is published in-process (MediatR). It has **two consumers**:
+  1. **Recommender module (005)** — updates `StudentTopicSessionResult` and `TagsMastery` per topic (idempotent).
+  2. **Notification module (008)** — sends a "test graded" push notification to the student.
+
+  Event payload (`MathInsight.Shared.Events.GradeCalculatedEvent`):
+
+  | Field | Type | Description |
+  |-------|------|-------------|
+  | `SessionId` | `Guid` | Graded session |
+  | `StudentId` | `Guid` | Owner student |
+  | `TestId` | `Guid` | Parent test |
+  | `TestFormat` | `string` | Test format (`Practice` or `Exam`) |
+  | `Score` | `decimal` | 0.00–10.00 normalized score (BR-20) |
+  | `NumCorrect` | `int` | Count of correct answers |
+  | `NumIncorrect` | `int` | Count of incorrect answers |
+  | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per TagId: `(TagId, TopicScore, CorrectCount, TotalCount)` |
+  | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
+  | `GradedAt` | `DateTime` | UTC timestamp |
+
+  `GradedAnswerDto` contains:
+  - `QuestionId` (`Guid`)
+  - `TagId` (`Guid`)
+  - `IsCorrect` (`bool`)
+  - `PointsEarned` (`decimal`)
+  - `TimeSpent` (`int`)
+  - `DifficultyLevel` (`byte` - value 1..4)
+  - `QuestionNo` (`int`)
+  - `IsAbandoned` (`bool`) — true if the question is abandoned/unanswered (per BR-16b)
+
+  Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
+- **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):
+
+  | Correct parts | Points earned |
+  |---------------|---------------|
+  | 0             | 0.00          |
+  | 1             | 0.10 × `default_point` |
+  | 2             | 0.25 × `default_point` |
+  | 3             | 0.50 × `default_point` |
+  | N (all)       | 1.00 × `default_point` |
+
+  This rule applies regardless of **which** specific parts are correct. `is_correct` on the parent `TestAnswer` is `true` only when all parts are correct. Each child `TestAnswerPart.is_correct` is still recorded individually for solution display.
 
 ### Grading Algorithm per Question Type
 
@@ -52,8 +93,9 @@
 |------|---------------|
 | `SINGLE_CHOICE` | `is_correct = (student_answer_id == correct_answer_id)` |
 | `MULTIPLE_SELECT` | `is_correct = (all correct options selected AND no incorrect options selected)` |
-| `TRUE_FALSE` | Same as SINGLE_CHOICE |
-| `COMPOSITE` | Grade each `QuestionPart` through `TestAnswerPart`; parent answer score is the sum of part points |
+| `TRUE_FALSE` | Same as `SINGLE_CHOICE` — standalone single-answer True/False question |
+| `COMPOSITE (general)` | Grade each `QuestionPart` individually; `points_earned` = sum of part points earned |
+| `COMPOSITE (all-TRUE_FALSE parts)` | Apply BR-23 non-linear scoring table based on count of correct parts |
 | `SHORT_ANSWER` | Case-insensitive string match: `LOWER(short_answer_text) == LOWER(correct_answer_content)` |
 
 ### Key Entities *(read from Testing module)*
@@ -83,3 +125,4 @@ Delegates competency updates to **Recommender module (005)** via `GradeCalculate
 - No RabbitMQ grading queue is required for MVP under the current `TestSession.Status` design.
 - Polly retry policy: 3 retries with exponential backoff for grading transaction failures.
 - Chatbot integration uses OpenAI or Claude API; credentials injected via environment variables.
+- Chatbot rate limiter (UC-51): **in-memory only for MVP** — keyed by `(studentId, sessionId)`. Redis is explicitly excluded per Constitution §IV; it may be introduced only when multi-instance deployment becomes a spec-backed requirement.

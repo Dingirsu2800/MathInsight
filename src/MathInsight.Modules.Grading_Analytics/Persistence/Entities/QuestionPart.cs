@@ -18,6 +18,9 @@ public class QuestionPart
     public decimal PointValue { get; set; }
     public string? Explanation { get; set; }
 
+    /// <summary>TRUE_FALSE | SHORT_ANSWER | NUMERIC_ANSWER</summary>
+    public string PartType { get; set; } = string.Empty;
+
     // Navigation
     public Question Question { get; set; } = null!;
 }

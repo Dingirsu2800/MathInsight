@@ -12,8 +12,8 @@ using MathInsight.Modules.Recommender;
 using MathInsight.Modules.Learning_Lecture;
 using MathInsight.Modules.Gamification;
 using MathInsight.Modules.Notification_Report;
-using MathInsight.Modules.Grading_Analytics.Consumers;
-using MathInsight.Modules.Recommender.Consumers;
+// using MathInsight.Modules.Grading_Analytics.Consumers;
+// using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
 using System.IdentityModel.Tokens.Jwt;
 using MathInsight.Modules.Identity_Access.Services.Auth;
@@ -35,8 +35,8 @@ var rabbitMqEnabled = builder.Configuration.GetValue<bool>("RabbitMQ:Enabled");
 builder.Services.AddMassTransit(x =>
 {
     // Register asynchronous consumers
-    x.AddConsumer<TestSubmittedConsumer>();
-    x.AddConsumer<GradeCalculatedConsumer>();
+    // x.AddConsumer<TestSubmittedConsumer>();
+    // x.AddConsumer<GradeCalculatedConsumer>();
 
     if (rabbitMqEnabled)
     {

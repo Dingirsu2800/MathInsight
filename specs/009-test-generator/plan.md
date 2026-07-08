@@ -96,28 +96,44 @@ POST   /api/v1/tests/generate                 # Generate test from approved blue
 ### Test Generation Engine
 
 ```csharp
-// GenerationEngine.GenerateAsync(blueprintId, studentId):
+// Path A: GenerateTestFromBlueprintAsync(blueprintId, studentId): (Exam Mode)
 // 1. Load Blueprint + BlueprintSection + BlueprintDetail slots
-// 2. For each BlueprintSection ordered by section_order:
-// 3. For each BlueprintDetail slot inside that section (tag_id, difficulty_id, quantity):
-//    a. Call IRecommenderService.GetStudentWeakTagsAsync(studentId)
-//    b. Check if this slot's (tag_id, difficulty_id) is in student's WeakTags:
+// 2. Call IRecommenderService.GetStudentWeakTagsAsync(studentId) to fetch diagnosed weak tags
+// 3. For each BlueprintSection ordered by section_order:
+// 4. For each BlueprintDetail slot inside that section (tag_id, difficulty_id, quantity):
+//    a. Check if this slot's tag_id is in student's WeakTags (official_point < 5.00):
 //       - YES (WeakTag):
 //         * Cap: WeakTag-biased questions ≤ 20% of total_questions (BR-WeakTag-Cap)
 //         * Bias probability: 40% → prefer WeakTag questions (reduce from 70%)
-//         * Difficulty downscale: if WeakTag at Hard → query Medium instead
-//         * Remedial: if WeakTag at Easy AND P_tag < 5.0 → bias = 10%, no downscale
-//       - NO or MASTERED: standard selection
-//    c. Query Question WHERE:
+//         * Difficulty downscale (F2 resolution):
+//           - if slot difficulty is Hard (level 3) or Very Hard (level 4) → query Medium (level 2) instead
+//           - if slot difficulty is Medium (level 2) AND student's official_point < 3.00 (Level 1) → query Easy (level 1) instead
+//           - if slot difficulty is Easy (level 1) (remedial: official_point < 5.00) → bias = 10%, no downscale
+//         * Rollback downscale (F3 resolution): Scale back to original slot difficulty only when official_point >= 5.00
+//       - NO or MASTERED: standard selection (or Challenge Mode upscale if official_point >= 8.00)
+//    b. Query Question WHERE:
 //       - question_id NOT IN (previous test sessions for this student, last 7 days) — dedup
 //       - tag_id = slot.tag_id (or adjusted difficulty)
 //       - difficulty_id = slot.difficulty_id (adjusted if WeakTag)
 //       - question_type = section.question_type
 //       - status = APPROVED AND is_active = true
-//    d. Random sample `quantity` questions from candidate pool
-// 4. Create Test record with generated_by = System; generate test_code only for shareable/code-entry tests, otherwise keep NULL
-// 5. Create TestQuestion records (ordered by section_order, then slot order)
-// 6. Return Test entity with session-start URL
+//    c. Random sample `quantity` questions from candidate pool
+// 5. Create Test record with generated_by = System, test_format = Exam, generated_for_student_id = studentId
+// 6. Create TestQuestion records (ordered by section_order, then slot order)
+// 7. Return Test entity with session-start URL
+
+// Path B: GeneratePracticeSeriesAsync(tagId, studentId): (Practice Mode - BR-54)
+// 1. Call IRecommenderService.GetStudentWeakTagAdviceAsync(studentId)
+// 2. Validate tagId is indeed a WeakTag for the student (official_point < 5.00)
+// 3. Determine target difficulty_level = WeakTagAdviceDto.RecommendedDifficultyLevel (1 or 2)
+// 4. Query candidate Questions WHERE:
+//       - tag_id = tagId
+//       - difficulty_id = matching target difficulty_level
+//       - status = APPROVED AND is_active = true
+// 5. Random sample 10 questions
+// 6. Create Test record with generated_by = System, test_format = Practice, total_questions = 10, generated_for_student_id = studentId
+// 7. Create TestQuestion records
+// 8. Return Test entity with session-start URL
 ```
 
 ### Blueprint Validation (BR-07)

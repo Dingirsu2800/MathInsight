@@ -18,6 +18,7 @@ public class QuestionPartConfiguration : IEntityTypeConfiguration<QuestionPart>
         builder.Property(x => x.AnswerKey).HasColumnName("answer_key").HasMaxLength(500).IsRequired();
         builder.Property(x => x.PointValue).HasColumnName("point_value").HasPrecision(5, 2);
         builder.Property(x => x.Explanation).HasColumnName("explanation").HasMaxLength(2000);
+        builder.Property(x => x.PartType).HasColumnName("part_type").HasMaxLength(50).IsRequired();
 
         builder.HasOne(x => x.Question)
                .WithMany(q => q.Parts)

@@ -52,15 +52,24 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 - **BR-15**: A Student may have at most one `InProgress` session for the same `test_id` at any given time.
 - **BR-16**: `TestAnswer.points_earned` is populated during grading (module 004). Submit returns only after grading succeeds and `status = Graded`.
 - **BR-16a**: `TestSession.submission_type` stores how the session was submitted: `StudentSubmit`, `TimeoutSubmit`, or `SystemSubmit`. It is required when `status = Graded` and must be null while `status = InProgress` or `Abandoned`.
+- **BR-16b**: An answer is considered "unanswered/abandoned" (which determines `TestSession.num_abandoned` and `GradeCalculatedEvent.Answers.IsAbandoned`) based on its `QuestionType`:
+  - `SINGLE_CHOICE`: `answer_id IS NULL`
+  - `TRUE_FALSE`: `answer_id IS NULL`
+  - `MULTIPLE_SELECT`: No options selected (i.e., no entries in `TestAnswerOption`)
+  - `SHORT_ANSWER`: `short_answer_text` is null or consists only of whitespace
+  - `COMPOSITE`: All child parts are unanswered/abandoned (i.e., all child parts have null or whitespace-only `student_answer` values in `TestAnswerPart`)
+
 
 ### Key Entities *(include if feature involves data)*
 
-- **Test**: `test_id`, `blueprint_id` (FK → blueprints), `test_status` (**ACTIVE** | **ARCHIVED**), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`, `created_time`
+- **Test**: `test_id`, `blueprint_id` (FK → blueprints, nullable), `test_format` (**Practice** | **Exam**), `generated_for_student_id` (FK → students, nullable), `generated_by` (default 'System'), `test_status` (**ACTIVE** | **ARCHIVED**), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`, `created_time`
 - **TestQuestion**: `test_id` (FK), `question_id` (FK), `question_order` — composite PK
 - **TestSession**: `session_id`, `test_id` (FK), `student_id` (FK), `test_format` (**Practice** | **Exam**), `status` (**InProgress** | **Graded** | **Abandoned**), `submission_type` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `duration`, `start_time`, `end_time`, `total_question`, `num_correct`, `num_incorrect`, `num_abandoned`, `score`
 - **TestAnswer**: `test_answer_id`, `session_id` (FK), `question_id` (FK), `answer_id` (FK, nullable for MultipleSelect/ShortAnswer), `question_no`, `time_spent`, `first_choice_time`, `update_choice_time`, `short_answer_text`, `is_correct` (nullable until graded), `points_earned` (0.00 until graded)
 - **TestAnswerOption**: `test_answer_id` (FK, PK), `answer_id` (FK, PK) — for MultipleSelect
+- **TestAnswerPart**: `test_answer_part_id` (PK), `test_answer_id` (FK), `question_part_id` (FK), `student_answer` (nullable string), `is_correct` (nullable until graded), `points_earned` (0.00 until graded) — for Composite parts
 - **TestIncident**: `incident_id`, `session_id` (FK), `type` (TAB_SWITCH | FOCUS_LOSS), `time`
+
 
 ### Session State Machine
 
@@ -84,8 +93,10 @@ InProgress ──(student submit + grading succeeds)──▶ Graded
 | TestSession | test_format | `Practice`, `Exam` |
 | TestSession | status | `InProgress`, `Graded`, `Abandoned` |
 | TestSession | submission_type | `StudentSubmit`, `TimeoutSubmit`, `SystemSubmit` |
+| Test | test_format | `Practice`, `Exam` |
 | Test | test_status | `ACTIVE`, `ARCHIVED` |
 | TestIncident | type | `TAB_SWITCH`, `FOCUS_LOSS` |
+
 
 ## Success Criteria *(mandatory)*
 

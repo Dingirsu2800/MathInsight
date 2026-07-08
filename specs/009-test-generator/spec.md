@@ -48,11 +48,19 @@
 - **BR-52**: Experts do not directly create/update/delete `Test` records in MVP. Experts manage `Question` and `Blueprint` data; the backend `GenerationEngine` creates `Test` and `TestQuestion` records.
 - **BR-53**: `Test.test_code` is optional. Generate it only for shareable/code-entry tests; personal adaptive/recommendation tests keep `test_code = NULL`.
 - **Dynamic WeakTag Adjustment Loop** (for `TestGen` service):
-  - **WeakTag Cap**: Max **20%** of total questions may be WeakTag-biased.
-  - **Adaptive Bias Probability**: WeakTag question selection bias = **40%** per matching blueprint slot (reduced from 70% default).
-  - **Difficulty Downscaling**: If student's WeakTag is at `Hard` → select `Medium` question for that topic (rebuild confidence). Scale back to `Hard` only when `accuracy_rate > 70%` on Medium.
-  - **Difficulty Upscaling (Challenge Mode)**: If `P_tag >= 8.0` AND `mastery_status = MASTERED` → select one difficulty level higher.
-  - **Remedial Learning (Easy-Level Protection)**: If `P_tag < 5.0` at `Easy` → bias probability drops to **10%**; no further downscaling; prioritize foundational lectures.
+  - **WeakTag Cap**: Max **20%** of total questions in a generated test may be WeakTag-biased.
+  - **Adaptive Bias Probability**: WeakTag question selection bias = **40%** per matching blueprint slot.
+  - **Difficulty Downscaling**: If a blueprint detail slot specifies a `Hard` (level 3) or `Very Hard` (level 4) difficulty, and the topic is a WeakTag for the student (student's `official_point < 5.00`), the engine downscales the question selection for that slot to `Medium` (level 2) to rebuild confidence. If the slot specifies `Medium` (level 2) and the topic's `official_point < 3.00` (which maps to level 1 `Easy`), the engine downscales the question selection to `Easy` (level 1) (F2 resolution). Scale back to the original slot difficulty (e.g., Hard) only when the topic's `official_point >= 5.00` (meaning it is no longer a WeakTag) (F3 resolution).
+  - **Difficulty Upscaling (Challenge Mode)**: If `official_point >= 8.0` AND `mastery_status = Mastered` → select one difficulty level higher (F6 resolution).
+  - **Remedial Learning (Easy-Level Protection)**: If `official_point < 5.0` at `Easy` → bias probability drops to **10%**; no further downscaling; prioritize foundational lectures (F6 resolution).
+
+- **Student Practice & Exam Flow Options** (BR-54):
+  - **Initial Generation Formats**: Students have access to two primary test formats:
+    1. **Exam Mode**: A full-length test session generated from an approved blueprint (`test_format = Exam`).
+    2. **Practice Mode**: A practice session of exactly **10 questions** targeting a specific diagnosed WeakTag topic (`test_format = Practice`).
+  - **Post-Exam Choices**: After completing an Exam session and receiving/updating WeakTags, the student can choose between:
+    1. **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: Generate a new `Exam` test session from the same blueprint structure (retains the original slot quantities and sections, but applies standard WeakTag adjustments like Cap, Bias, and Downscale based on the student's updated WeakTag state).
+    2. **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: Generate a `Practice` session of exactly 10 questions for a selected WeakTag topic, using the student's `recommended_difficulty_level` for that topic. Answers in this session will update the `practice_point` using the Elo-inspired formula and blend/reset after completing the 10-question series.
 
 ### Blueprint Status Machine
 
@@ -81,7 +89,7 @@
 - **Blueprint**: `blueprint_id` (PK), `blueprint_name` (VARCHAR 100), `grade` (10/11/12), `total_questions` (INT), `duration_minutes` (INT), `expert_id` (FK → experts), `status` (**DRAFT** | **PENDING_REVIEW** | **APPROVED** | **REJECTED** | **ACTIVE**), `review_note` (VARCHAR 255, nullable), `reviewed_by` (FK → experts, nullable), `reviewed_time` (nullable), `created_time`
 - **BlueprintSection**: `blueprint_section_id` (PK), `blueprint_id` (FK), `section_order`, `section_code`, `section_name`, `question_type`, `instruction_text`, `total_questions`, `default_point_per_question`, `default_point_per_part`, `part_count_per_question`
 - **BlueprintDetail**: `blueprint_detail_id` (PK), `blueprint_id`, `blueprint_section_id` (FK), `tag_id` (FK → tag_topics), `difficulty_id` (FK → tag_difficulties), `quantity` (INT) — composite UNIQUE `(blueprint_section_id, tag_id, difficulty_id)`
-- **Test**: `test_id` (PK), `blueprint_id` (nullable FK), `test_mode`, `generated_for_student_id` (nullable), `generated_by` (`System` by default), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`
+- **Test**: `test_id` (PK), `blueprint_id` (nullable FK), `test_format` (**Practice** | **Exam**), `generated_for_student_id` (nullable FK → students), `generated_by` (`System` by default), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`
 
 ### Enums
 
@@ -90,6 +98,7 @@
 | Blueprint | status | `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `ACTIVE` |
 | Blueprint | grade | `10`, `11`, `12` |
 | BlueprintSection | question_type | `SingleChoice`, `MultipleChoice`, `TrueFalse`, `ShortAnswer`, `Composite` |
+| Test | test_format | `Practice`, `Exam` |
 
 ## Success Criteria *(mandatory)*
 
