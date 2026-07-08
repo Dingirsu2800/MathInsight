@@ -17,15 +17,15 @@
 
 ## Phase 2: Core Domain Logic
 
-- [ ] **GradingEngine** (`IGradingEngine`):
-  - [ ] `SINGLE_CHOICE` grading: compare `TestAnswer.answer_id` to the correct `Answer.answer_id`
-  - [ ] `MULTIPLE_SELECT` grading: compare selected `TestAnswerOption` set to the full correct answer set — all correct + no incorrect = true
-  - [ ] `TRUE_FALSE` grading (standalone): same as `SINGLE_CHOICE`
-  - [ ] `COMPOSITE` grading — general: grade each `QuestionPart`; `points_earned` = sum of correct part points
-  - [ ] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually for solution display; `TestAnswerPart.points_earned = 0` (parent `TestAnswer.points_earned` is the source of truth — do NOT distribute non-linear parent score to child parts)
-  - [ ] `SHORT_ANSWER` grading: `LOWER(short_answer_text) == LOWER(Answer.answer_content)` where `Answer.is_correct = true`
-  - [ ] Calculate `score = SUM(points_earned) / SUM(max_points) × 10.0` (BR-20)
-  - [ ] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
+- [x] **GradingEngine** (`IGradingEngine`):
+  - [x] `SINGLE_CHOICE` grading: compare `TestAnswer.answer_id` to the correct `Answer.answer_id`
+  - [x] `MULTIPLE_SELECT` grading: compare selected `TestAnswerOption` set to the full correct answer set — all correct + no incorrect = true
+  - [x] `TRUE_FALSE` grading (standalone): same as `SINGLE_CHOICE`
+  - [x] `COMPOSITE` grading — general: grade each `QuestionPart`; `points_earned` = sum of correct part points
+  - [x] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually for solution display; `TestAnswerPart.points_earned = 0` (parent `TestAnswer.points_earned` is the source of truth — do NOT distribute non-linear parent score to child parts)
+  - [x] `SHORT_ANSWER` grading: `LOWER(short_answer_text) == LOWER(Answer.answer_content)` where `Answer.is_correct = true`
+  - [x] Calculate `score = SUM(points_earned) / SUM(max_points) × 10.0` (BR-20)
+  - [x] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
 
 - [ ] **GradeSubmittedSessionHandler** (MVP synchronous):
   - [ ] Called in-process by Testing submit/force-submit flow
@@ -43,7 +43,7 @@
 
 - [ ] **ChatbotService** (UC-51):
   - [ ] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
-  - [ ] POST to OpenAI/Claude API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
+  - [ ] POST to Gemini API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
   - [ ] Apply 10-second timeout, Polly circuit breaker (3 fails = open 30s)
   - [ ] Enforce 1 request per student per session using **in-memory rate limiter** (A2 — MVP only).
     - Keyed by `(studentId, sessionId)`; TTL-based or flag per request scope.

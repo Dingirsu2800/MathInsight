@@ -16,4 +16,5 @@ public class Question
     // Navigation
     public ICollection<Answer> Answers { get; set; } = new List<Answer>();
     public ICollection<QuestionPart> Parts { get; set; } = new List<QuestionPart>();
+    public ICollection<QuestionTopic> QuestionTopics { get; set; } = new List<QuestionTopic>();
 }

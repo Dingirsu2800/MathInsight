@@ -25,7 +25,10 @@ public static class GradingModuleExtensions
                     errorNumbersToAdd: null)));
 
 
-        // Phase 2: GradingEngine, ChatbotService, and MediatR handlers will be registered here.
+        // GradingEngine: per-question-type grading algorithm (Phase 2)
+        services.AddScoped<Services.IGradingEngine, Services.GradingEngine>();
+
+        // Phase 2 (remaining): ChatbotService, GradeSubmittedSessionHandler will be registered here.
 
         return services;
     }
