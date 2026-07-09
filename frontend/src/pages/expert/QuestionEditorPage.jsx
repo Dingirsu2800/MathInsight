@@ -44,6 +44,35 @@ export default function QuestionEditorPage() {
   // Page level loading/error states
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [isTopicPanelOpen, setIsTopicPanelOpen] = React.useState(false);
+  const [isTopicPanelClosing, setIsTopicPanelClosing] = React.useState(false);
+  const closeTopicPanelTimerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (closeTopicPanelTimerRef.current) {
+        window.clearTimeout(closeTopicPanelTimerRef.current);
+      }
+    };
+  }, []);
+
+  const closeTopicPanel = React.useCallback(() => {
+    if (isTopicPanelClosing) return;
+    setIsTopicPanelClosing(true);
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const closeDelay = prefersReducedMotion ? 0 : 180;
+
+    closeTopicPanelTimerRef.current = window.setTimeout(() => {
+      setIsTopicPanelOpen(false);
+      setIsTopicPanelClosing(false);
+    }, closeDelay);
+  }, [isTopicPanelClosing]);
+
+  const openTopicPanel = React.useCallback(() => {
+    setIsTopicPanelClosing(false);
+    setIsTopicPanelOpen(true);
+  }, []);
 
   // OCR state helper
   const [ocrImage, setOcrImage] = React.useState(null);
@@ -118,7 +147,28 @@ export default function QuestionEditorPage() {
   React.useEffect(() => {
     questionBankApi.getTopicTags(form.grade)
       .then(res => {
-        setTopicList(flattenTopicTree(res.data || []));
+        const flattened = flattenTopicTree(res.data || []);
+        setTopicList(flattened);
+        
+        // Auto-clean any parent topics or topics not matching this grade scope
+        setForm(prev => {
+          const validTopics = prev.topics.filter(topic => {
+            const match = flattened.find(f => f.tagId === topic.tagId);
+            return match && match.depth !== 0;
+          });
+          
+          let normalizedTopics = validTopics;
+          if (validTopics.length > 0) {
+            const hasPrimary = validTopics.some(t => t.isPrimary);
+            if (!hasPrimary) {
+              normalizedTopics = validTopics.map((t, idx) => ({
+                ...t,
+                isPrimary: idx === 0
+              }));
+            }
+          }
+          return { ...prev, topics: normalizedTopics };
+        });
       })
       .catch(err => {
         console.error("Failed to load topic tags:", err);
@@ -295,6 +345,54 @@ export default function QuestionEditorPage() {
     });
   };
 
+  // Multiple Topics + Primary Topic Handlers
+  const handleToggleTopic = (tagId) => {
+    setForm((prev) => {
+      const exists = prev.topics.some((topic) => topic.tagId === tagId);
+
+      if (exists) {
+        const remaining = prev.topics.filter((topic) => topic.tagId !== tagId);
+        const hasPrimary = remaining.some((topic) => topic.isPrimary);
+        let normalizedRemaining = remaining;
+        if (!hasPrimary && remaining.length > 0) {
+          normalizedRemaining = remaining.map((t, idx) => ({
+            ...t,
+            isPrimary: idx === 0
+          }));
+        }
+        return { ...prev, topics: normalizedRemaining };
+      } else {
+        const isPrimary = prev.topics.length === 0;
+        return {
+          ...prev,
+          topics: [...prev.topics, { tagId, isPrimary }]
+        };
+      }
+    });
+  };
+
+  const handleSetPrimaryTopic = (tagId) => {
+    setForm((prev) => {
+      const exists = prev.topics.some((topic) => topic.tagId === tagId);
+      if (!exists) return prev;
+
+      return {
+        ...prev,
+        topics: prev.topics.map((topic) => ({
+          ...topic,
+          isPrimary: topic.tagId === tagId,
+        })),
+      };
+    });
+  };
+
+  const getTopicDisplayLabel = (topic) => {
+    if (!topic) return "";
+    const rawName = topic.name || topic.tagName || topic.displayName || topic.tagId || "";
+    return rawName.replace(/^\s*Lớp\s*(10|11|12)\s*-\s*/i, "").trim();
+  };
+
+
   // OCR file handler
   const handleOcrImageUpload = (e) => {
     const file = e.target.files[0];
@@ -346,7 +444,23 @@ export default function QuestionEditorPage() {
       return;
     }
     if (form.topics.length === 0) {
-      alert("Vui lòng chọn ít nhất 1 chủ đề kiến thức!");
+      openTopicPanel();
+      window.setTimeout(() => alert("Vui lòng chọn ít nhất 1 chủ đề kiến thức!"), 0);
+      return;
+    }
+    const selectedParentTopic = form.topics.find((selectedTopic) => {
+      const topic = topicList.find((item) => item.tagId === selectedTopic.tagId);
+      return topic?.depth === 0;
+    });
+
+    if (selectedParentTopic) {
+      openTopicPanel();
+      window.setTimeout(() => alert("Vui lòng chỉ chọn chủ đề con, không chọn nhóm chủ đề cha."), 0);
+      return;
+    }
+    if (form.topics.filter((topic) => topic.isPrimary).length !== 1) {
+      openTopicPanel();
+      window.setTimeout(() => alert("Vui lòng chọn đúng 1 chủ đề chính cho câu hỏi!"), 0);
       return;
     }
 
@@ -416,6 +530,17 @@ export default function QuestionEditorPage() {
       });
   };
 
+  const primaryTopicId = form.topics.find((topic) => topic.isPrimary)?.tagId;
+  const primaryTopic = topicList.find((topic) => topic.tagId === primaryTopicId);
+
+  const selectedTopicLabels = form.topics.map((selectedTopic) => {
+    const topic = topicList.find((item) => item.tagId === selectedTopic.tagId);
+    return {
+      ...selectedTopic,
+      label: getTopicDisplayLabel(topic) || selectedTopic.tagId,
+    };
+  });
+
   return (
     <ExpertLayout>
       <div className="p-gutter bg-canvas-white relative min-h-screen">
@@ -480,69 +605,115 @@ export default function QuestionEditorPage() {
                   Thông tin phân loại
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Grade Select */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp học</label>
-                    <CustomSelect 
-                      value={form.grade?.toString() || "12"} 
-                      onValueChange={(val) => {
-                        setForm(prev => ({
-                          ...prev,
-                          grade: parseInt(val),
-                          topics: []
-                        }));
-                      }}
-                      placeholder="Chọn khối lớp"
-                      items={[
-                        { value: "10", label: "Lớp 10" },
-                        { value: "11", label: "Lớp 11" },
-                        { value: "12", label: "Lớp 12" }
-                      ]}
-                    />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                  <div className="space-y-4">
+                    {/* Grade Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp học</label>
+                      <CustomSelect 
+                        value={form.grade?.toString() || "12"} 
+                        onValueChange={(val) => {
+                          setForm(prev => ({
+                            ...prev,
+                            grade: parseInt(val),
+                            topics: []
+                          }));
+                          setIsTopicPanelOpen(false);
+                        }}
+                        placeholder="Chọn khối lớp"
+                        items={[
+                          { value: "10", label: "Lớp 10" },
+                          { value: "11", label: "Lớp 11" },
+                          { value: "12", label: "Lớp 12" }
+                        ]}
+                      />
+                    </div>
+
+                    {/* Difficulty Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Độ khó câu hỏi</label>
+                      <CustomSelect 
+                        value={form.difficultyId || "NONE"} 
+                        onValueChange={(val) => handleFieldChange("difficultyId", val === "NONE" ? "" : val)}
+                        placeholder="Chọn độ khó"
+                        items={[
+                          { value: "NONE", label: "Chọn độ khó" },
+                          ...difficultyList.map(d => ({ value: d.difficultyId, label: d.difficultyName }))
+                        ]}
+                      />
+                    </div>
                   </div>
 
-                  {/* Difficulty Select */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Độ khó câu hỏi</label>
-                    <CustomSelect 
-                      value={form.difficultyId || "NONE"} 
-                      onValueChange={(val) => handleFieldChange("difficultyId", val === "NONE" ? "" : val)}
-                      placeholder="Chọn độ khó"
-                      items={[
-                        { value: "NONE", label: "Chọn độ khó" },
-                        ...difficultyList.map(d => ({ value: d.difficultyId, label: d.difficultyName }))
-                      ]}
-                    />
-                  </div>
-                </div>
+                  <div className="space-y-4">
+                    {/* Default Point Input */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Điểm số mặc định</label>
+                      <input
+                        value={form.defaultPoint}
+                        onChange={(e) => handleFieldChange("defaultPoint", parseFloat(e.target.value) || 0)}
+                        className="w-full p-2.5 h-10 text-[13px] bg-transparent border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-semibold outline-none"
+                        type="number"
+                        step="0.05"
+                        min="0"
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Topic Select */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Chủ đề chính (Tag Topic)</label>
-                    <CustomSelect 
-                      value={form.topics?.[0]?.tagId || "NONE"}
-                      onValueChange={(val) => handleFieldChange("topics", val === "NONE" ? [] : [{ tagId: val, isPrimary: true }])}
-                      placeholder="Chọn chủ đề kiến thức"
-                      items={[
-                        { value: "NONE", label: "Chọn chủ đề kiến thức" },
-                        ...topicList.map(t => ({ value: t.tagId, label: t.displayName }))
-                      ]}
-                    />
-                  </div>
+                    {/* Topic Picker Trigger */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                          Chủ đề kiến thức
+                        </label>
+                        <span className="text-[10px] text-on-surface-variant font-semibold">
+                          Đã chọn {form.topics.length}
+                        </span>
+                      </div>
 
-                  {/* Default Point Input */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Điểm số mặc định</label>
-                    <input
-                      value={form.defaultPoint}
-                      onChange={(e) => handleFieldChange("defaultPoint", parseFloat(e.target.value) || 0)}
-                      className="w-full p-2.5 h-10 text-[13px] bg-transparent border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-semibold outline-none"
-                      type="number"
-                      step="0.05"
-                      min="0"
-                    />
+                      <button
+                        type="button"
+                        onClick={openTopicPanel}
+                        className="w-full min-h-10 border border-outline-variant rounded-xl bg-pure-surface px-3 py-2 text-left flex items-center justify-between gap-3 hover:border-primary/60 transition-colors cursor-pointer"
+                      >
+                        <div className="min-w-0 flex-1">
+                          {form.topics.length === 0 ? (
+                            <span className="text-[13px] font-semibold text-on-surface-variant">
+                              Chọn chủ đề cho lớp {form.grade}
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-[13px] font-bold text-on-surface truncate block">
+                                {getTopicDisplayLabel(primaryTopic) || `${form.topics.length} chủ đề đã chọn`}
+                              </span>
+                              <span className="text-[10px] text-on-surface-variant">
+                                Chủ đề chính • Tổng {form.topics.length} chủ đề
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        <span className="material-symbols-outlined text-[18px] text-primary">
+                          edit
+                        </span>
+                      </button>
+
+                      {selectedTopicLabels.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {selectedTopicLabels.map((selectedTopic) => (
+                            <span
+                              key={selectedTopic.tagId}
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold mi-chip-in ${
+                                selectedTopic.isPrimary
+                                  ? "bg-primary text-white"
+                                  : "bg-surface-container text-on-surface-variant border border-whisper-border"
+                              }`}
+                            >
+                              {selectedTopic.label}
+                              {selectedTopic.isPrimary && <span>(Chính)</span>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -555,7 +726,7 @@ export default function QuestionEditorPage() {
                         key={type}
                         type="button"
                         onClick={() => handleFieldChange("questionType", type)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex-1 text-center min-w-[120px] ${
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150 active:scale-[0.98] cursor-pointer flex-1 text-center min-w-[120px] ${
                           form.questionType === type 
                             ? "bg-primary text-white shadow-md" 
                             : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
@@ -588,8 +759,10 @@ export default function QuestionEditorPage() {
                         setIsMathHelperOpen(!isMathHelperOpen);
                         setIsOcrPanelOpen(false);
                       }}
-                      className={`px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
-                        isMathHelperOpen ? "bg-primary text-white" : "hover:bg-surface-container text-primary bg-primary/5"
+                      className={`px-2 py-1 rounded text-xs font-bold transition-all duration-150 flex items-center gap-1 cursor-pointer active:scale-[0.97] ${
+                        isMathHelperOpen
+                          ? "bg-primary text-white shadow-sm scale-[1.01]"
+                          : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
                       }`}
                     >
                       <span className="material-symbols-outlined text-[16px]">calculate</span>
@@ -602,8 +775,10 @@ export default function QuestionEditorPage() {
                         setIsOcrPanelOpen(!isOcrPanelOpen);
                         setIsMathHelperOpen(false);
                       }}
-                      className={`px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
-                        isOcrPanelOpen ? "bg-primary text-white" : "hover:bg-surface-container text-primary bg-primary/5"
+                      className={`px-2 py-1 rounded text-xs font-bold transition-all duration-150 flex items-center gap-1 cursor-pointer active:scale-[0.97] ${
+                        isOcrPanelOpen
+                          ? "bg-primary text-white shadow-sm scale-[1.01]"
+                          : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
                       }`}
                     >
                       <span className="material-symbols-outlined text-[16px]">photo_camera</span>
@@ -613,7 +788,7 @@ export default function QuestionEditorPage() {
 
                   {/* Math Helper Panel */}
                   {isMathHelperOpen && (
-                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 animate-in slide-in-from-top-2 duration-150">
+                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 mi-panel-down">
                       <div>
                         <h5 className="text-[10px] font-black text-on-surface-variant mb-2 uppercase tracking-wider">Mã toán nhanh:</h5>
                         <div className="flex flex-wrap gap-2">
@@ -667,7 +842,7 @@ export default function QuestionEditorPage() {
 
                   {/* OCR Scanner Panel */}
                   {isOcrPanelOpen && (
-                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 animate-in slide-in-from-top-2 duration-150">
+                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 mi-panel-down">
                       <div className="p-3.5 bg-primary/5 border border-primary/10 rounded-lg space-y-1.5">
                         <h4 className="text-[11px] font-bold text-primary flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[16px]">info</span>
@@ -744,7 +919,8 @@ export default function QuestionEditorPage() {
                   </p>
                 </div>
 
-                {/* Options List Form for SINGLE_CHOICE / MULTIPLE_CHOICE */}
+                <div key={form.questionType} className="mi-answer-switch">
+                  {/* Options List Form for SINGLE_CHOICE / MULTIPLE_CHOICE */}
                 {(form.questionType === "SINGLE_CHOICE" || form.questionType === "MULTIPLE_CHOICE") && (
                   <div className="space-y-4">
                     {form.options.map((opt, idx) => (
@@ -864,7 +1040,7 @@ export default function QuestionEditorPage() {
 
                 {/* Form for COMPOSITE */}
                 {form.questionType === "COMPOSITE" && (
-                  <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="space-y-6">
                     {form.parts.map((part, pIdx) => (
                       <div key={pIdx} className="border border-whisper-border rounded-xl p-5 bg-surface-container-lowest relative space-y-4 shadow-inner">
                         {/* Part Index Row */}
@@ -1010,6 +1186,7 @@ export default function QuestionEditorPage() {
                   </div>
                 )}
               </div>
+            </div>
 
               {/* 4. Lời giải chi tiết */}
               <div>
@@ -1285,6 +1462,169 @@ export default function QuestionEditorPage() {
         </div>
 
       </div>
+
+      {/* Right-side Slide-over Panel */}
+      {isTopicPanelOpen && (
+        <div className={`fixed inset-0 z-50 flex justify-end ${isTopicPanelClosing ? "mi-backdrop-out" : "mi-backdrop-in"}`}>
+          <button
+            type="button"
+            aria-label="Đóng chọn chủ đề"
+            className="absolute inset-0 bg-black/30 cursor-default border-0 outline-none"
+            onClick={closeTopicPanel}
+          />
+
+          <section className={`relative z-10 h-full w-full max-w-xl bg-pure-surface shadow-2xl border-l border-whisper-border flex flex-col ${isTopicPanelClosing ? "mi-drawer-out" : "mi-drawer-in"}`}>
+            {/* Header */}
+            <header className="px-5 py-4 border-b border-whisper-border flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-primary">
+                  Chủ đề kiến thức
+                </p>
+                <h3 className="text-lg font-bold text-on-surface">
+                  Chọn chủ đề cho lớp {form.grade}
+                </h3>
+                <p className="text-xs text-on-surface-variant mt-1">
+                  Chọn một hoặc nhiều chủ đề con và đặt đúng một chủ đề làm chính.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeTopicPanel}
+                className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
+                aria-label="Đóng"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </header>
+
+            {/* Selected Summary */}
+            <div className="px-5 py-3 border-b border-whisper-border bg-surface-container-lowest">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">
+                  Đã chọn {form.topics.length}
+                </span>
+                <span className="text-[11px] text-on-surface-variant">
+                  Chủ đề chính: {getTopicDisplayLabel(primaryTopic) || "Chưa chọn"}
+                </span>
+              </div>
+
+              {selectedTopicLabels.length === 0 ? (
+                <p className="text-xs text-on-surface-variant font-semibold">
+                  Chưa có chủ đề nào được chọn.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedTopicLabels.map((selectedTopic) => (
+                    <span
+                      key={selectedTopic.tagId}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold mi-chip-in ${
+                        selectedTopic.isPrimary
+                          ? "bg-primary text-white"
+                          : "bg-surface-container text-on-surface-variant border border-whisper-border"
+                      }`}
+                    >
+                      {selectedTopic.label}
+                      {selectedTopic.isPrimary && <span>(Chính)</span>}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Topic Tree List */}
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="border border-outline-variant rounded-xl bg-pure-surface divide-y divide-whisper-border overflow-hidden">
+                {topicList.length === 0 ? (
+                  <div className="p-4 text-sm text-on-surface-variant">
+                    Chưa có chủ đề cho khối lớp này.
+                  </div>
+                ) : (
+                  topicList.map((topic) => {
+                    const isParentTopic = topic.depth === 0;
+
+                    if (isParentTopic) {
+                      return (
+                        <div
+                          key={topic.tagId}
+                          className="sticky top-0 z-10 bg-surface-container-low px-3 py-2 text-[10px] font-black uppercase text-primary border-b border-whisper-border select-none"
+                        >
+                          {getTopicDisplayLabel(topic)}
+                        </div>
+                      );
+                    }
+
+                    const isSelected = form.topics.some((selected) => selected.tagId === topic.tagId);
+                    const isPrimary = form.topics.some(
+                      (selected) => selected.tagId === topic.tagId && selected.isPrimary
+                    );
+
+                    return (
+                      <div
+                        key={topic.tagId}
+                        className={`flex items-center gap-3 p-3 pl-5 text-[13px] transition-colors duration-150 ${
+                          isSelected ? "bg-primary/5" : "hover:bg-surface-container-low"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleTopic(topic.tagId)}
+                          className="h-4 w-4 accent-primary cursor-pointer"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTopic(topic.tagId)}
+                          className="flex-1 text-left font-semibold text-on-surface truncate cursor-pointer"
+                          title={getTopicDisplayLabel(topic)}
+                        >
+                          {getTopicDisplayLabel(topic)}
+                        </button>
+
+                        {isSelected && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimaryTopic(topic.tagId)}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all duration-150 active:scale-[0.98] ${
+                              isPrimary
+                                ? "bg-primary text-white border-primary cursor-default"
+                                : "text-primary border-primary/30 hover:bg-primary/10 hover:scale-[1.02] cursor-pointer"
+                            }`}
+                            title="Đặt làm chủ đề chính"
+                          >
+                            {isPrimary ? "Chính" : "Đặt chính"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <footer className="px-5 py-4 border-t border-whisper-border bg-pure-surface flex items-center justify-between gap-3">
+              <p className="text-xs text-on-surface-variant font-semibold">
+                {form.topics.length === 0
+                  ? "Chọn ít nhất một chủ đề con."
+                  : `Đã chọn ${form.topics.length} chủ đề.`}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeTopicPanel}
+                  className="px-4 py-2 rounded-lg bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-colors cursor-pointer"
+                >
+                  Hoàn tất
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
+
     </ExpertLayout>
   );
 }
