@@ -11,6 +11,7 @@ public sealed record QuestionListItemResponse(
     string Status,
     string QuestionType,
     string ExpertId,
+    string? ExpertName,
     decimal DefaultPoint,
     bool IsActive,
     IReadOnlyList<QuestionTopicSummaryResponse> Topics);

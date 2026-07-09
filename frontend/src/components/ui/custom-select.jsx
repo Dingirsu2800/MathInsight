@@ -26,7 +26,7 @@ export const CustomSelect = React.forwardRef(
         <SelectPrimitive.Trigger
           ref={ref}
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all select-none text-left cursor-pointer",
+            "flex h-10 w-full items-center justify-between rounded-xl border border-outline-variant hover:border-outline-variant/80 bg-surface-container-lowest px-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 transition-all select-none text-left cursor-pointer",
             className
           )}
         >
