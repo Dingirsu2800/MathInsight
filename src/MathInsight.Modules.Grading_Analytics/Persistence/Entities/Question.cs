@@ -16,6 +16,12 @@ public class Question
     /// <summary>Difficulty level value (1..4) from TagDifficulty, for GradeCalculatedEvent.</summary>
     public byte DifficultyLevel { get; set; }
 
+    /// <summary>
+    /// Question text content — cross-read from QuestionBank.
+    /// Used by ChatbotService (UC-51) to send question context to the AI API.
+    /// </summary>
+    public string QuestionContent { get; set; } = string.Empty;
+
     // Navigation
     public ICollection<Answer> Answers { get; set; } = new List<Answer>();
     public ICollection<QuestionPart> Parts { get; set; } = new List<QuestionPart>();

@@ -15,6 +15,7 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(x => x.QuestionType).HasColumnName("question_type").HasMaxLength(30).IsRequired();
         builder.Property(x => x.DefaultPoint).HasColumnName("default_point").HasPrecision(5, 2);
         builder.Property(x => x.DifficultyLevel).HasColumnName("difficulty_level");
+        builder.Property(x => x.QuestionContent).HasColumnName("QuestionContent").IsRequired();
 
         builder.HasMany(x => x.Answers)
                .WithOne(a => a.Question)

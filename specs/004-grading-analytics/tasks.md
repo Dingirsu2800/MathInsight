@@ -41,14 +41,14 @@
   - [x] On failure: rollback → session stays `InProgress`, not `Graded`
   - [x] Log failure with structured logging (session_id, error)
 
-- [ ] **ChatbotService** (UC-51):
-  - [ ] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
-  - [ ] POST to Gemini API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
-  - [ ] Apply 10-second timeout, Polly circuit breaker (3 fails = open 30s)
-  - [ ] Enforce 1 request per student per session using **in-memory rate limiter** (A2 — MVP only).
+- [x] **ChatbotService** (UC-51):
+  - [x] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
+  - [x] POST to Gemini API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
+  - [x] Apply 10-second timeout, Polly circuit breaker (3 fails = open 30s)
+  - [x] Enforce 1 request per student per session using **in-memory rate limiter** (A2 — MVP only).
     - Keyed by `(studentId, sessionId)`; TTL-based or flag per request scope.
     - **Do NOT use Redis** for this in MVP — Constitution §IV prohibits Redis unless spec-backed. Redis becomes relevant only under multi-instance deployment (post-MVP).
-  - [ ] Return explanation string — do NOT persist to database (BR-21)
+  - [x] Return explanation string — do NOT persist to database (BR-21)
 
 - [x] **Polly Retry Policy** (U2 — per Assumptions:L96):
   - [x] Configure Polly retry on grading DB transaction: 3 retries with exponential backoff (1s, 2s, 4s)
@@ -65,12 +65,12 @@
 
 ## Phase 3: Controller and Routing
 
-- [ ] `GradingController`:
-  - [ ] `POST /api/v1/chatbot/assist` — StudentOnly, UC-51
-  - [ ] Accepts `{ sessionId, questionId, studentAnswer }` in request body
-  - [ ] Returns `{ explanation: "..." }` as JSON
+- [x] `GradingController`:
+  - [x] `POST /api/v1/chatbot/assist` — StudentOnly, UC-51
+  - [x] Accepts `{ sessionId, questionId, studentAnswer }` in request body
+  - [x] Returns `{ explanation: "..." }` as JSON
 
-- [ ] Register inside `GradingModuleExtensions.cs`:
+- [x] Register inside `GradingModuleExtensions.cs`:
   - GradingEngine, ChatbotService, MediatR handlers
 
 ---
