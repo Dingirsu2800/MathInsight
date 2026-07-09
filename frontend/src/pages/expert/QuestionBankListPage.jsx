@@ -2,6 +2,7 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import ExpertLayout from "./ExpertLayout";
 import VersionHistoryDrawer from "./VersionHistoryDrawer";
+import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { cn } from "../../utils/cn";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -303,16 +304,15 @@ export default function QuestionBankListPage() {
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto">
         
         {/* Page Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-on-background">Ngân hàng câu hỏi</h1>
-            <p className="text-sm text-on-surface-variant mt-1">Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học.</p>
-          </div>
+        <DashboardPageHeader
+          title="Ngân hàng câu hỏi"
+          subtitle="Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học."
+        >
           <Button onClick={() => navigate("/expert/questions/new")}>
             <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
             Tạo câu hỏi mới
           </Button>
-        </div>
+        </DashboardPageHeader>
 
         {/* Error / Alert banner */}
         {error && (
