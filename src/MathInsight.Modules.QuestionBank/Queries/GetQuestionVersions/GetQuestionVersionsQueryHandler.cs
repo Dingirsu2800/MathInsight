@@ -43,7 +43,12 @@ public sealed class GetQuestionVersionsQueryHandler
                 version.AnswersSnapshot,
                 version.PictureUrl,
                 version.CreatedTime,
-                version.ExpertId))
+                version.ExpertId,
+                _context.AccountReadModels
+                    .Where(account => account.AccountId == version.ExpertId)
+                    .Select(account => account.FirstName + " " + account.LastName)
+                    .FirstOrDefault(),
+                "Approved"))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<QuestionVersionResponse>>.Success(versions);

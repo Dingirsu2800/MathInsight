@@ -68,6 +68,7 @@ export function mapQuestionListItemToViewModel(item) {
     status: item.status || "APPROVED",
     type: mapBackendTypeToUiType(item.questionType),
     expertId: item.expertId || "Hệ thống",
+    expertName: item.expertName || "",
     points: item.defaultPoint ?? 0.2,
     topics: item.topics || [],
     topic: primaryTopic?.tagName || primaryTopic?.name || "Chưa phân loại"
@@ -87,6 +88,7 @@ export function mapQuestionDetailToViewModel(detail) {
     status: detail.status || "APPROVED",
     type: mapBackendTypeToUiType(detail.questionType),
     expertId: detail.expertId || "Hệ thống",
+    expertName: detail.expertName || "",
     points: detail.defaultPoint ?? 0.2,
     topics: detail.topics || [],
     answers: detail.answers || [],

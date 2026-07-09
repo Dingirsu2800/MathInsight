@@ -4,6 +4,20 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../utils/cn";
 import { questionBankApi } from "../../services/questionBankApi";
+import LatexPreview from "../../components/expert/LatexPreview";
+import { getQuestionStatusLabel, getQuestionStatusVariant } from "../../utils/questionLabels";
+
+function formatExpertDisplay(version) {
+  if (!version) return "Hệ thống";
+  const name = version.expertName || version.expertDisplayName || version.updatedByName;
+  if (name) return name;
+
+  const id = version.expertId;
+  if (!id) return "Hệ thống";
+
+  if (id.length <= 12) return `ID: ${id}`;
+  return `ID: ${id.slice(0, 8)}...${id.slice(-4)}`;
+}
 
 function safeParseJson(value) {
   if (!value) return null;
@@ -48,6 +62,7 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
           if (currentDetails) {
             setCurrentVersion({
               expertId: currentDetails.expertId || "Hệ thống",
+              expertName: currentDetails.expertName || "",
               updatedAt: currentDetails.updatedAt || new Date().toISOString(),
               status: currentDetails.status || "APPROVED",
               content: currentDetails.questionContent,
@@ -77,6 +92,7 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
             // mock data fallback
             setCurrentVersion({
               expertId: "EXP-9921",
+              expertName: "Chuyên gia mẫu",
               updatedAt: "2026-07-08T14:30:00Z",
               status: "APPROVED",
               content: `Tính đạo hàm của hàm số y = \\sin(2x) tại điểm x = \\frac{\\pi}{4}.`,
@@ -93,6 +109,7 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
               {
                 versionId: "mock-v2",
                 expertId: "EXP-4402",
+                expertName: "Chuyên gia mẫu",
                 createdTime: "2026-07-07T09:15:00Z",
                 status: "APPROVED",
                 questionContent: `Tính đạo hàm của y = \\sin(2x) tại điểm x = \\frac{\\pi}{4}.`,
@@ -161,7 +178,7 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
                     <div className="space-y-1">
                       <p className="text-xs text-on-surface-variant flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[14px]">person</span>
-                        Chuyên gia: <span className="font-bold text-on-surface">{currentVersion.expertId}</span>
+                        Chuyên gia: <span className="font-bold text-on-surface">{formatExpertDisplay(currentVersion)}</span>
                       </p>
                       <p className="text-xs text-on-surface-variant flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[14px]">schedule</span>
@@ -174,19 +191,19 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
                         })}
                       </p>
                     </div>
-                    <Badge variant={currentVersion.status}>{currentVersion.status}</Badge>
+                    <Badge variant={getQuestionStatusVariant(currentVersion.status)}>{getQuestionStatusLabel(currentVersion.status)}</Badge>
                   </div>
 
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-xs font-bold text-on-surface mb-1.5">Nội dung câu hỏi:</h4>
-                      <div className="p-3 bg-surface-container rounded-lg text-sm font-mono text-on-surface break-words">
-                        {currentVersion.content}
+                      <div className="p-3 bg-surface-container rounded-lg text-sm text-on-surface break-words">
+                        <LatexPreview content={currentVersion.content} />
                       </div>
                     </div>
 
                     <div>
-                      <h4 className="text-xs font-bold text-on-surface mb-1.5">Snapshot đáp án (JSON):</h4>
+                      <h4 className="text-xs font-bold text-on-surface mb-1.5">Snapshot kỹ thuật (JSON):</h4>
                       <pre className="text-[12px] font-mono bg-charcoal-ink text-inverse-on-surface p-3.5 rounded-lg overflow-x-auto border border-whisper-border/20 leading-relaxed shadow-inner max-h-48">
                         <code>{JSON.stringify(currentVersion.answersSnapshot, null, 2)}</code>
                       </pre>
@@ -210,7 +227,7 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
                       <div className="space-y-1">
                         <p className="text-xs text-on-surface-variant flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[14px]">person</span>
-                          Chuyên gia: <span className="font-bold text-on-surface">{ver.expertId || "EXP-System"}</span>
+                          Chuyên gia: <span className="font-bold text-on-surface">{formatExpertDisplay(ver)}</span>
                         </p>
                         <p className="text-xs text-on-surface-variant flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[14px]">schedule</span>
@@ -225,7 +242,9 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Badge variant={ver.status || "APPROVED"}>{ver.status || "APPROVED"}</Badge>
+                        <Badge variant={getQuestionStatusVariant(ver.status || "APPROVED")}>
+                          {getQuestionStatusLabel(ver.status || "APPROVED")}
+                        </Badge>
                         <Button
                           variant="outline"
                           size="sm"
@@ -242,14 +261,14 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
                     <div className="space-y-4">
                       <div>
                         <h4 className="text-xs font-bold text-on-surface mb-1.5">Nội dung câu hỏi:</h4>
-                        <div className="p-3 bg-surface-container rounded-lg text-sm font-mono text-on-surface break-words">
-                          {ver.questionContent}
+                        <div className="p-3 bg-surface-container rounded-lg text-sm text-on-surface break-words">
+                          <LatexPreview content={ver.questionContent} />
                         </div>
                       </div>
 
                       {snapshot && (
                         <div>
-                          <h4 className="text-xs font-bold text-on-surface mb-1.5">Snapshot đáp án (JSON):</h4>
+                          <h4 className="text-xs font-bold text-on-surface mb-1.5">Snapshot kỹ thuật (JSON):</h4>
                           <pre className="text-[12px] font-mono bg-charcoal-ink text-inverse-on-surface p-3.5 rounded-lg overflow-x-auto border border-whisper-border/20 leading-relaxed shadow-inner max-h-48">
                             <code>{JSON.stringify(snapshot, null, 2)}</code>
                           </pre>

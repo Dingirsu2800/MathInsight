@@ -46,7 +46,10 @@ export default function QuestionEditorPage() {
   const [error, setError] = React.useState(null);
   const [isTopicPanelOpen, setIsTopicPanelOpen] = React.useState(false);
   const [isTopicPanelClosing, setIsTopicPanelClosing] = React.useState(false);
+  const [infoMessage, setInfoMessage] = React.useState(null);
   const closeTopicPanelTimerRef = React.useRef(null);
+  const errorRef = React.useRef(null);
+  const drawerErrorRef = React.useRef(null);
 
   React.useEffect(() => {
     return () => {
@@ -59,6 +62,7 @@ export default function QuestionEditorPage() {
   const closeTopicPanel = React.useCallback(() => {
     if (isTopicPanelClosing) return;
     setIsTopicPanelClosing(true);
+    setError(null);
 
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const closeDelay = prefersReducedMotion ? 0 : 180;
@@ -72,6 +76,19 @@ export default function QuestionEditorPage() {
   const openTopicPanel = React.useCallback(() => {
     setIsTopicPanelClosing(false);
     setIsTopicPanelOpen(true);
+  }, []);
+
+  const showError = React.useCallback((msg) => {
+    setError(msg);
+    setInfoMessage(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      if (drawerErrorRef.current) {
+        drawerErrorRef.current.focus();
+      } else if (errorRef.current) {
+        errorRef.current.focus();
+      }
+    }, 100);
   }, []);
 
   // OCR state helper
@@ -434,18 +451,20 @@ export default function QuestionEditorPage() {
 
   // Form validator & submit
   const handleSaveQuestion = () => {
+    setError(null);
+
     // Core fields validation
     if (!form.questionContent.trim()) {
-      alert("Nội dung câu hỏi không được để trống!");
+      showError("Nội dung câu hỏi không được để trống!");
       return;
     }
     if (!form.difficultyId) {
-      alert("Vui lòng chọn độ khó cho câu hỏi!");
+      showError("Vui lòng chọn độ khó cho câu hỏi!");
       return;
     }
     if (form.topics.length === 0) {
       openTopicPanel();
-      window.setTimeout(() => alert("Vui lòng chọn ít nhất 1 chủ đề kiến thức!"), 0);
+      showError("Vui lòng chọn ít nhất 1 chủ đề kiến thức!");
       return;
     }
     const selectedParentTopic = form.topics.find((selectedTopic) => {
@@ -455,12 +474,12 @@ export default function QuestionEditorPage() {
 
     if (selectedParentTopic) {
       openTopicPanel();
-      window.setTimeout(() => alert("Vui lòng chỉ chọn chủ đề con, không chọn nhóm chủ đề cha."), 0);
+      showError("Vui lòng chỉ chọn chủ đề con, không chọn nhóm chủ đề cha.");
       return;
     }
     if (form.topics.filter((topic) => topic.isPrimary).length !== 1) {
       openTopicPanel();
-      window.setTimeout(() => alert("Vui lòng chọn đúng 1 chủ đề chính cho câu hỏi!"), 0);
+      showError("Vui lòng chọn đúng 1 chủ đề chính cho câu hỏi!");
       return;
     }
 
@@ -468,44 +487,44 @@ export default function QuestionEditorPage() {
     if (form.questionType === "SINGLE_CHOICE") {
       const correctCount = form.options.filter(o => o.isCorrect).length;
       if (correctCount !== 1) {
-        alert("Câu hỏi SingleChoice cần có đúng 1 đáp án được đánh dấu là ĐÚNG!");
+        showError("Câu hỏi SingleChoice cần có đúng 1 đáp án được đánh dấu là ĐÚNG!");
         return;
       }
     } else if (form.questionType === "MULTIPLE_CHOICE") {
       const correctCount = form.options.filter(o => o.isCorrect).length;
       if (correctCount < 1) {
-        alert("Câu hỏi MultipleChoice cần chọn ít nhất 1 đáp án là ĐÚNG!");
+        showError("Câu hỏi MultipleChoice cần chọn ít nhất 1 đáp án là ĐÚNG!");
         return;
       }
     } else if (form.questionType === "TRUE_FALSE") {
       const tfOptions = normalizeTrueFalseOptions(form.options);
       const correctCount = tfOptions.filter(o => o.isCorrect).length;
       if (correctCount !== 1) {
-        alert("Câu hỏi Đúng/Sai cần chọn chính xác một đáp án đúng.");
+        showError("Câu hỏi Đúng/Sai cần chọn chính xác một đáp án đúng.");
         return;
       }
     } else if (form.questionType === "SHORT_ANSWER") {
       if (!form.shortAnswer.trim()) {
-        alert("Vui lòng nhập chuỗi đáp án ngắn chính xác!");
+        showError("Vui lòng nhập chuỗi đáp án ngắn chính xác!");
         return;
       }
     } else if (form.questionType === "COMPOSITE") {
       if (form.parts.length === 0) {
-        alert("Mẫu câu hỏi Composite cần chứa ít nhất 1 phần câu hỏi phụ!");
+        showError("Mẫu câu hỏi Composite cần chứa ít nhất 1 phần câu hỏi phụ!");
         return;
       }
       for (let i = 0; i < form.parts.length; i++) {
         const part = form.parts[i];
         if (!part.partContent.trim()) {
-          alert(`Nội dung câu hỏi phụ phần (${part.partLabel}) không được để trống!`);
+          showError(`Nội dung câu hỏi phụ phần (${part.partLabel}) không được để trống!`);
           return;
         }
         if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
-          alert(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
+          showError(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
           return;
         }
         if (part.partType === "NUMERIC_ANSWER" && (part.correctNumeric === null || part.correctNumeric === "")) {
-          alert(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
+          showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
           return;
         }
       }
@@ -520,12 +539,11 @@ export default function QuestionEditorPage() {
 
     saveRequest
       .then(() => {
-        alert(isEditMode ? "Cập nhật câu hỏi thành công!" : "Tạo mới câu hỏi thành công!");
         navigate("/expert/questions");
       })
       .catch(err => {
         console.error("Failed to save question:", err);
-        alert("Lưu câu hỏi thất bại: " + (err.response?.data?.message || err.message));
+        showError("Lưu câu hỏi thất bại: " + (err.response?.data?.message || err.message));
         setLoading(false);
       });
   };
@@ -547,9 +565,27 @@ export default function QuestionEditorPage() {
         
         {/* Error alert banner */}
         {error && (
-          <div className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center gap-2">
+          <div 
+            ref={errorRef}
+            tabIndex={-1}
+            role="alert" 
+            aria-live="assertive" 
+            className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
+          >
             <span className="material-symbols-outlined">error</span>
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Info/Notification banner */}
+        {infoMessage && (
+          <div 
+            role="status" 
+            aria-live="polite" 
+            className="p-4 mb-6 bg-primary/10 border border-primary/20 text-primary rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
+          >
+            <span className="material-symbols-outlined">info</span>
+            <span>{infoMessage}</span>
           </div>
         )}
 
@@ -565,16 +601,22 @@ export default function QuestionEditorPage() {
               </span>
             </div>
             <h2 className="text-2xl font-bold text-on-background">
-              {isEditMode ? `Chỉnh sửa câu hỏi #${id}` : "Tạo câu hỏi mới"}
+              {isEditMode ? `Chỉnh sửa câu hỏi` : "Tạo câu hỏi mới"}
             </h2>
             <p className="text-xs text-on-surface-variant mt-1">
-              {isEditMode ? `ID: #Q-${id}` : "ID: Sẽ cấp tự động"} • Lưu lần cuối: Vừa xong
+              {isEditMode ? (
+                <>
+                  ID: <span className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-[10px] text-primary font-bold">#Q-{id}</span>
+                </>
+              ) : (
+                "ID: Sẽ cấp tự động"
+              )} • Lưu lần cuối: Vừa xong
             </p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="normal-case h-9 text-xs" onClick={() => navigate("/expert/questions")}>Hủy</Button>
+            <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => navigate("/expert/questions")}>Hủy</Button>
             <Button 
-              className="normal-case h-9 text-xs" 
+              className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" 
               onClick={handleSaveQuestion}
               disabled={loading}
             >
@@ -590,7 +632,7 @@ export default function QuestionEditorPage() {
           <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
             
             {/* Content Area Container */}
-            <div className="bg-pure-surface rounded-2xl border border-whisper-border p-6 lg:p-8 diffused-shadow min-h-[500px] flex flex-col gap-6">
+            <div className="bg-pure-surface rounded-xl border border-whisper-border p-6 lg:p-8 diffused-shadow min-h-[500px] flex flex-col gap-6">
               {loading && !form.questionContent && (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -599,7 +641,7 @@ export default function QuestionEditorPage() {
               )}
 
               {/* 1. Thông tin phân loại */}
-              <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant space-y-6 shadow-inner">
+              <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant space-y-6 shadow-inner">
                 <h3 className="text-xs font-black uppercase text-primary tracking-wider border-b border-whisper-border pb-2.5 flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[16px]">label</span>
                   Thông tin phân loại
@@ -651,7 +693,7 @@ export default function QuestionEditorPage() {
                       <input
                         value={form.defaultPoint}
                         onChange={(e) => handleFieldChange("defaultPoint", parseFloat(e.target.value) || 0)}
-                        className="w-full p-2.5 h-10 text-[13px] bg-transparent border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-semibold outline-none"
+                        className="w-full p-2.5 h-10 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-semibold outline-none"
                         type="number"
                         step="0.05"
                         min="0"
@@ -672,7 +714,7 @@ export default function QuestionEditorPage() {
                       <button
                         type="button"
                         onClick={openTopicPanel}
-                        className="w-full min-h-10 border border-outline-variant rounded-xl bg-pure-surface px-3 py-2 text-left flex items-center justify-between gap-3 hover:border-primary/60 transition-colors cursor-pointer"
+                        className="w-full min-h-10 border border-outline-variant rounded-xl bg-pure-surface px-3 py-2 text-left flex items-center justify-between gap-3 hover:border-primary/60 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-150 active:scale-[0.98] outline-none cursor-pointer"
                       >
                         <div className="min-w-0 flex-1">
                           {form.topics.length === 0 ? (
@@ -728,7 +770,7 @@ export default function QuestionEditorPage() {
                         onClick={() => handleFieldChange("questionType", type)}
                         className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150 active:scale-[0.98] cursor-pointer flex-1 text-center min-w-[120px] ${
                           form.questionType === type 
-                            ? "bg-primary text-white shadow-md" 
+                            ? "bg-primary text-white shadow-sm" 
                             : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
                         }`}
                       >
@@ -804,7 +846,7 @@ export default function QuestionEditorPage() {
                               key={idx}
                               type="button"
                               onClick={() => handleInsertLatex(`$${sym.code}$`)}
-                              className="flex items-center gap-2 bg-pure-surface hover:bg-surface-container border border-whisper-border px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                              className="flex items-center gap-2 bg-pure-surface hover:bg-surface-container border border-whisper-border px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 active:scale-[0.96] cursor-pointer"
                             >
                               <div className="scale-90 select-none">
                                 <LatexPreview content={`$${sym.code}$`} />
@@ -825,7 +867,7 @@ export default function QuestionEditorPage() {
                               key={idx}
                               type="button"
                               onClick={() => handleInsertLatex(`$${sym}$`)}
-                              className="flex flex-col items-center justify-center bg-pure-surface hover:bg-surface-container border border-whisper-border min-w-[50px] py-1 rounded-lg text-xs transition-colors cursor-pointer text-center"
+                              className="flex flex-col items-center justify-center bg-pure-surface hover:bg-surface-container border border-whisper-border min-w-[50px] py-1 rounded-lg text-xs transition-all duration-150 active:scale-[0.96] cursor-pointer text-center"
                             >
                               <div className="scale-100 select-none h-6 flex items-center justify-center">
                                 <LatexPreview content={`$${sym}$`} />
@@ -876,9 +918,9 @@ export default function QuestionEditorPage() {
                                 size="sm"
                                 onClick={() => {
                                   handleInsertLatex("$f(x) = x^2 - 2x + 1$");
-                                  alert("Mockup: Đã chuyển đổi công thức toán trong ảnh thành LaTeX $f(x) = x^2 - 2x + 1$");
+                                  showError("Mockup: Đã chuyển đổi công thức toán trong ảnh thành LaTeX $f(x) = x^2 - 2x + 1$");
                                 }}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer"
+                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer active:scale-[0.98] transition-all"
                               >
                                 Chuyển sang LaTeX
                               </Button>
@@ -887,9 +929,9 @@ export default function QuestionEditorPage() {
                                 variant="secondary"
                                 size="sm"
                                 onClick={() => {
-                                  alert("Mockup: Tính năng upload ảnh thật đang chờ tích hợp API lưu trữ. Giao diện hiện tại giữ tệp này làm preview tạm thời.");
+                                  showError("Mockup: Tính năng upload ảnh thật đang chờ tích hợp API lưu trữ. Giao diện hiện tại giữ tệp này làm preview tạm thời.");
                                 }}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer"
+                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer active:scale-[0.98] transition-all"
                               >
                                 Lưu ảnh xem trước
                               </Button>
@@ -939,7 +981,7 @@ export default function QuestionEditorPage() {
                           <input
                             value={opt.content}
                             onChange={(e) => handleOptionContentChange(idx, e.target.value)}
-                            className="w-full bg-transparent border-b border-whisper-border focus:border-primary focus:ring-0 px-0 py-1 text-[14px] font-semibold outline-none"
+                            className="w-full bg-transparent border-b border-outline-variant/60 hover:border-outline-variant/80 focus:border-primary focus:ring-0 px-0 py-1 text-[14px] font-semibold font-mono outline-none transition-all duration-150"
                             type="text"
                             placeholder={`Nhập phương án ${String.fromCharCode(65 + idx)}`}
                           />
@@ -963,7 +1005,7 @@ export default function QuestionEditorPage() {
                             <button
                               type="button"
                               onClick={() => handleRemoveOption(idx)}
-                              className="text-on-surface-variant hover:text-deep-rose cursor-pointer p-1"
+                              className="text-on-surface-variant hover:text-deep-rose cursor-pointer p-1 active:scale-[0.9] transition-all"
                               title="Xóa phương án này"
                             >
                               <span className="material-symbols-outlined text-[18px]">delete</span>
@@ -977,7 +1019,7 @@ export default function QuestionEditorPage() {
                       <button
                         type="button"
                         onClick={handleAddOption}
-                        className="py-2.5 px-4 border border-primary/20 hover:border-primary text-primary hover:bg-primary/5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                        className="py-2.5 px-4 border border-primary/20 hover:border-primary text-primary hover:bg-primary/5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-150 active:scale-[0.98] flex items-center gap-1.5 cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[18px]">add</span>
                         Thêm phương án đáp án
@@ -1115,7 +1157,7 @@ export default function QuestionEditorPage() {
                             <input
                               value={part.correctText || ""}
                               onChange={(e) => handlePartFieldChange(pIdx, "correctText", e.target.value)}
-                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary font-mono font-bold"
+                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-bold outline-none"
                               placeholder="Nhập đáp án text chính xác"
                               type="text"
                             />
@@ -1129,7 +1171,7 @@ export default function QuestionEditorPage() {
                               <input
                                 value={part.correctNumeric !== null ? part.correctNumeric : ""}
                                 onChange={(e) => handlePartFieldChange(pIdx, "correctNumeric", e.target.value)}
-                                className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary font-mono font-bold"
+                                className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-bold outline-none"
                                 placeholder="Nhập giá trị số (VD: 3.14)"
                                 type="number"
                                 step="any"
@@ -1140,7 +1182,7 @@ export default function QuestionEditorPage() {
                               <input
                                 value={part.numericTolerance !== null ? part.numericTolerance : ""}
                                 onChange={(e) => handlePartFieldChange(pIdx, "numericTolerance", e.target.value)}
-                                className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary font-mono"
+                                className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono outline-none"
                                 placeholder="Nhập sai số (VD: 0.01)"
                                 type="number"
                                 step="any"
@@ -1155,7 +1197,7 @@ export default function QuestionEditorPage() {
                             <input
                               value={part.explanation || ""}
                               onChange={(e) => handlePartFieldChange(pIdx, "explanation", e.target.value)}
-                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary"
+                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none font-medium"
                               placeholder="Nhập giải thích ngắn"
                               type="text"
                             />
@@ -1165,7 +1207,7 @@ export default function QuestionEditorPage() {
                             <input
                               value={part.defaultPoint}
                               onChange={(e) => handlePartFieldChange(pIdx, "defaultPoint", e.target.value)}
-                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary"
+                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-semibold outline-none"
                               placeholder="Điểm phụ"
                               type="number"
                               step="0.05"
@@ -1178,7 +1220,7 @@ export default function QuestionEditorPage() {
                     <button
                       type="button"
                       onClick={handleAddCompositePart}
-                      className="w-full py-3 border-2 border-dashed border-outline-variant rounded-xl text-on-surface-variant font-bold text-xs uppercase tracking-wider hover:border-primary hover:text-primary transition-colors flex justify-center items-center gap-2 cursor-pointer"
+                      className="w-full py-3 border-2 border-dashed border-outline-variant rounded-xl text-on-surface-variant font-bold text-xs uppercase tracking-wider hover:border-primary hover:text-primary transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 cursor-pointer outline-none"
                     >
                       <span className="material-symbols-outlined text-[18px]">add</span>
                       Thêm phần câu hỏi phụ (Composite Part)
@@ -1195,7 +1237,7 @@ export default function QuestionEditorPage() {
                   <textarea
                     value={form.solutionContent}
                     onChange={(e) => handleFieldChange("solutionContent", e.target.value)}
-                    className="w-full h-32 p-4 text-[14px] bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 shadow-none resize-none"
+                    className="w-full h-32 p-4 text-[14px] bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 shadow-none resize-none font-mono"
                     placeholder="Nhập lời giải chi tiết giúp học sinh dễ dàng hiểu bài..."
                   />
                 </div>
@@ -1218,7 +1260,7 @@ export default function QuestionEditorPage() {
                         <button
                           type="button"
                           onClick={() => handleFieldChange("pictureUrl", "")}
-                          className="bg-deep-rose text-white p-1.5 rounded-full hover:scale-105 transition-transform cursor-pointer"
+                          className="bg-deep-rose text-white p-1.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
                           title="Xóa ảnh"
                         >
                           <span className="material-symbols-outlined text-[18px]">delete</span>
@@ -1247,7 +1289,7 @@ export default function QuestionEditorPage() {
                       size="sm"
                       disabled={uploading}
                       onClick={() => fileInputRef.current?.click()}
-                      className="gap-1.5 cursor-pointer h-8 text-[11px] font-bold"
+                      className="gap-1.5 cursor-pointer h-8 text-[11px] font-bold active:scale-[0.98] transition-all duration-150"
                     >
                       {uploading ? (
                         <>
@@ -1268,7 +1310,7 @@ export default function QuestionEditorPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleFieldChange("pictureUrl", "")}
-                        className="text-deep-rose border-deep-rose hover:bg-deep-rose/5 h-8 text-[11px] font-bold cursor-pointer"
+                        className="text-deep-rose border-deep-rose hover:bg-deep-rose/5 h-8 text-[11px] font-bold cursor-pointer active:scale-[0.98] transition-all duration-150"
                       >
                         Xóa ảnh
                       </Button>
@@ -1295,7 +1337,7 @@ export default function QuestionEditorPage() {
                       <input
                         value={form.pictureUrl}
                         onChange={(e) => handleFieldChange("pictureUrl", e.target.value)}
-                        className="w-full p-2.5 text-[12px] bg-pure-surface border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
+                        className="w-full p-2.5 text-[12px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono outline-none"
                         placeholder="https://example.com/image.png"
                         type="url"
                       />
@@ -1311,7 +1353,7 @@ export default function QuestionEditorPage() {
           <div className="col-span-12 lg:col-span-4 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto flex flex-col gap-6">
             
             {/* Meta Properties Summary Card */}
-            <div className="bg-pure-surface rounded-2xl border border-whisper-border p-5 lg:p-6 diffused-shadow">
+            <div className="bg-pure-surface rounded-xl border border-whisper-border p-5 lg:p-6 diffused-shadow">
               <h3 className="text-xs font-bold text-on-surface-variant mb-4 tracking-wider flex items-center gap-1.5 border-b border-whisper-border pb-2.5 uppercase">
                 <span className="material-symbols-outlined text-[16px]">tune</span>
                 THUỘC TÍNH CÂU HỎI
@@ -1337,18 +1379,18 @@ export default function QuestionEditorPage() {
                 <div>
                   <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Chủ đề chính:</label>
                   <p className="font-semibold text-[13px] text-on-surface truncate">
-                    {topicList.find(t => t.tagId === form.topics?.[0]?.tagId)?.name || "Chưa chọn"}
+                    {primaryTopic ? getTopicDisplayLabel(primaryTopic) : "Chưa chọn"}
                   </p>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm mặc định:</label>
-                  <p className="font-bold text-[14px] text-on-surface">{form.defaultPoint} điểm</p>
+                  <p className="font-bold text-[14px] text-on-surface font-mono">{form.defaultPoint} điểm</p>
                 </div>
               </div>
             </div>
 
             {/* Live Preview Panel */}
-            <div className="glass-panel rounded-2xl p-5 lg:p-6 relative overflow-hidden flex flex-col h-[400px]">
+            <div className="glass-panel rounded-xl p-5 lg:p-6 relative overflow-hidden flex flex-col h-[400px]">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
               
               <h3 className="text-xs font-bold text-primary mb-4 tracking-wider flex items-center gap-1.5 relative z-10 uppercase">
@@ -1473,7 +1515,10 @@ export default function QuestionEditorPage() {
             onClick={closeTopicPanel}
           />
 
-          <section className={`relative z-10 h-full w-full max-w-xl bg-pure-surface shadow-2xl border-l border-whisper-border flex flex-col ${isTopicPanelClosing ? "mi-drawer-out" : "mi-drawer-in"}`}>
+          <section 
+            id="topic-drawer-section"
+            className={`relative z-10 h-full w-full max-w-xl bg-pure-surface border-l border-whisper-border diffused-shadow flex flex-col ${isTopicPanelClosing ? "mi-drawer-out" : "mi-drawer-in"}`}
+          >
             {/* Header */}
             <header className="px-5 py-4 border-b border-whisper-border flex items-start justify-between gap-3">
               <div>
@@ -1497,6 +1542,22 @@ export default function QuestionEditorPage() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </header>
+
+            {/* Error banner inside Drawer */}
+            {error && (
+              <div className="px-5 pt-3">
+                <div 
+                  ref={drawerErrorRef}
+                  tabIndex={-1}
+                  role="alert" 
+                  aria-live="assertive" 
+                  className="p-3 bg-error/10 border border-error/20 text-error rounded-xl text-xs font-semibold flex items-center gap-2 outline-none"
+                >
+                  <span className="material-symbols-outlined text-[14px]">error</span>
+                  <span>{error}</span>
+                </div>
+              </div>
+            )}
 
             {/* Selected Summary */}
             <div className="px-5 py-3 border-b border-whisper-border bg-surface-container-lowest">
