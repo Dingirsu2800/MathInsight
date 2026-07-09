@@ -21,13 +21,13 @@
 
 ## Phase 2: Core Domain Logic
 
-- [ ] **TopicResultIngestionHandler**:
-  - [ ] Receive graded per-topic results from Grading module.
-  - [ ] Insert `StudentTopicSessionResult` per `(session_id, tag_id)`.
-  - [ ] Skip duplicate `(session_id, tag_id)` rows to keep update idempotent.
+- [x] **TopicResultIngestionHandler**:
+  - [x] Receive graded per-topic results from Grading module.
+  - [x] Insert `StudentTopicSessionResult` per `(session_id, tag_id)`.
+  - [x] Skip duplicate `(session_id, tag_id)` rows to keep update idempotent.
 
-- [ ] **CompetencyEngine**:
-  - [ ] `UpdateTagsMasteryFromSessionResult(studentId, tagId, topicScore, testMode, answers)`:
+- [x] **CompetencyEngine**:
+  - [x] `UpdateTagsMasteryFromSessionResult(studentId, tagId, topicScore, testMode, answers)`:
     - Upsert `TagsMastery(student_id, tag_id)`.
     - Update `number_done`, `num_correct`, `accuracy_rate`.
     - If official/exam result (TestFormat == "Exam"): update `exam_anchor` using Exponential Decay (RCM-05):
@@ -44,46 +44,46 @@
     - Recalculate `recommended_difficulty_level`.
     - Update `mastery_status`: `NotLearned`, `Learning`, `Mastered`.
     - Update `last_calculated_at`.
-  - [ ] Clamp all points to `0.00..10.00`.
-  - [ ] **Lazy-create** `TagsMastery` when no row exists for `(student_id, tag_id)` (U3 — RCM no-history rule):
+  - [x] Clamp all points to `0.00..10.00`.
+  - [x] **Lazy-create** `TagsMastery` when no row exists for `(student_id, tag_id)` (U3 — RCM no-history rule):
     - Insert with `official_point = 5.00`, `practice_point = 5.00`, `exam_anchor = 5.00`.
     - Set `mastery_status = NotLearned`, `number_done = 0`, `series_answer_count = 0`.
-  - [ ] Update `mastery_status` using RCM-13 thresholds after each update:
+  - [x] Update `mastery_status` using RCM-13 thresholds after each update:
     - `number_done = 0` → `NotLearned`
     - `number_done > 0` AND `official_point < 7.50` → `Learning`
     - `official_point >= 7.50` → `Mastered`
 
-- [ ] **Practice Series Logic**:
-  - [ ] When `series_answer_count >= 10`, blend:
+- [x] **Practice Series Logic**:
+  - [x] When `series_answer_count >= 10`, blend:
     - `official_point = 0.7 * exam_anchor + 0.3 * practice_point`
     - `practice_point = official_point`
     - `series_answer_count = 0`
 
-- [ ] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
-  - [ ] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level. Query `Student.current_grade` from the Identity module cross-schema (F5 resolution).
-  - [ ] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
-  - [ ] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
+- [x] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
+  - [x] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level. Query `Student.current_grade` from the Identity module cross-schema (F5 resolution).
+  - [x] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
+  - [x] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
 
-- [ ] **DifficultyMappingService**:
-  - [ ] `MapFromOfficialPoint(officialPoint)` returns level `1..4` (RCM-07).
-  - [ ] `IsWeak(officialPoint)` returns true when `< 5.00`.
-  - [ ] `IsRemedial(recommendedDifficultyLevel)` returns true when level `1` and weak.
-  - [ ] Cross-module contract: `WeakTagAdviceDto.RecommendedDifficultyLevel` is a level integer `1..4`.
+- [x] **DifficultyMappingService**:
+  - [x] `MapFromOfficialPoint(officialPoint)` returns level `1..4` (RCM-07).
+  - [x] `IsWeak(officialPoint)` returns true when `< 5.00`.
+  - [x] `IsRemedial(recommendedDifficultyLevel)` returns true when level `1` and weak.
+  - [x] Cross-module contract: `WeakTagAdviceDto.RecommendedDifficultyLevel` is a level integer `1..4`.
     - Consumers (TestGen) **must not** use this value directly as a `difficulty_id` (PK of `TagDifficulty`).
     - Resolution: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`.
     - This mapping is stable because `TagDifficulty.LevelValue` has a UNIQUE constraint (BR-63).
 
-- [ ] **RecommenderService**:
-  - [ ] `GetStudentWeakTagsAsync(studentId)` reads `TagsMastery` where `official_point < 5.00`.
+- [x] **RecommenderService**:
+  - [x] `GetStudentWeakTagsAsync(studentId)` reads `TagsMastery` where `official_point < 5.00`.
     - **WeakTag tag type**: `TagsMastery.TagId` refers to `TagTopic` (topic tags). WeakTag evaluation is always per-topic, not per-difficulty.
     - **No-row behavior (MVP)**: Topics with no `TagsMastery` row are **not** returned as weak. They stay neutral until the first graded data point triggers lazy-create (see Phase 2 → CompetencyEngine → Lazy-create task). A newly created row starts at `official_point = 5.00` (above the `< 5.00` weak threshold), so it will not appear in WeakTags until real grading data lowers the score.
-  - [ ] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
-  - [ ] Keep SQL-only implementation for MVP; Redis cache is optional later.
+  - [x] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
+  - [x] Keep SQL-only implementation for MVP; Redis cache is optional later.
 
-- [ ] **Recommendation Queries**:
-  - [ ] `GetWeakTagsQuery` - UC-52.
-  - [ ] `GetRecommendedLecturesQuery` - UC-53: match `Lecture.TagID` to weak `TagID`; remedial topics sorted first.
-  - [ ] `GetRecommendedMaterialsQuery` - UC-54: match materials through `LectureMaterial`; remedial topics sorted first.
+- [x] **Recommendation Queries**:
+  - [x] `GetWeakTagsQuery` - UC-52.
+  - [x] `GetRecommendedLecturesQuery` - UC-53: match `Lecture.TagID` to weak `TagID`; remedial topics sorted first.
+  - [x] `GetRecommendedMaterialsQuery` - UC-54: match materials through `LectureMaterial`; remedial topics sorted first.
 
 ---
 
