@@ -26,7 +26,8 @@ public class GetTagDifficultiesQueryHandler : IRequestHandler<GetTagDifficulties
                 tag.DifficultyName,
                 tag.Description,
                 tag.LevelValue,
-                tag.DisplayOrder
+                tag.DisplayOrder,
+                tag.IsActive
             ))
             .ToListAsync(cancellationToken);
     }

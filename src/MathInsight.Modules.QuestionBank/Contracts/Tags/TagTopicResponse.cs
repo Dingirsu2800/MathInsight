@@ -8,5 +8,6 @@ public sealed class TagTopicResponse
     public string? Description { get; set; }
     public int Grade { get; set; }
     public int DisplayOrder { get; set; }
+    public bool IsActive { get; set; }
     public List<TagTopicResponse> Children { get; set; } = [];
 }

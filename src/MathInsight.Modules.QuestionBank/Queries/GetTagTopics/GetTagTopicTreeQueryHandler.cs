@@ -46,6 +46,7 @@ public class GetTagTopicTreeQueryHandler : IRequestHandler<GetTagTopicTreeQuery,
                 topic.Description,
                 topic.Grade,
                 topic.DisplayOrder,
+                topic.IsActive,
                 children
             );
         }

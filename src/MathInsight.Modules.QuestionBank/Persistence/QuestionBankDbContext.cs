@@ -19,6 +19,7 @@ public class QuestionBankDbContext : DbContext
     public DbSet<TagDifficulty> TagDifficulties => Set<TagDifficulty>();
     public DbSet<TagTopic> TagTopics => Set<TagTopic>();
     public DbSet<AccountReadModel> AccountReadModels => Set<AccountReadModel>();
+    public DbSet<TestQuestionReadModel> TestQuestionReadModels => Set<TestQuestionReadModel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

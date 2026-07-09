@@ -6,5 +6,6 @@ public sealed record TagDifficultyResponse
     string DifficultyName,
     string? Description,
     int LevelValue,
-    int DisplayOrder
+    int DisplayOrder,
+    bool IsActive
 );

@@ -7,5 +7,6 @@ public sealed record TagTopicTreeResponse(
     string? Description,
     int Grade,
     int DisplayOrder,
+    bool IsActive,
     IReadOnlyList<TagTopicTreeResponse> Children
 );

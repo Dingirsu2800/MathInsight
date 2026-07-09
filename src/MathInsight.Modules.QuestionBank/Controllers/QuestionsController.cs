@@ -11,6 +11,8 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using MathInsight.Modules.QuestionBank.Commands.DeleteQuestion;
+using MathInsight.Modules.QuestionBank.Commands.ToggleQuestionActive;
 
 namespace MathInsight.Modules.QuestionBank.Controllers;
 
@@ -145,5 +147,65 @@ public class QuestionsController : ControllerBase
         }
 
         return Ok(result.Value);
+    }
+
+    [HttpPut("{questionId}/active")]
+    public async Task<IActionResult> ToggleQuestionActive(
+        string questionId,
+        [FromBody] ToggleQuestionActiveRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(QuestionBankErrors.QuestionRequestInvalid));
+
+        var expertId = User.FindFirst("account_id")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new ToggleQuestionActiveCommand(questionId, request.IsActive, expertId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToQuestionMutationErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
+    [HttpDelete("{questionId}")]
+    public async Task<IActionResult> DeleteQuestion(
+        string questionId,
+        CancellationToken cancellationToken)
+    {
+        var expertId = User.FindFirst("account_id")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new DeleteQuestionCommand(questionId, expertId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToQuestionMutationErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
+    private IActionResult ToQuestionMutationErrorResult(Error error)
+    {
+        if (error == QuestionBankErrors.QuestionNotFound)
+            return NotFound(new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.QuestionMutationForbidden)
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.QuestionInUse)
+            return Conflict(new ApiErrorResponse(error));
+
+        return BadRequest(new ApiErrorResponse(error));
     }
 }
