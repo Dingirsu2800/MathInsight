@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../../utils/cn";
+import client from "../../services/questionBankApiClient";
 
 export default function ExpertLayout({ children }) {
   const location = useLocation();
@@ -103,13 +104,23 @@ export default function ExpertLayout({ children }) {
             <span className="material-symbols-outlined">help</span>
             <span className="text-[14px]">Trợ giúp</span>
           </a>
-          <Link
-            to="/login"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-error hover:bg-error/10 transition-colors"
+          <button
+            onClick={async () => {
+              try {
+                await client.post("/api/v1/auth/logout");
+              } catch (err) {
+                console.error("Lỗi đăng xuất hệ thống:", err);
+              } finally {
+                localStorage.removeItem("token");
+                localStorage.removeItem("access_token");
+                navigate("/login");
+              }
+            }}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-error hover:bg-error/10 transition-colors w-full text-left cursor-pointer border-0 bg-transparent outline-none font-body"
           >
             <span className="material-symbols-outlined">logout</span>
             <span className="text-[14px] font-bold">Đăng xuất</span>
-          </Link>
+          </button>
         </div>
       </aside>
 
