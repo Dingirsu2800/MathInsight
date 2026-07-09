@@ -31,7 +31,7 @@ public static class RecommenderModuleExtensions
         services.AddSingleton<IDifficultyMappingService, DifficultyMappingService>();
         services.AddScoped<IRecommenderService, RecommenderService>();
 
-        // Phase 3: RecommenderController registered via MapControllers in WebAPI.
+        // RecommenderController is auto-discovered by AddControllers() in WebAPI.
 
         return services;
     }

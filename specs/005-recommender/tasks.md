@@ -89,14 +89,14 @@
 
 ## Phase 3: Controller and Routing
 
-- [ ] `RecommenderController` - StudentOnly:
-  - [ ] `GET /api/v1/recommender/weak-tags`
-  - [ ] `GET /api/v1/recommender/lectures`
-  - [ ] `GET /api/v1/recommender/materials`
-  - [ ] Enforce `[Authorize(Roles = "Student")]` on all three endpoints (G2).
-- [ ] Register inside `RecommenderModuleExtensions.cs`:
+- [x] `RecommenderController` - StudentOnly:
+  - [x] `GET /api/v1/recommender/weak-tags`
+  - [x] `GET /api/v1/recommender/lectures`
+  - [x] `GET /api/v1/recommender/materials`
+  - [x] Enforce `[Authorize(Roles = "Student")]` on all three endpoints (G2).
+- [x] Register inside `RecommenderModuleExtensions.cs`:
   - DbContext, CompetencyEngine, DifficultyMappingService, RecommenderService, MediatR handlers.
-- [ ] Do not require Redis, Python, SAR, Hangfire, or separate recommender service for MVP.
+- [x] Do not require Redis, Python, SAR, Hangfire, or separate recommender service for MVP.
 
 ---
 
