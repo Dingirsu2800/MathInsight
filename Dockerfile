@@ -23,7 +23,7 @@ COPY src/MathInsight.Modules.TestGen/MathInsight.Modules.TestGen.csproj src/Math
 RUN dotnet restore src/MathInsight.WebAPI/MathInsight.WebAPI.csproj
 
 COPY . .
-RUN dotnet publish src/MathInsight.WebAPI/MathInsight.WebAPI.csproj -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish src/MathInsight.WebAPI/MathInsight.WebAPI.csproj -c Release -o /app/publish /p:UseAppHost=false --no-restore
 
 FROM runtime AS final
 WORKDIR /app

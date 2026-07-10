@@ -9,7 +9,13 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, Di
 import { CustomSelect } from "../../components/ui/custom-select";
 import { questionBankApi } from "../../services/questionBankApi";
 import { mapQuestionListItemToViewModel, mapQuestionDetailToViewModel, flattenTopicTree } from "./questionMappers";
-import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/questionLabels";
+import {
+  getQuestionTypeLabel,
+  getQuestionPartTypeLabel,
+  getQuestionStatusLabel,
+  getQuestionTypeShortLabel,
+  getQuestionStatusVariant
+} from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function QuestionBankListPage() {
@@ -386,10 +392,10 @@ export default function QuestionBankListPage() {
                 placeholder="Trạng thái"
                 items={[
                   { value: "ALL", label: "Tất cả trạng thái" },
-                  { value: "APPROVED", label: "Approved" },
-                  { value: "REPORTED", label: "Reported" },
-                  { value: "REJECTED", label: "Rejected" },
-                  { value: "DEACTIVATED", label: "Deactivated" }
+                  { value: "APPROVED", label: "Đã duyệt" },
+                  { value: "REPORTED", label: "Bị báo cáo" },
+                  { value: "REJECTED", label: "Từ chối" },
+                  { value: "DEACTIVATED", label: "Ngừng sử dụng" }
                 ]}
               />
             </div>
@@ -441,10 +447,9 @@ export default function QuestionBankListPage() {
             <table className="w-full text-left border-collapse">
               <thead className="bg-surface-container-low border-b border-whisper-border">
                 <tr className="text-on-surface-variant uppercase text-[11px] font-bold tracking-wider">
-                  <th className="py-3 px-4 w-16 text-center">ID</th>
                   <th className="py-3 px-4 max-w-md">Nội dung câu hỏi (Preview)</th>
                   <th className="py-3 px-4 w-48">Thuộc tính</th>
-                  <th className="py-3 px-4 w-40">Loại</th>
+                  <th className="py-3 px-4 w-32">Loại</th>
                   <th className="py-3 px-4 w-36">Trạng thái</th>
                   <th className="py-3 px-4 w-20 text-center">Điểm</th>
                   <th className="py-3 px-4 w-32 text-right">Thao tác</th>
@@ -453,7 +458,7 @@ export default function QuestionBankListPage() {
               <tbody className="divide-y divide-whisper-border bg-pure-surface text-[14px]">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center text-on-surface-variant">
+                    <td colSpan={6} className="py-20 text-center text-on-surface-variant">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                         <span>Đang tải danh sách câu hỏi...</span>
@@ -462,7 +467,7 @@ export default function QuestionBankListPage() {
                   </tr>
                 ) : filteredQuestions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-on-surface-variant">
+                    <td colSpan={6} className="py-12 text-center text-on-surface-variant">
                       <div className="flex flex-col items-center gap-2">
                         <span className="material-symbols-outlined text-[36px] text-outline-variant">search_off</span>
                         Không tìm thấy câu hỏi phù hợp.
@@ -472,12 +477,14 @@ export default function QuestionBankListPage() {
                 ) : (
                   filteredQuestions.map((q) => (
                     <tr key={q.id} className="hover:bg-surface-bright transition-all group duration-150">
-                      <td className="py-4 px-4 font-mono font-bold text-center text-on-surface-variant">
-                        #{q.id}
-                      </td>
                       <td className="py-4 px-4 max-w-md">
-                        <div className="truncate font-semibold text-on-surface" title={q.content}>
-                          {q.content}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded font-bold">
+                            Q-{q.id}
+                          </span>
+                        </div>
+                        <div className="font-semibold text-on-surface text-[13px] leading-relaxed mi-line-clamp-2" title={q.content}>
+                          <LatexPreview content={q.content} />
                         </div>
                       </td>
                       <td className="py-4 px-4">
@@ -504,21 +511,22 @@ export default function QuestionBankListPage() {
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        <span className="font-semibold text-xs text-on-secondary-fixed bg-surface-container-high px-2.5 py-1 rounded-md border border-whisper-border">
-                          {getQuestionTypeLabel(q.type)}
+                        <span className="inline-flex whitespace-nowrap font-semibold text-xs text-on-secondary-fixed bg-surface-container-high px-2.5 py-1 rounded-md border border-whisper-border">
+                          {getQuestionTypeShortLabel(q.type)}
                         </span>
                       </td>
                       <td className="py-4 px-4">
-                        <Badge variant={q.status}>{q.status}</Badge>
+                        <Badge variant={getQuestionStatusVariant(q.status)}>{getQuestionStatusLabel(q.status)}</Badge>
                       </td>
                       <td className="py-4 px-4 font-bold text-center text-on-surface">
                         {q.points}
                       </td>
                       <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
                           <button
                             onClick={() => handleOpenPreview(q)}
                             className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                            aria-label="Xem chi tiết câu hỏi"
                             title="Xem chi tiết"
                           >
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
@@ -526,6 +534,7 @@ export default function QuestionBankListPage() {
                           <button
                             onClick={() => navigate(`/expert/questions/${q.id}/edit`)}
                             className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                            aria-label="Chỉnh sửa câu hỏi"
                             title="Chỉnh sửa"
                           >
                             <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -536,6 +545,7 @@ export default function QuestionBankListPage() {
                               setIsHistoryOpen(true);
                             }}
                             className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                            aria-label="Xem lịch sử phiên bản"
                             title="Lịch sử"
                           >
                             <span className="material-symbols-outlined text-[18px]">history</span>
@@ -588,7 +598,7 @@ export default function QuestionBankListPage() {
             <DialogHeader>
               <div className="flex items-center gap-2 mb-1">
                 <Badge variant="primary">Q-{selectedQuestion.id}</Badge>
-                <Badge variant={selectedQuestion.status}>{selectedQuestion.status}</Badge>
+                <Badge variant={getQuestionStatusVariant(selectedQuestion.status)}>{getQuestionStatusLabel(selectedQuestion.status)}</Badge>
               </div>
               <DialogTitle>Chi tiết Câu hỏi</DialogTitle>
               <DialogDescription>Xem thông tin chi tiết cấu hình câu hỏi môn Toán học.</DialogDescription>
@@ -717,9 +727,10 @@ export default function QuestionBankListPage() {
                             )}
 
                             {part.explanation && (
-                              <p className="text-[11px] text-on-surface-variant italic mt-1.5 border-t border-dashed border-whisper-border pt-1">
-                                Lời giải phụ: {part.explanation}
-                              </p>
+                              <div className="text-[11px] text-on-surface-variant mt-1.5 border-t border-dashed border-whisper-border pt-1">
+                                <span className="font-semibold mr-1">Lời giải phụ:</span>
+                                <LatexPreview content={part.explanation} />
+                              </div>
                             )}
                           </div>
                         ))}

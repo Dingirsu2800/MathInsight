@@ -10,6 +10,9 @@ obj/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.example.json
+*.csproj.user
+*.csproj.User
+*.user
 
 # Local AI assistant / IDE agent state
 .codex/*
