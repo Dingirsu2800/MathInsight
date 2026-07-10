@@ -3,4 +3,5 @@ using MediatR;
 
 namespace MathInsight.Modules.QuestionBank.Queries.GetTagDifficulties;
 
-public sealed record GetTagDifficultiesQuery() : IRequest<IReadOnlyList<TagDifficultyResponse>>;
+public sealed record GetTagDifficultiesQuery(bool IncludeInactive = false)
+    : IRequest<IReadOnlyList<TagDifficultyResponse>>;

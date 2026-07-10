@@ -215,4 +215,8 @@ public static class QuestionBankErrors
     public static readonly Error TagLevelValueDuplicate = new(
         "TAG_LEVEL_VALUE_DUPLICATE",
         "Difficulty level value already exists.");
+
+    public static readonly Error TagTopicHasActiveDescendants = new(
+        "TAG_TOPIC_HAS_ACTIVE_DESCENDANTS",
+        "Topic has active descendant topics and cannot be deactivated.");
 }

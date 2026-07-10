@@ -1,3 +1,4 @@
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Tags;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
@@ -85,6 +86,12 @@ public sealed class UpdateTagTopicCommandHandler
                     .FirstOrDefault(existing => existing.TagId == ancestorId)
                     ?.ParentTagId;
             }
+        }
+
+        if (topic.IsActive && !request.IsActive &&
+            await TagTopicHierarchyRules.HasActiveDescendantAsync(_context, topic.TagId, cancellationToken))
+        {
+            return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagTopicHasActiveDescendants);
         }
 
         topic.ParentTagId = normalizedParentId;

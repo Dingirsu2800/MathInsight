@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-question-bank`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-03
+**Created**: 2026-06-23 | **Updated**: 2026-07-10
 
 **Status**: Approved
 
@@ -41,14 +41,14 @@
 - **Duplicate question**: System detects near-match via content hash → HTTP 409 with link to existing question.
 - **Empty answers list**: SingleChoice / MultipleSelect must have at least one correct answer → HTTP 400.
 - **Tag not found**: Assigning a non-existent `tag_id` → HTTP 422.
-- **Question in active test**: Cannot hard-delete or deactivate a question used in existing `TestQuestion` records → HTTP 409.
+- **Question in test history**: Cannot hard-delete or deactivate a question used in any existing `TestQuestion` record → HTTP 409 (`QUESTION_IN_USE`).
 - **Unsupported content format**: If `question_content` contains unsafe HTML, unsupported embedded content, or malformed rich-text payload → reject with HTTP 422 (frontend pre-validates; backend sanitizes/logs).
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **DC-02**: Entities cannot be hard-deleted if referenced in test sessions or blueprints. Soft delete enforced via `is_active = false` or `status = REJECTED/ARCHIVED`.
+- **DC-02**: Referential history is protected. Taxonomy tags are soft-disabled through `IsActive = false` to preserve QuestionBank/TestGen/Recommender references. A Question with any existing `TestQuestion` reference cannot be hard-deleted or deactivated and returns HTTP 409 (`QUESTION_IN_USE`); an unreferenced Question may be hard-deleted.
 - **BR-04**: Mathematical questions and solutions must be entered through a user-friendly rich-text/WYSIWYG editor. Experts are not required to know or type technical markup syntax. The editor may provide toolbar-based math symbols, superscript/subscript, fractions, tables, and optional image upload for diagrams or complex formulas.
 - **BR-05**: A newly created question must be assigned at least one **Topic** tag and one **Difficulty** tag before saving.
 - **BR-50**: Each `SINGLE_CHOICE` question must have **exactly one** correct answer. `MULTIPLE_SELECT` must have **at least one** correct answer.
@@ -68,6 +68,8 @@
 - **BR-53**: File import (Excel/Word) must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows.
 - **BR-63**: `TagDifficulty.LevelValue` is the stable cross-module difficulty contract. Values should be unique and normally map to Recommender v2 `RecommendedDifficultyLevel` values `1..4`. Question Bank owns `Question.DifficultyID`; Recommender v2 owns only student-topic mastery and does not store Ptag per difficulty.
 - **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.
+- **BR-65**: Tag list APIs return only active records by default. Expert tag management may request inactive records with `includeInactive=true`; each response retains its `IsActive` state.
+- **BR-66**: A topic cannot be soft-disabled while it has an active descendant at any depth. The operation returns HTTP 409 (`TAG_TOPIC_HAS_ACTIVE_DESCENDANTS`) and leaves the topic unchanged.
 
 ### Accepted Question Types
 

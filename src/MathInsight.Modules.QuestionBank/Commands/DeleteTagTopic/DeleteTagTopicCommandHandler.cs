@@ -1,3 +1,4 @@
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Tags;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
@@ -29,6 +30,12 @@ public sealed class DeleteTagTopicCommandHandler
 
         if (topic is null)
             return Result<DeleteTagResponse>.Failure(QuestionBankErrors.TagTopicNotFound);
+
+        if (topic.IsActive &&
+            await TagTopicHierarchyRules.HasActiveDescendantAsync(_context, topic.TagId, cancellationToken))
+        {
+            return Result<DeleteTagResponse>.Failure(QuestionBankErrors.TagTopicHasActiveDescendants);
+        }
 
         topic.IsActive = false;
         await _context.SaveChangesAsync(cancellationToken);

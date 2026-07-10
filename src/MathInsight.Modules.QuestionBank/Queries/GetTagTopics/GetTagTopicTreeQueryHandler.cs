@@ -16,9 +16,12 @@ public class GetTagTopicTreeQueryHandler : IRequestHandler<GetTagTopicTreeQuery,
 
     public async Task<IReadOnlyList<TagTopicTreeResponse>> Handle(GetTagTopicTreeQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.TagTopics
-        .AsNoTracking()
-        .Where(topic => topic.IsActive);
+        var query = _context.TagTopics.AsNoTracking();
+
+        if (!request.IncludeInactive)
+        {
+            query = query.Where(topic => topic.IsActive);
+        }
 
         if (request.Grade is not null)
         {

@@ -28,7 +28,7 @@
   - [x] `CreateQuestionCommand` — validate non-empty sanitized content, >=1 Topic + >=1 Difficulty tag, answer constraints per type, `Composite` part constraints, set `status = APPROVED` for Expert creator (BR-55)
   - [x] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` (BR-54); validate constraints
   - [x] `ToggleQuestionActiveCommand` — check existing `TestQuestion` records (DC-02)
-  - [x] `DeleteQuestionCommand` — hard-delete if no test references; soft-delete otherwise (DC-02)
+  - [x] `DeleteQuestionCommand` — hard-delete if no `TestQuestion` reference; otherwise return `QUESTION_IN_USE` / HTTP 409 without mutation (DC-02)
   - [ ] `AdminApproveQuestionCommand` — set `status = APPROVED`
   - [ ] `AdminRejectQuestionCommand` — set `status = REJECTED`; requires non-empty reject reason
 - [ ] **Report Commands**:
@@ -39,13 +39,13 @@
   - [x] `CreateTagTopicCommand` — assign `parent_tag_id`, validate grade
   - [x] `CreateTagDifficultyCommand` — validate UNIQUE `level_value`; for MVP seed/accept normal levels `1..4` so Recommender `RecommendedDifficultyLevel` can resolve deterministically
   - [x] `UpdateTagCommand` — keep topic structure and difficulty `level_value` immutable after creation
-  - [x] `DeleteTagCommand` — soft-delete taxonomy tags (`is_active = false`) to avoid FK conflicts with QuestionBank/TestGen/Recommender references (DC-02)
+  - [x] `DeleteTagCommand` — soft-delete taxonomy tags (`is_active = false`) to avoid FK conflicts; topic delete/deactivation is blocked when an active descendant exists (DC-02, BR-66)
 - [ ] **Queries**:
   - [ ] `GetDashboardQuery` — count by `status`, `question_type`, `grade`; return last 5 reports
   - [x] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
   - [x] `GetQuestionVersionsQuery` — ordered by `created_time` DESC
   - [ ] `GetReportedQuestionsQuery` — filter by `reporter_account_id` = current Expert's questions
-  - [x] `GetTagListQuery`/tag queries — return hierarchical topic tree + flat difficulty list
+  - [x] `GetTagListQuery`/tag queries — return hierarchical topic tree + flat difficulty list; active-only by default and support `includeInactive=true` (BR-65)
 - [ ] **Cross-module read contract**:
   - [ ] Provide/query by `QuestionTopic.TagID` + `Question.DifficultyID` + optional `Question.QuestionType` for TestGen.
   - [ ] For `Composite` questions, provide `QuestionPart` rows to Testing/Grading, but hide `correct_*` answer-key fields from student-facing test payloads before grading.
@@ -83,11 +83,13 @@
   - [ ] UC-21: API enum `TRUE_FALSE` persists as DB value `TrueFalse`; `MULTIPLE_SELECT` persists as `MultipleChoice`; `COMPOSITE` persists as `Composite`
   - [ ] UC-21: Create SHORT_ANSWER with rich-text/image content in correct field -> 400 (BR-61)
   - [ ] UC-25: Update APPROVED question -> QuestionVersion created before update (BR-54)
-  - [ ] UC-27: Delete question used in test_questions -> soft-delete (`is_active = false`, `status = Deactivated`) (DC-02)
+  - [x] UC-27: Delete/deactivate question used in `TestQuestion` -> `QUESTION_IN_USE` / 409 with no data mutation (DC-02)
   - [ ] UC-28: Student report -> QuestionReport created, question status unchanged (BR-58)
   - [ ] UC-28: Teacher attempts to report -> 403 (BR-59)
   - [ ] UC-31/32: Admin approve/reject -> status transitions correct
   - [ ] UC-23: Import 10 questions from Excel -> all created, invalid rows rejected
   - [ ] UC-38: Delete tag with linked questions -> soft-delete (`is_active = false`) (DC-02)
+  - [x] UC-38: Disable/delete topic with active descendant -> `TAG_TOPIC_HAS_ACTIVE_DESCENDANTS` / 409 with no data mutation (BR-66)
+  - [x] UC-34: Tag queries exclude inactive records by default and return them with `includeInactive=true` (BR-65)
   - [ ] Recommender/TestGen contract: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2` and returns matching `Question.DifficultyID`
   - [ ] TestGen query contract: approved active questions can be filtered by `QuestionTopic.TagID`, `Question.DifficultyID`, and section `Question.QuestionType`

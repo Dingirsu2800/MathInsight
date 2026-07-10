@@ -46,15 +46,7 @@ public sealed class DeleteQuestionCommandHandler
                 cancellationToken);
 
         if (isUsedInTest)
-        {
-            question.IsActive = false;
-            question.Status = "Deactivated";
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            return Result<DeleteQuestionResponse>.Success(
-                new DeleteQuestionResponse(question.QuestionId, "SoftDeleted", question.IsActive, question.Status));
-        }
+            return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionInUse);
 
         _context.QuestionReports.RemoveRange(question.Reports);
         _context.QuestionVersions.RemoveRange(question.Versions);

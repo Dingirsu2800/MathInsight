@@ -29,9 +29,11 @@ public class TagsController : ControllerBase
     }
 
     [HttpGet("difficulties")]
-    public async Task<IActionResult> GetDifficulties(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetDifficulties(
+        CancellationToken cancellationToken,
+        [FromQuery] bool includeInactive = false)
     {
-        var result = await _mediator.Send(new GetTagDifficultiesQuery(), cancellationToken);
+        var result = await _mediator.Send(new GetTagDifficultiesQuery(includeInactive), cancellationToken);
         return Ok(result);
     }
 
@@ -82,9 +84,12 @@ public class TagsController : ControllerBase
     }
 
     [HttpGet("topics")]
-    public async Task<IActionResult> GetTopics([FromQuery] int? grade, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetTopics(
+        [FromQuery] int? grade,
+        CancellationToken cancellationToken,
+        [FromQuery] bool includeInactive = false)
     {
-        var result = await _mediator.Send(new GetTagTopicTreeQuery(grade), cancellationToken);
+        var result = await _mediator.Send(new GetTagTopicTreeQuery(grade, includeInactive), cancellationToken);
         return Ok(result);
     }
 
@@ -144,7 +149,8 @@ public class TagsController : ControllerBase
         }
 
         if (error == QuestionBankErrors.TagNameDuplicate ||
-            error == QuestionBankErrors.TagLevelValueDuplicate)
+            error == QuestionBankErrors.TagLevelValueDuplicate ||
+            error == QuestionBankErrors.TagTopicHasActiveDescendants)
         {
             return Conflict(new ApiErrorResponse(error));
         }
