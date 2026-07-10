@@ -102,29 +102,29 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` - zero compile errors.
-- [ ] Unit tests:
-  - [ ] `official_point = 0.7 * exam_anchor + 0.3 * practice_point`.
-  - [ ] `official_point < 5.00` returns WeakTag.
-  - [ ] Difficulty mapping: `2.99 -> 1`, `3.00 -> 2`, `4.99 -> 2`, `5.00 -> 3`, `7.49 -> 3`, `7.50 -> 4`.
-  - [ ] Practice series count `10` resets `practice_point` and `series_answer_count`.
-  - [ ] **exam_anchor — Exponential Decay**:
+- [x] `dotnet build` - zero compile errors.
+- [x] Unit tests:
+  - [x] `official_point = 0.7 * exam_anchor + 0.3 * practice_point`.
+  - [x] `official_point < 5.00` returns WeakTag.
+  - [x] Difficulty mapping: `2.99 -> 1`, `3.00 -> 2`, `4.99 -> 2`, `5.00 -> 3`, `7.49 -> 3`, `7.50 -> 4`.
+  - [x] Practice series count `10` resets `practice_point` and `series_answer_count`.
+  - [x] **exam_anchor — Exponential Decay**:
     - 1 result: `exam_anchor = T1`.
     - 2 results: `exam_anchor = (T1 + 0.8×T2) / (1 + 0.8)`.
     - 5 results: weights `1.0, 0.8, 0.64, 0.512, 0.410`; older result beyond k=5 is ignored.
     - `exam_history` is capped at 5 entries after each update.
-  - [ ] **practice_point — Elo formula**:
+  - [x] **practice_point — Elo formula**:
     - Correct, level 2 (`w_D=1.0`), normal time: `Δ = +0.05`.
     - Wrong, level 1 (`w_D=0.5`), normal time: `Δ = −0.05×(5−0.5) = −0.225`.
     - Wrong, level 4 (`w_D=2.0`), normal time: `Δ = −0.05×(5−2.0) = −0.150`.
     - Wrong, level 1 (`w_D=0.5`), `t < 5s` (guessing): `Δ = −0.05×4.5×1.5 = −0.3375`.
     - Result never exceeds `10.0` or drops below `0.0`.
-- [ ] Integration tests:
-  - [ ] Duplicate `(session_id, tag_id)` result does not double-update `TagsMastery`.
-  - [ ] Graded session updates `StudentTopicSessionResult` and `TagsMastery`.
-  - [ ] `TagsMastery` unique key is `(student_id, tag_id)` only.
-  - [ ] WeakTags query returns only rows with `official_point < 5.00`.
-  - [ ] Lecture/material recommendations prioritize remedial weak topics first.
-  - [ ] SQL-only recommender works without Redis/SAR configured.
+- [x] Integration tests:
+  - [x] Duplicate `(session_id, tag_id)` result does not double-update `TagsMastery`.
+  - [x] Graded session updates `StudentTopicSessionResult` and `TagsMastery`.
+  - [x] `TagsMastery` unique key is `(student_id, tag_id)` only.
+  - [x] WeakTags query returns only rows with `official_point < 5.00`.
+  - [x] Lecture/material recommendations prioritize remedial weak topics first.
+  - [x] SQL-only recommender works without Redis/SAR configured.
   - [ ] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
-  - [ ] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
+  - [x] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
