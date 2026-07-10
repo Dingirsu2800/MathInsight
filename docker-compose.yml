@@ -1,12 +1,8 @@
-version: '3.8'
-
 services:
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     container_name: mathinsight-redis
-    ports:
-      - "6379:6379"
-    restart: always
+    restart: unless-stopped
     volumes:
       - redis_data:/data
 
@@ -17,22 +13,47 @@ services:
       dockerfile: Dockerfile
     container_name: mathinsight-webapi
     ports:
-      - "8080:8080"
+      - "${WEBAPI_PORT:-8080}:8080"
     depends_on:
       - redis
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - Redis__Enabled=true
-      - Redis__ConnectionString=redis:6379
-      # Bạn có thể truyền ConnectionStrings__DefaultConnection từ file .env hoặc command line
-      - ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection:-}
-      - Jwt__Issuer=MathInsight
-      - Jwt__Audience=MathInsightClient
-      - Jwt__SigningKey=CHANGE_ME_DEV_SECRET_KEY_AT_LEAST_32_CHARS
-      - Chatbot__ApiKey=${Chatbot__ApiKey:-}
-      - Chatbot__Model=gemini-2.0-flash
-      - Chatbot__BaseUrl=https://generativelanguage.googleapis.com/
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Redis__Enabled: "true"
+      Redis__ConnectionString: redis:6379
+      RabbitMQ__Enabled: "false"
+      Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0:-http://localhost:5173}
+      Cors__AllowedOrigins__1: ${Cors__AllowedOrigins__1:-http://127.0.0.1:5173}
+      ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection:-}
+      Jwt__Issuer: MathInsight
+      Jwt__Audience: MathInsightClient
+      Jwt__SigningKey: ${Jwt__SigningKey:-CHANGE_ME_DEV_SECRET_KEY_AT_LEAST_32_CHARS}
+      Cloudinary__CloudName: ${Cloudinary__CloudName:-your-cloud-name}
+      Cloudinary__ApiKey: ${Cloudinary__ApiKey:-your-api-key}
+      Cloudinary__ApiSecret: ${Cloudinary__ApiSecret:-your-api-secret}
+    restart: on-failure
+
+  frontend:
+    image: mathinsight-frontend:dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mathinsight-frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      - webapi
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+      VITE_CLOUDINARY_CLOUD_NAME: ${VITE_CLOUDINARY_CLOUD_NAME:-}
+      VITE_CLOUDINARY_UPLOAD_PRESET: ${VITE_CLOUDINARY_UPLOAD_PRESET:-}
+      VITE_ENABLE_MOCK_FALLBACK: ${VITE_ENABLE_MOCK_FALLBACK:-false}
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
     restart: on-failure
 
 volumes:
   redis_data:
+  frontend_node_modules:

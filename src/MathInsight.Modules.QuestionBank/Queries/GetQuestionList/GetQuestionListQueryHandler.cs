@@ -79,6 +79,10 @@ public class GetQuestionListQueryHandler
                 question.Status,
                 question.QuestionType,
                 question.ExpertId,
+                _context.AccountReadModels
+                    .Where(account => account.AccountId == question.ExpertId)
+                    .Select(account => account.FirstName + " " + account.LastName)
+                    .FirstOrDefault(),
                 question.DefaultPoint,
                 question.IsActive,
                 question.QuestionTopics

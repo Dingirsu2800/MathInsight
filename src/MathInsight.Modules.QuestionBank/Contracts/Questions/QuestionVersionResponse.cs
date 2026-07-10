@@ -8,4 +8,6 @@ public sealed record QuestionVersionResponse(
     string AnswersSnapshot,
     string? PictureUrl,
     DateTime CreatedTime,
-    string ExpertId);
+    string ExpertId,
+    string? ExpertName,
+    string Status);
