@@ -17,17 +17,52 @@ export const questionBankApi = {
     return client.put(`/api/question-bank/questions/${questionId}`, payload);
   },
 
+  deleteQuestion(questionId) {
+    return client.delete(`/api/question-bank/questions/${questionId}`);
+  },
+
   getQuestionVersions(questionId) {
     return client.get(`/api/question-bank/questions/${questionId}/versions`);
   },
 
-  getTopicTags(grade) {
-    return client.get("/api/question-bank/tags/topics", {
-      params: grade ? { grade } : undefined,
-    });
+  getTopicTags(params) {
+    const queryParams = typeof params === "object" ? params : { grade: params };
+    return client.get("/api/question-bank/tags/topics", { params: queryParams });
   },
 
-  getDifficulties() {
-    return client.get("/api/question-bank/tags/difficulties");
+  createTopic(payload) {
+    return client.post("/api/question-bank/tags/topics", payload);
   },
+
+  updateTopic(tagId, payload) {
+    return client.put(`/api/question-bank/tags/topics/${tagId}`, payload);
+  },
+
+  getDifficulties(params) {
+    return client.get("/api/question-bank/tags/difficulties", { params });
+  },
+
+  createDifficulty(payload) {
+    return client.post("/api/question-bank/tags/difficulties", payload);
+  },
+
+  updateDifficulty(difficultyId, payload) {
+    return client.put(`/api/question-bank/tags/difficulties/${difficultyId}`, payload);
+  },
+
+  reportQuestion(questionId, payload) {
+    return client.post(`/api/question-bank/questions/${questionId}/reports`, payload);
+  },
+
+  getMyReportedQuestions(params) {
+    return client.get("/api/question-bank/reports/mine", { params });
+  },
+
+  getQuestionReports(questionId, params) {
+    return client.get(`/api/question-bank/questions/${questionId}/reports`, { params });
+  },
+
+  updateQuestionReportStatus(reportId, payload) {
+    return client.patch(`/api/question-bank/reports/${reportId}`, payload);
+  }
 };

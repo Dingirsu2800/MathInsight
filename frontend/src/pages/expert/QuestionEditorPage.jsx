@@ -1,5 +1,6 @@
 import * as React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { cn } from "../../utils/cn";
 import ExpertLayout from "./ExpertLayout";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
@@ -10,10 +11,27 @@ import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/ques
 import LatexPreview from "../../components/expert/LatexPreview";
 import { uploadQuestionImage } from "../../services/cloudinaryUploadApi";
 
+function getRoleLabel(role) {
+  if (role === "Student") return "Học sinh";
+  if (role === "Expert") return "Chuyên gia";
+  if (role === "Admin") return "Quản trị viên";
+  return role;
+}
+
 export default function QuestionEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEditMode = !!id;
+
+  const searchParams = new URLSearchParams(location.search);
+  const fromReported = searchParams.get("from") === "reported";
+
+  const [hasSavedInSession, setHasSavedInSession] = React.useState(false);
+  const [pendingReports, setPendingReports] = React.useState([]);
+  const [reportsLoading, setReportsLoading] = React.useState(false);
+  const [updatingReportId, setUpdatingReportId] = React.useState(null);
+  const [reportsError, setReportsError] = React.useState("");
 
 
 
@@ -160,20 +178,59 @@ export default function QuestionEditorPage() {
       });
   }, []);
 
+  const fetchPendingReports = async () => {
+    if (!id) return;
+    setReportsLoading(true);
+    setReportsError("");
+    try {
+      const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
+      setPendingReports(res.data || []);
+    } catch (err) {
+      console.error("Failed to load pending reports:", err);
+      setReportsError("Không thể tải các báo cáo đang chờ xử lý từ máy chủ.");
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isEditMode && fromReported) {
+      fetchPendingReports();
+    }
+  }, [id, fromReported]);
+
+  const handleResolveReport = async (reportId, nextStatus) => {
+    setUpdatingReportId(reportId);
+    try {
+      await questionBankApi.updateQuestionReportStatus(reportId, { status: nextStatus });
+      const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
+      const remaining = res.data || [];
+      setPendingReports(remaining);
+      if (remaining.length === 0) {
+        navigate("/expert/questions/reported");
+      }
+    } catch (err) {
+      console.error(err);
+      showError("Không thể cập nhật trạng thái báo cáo này.");
+    } finally {
+      setUpdatingReportId(null);
+    }
+  };
+
   // Fetch topics whenever grade changes
   React.useEffect(() => {
     questionBankApi.getTopicTags(form.grade)
       .then(res => {
         const flattened = flattenTopicTree(res.data || []);
         setTopicList(flattened);
-        
+
         // Auto-clean any parent topics or topics not matching this grade scope
         setForm(prev => {
           const validTopics = prev.topics.filter(topic => {
             const match = flattened.find(f => f.tagId === topic.tagId);
             return match && match.depth !== 0;
           });
-          
+
           let normalizedTopics = validTopics;
           if (validTopics.length > 0) {
             const hasPrimary = validTopics.some(t => t.isPrimary);
@@ -244,7 +301,7 @@ export default function QuestionEditorPage() {
   const handleFieldChange = (field, value) => {
     setForm(prev => {
       const updated = { ...prev, [field]: value };
-      
+
       // If questionType changes, initialize options with appropriate structures
       if (field === "questionType") {
         if (value === "TRUE_FALSE") {
@@ -426,15 +483,15 @@ export default function QuestionEditorPage() {
       const startPos = textarea.selectionStart;
       const endPos = textarea.selectionEnd;
       const text = form.questionContent;
-      
+
       const newText = text.substring(0, startPos) + latex + text.substring(endPos, text.length);
-      
+
       // Update form state
       setForm(prev => ({
         ...prev,
         questionContent: newText
       }));
-      
+
       // Restore cursor position right after newly inserted text
       setTimeout(() => {
         textarea.focus();
@@ -531,7 +588,7 @@ export default function QuestionEditorPage() {
     }
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
-    
+
     setLoading(true);
     const saveRequest = isEditMode
       ? questionBankApi.updateQuestion(id, payload)
@@ -539,7 +596,14 @@ export default function QuestionEditorPage() {
 
     saveRequest
       .then(() => {
-        navigate("/expert/questions");
+        if (fromReported) {
+          setHasSavedInSession(true);
+          setInfoMessage("Đã lưu câu hỏi thành công. Bây giờ bạn có thể giải quyết hoặc không chấp nhận các báo cáo.");
+          setLoading(false);
+          fetchPendingReports();
+        } else {
+          navigate("/expert/questions");
+        }
       })
       .catch(err => {
         console.error("Failed to save question:", err);
@@ -562,14 +626,14 @@ export default function QuestionEditorPage() {
   return (
     <ExpertLayout>
       <div className="p-gutter bg-canvas-white relative min-h-screen">
-        
+
         {/* Error alert banner */}
         {error && (
-          <div 
+          <div
             ref={errorRef}
             tabIndex={-1}
-            role="alert" 
-            aria-live="assertive" 
+            role="alert"
+            aria-live="assertive"
             className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
           >
             <span className="material-symbols-outlined">error</span>
@@ -579,9 +643,9 @@ export default function QuestionEditorPage() {
 
         {/* Info/Notification banner */}
         {infoMessage && (
-          <div 
-            role="status" 
-            aria-live="polite" 
+          <div
+            role="status"
+            aria-live="polite"
             className="p-4 mb-6 bg-primary/10 border border-primary/20 text-primary rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
           >
             <span className="material-symbols-outlined">info</span>
@@ -615,8 +679,8 @@ export default function QuestionEditorPage() {
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => navigate("/expert/questions")}>Hủy</Button>
-            <Button 
-              className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" 
+            <Button
+              className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
               onClick={handleSaveQuestion}
               disabled={loading}
             >
@@ -627,10 +691,10 @@ export default function QuestionEditorPage() {
 
         {/* Bento Grid Layout */}
         <div className="grid grid-cols-12 gap-6 items-start">
-          
+
           {/* Left Column: Editor Form */}
           <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-            
+
             {/* Content Area Container */}
             <div className="bg-pure-surface rounded-xl border border-whisper-border p-6 lg:p-8 diffused-shadow min-h-[500px] flex flex-col gap-6">
               {loading && !form.questionContent && (
@@ -646,14 +710,14 @@ export default function QuestionEditorPage() {
                   <span className="material-symbols-outlined text-[16px]">label</span>
                   Thông tin phân loại
                 </h3>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                   <div className="space-y-4">
                     {/* Grade Select */}
                     <div>
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp học</label>
-                      <CustomSelect 
-                        value={form.grade?.toString() || "12"} 
+                      <CustomSelect
+                        value={form.grade?.toString() || "12"}
                         onValueChange={(val) => {
                           setForm(prev => ({
                             ...prev,
@@ -674,8 +738,8 @@ export default function QuestionEditorPage() {
                     {/* Difficulty Select */}
                     <div>
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Độ khó câu hỏi</label>
-                      <CustomSelect 
-                        value={form.difficultyId || "NONE"} 
+                      <CustomSelect
+                        value={form.difficultyId || "NONE"}
                         onValueChange={(val) => handleFieldChange("difficultyId", val === "NONE" ? "" : val)}
                         placeholder="Chọn độ khó"
                         items={[
@@ -769,8 +833,8 @@ export default function QuestionEditorPage() {
                         type="button"
                         onClick={() => handleFieldChange("questionType", type)}
                         className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150 active:scale-[0.98] cursor-pointer flex-1 text-center min-w-[120px] ${
-                          form.questionType === type 
-                            ? "bg-primary text-white shadow-sm" 
+                          form.questionType === type
+                            ? "bg-primary text-white shadow-sm"
                             : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
                         }`}
                       >
@@ -792,9 +856,9 @@ export default function QuestionEditorPage() {
                     <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
                     <button type="button" onClick={() => handleInsertLatex("$\\sqrt{x^2 + y^2}$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Căn thức"><span className="material-symbols-outlined text-[18px]">image</span></button>
                     <button type="button" onClick={() => handleInsertLatex("$\\frac{a}{b}$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Phân số"><span className="material-symbols-outlined text-[18px]">table_chart</span></button>
-                    
+
                     <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
-                    
+
                     <button
                       type="button"
                       onClick={() => {
@@ -899,11 +963,11 @@ export default function QuestionEditorPage() {
                         <label className="border border-dashed border-outline-variant rounded-xl p-4 text-center hover:border-primary transition-colors flex flex-col items-center gap-1 cursor-pointer bg-pure-surface">
                           <span className="material-symbols-outlined text-[24px] text-on-surface-variant">photo_camera</span>
                           <span className="text-[11px] font-bold text-on-surface">Chọn ảnh công thức toán</span>
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={handleOcrImageUpload} 
-                            className="hidden" 
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleOcrImageUpload}
+                            className="hidden"
                           />
                         </label>
 
@@ -969,8 +1033,8 @@ export default function QuestionEditorPage() {
                       <div
                         key={idx}
                         className={`flex items-center gap-4 p-4 border rounded-xl relative transition-all ${
-                          opt.isCorrect 
-                            ? "bg-emerald-success/5 border-emerald-success/30 shadow-sm" 
+                          opt.isCorrect
+                            ? "bg-emerald-success/5 border-emerald-success/30 shadow-sm"
                             : "border-whisper-border bg-surface-container-lowest"
                         }`}
                       >
@@ -986,7 +1050,7 @@ export default function QuestionEditorPage() {
                             placeholder={`Nhập phương án ${String.fromCharCode(65 + idx)}`}
                           />
                         </div>
-                        
+
                         <div className="flex items-center gap-3 shrink-0 mt-2">
                           <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none">
                             <input
@@ -1000,7 +1064,7 @@ export default function QuestionEditorPage() {
                             />
                             <span className={opt.isCorrect ? "text-emerald-success font-black" : "text-on-surface-variant"}>ĐÚNG</span>
                           </label>
-                          
+
                           {form.options.length > 2 && (
                             <button
                               type="button"
@@ -1014,7 +1078,7 @@ export default function QuestionEditorPage() {
                         </div>
                       </div>
                     ))}
-                    
+
                     <div className="flex justify-end pt-2">
                       <button
                         type="button"
@@ -1247,7 +1311,7 @@ export default function QuestionEditorPage() {
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Hình ảnh minh họa</label>
                 <div className="flex flex-col gap-3 p-4 border border-outline-variant bg-surface-container-lowest rounded-xl">
-                  
+
                   {/* Image Preview */}
                   {form.pictureUrl ? (
                     <div className="relative group max-w-xs border border-whisper-border rounded-lg overflow-hidden bg-surface-container-low">
@@ -1303,7 +1367,7 @@ export default function QuestionEditorPage() {
                         </>
                       )}
                     </Button>
-                    
+
                     {form.pictureUrl && (
                       <Button
                         type="button"
@@ -1315,7 +1379,7 @@ export default function QuestionEditorPage() {
                         Xóa ảnh
                       </Button>
                     )}
-                    
+
                     <span className="text-[10px] text-on-surface-variant font-medium">
                       Hỗ trợ: JPEG, PNG, WEBP (Tối đa 5MB)
                     </span>
@@ -1351,14 +1415,106 @@ export default function QuestionEditorPage() {
 
           {/* Right Column: Properties Summary & Live Preview */}
           <div className="col-span-12 lg:col-span-4 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto flex flex-col gap-6">
-            
+
+            {/* Pending Reports Panel */}
+            {fromReported && (
+              <div className="bg-pure-surface rounded-xl border border-error/20 p-5 lg:p-6 diffused-shadow shadow-sm">
+                <h3 className="text-xs font-bold text-error mb-4 tracking-wider flex items-center gap-1.5 border-b border-error/10 pb-2.5 uppercase">
+                  <span className="material-symbols-outlined text-[16px]">report</span>
+                  BÁO CÁO ĐANG CHỜ XỬ LÝ ({pendingReports.length})
+                </h3>
+
+                {reportsError ? (
+                  <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg text-center font-semibold">
+                    <p className="mb-2">{reportsError}</p>
+                    <Button variant="outline" size="sm" onClick={fetchPendingReports} className="text-[10px] h-7">Thử lại</Button>
+                  </div>
+                ) : reportsLoading && pendingReports.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-on-surface-variant flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <span>Đang tải các báo cáo...</span>
+                  </div>
+                ) : pendingReports.length === 0 ? (
+                  <div className="p-3 text-xs text-emerald-success bg-emerald-success/5 border border-emerald-success/15 rounded-lg text-center font-bold">
+                    Không còn báo cáo nào đang chờ xử lý.
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+                    {pendingReports.map((rep) => {
+                      const reportIdVal = rep.reportId || rep.id;
+                      const time = rep.createdTime ? new Date(rep.createdTime).toLocaleString("vi-VN") : "Chưa rõ thời gian";
+                      const isUpdatingThisReport = updatingReportId === reportIdVal;
+                      const isAnyReportUpdating = updatingReportId !== null;
+
+                      return (
+                        <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
+                          <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                            <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
+                              {getRoleLabel(rep.reporterRole || rep.role)}
+                            </span>
+                            <span>{time}</span>
+                          </div>
+                          <p className="text-on-surface font-medium leading-relaxed italic">
+                            &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                          </p>
+                          <div className="flex justify-end gap-2 pt-1 border-t border-error/10">
+                            <button
+                              type="button"
+                              disabled={!hasSavedInSession || isAnyReportUpdating}
+                              onClick={() => handleResolveReport(reportIdVal, "Resolved")}
+                              className={cn(
+                                "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                                hasSavedInSession && !isAnyReportUpdating
+                                  ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
+                                  : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                              )}
+                              title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
+                            >
+                              {isUpdatingThisReport ? (
+                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                "Đã khắc phục"
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!hasSavedInSession || isAnyReportUpdating}
+                              onClick={() => handleResolveReport(reportIdVal, "Dismissed")}
+                              className={cn(
+                                "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                                hasSavedInSession && !isAnyReportUpdating
+                                  ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
+                                  : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                              )}
+                              title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
+                            >
+                              {isUpdatingThisReport ? (
+                                <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                "Không chấp nhận"
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {!hasSavedInSession && !reportsError && pendingReports.length > 0 && (
+                  <p className="text-[10px] text-on-surface-variant/75 mt-3 italic leading-relaxed text-center">
+                    * Các nút xử lý báo cáo sẽ hoạt động sau khi bạn ấn &ldquo;Lưu câu hỏi&rdquo; thành công ít nhất một lần.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Meta Properties Summary Card */}
             <div className="bg-pure-surface rounded-xl border border-whisper-border p-5 lg:p-6 diffused-shadow">
               <h3 className="text-xs font-bold text-on-surface-variant mb-4 tracking-wider flex items-center gap-1.5 border-b border-whisper-border pb-2.5 uppercase">
                 <span className="material-symbols-outlined text-[16px]">tune</span>
                 THUỘC TÍNH CÂU HỎI
               </h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Loại câu hỏi:</label>
@@ -1392,12 +1548,12 @@ export default function QuestionEditorPage() {
             {/* Live Preview Panel */}
             <div className="glass-panel rounded-xl p-5 lg:p-6 relative overflow-hidden flex flex-col h-[400px]">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-              
+
               <h3 className="text-xs font-bold text-primary mb-4 tracking-wider flex items-center gap-1.5 relative z-10 uppercase">
                 <span className="material-symbols-outlined text-[16px]">visibility</span>
                 XEM TRƯỚC (LIVE PREVIEW)
               </h3>
-              
+
               <div className="flex-1 bg-pure-surface rounded-xl border border-whisper-border p-4 overflow-y-auto relative z-10 diffused-shadow">
                 <div className="text-[13px] text-on-surface space-y-4 leading-relaxed font-medium">
                   <div>
@@ -1416,7 +1572,7 @@ export default function QuestionEditorPage() {
                   {/* Preview based on Question Type */}
                   <div>
                     <span className="font-bold text-primary">Các lựa chọn trả lời:</span>
-                    
+
                     {/* SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE */}
                     {(form.questionType === "SINGLE_CHOICE" || form.questionType === "MULTIPLE_CHOICE" || form.questionType === "TRUE_FALSE") && (
                       <div className="space-y-2 mt-1.5">
@@ -1485,7 +1641,7 @@ export default function QuestionEditorPage() {
                         ))}
                       </div>
                     )}
-                    
+
                     {form.solutionContent && (
                       <div className="mt-4 border-t border-dashed border-whisper-border pt-3">
                         <span className="font-bold text-primary mr-1">Lời giải chi tiết:</span>
@@ -1515,7 +1671,7 @@ export default function QuestionEditorPage() {
             onClick={closeTopicPanel}
           />
 
-          <section 
+          <section
             id="topic-drawer-section"
             className={`relative z-10 h-full w-full max-w-xl bg-pure-surface border-l border-whisper-border diffused-shadow flex flex-col ${isTopicPanelClosing ? "mi-drawer-out" : "mi-drawer-in"}`}
           >
@@ -1546,11 +1702,11 @@ export default function QuestionEditorPage() {
             {/* Error banner inside Drawer */}
             {error && (
               <div className="px-5 pt-3">
-                <div 
+                <div
                   ref={drawerErrorRef}
                   tabIndex={-1}
-                  role="alert" 
-                  aria-live="assertive" 
+                  role="alert"
+                  aria-live="assertive"
                   className="p-3 bg-error/10 border border-error/20 text-error rounded-xl text-xs font-semibold flex items-center gap-2 outline-none"
                 >
                   <span className="material-symbols-outlined text-[14px]">error</span>
