@@ -29,6 +29,9 @@ services:
       - Jwt__Issuer=MathInsight
       - Jwt__Audience=MathInsightClient
       - Jwt__SigningKey=CHANGE_ME_DEV_SECRET_KEY_AT_LEAST_32_CHARS
+      - Chatbot__ApiKey=${Chatbot__ApiKey:-}
+      - Chatbot__Model=gemini-2.0-flash
+      - Chatbot__BaseUrl=https://generativelanguage.googleapis.com/
     restart: on-failure
 
 volumes:
