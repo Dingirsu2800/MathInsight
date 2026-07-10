@@ -5,16 +5,9 @@ export const expertNavItems = [
     icon: "database"
   },
   {
-    label: "Soạn thảo LaTeX",
-    path: "/expert/latex-helper",
-    icon: "functions",
-    disabled: true
-  },
-  {
-    label: "Quản lý chủ đề",
-    path: "/expert/topics",
-    icon: "category",
-    disabled: true
+    label: "Quản lý Tag",
+    path: "/expert/tags",
+    icon: "category"
   },
   {
     label: "Cài đặt hệ thống",

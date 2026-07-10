@@ -15,6 +15,8 @@ export default function ExpertLayout({ children }) {
     } finally {
       localStorage.removeItem("token");
       localStorage.removeItem("access_token");
+      localStorage.removeItem("AccountId");
+      localStorage.removeItem("RoleName");
       navigate("/login");
     }
   };

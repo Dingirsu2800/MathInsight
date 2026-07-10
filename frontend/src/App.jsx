@@ -4,6 +4,8 @@ import TestSession from './pages/student/TestSession.jsx';
 import QuestionBankListPage from './pages/expert/QuestionBankListPage.jsx';
 import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
 import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
+import TagManagementPage from './pages/expert/TagManagementPage.jsx';
+import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -27,8 +29,10 @@ export default function App() {
       {/* Expert Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/expert/questions" element={<QuestionBankListPage />} />
+        <Route path="/expert/questions/reported" element={<ReportedQuestionsPage />} />
         <Route path="/expert/questions/new" element={<QuestionEditorPage />} />
         <Route path="/expert/questions/:id/edit" element={<QuestionEditorPage />} />
+        <Route path="/expert/tags" element={<TagManagementPage />} />
         <Route path="/expert/profile" element={<ExpertProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />

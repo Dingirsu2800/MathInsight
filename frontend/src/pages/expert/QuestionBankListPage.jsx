@@ -26,7 +26,7 @@ export default function QuestionBankListPage() {
   const [selectedQuestion, setSelectedQuestion] = React.useState(null);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
-  
+
   // Real detail states
   const [selectedQuestionDetails, setSelectedQuestionDetails] = React.useState(null);
   const [detailsLoading, setDetailsLoading] = React.useState(false);
@@ -54,6 +54,21 @@ export default function QuestionBankListPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [usingMockData, setUsingMockData] = React.useState(false);
+
+  const currentAccountId = localStorage.getItem("AccountId");
+
+  // Delete states
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [deleteError, setDeleteError] = React.useState("");
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+
+  // Report states
+  const [isReportDialogOpen, setIsReportDialogOpen] = React.useState(false);
+  const [reportTarget, setReportTarget] = React.useState(null);
+  const [reportReason, setReportReason] = React.useState("");
+  const [reportError, setReportError] = React.useState("");
+  const [reportLoading, setReportLoading] = React.useState(false);
 
   // Static mock questions fallback database (matching backend enum mapping)
   const mockQuestionsFallback = [
@@ -240,7 +255,7 @@ export default function QuestionBankListPage() {
         q.id.toString().includes(searchTerm) ||
         q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.topic.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       // If we are using local fallback mock data, we also apply the selectors client-side:
       if (usingMockData) {
         const matchesGrade = selectedGrade === "" || q.grade === selectedGrade;
@@ -299,10 +314,54 @@ export default function QuestionBankListPage() {
       });
   };
 
+  const handleProceedDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      await questionBankApi.deleteQuestion(deleteTarget.id);
+      setIsConfirmDeleteOpen(false);
+      setDeleteTarget(null);
+      fetchQuestions();
+    } catch (err) {
+      console.error(err);
+      if (err.response?.status === 409) {
+        setDeleteError("Câu hỏi đã được dùng trong bài kiểm tra nên không thể xóa.");
+      } else {
+        setDeleteError(err.response?.data?.message || err.message || "Xóa câu hỏi thất bại.");
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleProceedReport = async (e) => {
+    if (e) e.preventDefault();
+    if (!reportTarget) return;
+    if (!reportReason.trim()) {
+      setReportError("Vui lòng điền lý do báo cáo.");
+      return;
+    }
+    setReportLoading(true);
+    setReportError("");
+    try {
+      await questionBankApi.reportQuestion(reportTarget.id, { reportReason: reportReason.trim() });
+      setIsReportDialogOpen(false);
+      setReportTarget(null);
+      setReportReason("");
+      fetchQuestions();
+    } catch (err) {
+      console.error(err);
+      setReportError(err.response?.data?.message || err.message || "Báo cáo câu hỏi thất bại.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   return (
     <ExpertLayout>
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto">
-        
+
         {/* Page Header */}
         <DashboardPageHeader
           title="Ngân hàng câu hỏi"
@@ -314,12 +373,28 @@ export default function QuestionBankListPage() {
           </Button>
         </DashboardPageHeader>
 
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-whisper-border">
+          <button
+            onClick={() => navigate("/expert/questions")}
+            className="px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none text-primary border-primary"
+          >
+            Tất cả câu hỏi
+          </button>
+          <button
+            onClick={() => navigate("/expert/questions/reported")}
+            className="px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none text-on-surface-variant border-transparent hover:text-primary"
+          >
+            Câu hỏi bị báo cáo
+          </button>
+        </div>
+
         {/* Error / Alert banner */}
         {error && (
           <div className={cn(
             "p-4 border rounded-xl flex items-center justify-between text-sm font-semibold shadow-sm",
-            usingMockData 
-              ? "bg-amber-warning/10 border-amber-warning/30 text-amber-warning" 
+            usingMockData
+              ? "bg-amber-warning/10 border-amber-warning/30 text-amber-warning"
               : "bg-error/10 border-error/20 text-error"
           )}>
             <div className="flex items-center gap-2">
@@ -327,7 +402,7 @@ export default function QuestionBankListPage() {
               <span>{error}</span>
             </div>
             {usingMockData && (
-              <button 
+              <button
                 onClick={fetchQuestions}
                 className="underline hover:no-underline cursor-pointer"
               >
@@ -531,25 +606,30 @@ export default function QuestionBankListPage() {
                           >
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                           </button>
-                          <button
-                            onClick={() => navigate(`/expert/questions/${q.id}/edit`)}
-                            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
-                            aria-label="Chỉnh sửa câu hỏi"
-                            title="Chỉnh sửa"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedQuestion(q);
-                              setIsHistoryOpen(true);
-                            }}
-                            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
-                            aria-label="Xem lịch sử phiên bản"
-                            title="Lịch sử"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">history</span>
-                          </button>
+                          {q.expertId === currentAccountId && (
+                            <>
+                              <button
+                                onClick={() => navigate(`/expert/questions/${q.id}/edit`)}
+                                className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                                aria-label="Chỉnh sửa câu hỏi"
+                                title="Chỉnh sửa"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteTarget(q);
+                                  setDeleteError("");
+                                  setIsConfirmDeleteOpen(true);
+                                }}
+                                className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/5 rounded transition-colors cursor-pointer"
+                                aria-label="Xóa câu hỏi"
+                                title="Xóa"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -646,7 +726,7 @@ export default function QuestionBankListPage() {
                   {/* Answers */}
                   <div>
                     <h4 className="text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Đáp án & Lời giải:</h4>
-                    
+
                     {/* Single / Multiple Choice / True False options */}
                     {(selectedQuestion.type === "SINGLE_CHOICE" || selectedQuestion.type === "MULTIPLE_CHOICE" || selectedQuestion.type === "TRUE_FALSE") && (
                       <div className="space-y-2 mb-4">
@@ -698,7 +778,7 @@ export default function QuestionBankListPage() {
                             <div className="mb-2">
                               <LatexPreview content={part.partContent} />
                             </div>
-                            
+
                             {part.partType === "TRUE_FALSE" && (
                               <div className="flex gap-2">
                                 <Badge variant={part.correctBoolean ? "approved" : "secondary"}>
@@ -754,24 +834,53 @@ export default function QuestionBankListPage() {
             </DialogContent>
 
             <DialogFooter>
+              {selectedQuestionDetails && selectedQuestionDetails.expertId !== currentAccountId && (
+                <Button
+                  variant="outline"
+                  className="border-error text-error hover:bg-error/5 normal-case h-9 text-xs mr-auto flex items-center gap-1.5"
+                  onClick={() => {
+                    setIsPreviewOpen(false);
+                    setReportTarget(selectedQuestion);
+                    setReportReason("");
+                    setReportError("");
+                    setIsReportDialogOpen(true);
+                  }}
+                >
+                  <span className="material-symbols-outlined text-[16px]">report</span>
+                  Báo cáo câu hỏi
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsPreviewOpen(false);
+                  setIsHistoryOpen(true);
+                }}
+                className="normal-case h-9 text-xs flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">history</span>
+                Lịch sử phiên bản
+              </Button>
               <Button variant="outline" onClick={() => setIsPreviewOpen(false)} className="normal-case h-9 text-xs">
                 Đóng
               </Button>
-              <Button 
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  navigate(`/expert/questions/${selectedQuestion.id}/edit`);
-                }} 
-                disabled={detailsLoading}
-                className="normal-case h-9 text-xs"
-              >
-                Chỉnh sửa
-              </Button>
+              {selectedQuestionDetails && selectedQuestionDetails.expertId === currentAccountId && (
+                <Button
+                  onClick={() => {
+                    setIsPreviewOpen(false);
+                    navigate(`/expert/questions/${selectedQuestion.id}/edit`);
+                  }}
+                  disabled={detailsLoading}
+                  className="normal-case h-9 text-xs"
+                >
+                  Chỉnh sửa
+                </Button>
+              )}
             </DialogFooter>
           </>
         )}
       </Dialog>
-      
+
       {/* VERSION HISTORY DRAWER */}
       {selectedQuestion && (
         <VersionHistoryDrawer
@@ -781,6 +890,87 @@ export default function QuestionBankListPage() {
           questionTitle={selectedQuestion.content}
         />
       )}
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      <Dialog isOpen={isConfirmDeleteOpen} onClose={() => setIsConfirmDeleteOpen(false)} variant="modal">
+        <DialogHeader>
+          <DialogTitle>Xóa câu hỏi?</DialogTitle>
+          <DialogDescription>
+            Bạn có chắc chắn muốn xóa câu hỏi này khỏi hệ thống? Thao tác này không thể hoàn tác.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent>
+          {deleteError && (
+            <div className="p-3 text-xs font-bold text-deep-rose bg-deep-rose/5 border border-deep-rose/15 rounded-xl leading-relaxed flex items-start gap-2 mb-4">
+              <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+              <span>{deleteError}</span>
+            </div>
+          )}
+          {deleteTarget && (
+            <div className="p-3 bg-surface-container rounded-xl text-xs text-on-surface-variant leading-relaxed border border-whisper-border">
+              <span className="font-bold block mb-1">Nội dung câu hỏi:</span>
+              <div className="italic break-words">
+                <LatexPreview content={deleteTarget.content} />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsConfirmDeleteOpen(false)} disabled={deleteLoading}>
+            Hủy
+          </Button>
+          <Button
+            className="bg-error hover:bg-deep-rose text-white"
+            onClick={handleProceedDelete}
+            disabled={deleteLoading}
+          >
+            {deleteLoading ? "Đang xóa..." : "Xóa câu hỏi"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* REPORT QUESTION DIALOG */}
+      <Dialog isOpen={isReportDialogOpen} onClose={() => setIsReportDialogOpen(false)} variant="modal">
+        <DialogHeader>
+          <DialogTitle>Báo cáo câu hỏi</DialogTitle>
+          <DialogDescription>
+            Vui lòng cung cấp lý do chi tiết để báo cáo lỗi nội dung hoặc cấu hình của câu hỏi này.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleProceedReport}>
+          <DialogContent className="space-y-4">
+            {reportError && (
+              <div className="p-3 text-xs font-bold text-deep-rose bg-deep-rose/5 border border-deep-rose/15 rounded-xl leading-relaxed flex items-start gap-2 mb-2">
+                <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+                <span>{reportError}</span>
+              </div>
+            )}
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Lý do báo cáo <span className="text-error">*</span></label>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Ví dụ: Công thức Toán học hiển thị lỗi, sai đáp án trắc nghiệm hoặc phân loại sai chủ đề..."
+                rows="4"
+                className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
+                required
+              />
+            </div>
+          </DialogContent>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsReportDialogOpen(false)} disabled={reportLoading}>
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              className="bg-error hover:bg-deep-rose text-white"
+              disabled={reportLoading}
+            >
+              {reportLoading ? "Đang gửi..." : "Gửi báo cáo"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
     </ExpertLayout>
   );
 }

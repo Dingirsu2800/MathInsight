@@ -29,7 +29,8 @@ export default function LoginPage() {
 
       const data = response.data || {};
       const token = data.accessToken || data.AccessToken;
-      const roleName = data.roleName || data.RoleName;
+      const roleName = data.roleName || data.RoleName || "";
+      const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
 
       if (!token) {
         throw new Error("Không nhận được mã xác thực (Token) từ hệ thống.");
@@ -42,6 +43,8 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("token", token);
+      localStorage.setItem("AccountId", accountId);
+      localStorage.setItem("RoleName", roleName);
       navigate("/expert/questions");
     } catch (err) {
       console.error(err);
