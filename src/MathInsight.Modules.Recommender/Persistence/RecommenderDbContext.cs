@@ -19,6 +19,12 @@ public class RecommenderDbContext : DbContext
     public DbSet<TagsMastery> TagsMasteries => Set<TagsMastery>();
     public DbSet<StudentTopicSessionResult> StudentTopicSessionResults => Set<StudentTopicSessionResult>();
 
+    // Cross-module read-only tables (not owned by Recommender)
+    public DbSet<TagTopicReadOnly> TagTopics => Set<TagTopicReadOnly>();
+    public DbSet<LectureReadOnly> Lectures => Set<LectureReadOnly>();
+    public DbSet<LectureMaterialReadOnly> LectureMaterials => Set<LectureMaterialReadOnly>();
+    public DbSet<MaterialReadOnly> Materials => Set<MaterialReadOnly>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -28,9 +28,10 @@ public static class RecommenderModuleExtensions
 
         // Domain services
         services.AddScoped<ICompetencyEngine, CompetencyEngine>();
+        services.AddSingleton<IDifficultyMappingService, DifficultyMappingService>();
+        services.AddScoped<IRecommenderService, RecommenderService>();
 
-        // Phase 3: RecommenderController registered via MapControllers in WebAPI.
-        // Phase 2 remaining: IRecommenderService, IDifficultyMappingService (queries).
+        // RecommenderController is auto-discovered by AddControllers() in WebAPI.
 
         return services;
     }
