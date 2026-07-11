@@ -9,7 +9,6 @@ import { questionBankApi } from "../../services/questionBankApi";
 import { mapQuestionDetailToEditorState, mapEditorStateToCreateUpdateRequest, flattenTopicTree, normalizeTrueFalseOptions } from "./questionMappers";
 import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
-import { uploadQuestionImage } from "../../services/cloudinaryUploadApi";
 
 function getRoleLabel(role) {
   if (role === "Student") return "Học sinh";
@@ -140,6 +139,7 @@ export default function QuestionEditorPage() {
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       setUploadError("Kích thước ảnh vượt quá giới hạn 5MB.");
+      if (e.target) e.target.value = "";
       return;
     }
 
@@ -147,20 +147,38 @@ export default function QuestionEditorPage() {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       setUploadError("Định dạng tệp không được hỗ trợ. Vui lòng tải ảnh dạng JPEG, PNG hoặc WEBP.");
+      if (e.target) e.target.value = "";
       return;
     }
 
     setUploading(true);
     try {
-      const data = await uploadQuestionImage(file);
-      if (data && data.secure_url) {
-        handleFieldChange("pictureUrl", data.secure_url);
+      const res = await questionBankApi.uploadQuestionImage(file);
+      const pictureUrl = res.data?.pictureUrl;
+      if (pictureUrl) {
+        handleFieldChange("pictureUrl", pictureUrl);
       } else {
-        throw new Error("Không lấy được link ảnh trả về từ Cloudinary.");
+        throw new Error("Không lấy được đường dẫn ảnh trả về từ máy chủ.");
       }
     } catch (err) {
       console.error("Upload error details:", err);
-      setUploadError(err.message || "Tải ảnh lên thất bại. Hãy thử lại.");
+      const status = err.response?.status;
+      const code = err.response?.data?.code;
+
+      let message = "Tải ảnh lên thất bại. Hãy thử lại.";
+      if (status === 413 || code === "IMAGE_TOO_LARGE") {
+        message = "Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng giảm dung lượng ảnh.";
+      } else if (code === "IMAGE_REQUIRED") {
+        message = "Vui lòng chọn một tệp ảnh để tải lên.";
+      } else if (code === "IMAGE_TYPE_NOT_SUPPORTED") {
+        message = "Định dạng ảnh không được hỗ trợ. Chỉ hỗ trợ các định dạng JPEG, PNG, và WebP.";
+      } else if (code === "IMAGE_STORAGE_UNAVAILABLE") {
+        message = "Hệ thống lưu trữ ảnh tạm thời không khả dụng. Vui lòng thử lại sau.";
+      } else if (code === "IMAGE_UPLOAD_FAILED") {
+        message = "Tải ảnh lên thất bại. Vui lòng thử lại.";
+      }
+
+      setUploadError(message);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

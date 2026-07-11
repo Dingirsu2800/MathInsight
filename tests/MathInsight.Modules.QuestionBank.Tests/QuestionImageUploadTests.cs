@@ -5,6 +5,7 @@ using MathInsight.Modules.QuestionBank.Configuration;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Storage;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace MathInsight.Modules.QuestionBank.Tests;
@@ -144,7 +145,8 @@ public sealed class QuestionImageUploadTests
         };
         var storage = new CloudinaryQuestionImageStorage(
             client,
-            Options.Create(options));
+            Options.Create(options),
+            NullLogger<CloudinaryQuestionImageStorage>.Instance);
 
         await Assert.ThrowsAsync<QuestionImageStorageUnavailableException>(() =>
             storage.UploadAsync(new MemoryStream(PngHeader), "image.png", "image/png", CancellationToken.None));
@@ -212,6 +214,11 @@ public sealed class QuestionImageUploadTests
         Assert.NotNull(capturedRequest);
         Assert.Equal(HttpMethod.Post, capturedRequest.Method);
         Assert.Equal("https://api.cloudinary.com/v1_1/mathinsight/image/upload", capturedRequest.RequestUri!.AbsoluteUri);
+        Assert.NotNull(capturedRequest.Headers.Authorization);
+        Assert.Equal("Basic", capturedRequest.Headers.Authorization!.Scheme);
+        Assert.Equal(
+            "api-key:api-secret",
+            Encoding.UTF8.GetString(Convert.FromBase64String(capturedRequest.Headers.Authorization.Parameter!)));
     }
 
     public static IEnumerable<object[]> ValidImages =>
@@ -239,7 +246,8 @@ public sealed class QuestionImageUploadTests
                 CloudName = "mathinsight",
                 ApiKey = "api-key",
                 ApiSecret = "api-secret"
-            }));
+            }),
+            NullLogger<CloudinaryQuestionImageStorage>.Instance);
     }
 
     private static IFormFile CreateFile(byte[] content, string contentType, string fileName)

@@ -140,7 +140,7 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
 - **Testing/Grading modules** read `QuestionPart` for `Composite` questions and write per-part student answers to `TestAnswerPart`.
 - **Recommender/TestGen v2 contract**: Recommender stores Ptag by `StudentID + TagID` only. TestGen maps `TagsMastery.RecommendedDifficultyLevel` to `TagDifficulty.LevelValue`, then filters `Question.DifficultyID` plus `QuestionTopic.TagID`. If a `BlueprintSection` is used, TestGen also filters `Question.QuestionType` by the section's `QuestionType`. Do not remove `Question.DifficultyID`, `Question.QuestionType`, or `TagDifficulty` from QuestionBank.
 - **Testing module** references `question_id` in `test_questions` — a Question with any existing reference cannot be hard-deleted or deactivated and returns `409 QUESTION_IN_USE`.
-- **Cloudinary** integration for image upload (UC-22): an Expert posts multipart field `file` to `POST /api/question-bank/questions/image-upload`. `IQuestionImageStorage` signs and forwards JPEG/PNG/WebP files (max 5 MB) to Cloudinary REST, then returns only `picture_url`. No Cloudinary secret, signature, raw response, or OCR behavior is exposed to frontend clients.
+- **Cloudinary** integration for image upload (UC-22): an Expert posts multipart field `file` to `POST /api/question-bank/questions/image-upload`. `IQuestionImageStorage` authenticates and forwards JPEG/PNG/WebP files (max 5 MB) to Cloudinary REST using server-side HTTP Basic authentication, then returns only `picture_url`. No Cloudinary secret, authorization header, raw response, or OCR behavior is exposed to frontend clients.
 - **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
 
 ## Verification Plan

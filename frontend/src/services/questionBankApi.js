@@ -64,5 +64,15 @@ export const questionBankApi = {
 
   updateQuestionReportStatus(reportId, payload) {
     return client.patch(`/api/question-bank/reports/${reportId}`, payload);
+  },
+
+  uploadQuestionImage(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return client.post("/api/question-bank/questions/image-upload", formData, {
+      headers: {
+        "Content-Type": undefined
+      }
+    });
   }
 };

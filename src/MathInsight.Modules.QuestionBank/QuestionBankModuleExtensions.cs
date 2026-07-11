@@ -14,7 +14,9 @@ public static class QuestionBankModuleExtensions
         services.AddDbContext<QuestionBankDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
-        services.Configure<CloudinaryOptions>(configuration.GetSection(CloudinaryOptions.SectionName));
+        services
+            .AddOptions<CloudinaryOptions>()
+            .Bind(configuration.GetSection(CloudinaryOptions.SectionName));
         services.AddHttpClient<IQuestionImageStorage, CloudinaryQuestionImageStorage>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);

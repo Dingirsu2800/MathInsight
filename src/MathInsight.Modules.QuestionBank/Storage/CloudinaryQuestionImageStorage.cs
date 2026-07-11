@@ -1,9 +1,8 @@
-using System.Globalization;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MathInsight.Modules.QuestionBank.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace MathInsight.Modules.QuestionBank.Storage;
@@ -13,13 +12,16 @@ public sealed class CloudinaryQuestionImageStorage : IQuestionImageStorage
     private const string Folder = "mathinsight/questions";
     private readonly HttpClient _httpClient;
     private readonly CloudinaryOptions _options;
+    private readonly ILogger<CloudinaryQuestionImageStorage> _logger;
 
     public CloudinaryQuestionImageStorage(
         HttpClient httpClient,
-        IOptions<CloudinaryOptions> options)
+        IOptions<CloudinaryOptions> options,
+        ILogger<CloudinaryQuestionImageStorage> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _logger = logger;
     }
 
     public async Task<string> UploadAsync(
@@ -29,32 +31,50 @@ public sealed class CloudinaryQuestionImageStorage : IQuestionImageStorage
         CancellationToken cancellationToken)
     {
         if (!IsConfigured())
+        {
+            _logger.LogWarning(
+                "Question image storage is unavailable. CloudName configured: {CloudNameConfigured}; ApiKey configured: {ApiKeyConfigured}; ApiSecret configured: {ApiSecretConfigured}.",
+                IsConfiguredValue(_options.CloudName),
+                IsConfiguredValue(_options.ApiKey),
+                IsConfiguredValue(_options.ApiSecret));
             throw new QuestionImageStorageUnavailableException();
+        }
 
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var publicId = Guid.NewGuid().ToString("N");
-        var signature = CreateSignature(timestamp, publicId);
 
+        await using var fileBuffer = new MemoryStream();
+        await content.CopyToAsync(fileBuffer, cancellationToken);
         using var multipart = new MultipartFormDataContent();
-        using var fileContent = new StreamContent(content);
+        using var fileContent = new ByteArrayContent(fileBuffer.ToArray());
         fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
 
         multipart.Add(fileContent, "file", fileName);
-        multipart.Add(new StringContent(_options.ApiKey), "api_key");
-        multipart.Add(new StringContent(timestamp.ToString(CultureInfo.InvariantCulture)), "timestamp");
-        multipart.Add(new StringContent(Folder), "folder");
-        multipart.Add(new StringContent(publicId), "public_id");
-        multipart.Add(new StringContent(signature), "signature");
+        multipart.Add(CreateFormField(Folder), "folder");
+        multipart.Add(CreateFormField(publicId), "public_id");
 
         try
         {
-            using var response = await _httpClient.PostAsync(
-                $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(_options.CloudName)}/image/upload",
-                multipart,
-                cancellationToken);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(_options.CloudName)}/image/upload")
+            {
+                Content = multipart
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_options.ApiKey}:{_options.ApiSecret}")));
+
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
+            {
+                var errorMessage = await ReadCloudinaryErrorMessageAsync(response, cancellationToken);
+                _logger.LogWarning(
+                    "Cloudinary rejected question image upload. Status code: {StatusCode}; Error: {ErrorMessage}",
+                    (int)response.StatusCode,
+                    errorMessage);
                 throw new QuestionImageUploadException();
+            }
 
             await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var payload = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken);
@@ -93,11 +113,33 @@ public sealed class CloudinaryQuestionImageStorage : IQuestionImageStorage
             IsConfiguredValue(_options.ApiSecret);
     }
 
-    private string CreateSignature(long timestamp, string publicId)
+    private static ByteArrayContent CreateFormField(string value)
     {
-        var valueToSign = $"folder={Folder}&public_id={publicId}&timestamp={timestamp}{_options.ApiSecret}";
-        var hash = SHA1.HashData(Encoding.UTF8.GetBytes(valueToSign));
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return new ByteArrayContent(Encoding.UTF8.GetBytes(value));
+    }
+
+    private static async Task<string> ReadCloudinaryErrorMessageAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var payload = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken);
+
+            if (payload.RootElement.TryGetProperty("error", out var errorElement) &&
+                errorElement.TryGetProperty("message", out var messageElement) &&
+                messageElement.ValueKind == JsonValueKind.String)
+            {
+                return messageElement.GetString() ?? "Cloudinary returned no error message.";
+            }
+        }
+        catch (JsonException)
+        {
+            // A generic message is sufficient when Cloudinary does not return the expected JSON error shape.
+        }
+
+        return "Cloudinary returned an unexpected error response.";
     }
 
     private static bool IsConfiguredValue(string? value)
