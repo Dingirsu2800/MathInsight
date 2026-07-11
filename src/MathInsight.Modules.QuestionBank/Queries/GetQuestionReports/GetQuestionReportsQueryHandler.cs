@@ -10,7 +10,7 @@ namespace MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
 public sealed class GetQuestionReportsQueryHandler
     : IRequestHandler<GetQuestionReportsQuery, Result<IReadOnlyList<QuestionReportResponse>>>
 {
-    private const string ActionRequiredStatus = "ActionRequired";
+    private const string ActiveReportsStatus = "ActiveReports";
     private readonly QuestionBankDbContext _context;
 
     public GetQuestionReportsQueryHandler(QuestionBankDbContext context)
@@ -42,7 +42,7 @@ public sealed class GetQuestionReportsQueryHandler
                     on report.ReporterAccountId equals account.AccountId into accounts
                 from account in accounts.DefaultIfEmpty()
                 where report.QuestionId == request.QuestionId &&
-                      (status == ActionRequiredStatus
+                      (status == ActiveReportsStatus
                           ? report.Status == "Pending" ||
                             report.Status == "PendingFix" ||
                             report.Status == "PendingReview"
@@ -71,12 +71,12 @@ public sealed class GetQuestionReportsQueryHandler
     private static string? NormalizeStatus(string? status)
     {
         if (string.IsNullOrWhiteSpace(status))
-            return ActionRequiredStatus;
+            return ActiveReportsStatus;
 
         return status.Trim().ToUpperInvariant() switch
         {
-            "PENDING" => ActionRequiredStatus,
-            "ACTIONREQUIRED" => ActionRequiredStatus,
+            "PENDING" => ActiveReportsStatus,
+            "ACTIVEREPORTS" => ActiveReportsStatus,
             "PENDINGFIX" => "PendingFix",
             "PENDINGREVIEW" => "PendingReview",
             "RESOLVED" => "Resolved",

@@ -12,4 +12,5 @@ public sealed record ReportedQuestionListItemResponse(
     int PendingReportCount,
     string LatestReportReason,
     DateTime LatestReportAt,
-    IReadOnlyList<string> ReporterRoles);
+    IReadOnlyList<string> ReporterRoles,
+    IReadOnlyList<string> ActiveReportStatuses);

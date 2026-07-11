@@ -31,6 +31,26 @@ public sealed class QuestionReportQueryTests
         Assert.Equal(2, item.PendingReportCount);
         Assert.Contains("Expert", item.ReporterRoles);
         Assert.Contains("Admin", item.ReporterRoles);
+        Assert.Equal(["Pending", "PendingFix"], item.ActiveReportStatuses);
+    }
+
+    [Fact]
+    public async Task OwnedReportedQuestions_ReturnsDistinctActiveStatusesForEachQuestion()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "mixed-active-statuses", "expert-1");
+
+        await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending", DateTime.UtcNow.AddMinutes(-2));
+        await AddReportAsync(database, question.QuestionId, "admin-1", "Admin", "PendingFix", DateTime.UtcNow.AddMinutes(-1));
+        await AddReportAsync(database, question.QuestionId, "admin-2", "Admin", "PendingReview", DateTime.UtcNow);
+
+        var result = await new GetOwnedReportedQuestionsQueryHandler(database.Context)
+            .Handle(new GetOwnedReportedQuestionsQuery("expert-1", "PendingReview", 1, 10), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value!.Items);
+        Assert.Equal(question.QuestionId, item.QuestionId);
+        Assert.Equal(["Pending", "PendingFix", "PendingReview"], item.ActiveReportStatuses);
     }
 
     [Fact]

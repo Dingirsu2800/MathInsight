@@ -15,7 +15,7 @@ public sealed class GetOwnedReportedQuestionsQueryHandler
     private const int DefaultPageIndex = 1;
     private const int DefaultPageSize = 10;
     private const int MaxPageSize = 100;
-    private const string ActionRequiredStatus = "ActionRequired";
+    private const string ActiveReportsStatus = "ActiveReports";
 
     private readonly QuestionBankDbContext _context;
 
@@ -39,7 +39,7 @@ public sealed class GetOwnedReportedQuestionsQueryHandler
             .AsNoTracking()
             .Where(report => report.Question.ExpertId == request.OwnerExpertId);
 
-        var filteredReports = status == ActionRequiredStatus
+        var filteredReports = status == ActiveReportsStatus
             ? reportsForOwner.Where(report => report.Status == "Pending" ||
                                              report.Status == "PendingFix" ||
                                              report.Status == "PendingReview")
@@ -77,6 +77,25 @@ public sealed class GetOwnedReportedQuestionsQueryHandler
             .GroupBy(report => report.QuestionId)
             .Select(group => new { QuestionId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(item => item.QuestionId, item => item.Count, cancellationToken);
+
+        var activeReportStatuses = await _context.QuestionReports
+            .AsNoTracking()
+            .Where(report => questionIds.Contains(report.QuestionId) &&
+                             (report.Status == "Pending" ||
+                              report.Status == "PendingFix" ||
+                              report.Status == "PendingReview"))
+            .Select(report => new { report.QuestionId, report.Status })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var activeStatusesByQuestion = activeReportStatuses
+            .GroupBy(report => report.QuestionId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .Select(report => report.Status)
+                    .OrderBy(GetActiveStatusOrder)
+                    .ToList());
 
         var questions = await _context.Questions
             .AsNoTracking()
@@ -116,7 +135,8 @@ public sealed class GetOwnedReportedQuestionsQueryHandler
                     reports
                         .Select(report => report.ReporterRole)
                         .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList());
+                        .ToList(),
+                    activeStatusesByQuestion.GetValueOrDefault(question.QuestionId, Array.Empty<string>()));
             })
             .ToList();
 
@@ -136,17 +156,28 @@ public sealed class GetOwnedReportedQuestionsQueryHandler
     private static string? NormalizeStatus(string? status)
     {
         if (string.IsNullOrWhiteSpace(status))
-            return ActionRequiredStatus;
+            return ActiveReportsStatus;
 
         return status.Trim().ToUpperInvariant() switch
         {
-            "PENDING" => ActionRequiredStatus,
-            "ACTIONREQUIRED" => ActionRequiredStatus,
+            "PENDING" => ActiveReportsStatus,
+            "ACTIVEREPORTS" => ActiveReportsStatus,
             "PENDINGFIX" => "PendingFix",
             "PENDINGREVIEW" => "PendingReview",
             "RESOLVED" => "Resolved",
             "DISMISSED" => "Dismissed",
             _ => null
+        };
+    }
+
+    private static int GetActiveStatusOrder(string status)
+    {
+        return status switch
+        {
+            "Pending" => 0,
+            "PendingFix" => 1,
+            "PendingReview" => 2,
+            _ => 3
         };
     }
 }

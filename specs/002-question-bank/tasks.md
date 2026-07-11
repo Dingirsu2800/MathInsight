@@ -68,6 +68,8 @@
 - [x] `ReportsController` — Student/Expert/Admin POST report; Expert owner GET report list/detail and PATCH resolve/dismiss
 - [x] Admin report workflow APIs: Expert submit-review; original Admin reporter approve/reject; Admin-reporter-only dashboard query
 - [x] Frontend handoff: `status=Pending` aggregates active report states for Expert inbox; document Admin submit/review API contracts and stable errors
+- [x] Expert frontend report workflow: distinguish `Pending`, `PendingFix`, and `PendingReview` in reported-question list and editor; integrate submit-review; preserve regular resolve/dismiss for Student/Expert reports
+- [ ] Admin frontend report dashboard and approve/reject UI
 - [x] Image upload helper endpoint -> authenticated Cloudinary REST client using server-side HTTP Basic authentication, return `picture_url`; validate JPEG/PNG/WebP magic bytes and 5 MB limit; OCR/Pix2Text remains a separate backlog checkpoint
 - [ ] Register all inside `QuestionBankModuleExtensions.cs`:
   - DbContext, MediatR handlers, Parsers, MassTransit consumer

@@ -66,6 +66,59 @@ export default function DashboardSidebar({
             );
           }
 
+          const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+
+          if (hasChildren) {
+            const isChildActive = item.children.some(child => currentPath === child.path);
+            const showChildren = isActive || isChildActive;
+
+            return (
+              <div key={item.path || item.label} className="flex flex-col gap-1">
+                <Link
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-all",
+                    isChildActive
+                      ? "text-primary/80 font-semibold bg-surface-container-low"
+                      : isActive
+                        ? "text-primary font-bold bg-surface-container-high"
+                        : "text-on-surface-variant hover:bg-surface-container"
+                  )}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontVariationSettings: (isActive || isChildActive) ? "'FILL' 1" : "'FILL' 0" }}
+                  >
+                    {item.icon}
+                  </span>
+                  <span className="text-[15px]">{item.label}</span>
+                </Link>
+
+                {showChildren && (
+                  <div className="pl-4 flex flex-col gap-1 mt-1 mb-2 border-l border-whisper-border/65 ml-[22px]">
+                    {item.children.map((child) => {
+                      const isChildItemActive = currentPath === child.path;
+                      return (
+                        <Link
+                          key={child.path}
+                          to={child.path}
+                          className={cn(
+                            "py-2 px-3 rounded-md text-[13px] transition-all",
+                            isChildItemActive
+                              ? "text-primary font-bold bg-surface-container-high"
+                              : "text-on-surface-variant/80 hover:bg-surface-container/60 hover:text-on-surface-variant"
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.path}

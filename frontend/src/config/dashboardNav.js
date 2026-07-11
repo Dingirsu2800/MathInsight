@@ -2,7 +2,17 @@ export const expertNavItems = [
   {
     label: "Ngân hàng câu hỏi",
     path: "/expert/questions",
-    icon: "database"
+    icon: "database",
+    children: [
+      {
+        label: "Tất cả câu hỏi",
+        path: "/expert/questions",
+      },
+      {
+        label: "Câu hỏi bị báo cáo",
+        path: "/expert/questions/reported",
+      }
+    ]
   },
   {
     label: "Quản lý Tag",

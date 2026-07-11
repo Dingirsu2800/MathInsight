@@ -1,4 +1,14 @@
-# Admin Question Report Review Frontend Handoff
+# Checkpoint 5 Frontend Report Workflow Handoff
+
+## Delivery Checklist
+
+- [x] Backend aggregates Expert inbox `status=Pending` across `Pending`, `PendingFix`, and `PendingReview`.
+- [x] Backend exposes `activeReportStatuses` on every Expert reported-question list item.
+- [x] Backend exposes Expert submit-review and Admin review endpoints with stable errors.
+- [x] Expert reported-question list renders actionable and waiting-review states.
+- [x] Expert editor report panel branches Student/Expert and Admin workflows.
+- [ ] Expert frontend smoke-tests the workflow described below.
+- [ ] Admin dashboard UI is intentionally out of scope for Checkpoint 5.
 
 ## Expert Report Inbox
 
@@ -9,7 +19,17 @@ GET /api/question-bank/reports/mine?status=Pending&pageIndex=1&pageSize=10
 GET /api/question-bank/questions/{questionId}/reports?status=Pending
 ```
 
-For these two Expert endpoints, `status=Pending` now means **action required** and includes report records in `Pending`, `PendingFix`, and `PendingReview`.
+For these two Expert endpoints, `status=Pending` is a backward-compatible alias for **active reports** and includes report records in `Pending`, `PendingFix`, and `PendingReview`. Only `Pending` and `PendingFix` require an Expert action; `PendingReview` is read-only while the original Admin reporter reviews it.
+
+Each item from `GET /api/question-bank/reports/mine` also contains:
+
+```json
+{
+  "activeReportStatuses": ["Pending", "PendingFix", "PendingReview"]
+}
+```
+
+The array is distinct and contains only statuses currently active for that Question. Use it for list badges; do not infer workflow state from `question.status` alone.
 
 An Admin report with `PendingFix` needs an Expert action. Show a submit-review action only when the current Expert owns the question:
 
@@ -19,9 +39,9 @@ POST /api/question-bank/reports/{reportId}/submit-review
 
 On success, refresh the report list/detail. The report becomes `PendingReview`; no request body is required.
 
-## Admin Review Inbox
+## Admin Review Backend Contract
 
-Admin sees only workflows created by that Admin account:
+The following backend contract is ready for a future Admin dashboard. Implementing that dashboard remains out of scope for this checkpoint. Admin sees only workflows created by that Admin account:
 
 ```http
 GET /api/question-bank/admin/reports/mine?status=PendingReview&pageIndex=1&pageSize=10

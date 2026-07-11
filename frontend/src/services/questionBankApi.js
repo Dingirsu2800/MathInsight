@@ -74,5 +74,9 @@ export const questionBankApi = {
         "Content-Type": undefined
       }
     });
+  },
+
+  submitQuestionReportReview(reportId) {
+    return client.post(`/api/question-bank/reports/${reportId}/submit-review`);
   }
 };

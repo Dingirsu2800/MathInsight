@@ -92,22 +92,6 @@ export default function ReportedQuestionsPage() {
           subtitle="Quản lý các câu hỏi do bạn sở hữu nhận được phản hồi/báo cáo từ học sinh, chuyên gia khác hoặc quản trị viên."
         />
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-whisper-border">
-          <button
-            onClick={() => navigate("/expert/questions")}
-            className="px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none text-on-surface-variant border-transparent hover:text-primary"
-          >
-            Tất cả câu hỏi
-          </button>
-          <button
-            onClick={() => navigate("/expert/questions/reported")}
-            className="px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none text-primary border-primary"
-          >
-            Câu hỏi bị báo cáo
-          </button>
-        </div>
-
         {/* Reported Questions Data Table */}
         <div className="w-full bg-pure-surface border border-whisper-border rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
@@ -160,13 +144,29 @@ export default function ReportedQuestionsPage() {
                     const formattedTime = q.latestReportAt ? new Date(q.latestReportAt).toLocaleString("vi-VN") : "Chưa xác định";
                     const reporterRolesList = q.reporterRoles || [];
 
+                    const activeStatuses = Array.isArray(q.activeReportStatuses)
+                      ? q.activeReportStatuses
+                      : ["Pending"];
+                    const hasPendingOrPendingFix = activeStatuses.some(s => s === "Pending" || s === "PendingFix");
+                    const hasPendingReview = activeStatuses.some(s => s === "PendingReview");
+
                     return (
                       <tr key={qId} className="hover:bg-surface-bright transition-all group duration-150">
                         <td className="py-4 px-4 max-w-md">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
                             <span className="font-mono text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded font-bold">
                               Q-{qId}
                             </span>
+                            {hasPendingOrPendingFix && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                Cần xử lý
+                              </span>
+                            )}
+                            {hasPendingReview && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                                Đang chờ Admin duyệt
+                              </span>
+                            )}
                           </div>
                           <div className="font-semibold text-on-surface text-[13px] leading-relaxed mi-line-clamp-2" title={qContent}>
                             <LatexPreview content={qContent} />
@@ -220,14 +220,25 @@ export default function ReportedQuestionsPage() {
                             >
                               <span className="material-symbols-outlined text-[18px]">visibility</span>
                             </button>
-                            <button
-                              onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported`)}
-                              className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
-                              aria-label="Khắc phục câu hỏi"
-                              title="Khắc phục câu hỏi"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">build</span>
-                            </button>
+                            {hasPendingOrPendingFix ? (
+                              <button
+                                onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported`)}
+                                className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                                aria-label="Xử lý báo cáo"
+                                title="Xử lý báo cáo"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported`)}
+                                className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                                aria-label="Theo dõi trạng thái"
+                                title="Theo dõi trạng thái"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">rate_review</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

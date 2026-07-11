@@ -373,22 +373,6 @@ export default function QuestionBankListPage() {
           </Button>
         </DashboardPageHeader>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-whisper-border">
-          <button
-            onClick={() => navigate("/expert/questions")}
-            className="px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none text-primary border-primary"
-          >
-            Tất cả câu hỏi
-          </button>
-          <button
-            onClick={() => navigate("/expert/questions/reported")}
-            className="px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none text-on-surface-variant border-transparent hover:text-primary"
-          >
-            Câu hỏi bị báo cáo
-          </button>
-        </div>
-
         {/* Error / Alert banner */}
         {error && (
           <div className={cn(
@@ -413,9 +397,9 @@ export default function QuestionBankListPage() {
         )}
 
         {/* Filters & Search Layout */}
-        <div className="grid grid-cols-12 gap-4 bg-pure-surface border border-whisper-border p-4 rounded-xl shadow-sm">
+        <div className="grid grid-cols-1 gap-3 bg-pure-surface border border-whisper-border p-4 rounded-xl shadow-sm lg:grid-cols-5 2xl:grid-cols-[1fr_110px_125px_135px_155px_155px_42px] 2xl:items-center">
           {/* Search Box */}
-          <div className="col-span-12 lg:col-span-4 bg-surface-container-lowest border border-whisper-border rounded-lg flex items-center shadow-inner focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all">
+          <div className="bg-surface-container-lowest border border-whisper-border rounded-lg flex items-center shadow-inner focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all h-10 lg:row-start-1 lg:col-start-1 lg:col-span-4 2xl:row-start-1 2xl:col-start-1 2xl:col-span-1">
             <span className="material-symbols-outlined text-on-surface-variant px-3 select-none">search</span>
             <input
               value={searchTerm}
@@ -429,90 +413,88 @@ export default function QuestionBankListPage() {
             />
           </div>
 
-          {/* Filters Select Dropdowns */}
-          <div className="col-span-12 lg:col-span-8 flex flex-wrap gap-3 items-center">
-            {/* Khối lớp */}
-            <div className="w-[110px]">
-              <CustomSelect
-                value={selectedGrade || "ALL"}
-                onValueChange={(val) => { setSelectedGrade(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Khối lớp"
-                items={[
-                  { value: "ALL", label: "Tất cả khối" },
-                  { value: "10", label: "Lớp 10" },
-                  { value: "11", label: "Lớp 11" },
-                  { value: "12", label: "Lớp 12" }
-                ]}
-              />
-            </div>
+          {/* Reset Filters Button */}
+          <button
+            onClick={handleResetFilters}
+            className="w-10 h-10 p-0 inline-flex items-center justify-center text-on-surface-variant hover:text-error transition-colors rounded-lg border border-whisper-border bg-pure-surface hover:bg-surface-container-low cursor-pointer lg:row-start-1 lg:col-start-5 lg:col-span-1 lg:justify-self-end 2xl:row-start-1 2xl:col-start-7 2xl:col-span-1"
+            aria-label="Xóa bộ lọc"
+            title="Xóa bộ lọc"
+          >
+            <span className="material-symbols-outlined text-[20px]">filter_alt_off</span>
+          </button>
 
-            {/* Độ khó */}
-            <div className="w-[125px]">
-              <CustomSelect
-                value={selectedDifficulty || "ALL"}
-                onValueChange={(val) => { setSelectedDifficulty(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Độ khó"
-                items={[
-                  { value: "ALL", label: "Tất cả độ khó" },
-                  ...difficulties.map((d) => ({ value: d.difficultyId, label: d.difficultyName }))
-                ]}
-              />
-            </div>
+          {/* Khối lớp */}
+          <div className="w-full lg:row-start-2 lg:col-start-1 lg:col-span-1 2xl:row-start-1 2xl:col-start-2 2xl:col-span-1">
+            <CustomSelect
+              value={selectedGrade || "ALL"}
+              onValueChange={(val) => { setSelectedGrade(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Khối lớp"
+              items={[
+                { value: "ALL", label: "Tất cả khối" },
+                { value: "10", label: "Lớp 10" },
+                { value: "11", label: "Lớp 11" },
+                { value: "12", label: "Lớp 12" }
+              ]}
+            />
+          </div>
 
-            {/* Trạng thái */}
-            <div className="w-[135px]">
-              <CustomSelect
-                value={selectedStatus || "ALL"}
-                onValueChange={(val) => { setSelectedStatus(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Trạng thái"
-                items={[
-                  { value: "ALL", label: "Tất cả trạng thái" },
-                  { value: "APPROVED", label: "Đã duyệt" },
-                  { value: "REPORTED", label: "Bị báo cáo" },
-                  { value: "REJECTED", label: "Từ chối" },
-                  { value: "DEACTIVATED", label: "Ngừng sử dụng" }
-                ]}
-              />
-            </div>
+          {/* Độ khó */}
+          <div className="w-full lg:row-start-2 lg:col-start-2 lg:col-span-1 2xl:row-start-1 2xl:col-start-3 2xl:col-span-1">
+            <CustomSelect
+              value={selectedDifficulty || "ALL"}
+              onValueChange={(val) => { setSelectedDifficulty(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Độ khó"
+              items={[
+                { value: "ALL", label: "Tất cả độ khó" },
+                ...difficulties.map((d) => ({ value: d.difficultyId, label: d.difficultyName }))
+              ]}
+            />
+          </div>
 
-            {/* Loại câu hỏi */}
-            <div className="w-[155px]">
-              <CustomSelect
-                value={selectedType || "ALL"}
-                onValueChange={(val) => { setSelectedType(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Loại câu hỏi"
-                items={[
-                  { value: "ALL", label: "Tất cả loại" },
-                  { value: "SINGLE_CHOICE", label: "Trắc nghiệm một đáp án" },
-                  { value: "MULTIPLE_CHOICE", label: "Trắc nghiệm nhiều đáp án" },
-                  { value: "TRUE_FALSE", label: "Đúng / Sai" },
-                  { value: "SHORT_ANSWER", label: "Trả lời ngắn" },
-                  { value: "COMPOSITE", label: "Câu hỏi nhiều mệnh đề" }
-                ]}
-              />
-            </div>
+          {/* Trạng thái */}
+          <div className="w-full lg:row-start-2 lg:col-start-3 lg:col-span-1 2xl:row-start-1 2xl:col-start-4 2xl:col-span-1">
+            <CustomSelect
+              value={selectedStatus || "ALL"}
+              onValueChange={(val) => { setSelectedStatus(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Trạng thái"
+              items={[
+                { value: "ALL", label: "Tất cả trạng thái" },
+                { value: "APPROVED", label: "Đã duyệt" },
+                { value: "REPORTED", label: "Bị báo cáo" },
+                { value: "REJECTED", label: "Từ chối" },
+                { value: "DEACTIVATED", label: "Ngừng sử dụng" }
+              ]}
+            />
+          </div>
 
-            {/* Chủ đề (Hierarchical) */}
-            <div className="w-[155px]">
-              <CustomSelect
-                value={selectedTopic || "ALL"}
-                onValueChange={(val) => { setSelectedTopic(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Chủ đề"
-                items={[
-                  { value: "ALL", label: "Tất cả chủ đề" },
-                  ...topics.map((t) => ({ value: t.tagId, label: t.displayName }))
-                ]}
-              />
-            </div>
+          {/* Loại câu hỏi */}
+          <div className="w-full lg:row-start-2 lg:col-start-4 lg:col-span-1 2xl:row-start-1 2xl:col-start-5 2xl:col-span-1">
+            <CustomSelect
+              value={selectedType || "ALL"}
+              onValueChange={(val) => { setSelectedType(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Loại câu hỏi"
+              items={[
+                { value: "ALL", label: "Tất cả loại" },
+                { value: "SINGLE_CHOICE", label: "Trắc nghiệm một đáp án" },
+                { value: "MULTIPLE_CHOICE", label: "Trắc nghiệm nhiều đáp án" },
+                { value: "TRUE_FALSE", label: "Đúng / Sai" },
+                { value: "SHORT_ANSWER", label: "Trả lời ngắn" },
+                { value: "COMPOSITE", label: "Câu hỏi nhiều mệnh đề" }
+              ]}
+            />
+          </div>
 
-            {/* Reset Filters Button */}
-            <button
-              onClick={handleResetFilters}
-              className="ml-auto text-on-surface-variant hover:text-error text-xs font-bold flex items-center gap-1 transition-colors px-2.5 py-1.5 rounded-lg border border-whisper-border bg-pure-surface hover:bg-surface-container-low cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">filter_alt_off</span>
-              Xóa bộ lọc
-            </button>
+          {/* Chủ đề (Hierarchical) */}
+          <div className="w-full lg:row-start-2 lg:col-start-5 lg:col-span-1 2xl:row-start-1 2xl:col-start-6 2xl:col-span-1">
+            <CustomSelect
+              value={selectedTopic || "ALL"}
+              onValueChange={(val) => { setSelectedTopic(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Chủ đề"
+              items={[
+                { value: "ALL", label: "Tất cả chủ đề" },
+                ...topics.map((t) => ({ value: t.tagId, label: t.displayName }))
+              ]}
+            />
           </div>
         </div>
 
