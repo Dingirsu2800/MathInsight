@@ -1,7 +1,11 @@
 using System.Reflection;
 using System.Security.Claims;
+using MathInsight.Modules.QuestionBank.Commands.AdminApproveQuestionReport;
+using MathInsight.Modules.QuestionBank.Commands.AdminRejectQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.DeleteQuestion;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
+using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
+using MathInsight.Modules.QuestionBank.Commands.ToggleQuestionActive;
 using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
@@ -125,6 +129,126 @@ public sealed class ControllerErrorMappingTests
         var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
         Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
         Assert.Equal(QuestionBankErrors.ReportAlreadyPending.Code, error.Code);
+    }
+
+    [Fact]
+    public async Task ReportQuestion_WhenAdminWorkflowExists_Returns409WithStableCode()
+    {
+        var controller = new ReportsController(CreateMediator(request =>
+        {
+            Assert.IsType<ReportQuestionCommand>(request);
+            return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.AdminReportWorkflowAlreadyExists);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext("admin-1", "Admin")
+            }
+        };
+
+        var result = await controller.ReportQuestion(
+            "question-1",
+            new ReportQuestionRequest { ReportReason = "Needs review." },
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(QuestionBankErrors.AdminReportWorkflowAlreadyExists.Code, error.Code);
+    }
+
+    [Fact]
+    public async Task SubmitReview_WhenHandlerReturnsForbidden_Returns403WithStableCode()
+    {
+        var controller = new ReportsController(CreateMediator(request =>
+        {
+            Assert.IsType<SubmitQuestionReportReviewCommand>(request);
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext("expert-2", "Expert")
+            }
+        };
+
+        var result = await controller.SubmitQuestionReportReview("report-1", CancellationToken.None);
+
+        var forbidden = Assert.IsType<ObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(forbidden.Value);
+        Assert.Equal(StatusCodes.Status403Forbidden, forbidden.StatusCode);
+        Assert.Equal(QuestionBankErrors.ReportAccessForbidden.Code, error.Code);
+    }
+
+    [Fact]
+    public async Task AdminApprove_WhenHandlerReturnsInvalidState_Returns409WithStableCode()
+    {
+        var controller = new ReportsController(CreateMediator(request =>
+        {
+            Assert.IsType<AdminApproveQuestionReportCommand>(request);
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext("admin-1", "Admin")
+            }
+        };
+
+        var result = await controller.ApproveQuestionReport("report-1", CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(QuestionBankErrors.ReportAlreadyHandled.Code, error.Code);
+    }
+
+    [Fact]
+    public async Task AdminReject_WhenHandlerReturnsInvalidReviewNote_Returns400WithStableCode()
+    {
+        var controller = new ReportsController(CreateMediator(request =>
+        {
+            Assert.IsType<AdminRejectQuestionReportCommand>(request);
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteTooLong);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext("admin-1", "Admin")
+            }
+        };
+
+        var result = await controller.RejectQuestionReport(
+            "report-1",
+            new AdminRejectQuestionReportRequest { ReviewNote = new string('x', 2001) },
+            CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(badRequest.Value);
+        Assert.Equal(QuestionBankErrors.ReviewNoteTooLong.Code, error.Code);
+    }
+
+    [Fact]
+    public async Task ToggleQuestion_WhenHandlerReturnsActiveReportError_Returns409WithStableCode()
+    {
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<ToggleQuestionActiveCommand>(request);
+            return Result<ToggleQuestionActiveResponse>.Failure(QuestionBankErrors.QuestionHasPendingReports);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext()
+            }
+        };
+
+        var result = await controller.ToggleQuestionActive(
+            "question-1",
+            new ToggleQuestionActiveRequest { IsActive = false },
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(QuestionBankErrors.QuestionHasPendingReports.Code, error.Code);
     }
 
     [Theory]

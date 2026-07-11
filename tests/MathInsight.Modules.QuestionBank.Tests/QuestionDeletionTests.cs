@@ -71,6 +71,32 @@ public sealed class QuestionDeletionTests
         Assert.True(await database.Context.QuestionReports.AnyAsync(item => item.QuestionId == question.QuestionId));
     }
 
+    [Theory]
+    [InlineData("PendingFix")]
+    [InlineData("PendingReview")]
+    public async Task DeleteQuestion_WhenAdminWorkflowIsActive_ReturnsConflict(string reportStatus)
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, $"question-{reportStatus}");
+        database.Context.QuestionReports.Add(new QuestionReport
+        {
+            ReportId = $"report-{reportStatus}",
+            QuestionId = question.QuestionId,
+            ReporterAccountId = "admin-1",
+            ReporterRole = "Admin",
+            ReportReason = "Needs review.",
+            Status = reportStatus,
+            CreatedTime = DateTime.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+
+        var result = await new DeleteQuestionCommandHandler(database.Context)
+            .Handle(new DeleteQuestionCommand(question.QuestionId, question.ExpertId), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionHasPendingReports, result.Error);
+    }
+
     [Fact]
     public async Task DeleteQuestion_WhenReportedWithoutPendingReport_ReturnsConflict()
     {
@@ -104,6 +130,35 @@ public sealed class QuestionDeletionTests
         Assert.True(result.IsFailure);
         Assert.Equal(QuestionBankErrors.QuestionInUse, result.Error);
         Assert.True(question.IsActive);
+    }
+
+    [Theory]
+    [InlineData("Pending")]
+    [InlineData("PendingFix")]
+    [InlineData("PendingReview")]
+    public async Task ToggleQuestionActive_WhenActiveReportExists_ReturnsConflictAndKeepsQuestionActive(string reportStatus)
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, $"question-toggle-{reportStatus}");
+        database.Context.QuestionReports.Add(new QuestionReport
+        {
+            ReportId = $"report-toggle-{reportStatus}",
+            QuestionId = question.QuestionId,
+            ReporterAccountId = reportStatus == "Pending" ? "expert-2" : "admin-1",
+            ReporterRole = reportStatus == "Pending" ? "Expert" : "Admin",
+            ReportReason = "Needs review.",
+            Status = reportStatus,
+            CreatedTime = DateTime.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+
+        var result = await new ToggleQuestionActiveCommandHandler(database.Context)
+            .Handle(new ToggleQuestionActiveCommand(question.QuestionId, false, question.ExpertId), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionHasPendingReports, result.Error);
+        Assert.True(question.IsActive);
+        Assert.Equal("Approved", question.Status);
     }
 
     private static async Task<Question> AddQuestionAsync(QuestionBankInMemoryContext database, string questionId)

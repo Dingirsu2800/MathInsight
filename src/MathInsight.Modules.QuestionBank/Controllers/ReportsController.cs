@@ -1,9 +1,13 @@
 using System.Security.Claims;
+using MathInsight.Modules.QuestionBank.Commands.AdminApproveQuestionReport;
+using MathInsight.Modules.QuestionBank.Commands.AdminRejectQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.HandleQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
+using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetOwnedReportedQuestions;
+using MathInsight.Modules.QuestionBank.Queries.GetAdminQuestionReports;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -116,6 +120,92 @@ public sealed class ReportsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
+    [HttpPost("reports/{reportId}/submit-review")]
+    public async Task<IActionResult> SubmitQuestionReportReview(
+        string reportId,
+        CancellationToken cancellationToken)
+    {
+        var expertId = GetAccountId();
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new SubmitQuestionReportReviewCommand(reportId, expertId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToReportErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("admin/reports/mine")]
+    public async Task<IActionResult> GetAdminQuestionReports(
+        [FromQuery] string? status,
+        [FromQuery] int pageIndex,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var adminId = GetAccountId();
+        if (string.IsNullOrWhiteSpace(adminId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new GetAdminQuestionReportsQuery(adminId, status, pageIndex, pageSize),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToReportErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("admin/reports/{reportId}/approve")]
+    public async Task<IActionResult> ApproveQuestionReport(
+        string reportId,
+        CancellationToken cancellationToken)
+    {
+        var adminId = GetAccountId();
+        if (string.IsNullOrWhiteSpace(adminId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new AdminApproveQuestionReportCommand(reportId, adminId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToReportErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("admin/reports/{reportId}/reject")]
+    public async Task<IActionResult> RejectQuestionReport(
+        string reportId,
+        [FromBody] AdminRejectQuestionReportRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(QuestionBankErrors.ReviewNoteRequired));
+
+        var adminId = GetAccountId();
+        if (string.IsNullOrWhiteSpace(adminId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new AdminRejectQuestionReportCommand(reportId, request, adminId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToReportErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
     private string? GetAccountId()
     {
         return User.FindFirst("account_id")?.Value
@@ -141,7 +231,9 @@ public sealed class ReportsController : ControllerBase
 
         if (error == QuestionBankErrors.ReportAlreadyPending ||
             error == QuestionBankErrors.ReportAlreadyHandled ||
-            error == QuestionBankErrors.QuestionNotReportable)
+            error == QuestionBankErrors.QuestionNotReportable ||
+            error == QuestionBankErrors.AdminReportWorkflowAlreadyExists ||
+            error == QuestionBankErrors.AdminReportRequiresReview)
         {
             return Conflict(new ApiErrorResponse(error));
         }

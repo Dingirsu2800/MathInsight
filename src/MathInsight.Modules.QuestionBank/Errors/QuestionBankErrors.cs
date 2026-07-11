@@ -276,6 +276,22 @@ public static class QuestionBankErrors
         "REPORT_ALREADY_HANDLED",
         "Question report has already been handled.");
 
+    public static readonly Error AdminReportWorkflowAlreadyExists = new(
+        "ADMIN_REPORT_WORKFLOW_ALREADY_EXISTS",
+        "An active Admin report workflow already exists for this question.");
+
+    public static readonly Error AdminReportRequiresReview = new(
+        "ADMIN_REPORT_REQUIRES_REVIEW",
+        "An Admin report must be submitted and reviewed through the Admin workflow.");
+
+    public static readonly Error ReviewNoteRequired = new(
+        "REVIEW_NOTE_REQUIRED",
+        "Review note is required.");
+
+    public static readonly Error ReviewNoteTooLong = new(
+        "REVIEW_NOTE_TOO_LONG",
+        "Review note must not exceed 2000 characters.");
+
     public static readonly Error QuestionNotReportable = new(
         "QUESTION_NOT_REPORTABLE",
         "Question cannot be reported in its current state.");

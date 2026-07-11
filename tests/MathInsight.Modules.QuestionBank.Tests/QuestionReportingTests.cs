@@ -62,6 +62,7 @@ public sealed class QuestionReportingTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Admin", result.Value!.ReporterRole);
+        Assert.Equal("PendingFix", result.Value.Status);
         Assert.Equal("Reported", question.Status);
         Assert.True(question.IsActive);
     }
@@ -192,7 +193,7 @@ public sealed class QuestionReportingTests
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         var question = await AddQuestionAsync(database, "reported-question", "Reported", true);
         var firstReport = await AddReportAsync(database, question.QuestionId, "expert-2", "Expert", "Pending");
-        await AddReportAsync(database, question.QuestionId, "admin-1", "Admin", "Pending");
+        await AddReportAsync(database, question.QuestionId, "admin-1", "Admin", "PendingFix");
 
         var result = await new HandleQuestionReportCommandHandler(database.Context)
             .Handle(

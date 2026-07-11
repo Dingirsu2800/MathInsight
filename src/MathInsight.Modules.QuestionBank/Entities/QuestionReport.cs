@@ -11,6 +11,10 @@ public class QuestionReport
     public DateTime CreatedTime { get; set; }
     public DateTime? ResolvedTime { get; set; }
     public string? ResolvedBy { get; set; }
+    public string? ReviewNote { get; set; }
+    public DateTime? SubmittedTime { get; set; }
+    public DateTime? ReviewedTime { get; set; }
+    public string? ReviewedBy { get; set; }
 
     public Question Question { get; set; } = default!;
 }

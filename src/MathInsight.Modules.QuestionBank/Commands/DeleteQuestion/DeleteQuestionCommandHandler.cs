@@ -51,7 +51,9 @@ public sealed class DeleteQuestionCommandHandler
             return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionMutationForbidden);
 
         var hasPendingReports = string.Equals(question.Status, "Reported", StringComparison.OrdinalIgnoreCase) ||
-            question.Reports.Any(report => report.Status == "Pending");
+            question.Reports.Any(report => report.Status == QuestionReportWorkflow.Pending ||
+                                           report.Status == QuestionReportWorkflow.PendingFix ||
+                                           report.Status == QuestionReportWorkflow.PendingReview);
 
         if (hasPendingReports)
             return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionHasPendingReports);

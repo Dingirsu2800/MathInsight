@@ -63,6 +63,23 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
             .HasMaxLength(36)
             .IsUnicode(false);
 
+        builder.Property(report => report.ReviewNote)
+            .HasColumnName("ReviewNote")
+            .HasMaxLength(2000);
+
+        builder.Property(report => report.SubmittedTime)
+            .HasColumnName("SubmittedTime")
+            .HasColumnType("datetime2(0)");
+
+        builder.Property(report => report.ReviewedTime)
+            .HasColumnName("ReviewedTime")
+            .HasColumnType("datetime2(0)");
+
+        builder.Property(report => report.ReviewedBy)
+            .HasColumnName("ReviewedBy")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
         builder.HasIndex(report => new { report.QuestionId, report.Status })
             .HasDatabaseName("IX_QuestionReport_Question_Status");
 

@@ -73,7 +73,7 @@ src/MathInsight.Modules.QuestionBank/
 
 ### Reporting Consistency
 
-The existing schema is kept unchanged. On SQL Server, report creation, report handling, and Question deletion use a `Serializable` transaction and an `UPDLOCK, HOLDLOCK` row lock on the related `QuestionID`. This serializes report mutations for one Question, preventing duplicate pending reports and stale `Reported` status transitions without introducing a migration. The in-memory test provider uses the same business rules without SQL Server locking.
+Migration `003_Admin_QuestionReport_Review_Workflow.sql` extends `QuestionReport` with review audit fields and workflow statuses. On SQL Server, report creation, report handling, Admin review, and Question deletion use a `Serializable` transaction and an `UPDLOCK, HOLDLOCK` row lock on the related `QuestionID`. This serializes mutations for one Question, enforcing one active Admin workflow and preventing stale Question status transitions. The in-memory test provider uses the same business rules without SQL Server locking.
 
 ### Database Layer (Current DB Script Tables)
 
@@ -94,7 +94,7 @@ The existing schema is kept unchanged. On SQL Server, report creation, report ha
 GET    /api/v1/questions                          # UC-19: list (paged + filter)
 GET    /api/v1/questions/dashboard                # UC-18: stats
 POST   /api/v1/questions                          # UC-20/21: create single question
-POST   /api/question-bank/questions/image-upload  # UC-22: signed backend upload to Cloudinary
+POST   /api/question-bank/questions/image-upload  # UC-22: authenticated backend upload to Cloudinary
 POST   /api/v1/questions/import                   # UC-23: bulk import file → queue
 GET    /api/v1/questions/{id}/versions            # UC-24: version history
 PUT    /api/v1/questions/{id}                     # UC-25: update (auto-snapshot)
@@ -104,6 +104,7 @@ POST   /api/question-bank/questions/{id}/reports  # UC-28/29: Student, Expert, o
 GET    /api/question-bank/reports/mine            # UC-30: Expert views reports on own questions
 GET    /api/question-bank/questions/{id}/reports  # UC-33: Expert views report details for an owned question
 PATCH  /api/question-bank/reports/{reportId}      # UC-33: Expert resolves or dismisses a report
+POST   /api/question-bank/reports/{reportId}/submit-review # Expert submits Admin report after fixing
 GET    /api/question-bank/tags/topics              # UC-34: topic tree; `includeInactive=false` by default
 POST   /api/v1/tags/topics                        # UC-35: create topic tag
 PUT    /api/question-bank/tags/topics/{id}         # UC-37: update; cannot disable with active descendants
@@ -121,9 +122,9 @@ POST   /api/question-bank/questions/{id}/reports  # UC-28: report question (crea
 
 **Admin (AdminOnly policy)**
 ```
-GET    /api/v1/admin/questions/reports            # View all pending question reports
-POST   /api/v1/admin/questions/{id}/approve       # UC-31: set status = APPROVED
-POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED with note
+GET    /api/question-bank/admin/reports/mine      # Admin views own Admin-report workflows
+POST   /api/question-bank/admin/reports/{reportId}/approve # Original Admin reporter approves
+POST   /api/question-bank/admin/reports/{reportId}/reject  # Original Admin reporter rejects with note
 ```
 
 ### Integration & Domain Events

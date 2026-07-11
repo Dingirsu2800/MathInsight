@@ -10,6 +10,7 @@ namespace MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
 public sealed class GetQuestionReportsQueryHandler
     : IRequestHandler<GetQuestionReportsQuery, Result<IReadOnlyList<QuestionReportResponse>>>
 {
+    private const string ActionRequiredStatus = "ActionRequired";
     private readonly QuestionBankDbContext _context;
 
     public GetQuestionReportsQueryHandler(QuestionBankDbContext context)
@@ -40,7 +41,12 @@ public sealed class GetQuestionReportsQueryHandler
                 join account in _context.AccountReadModels.AsNoTracking()
                     on report.ReporterAccountId equals account.AccountId into accounts
                 from account in accounts.DefaultIfEmpty()
-                where report.QuestionId == request.QuestionId && report.Status == status
+                where report.QuestionId == request.QuestionId &&
+                      (status == ActionRequiredStatus
+                          ? report.Status == "Pending" ||
+                            report.Status == "PendingFix" ||
+                            report.Status == "PendingReview"
+                          : report.Status == status)
                 orderby report.CreatedTime descending, report.ReportId descending
                 select new QuestionReportResponse(
                     report.ReportId,
@@ -52,7 +58,11 @@ public sealed class GetQuestionReportsQueryHandler
                     report.Status,
                     report.CreatedTime,
                     report.ResolvedTime,
-                    report.ResolvedBy))
+                    report.ResolvedBy,
+                    report.ReviewNote,
+                    report.SubmittedTime,
+                    report.ReviewedTime,
+                    report.ReviewedBy))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<QuestionReportResponse>>.Success(reports);
@@ -61,11 +71,14 @@ public sealed class GetQuestionReportsQueryHandler
     private static string? NormalizeStatus(string? status)
     {
         if (string.IsNullOrWhiteSpace(status))
-            return "Pending";
+            return ActionRequiredStatus;
 
         return status.Trim().ToUpperInvariant() switch
         {
-            "PENDING" => "Pending",
+            "PENDING" => ActionRequiredStatus,
+            "ACTIONREQUIRED" => ActionRequiredStatus,
+            "PENDINGFIX" => "PendingFix",
+            "PENDINGREVIEW" => "PendingReview",
             "RESOLVED" => "Resolved",
             "DISMISSED" => "Dismissed",
             _ => null

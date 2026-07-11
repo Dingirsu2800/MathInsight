@@ -50,6 +50,19 @@ public sealed class ReportQuestionCommandHandler
         if (question is null)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.QuestionNotFound);
 
+        if (reporterRole == "Admin")
+        {
+            var hasActiveAdminWorkflow = await _context.QuestionReports.AnyAsync(
+                report => report.QuestionId == question.QuestionId &&
+                          report.ReporterRole == "Admin" &&
+                          (report.Status == QuestionReportWorkflow.PendingFix ||
+                           report.Status == QuestionReportWorkflow.PendingReview),
+                cancellationToken);
+
+            if (hasActiveAdminWorkflow)
+                return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.AdminReportWorkflowAlreadyExists);
+        }
+
         if (reporterRole is "Expert" or "Admin" &&
             (question.Status is not ("Approved" or "Reported") || !question.IsActive))
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.QuestionNotReportable);
@@ -60,13 +73,15 @@ public sealed class ReportQuestionCommandHandler
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.QuestionSelfReportForbidden);
         }
 
-        var hasPendingReport = await _context.QuestionReports.AnyAsync(
+        var hasActiveReportFromReporter = await _context.QuestionReports.AnyAsync(
             report => report.QuestionId == question.QuestionId &&
                       report.ReporterAccountId == command.ReporterAccountId &&
-                      report.Status == "Pending",
+                      (report.Status == QuestionReportWorkflow.Pending ||
+                       report.Status == QuestionReportWorkflow.PendingFix ||
+                       report.Status == QuestionReportWorkflow.PendingReview),
             cancellationToken);
 
-        if (hasPendingReport)
+        if (hasActiveReportFromReporter)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportAlreadyPending);
 
         var createdTime = DateTime.UtcNow;
@@ -77,7 +92,9 @@ public sealed class ReportQuestionCommandHandler
             ReporterAccountId = command.ReporterAccountId,
             ReporterRole = reporterRole,
             ReportReason = reason,
-            Status = "Pending",
+            Status = reporterRole == "Admin"
+                ? QuestionReportWorkflow.PendingFix
+                : QuestionReportWorkflow.Pending,
             CreatedTime = createdTime
         };
 

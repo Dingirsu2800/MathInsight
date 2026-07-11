@@ -57,7 +57,10 @@ public sealed class HandleQuestionReportCommandHandler
         if (!string.Equals(report.Question.ExpertId, command.ExpertAccountId, StringComparison.OrdinalIgnoreCase))
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
-        if (report.Status != "Pending")
+        if (report.ReporterRole == "Admin")
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
+
+        if (report.Status != QuestionReportWorkflow.Pending)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
 
         report.Status = targetStatus;
@@ -67,8 +70,10 @@ public sealed class HandleQuestionReportCommandHandler
         var otherBlockingReportsRemain = await _context.QuestionReports.AnyAsync(
             item => item.QuestionId == report.QuestionId &&
                     item.ReportId != report.ReportId &&
-                    item.Status == "Pending" &&
-                    (item.ReporterRole == "Expert" || item.ReporterRole == "Admin"),
+                    ((item.ReporterRole == "Expert" && item.Status == QuestionReportWorkflow.Pending) ||
+                     (item.ReporterRole == "Admin" &&
+                      (item.Status == QuestionReportWorkflow.PendingFix ||
+                       item.Status == QuestionReportWorkflow.PendingReview))),
             cancellationToken);
 
         if (!otherBlockingReportsRemain && report.Question.Status == "Reported")
@@ -94,7 +99,11 @@ public sealed class HandleQuestionReportCommandHandler
             report.Status,
             report.CreatedTime,
             report.ResolvedTime,
-            report.ResolvedBy));
+            report.ResolvedBy,
+            report.ReviewNote,
+            report.SubmittedTime,
+            report.ReviewedTime,
+            report.ReviewedBy));
     }
 
     private static string? NormalizeHandledStatus(string? status)

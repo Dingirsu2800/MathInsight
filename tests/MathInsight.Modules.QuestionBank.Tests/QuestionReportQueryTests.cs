@@ -17,7 +17,7 @@ public sealed class QuestionReportQueryTests
 
         await AddReportAsync(database, firstQuestion.QuestionId, "student-1", "Student", "Pending", DateTime.UtcNow.AddMinutes(-10));
         await AddReportAsync(database, secondQuestion.QuestionId, "expert-3", "Expert", "Pending", DateTime.UtcNow.AddMinutes(-1));
-        await AddReportAsync(database, secondQuestion.QuestionId, "admin-1", "Admin", "Pending", DateTime.UtcNow);
+        await AddReportAsync(database, secondQuestion.QuestionId, "admin-1", "Admin", "PendingFix", DateTime.UtcNow);
         await AddReportAsync(database, otherQuestion.QuestionId, "student-2", "Student", "Pending", DateTime.UtcNow.AddMinutes(1));
 
         var result = await new GetOwnedReportedQuestionsQueryHandler(database.Context)
@@ -31,6 +31,22 @@ public sealed class QuestionReportQueryTests
         Assert.Equal(2, item.PendingReportCount);
         Assert.Contains("Expert", item.ReporterRoles);
         Assert.Contains("Admin", item.ReporterRoles);
+    }
+
+    [Fact]
+    public async Task QuestionReports_PendingFilterIncludesAdminWorkflowStatuses()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "admin-workflow-detail", "expert-1");
+        await AddReportAsync(database, question.QuestionId, "expert-2", "Expert", "Pending", DateTime.UtcNow.AddMinutes(-1));
+        await AddReportAsync(database, question.QuestionId, "admin-1", "Admin", "PendingReview", DateTime.UtcNow);
+
+        var result = await new GetQuestionReportsQueryHandler(database.Context)
+            .Handle(new GetQuestionReportsQuery(question.QuestionId, "expert-1", "Pending"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.Value!.Count);
+        Assert.Contains(result.Value, report => report.Status == "PendingReview" && report.ReporterRole == "Admin");
     }
 
     [Fact]

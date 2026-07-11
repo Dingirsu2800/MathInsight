@@ -17,8 +17,8 @@
   - [x] `QuestionTopicConfiguration` — composite UNIQUE `(question_id, tag_id)`, `is_primary` flag
 - [x] Create `QuestionBankDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
 - [x] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
-- [ ] Schema alignment check: verify SQL script allows `Question.Status = Pending` before implementing Admin re-review flow; verify `TagDifficulty.LevelValue` has a unique constraint; verify `Question.QuestionType` allows `Composite` and `QuestionPart` exists.
-- [x] Seed: topic/difficulty levels and sample questions; `PENDING` sample rows are applied only when the DB allows `Question.Status = Pending`
+- [x] Schema alignment check: Admin re-review state is stored in `QuestionReport`; migration `003` adds review audit fields/statuses and `TagDifficulty.LevelValue` unique index; verify `Question.QuestionType` allows `Composite` and `QuestionPart` exists.
+- [x] Seed: topic/difficulty levels and sample questions; Admin re-review state is represented by `QuestionReport.PendingFix` / `PendingReview`, never `Question.Status = Pending`
 
 ---
 
@@ -29,11 +29,11 @@
   - [x] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` or `REPORTED` (BR-54); validate constraints
   - [x] `ToggleQuestionActiveCommand` — check existing `TestQuestion` records (DC-02)
   - [x] `DeleteQuestionCommand` — hard-delete only when there is no `TestQuestion` reference, pending report, or `REPORTED` status; otherwise return the matching HTTP 409 without mutation (DC-02, BR-69)
-  - [ ] `AdminApproveQuestionCommand` — set `status = APPROVED`
-  - [ ] `AdminRejectQuestionCommand` — set `status = REJECTED`; requires non-empty reject reason
+  - [x] `SubmitQuestionReportReviewCommand` — owning Expert submits an Admin `PendingFix` report as `PendingReview`
+  - [x] `AdminApproveQuestionReportCommand` / `AdminRejectQuestionReportCommand` — only the original Admin reporter reviews `PendingReview`; approve restores `Approved` only when no Expert `Pending` report remains, reject requires review note and sets `Rejected`
 - [x] **Report Commands**:
-  - [x] `ReportQuestionCommand` — Student creates `QuestionReport` for any existing Question without changing it; Expert/Admin reports require active `Approved`/`Reported` Questions and move `Approved` to `Reported` without changing `IsActive`; Expert self-report is forbidden (BR-58, BR-67)
-  - [x] `HandleQuestionReportCommand` — Question owner resolves or dismisses a pending report; restores `Reported` to `Approved` only after the final pending Expert/Admin report is handled (BR-60, BR-68)
+  - [x] `ReportQuestionCommand` — Student/Expert reports create `Pending`; Admin creates `PendingFix`; one active Admin workflow per Question is enforced under the SQL Server question lock (BR-58, BR-67, BR-71)
+  - [x] `HandleQuestionReportCommand` — Question owner resolves or dismisses only Student/Expert `Pending` reports; Admin reports require submit/review flow; restoration accounts for active Admin workflow (BR-60, BR-68)
   - [x] Validate Teacher cannot report (BR-59) -> 403
 - [x] **Tag Commands**:
   - [x] `CreateTagTopicCommand` — assign `parent_tag_id`, validate grade
@@ -44,7 +44,8 @@
   - [ ] `GetDashboardQuery` — count by `status`, `question_type`, `grade`; return last 5 reports
   - [x] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
   - [x] `GetQuestionVersionsQuery` — ordered by `created_time` DESC
-  - [x] `GetOwnedReportedQuestionsQuery` / `GetQuestionReportsQuery` — owner-only reported-question list (grouped/paged) and report detail ordered by newest first
+  - [x] `GetOwnedReportedQuestionsQuery` / `GetQuestionReportsQuery` — owner-only reported-question list (grouped/paged) and report detail ordered by newest first, including `PendingFix`/`PendingReview`
+  - [x] `GetAdminQuestionReportsQuery` — paged Admin-reporter-only workflow query for `PendingFix`, `PendingReview`, or `Resolved`
   - [x] `GetTagListQuery`/tag queries — return hierarchical topic tree + flat difficulty list; active-only by default and support `includeInactive=true` (BR-65)
 - [ ] **Cross-module read contract**:
   - [ ] Provide/query by `QuestionTopic.TagID` + `Question.DifficultyID` + optional `Question.QuestionType` for TestGen.
@@ -65,7 +66,8 @@
 - [ ] `QuestionsController` — ExpertOnly + AdminOnly hybrid routes
 - [x] `TagsController` — ExpertOnly routes for topic/difficulty CRUD
 - [x] `ReportsController` — Student/Expert/Admin POST report; Expert owner GET report list/detail and PATCH resolve/dismiss
-- [ ] Admin report dashboard and Admin approve/reject Question workflows
+- [x] Admin report workflow APIs: Expert submit-review; original Admin reporter approve/reject; Admin-reporter-only dashboard query
+- [x] Frontend handoff: `status=Pending` aggregates active report states for Expert inbox; document Admin submit/review API contracts and stable errors
 - [x] Image upload helper endpoint -> authenticated Cloudinary REST client using server-side HTTP Basic authentication, return `picture_url`; validate JPEG/PNG/WebP magic bytes and 5 MB limit; OCR/Pix2Text remains a separate backlog checkpoint
 - [ ] Register all inside `QuestionBankModuleExtensions.cs`:
   - DbContext, MediatR handlers, Parsers, MassTransit consumer
@@ -89,7 +91,7 @@
   - [x] UC-28: Teacher attempts to report -> 403 (BR-59)
   - [x] UC-29/30/33: Expert/Admin report, owner-only report queries, resolve/dismiss state transitions, and HTTP error mapping
   - [ ] Manual SQL Server smoke: verify `QuestionReportSqlServerLock` serializes report mutations for the same QuestionID in a disposable test database
-  - [ ] UC-31/32: Admin approve/reject -> status transitions correct
+  - [x] UC-31/32: Admin workflow submit, approve/reject, ownership, active-workflow and question-status transitions correct
   - [ ] UC-23: Import 10 questions from Excel -> all created, invalid rows rejected
   - [ ] UC-38: Delete tag with linked questions -> soft-delete (`is_active = false`) (DC-02)
   - [x] UC-38: Disable/delete topic with active descendant -> `TAG_TOPIC_HAS_ACTIVE_DESCENDANTS` / 409 with no data mutation (BR-66)
