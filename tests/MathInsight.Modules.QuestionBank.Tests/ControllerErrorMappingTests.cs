@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Security.Claims;
 using MathInsight.Modules.QuestionBank.Commands.DeleteQuestion;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
+using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
@@ -10,6 +11,7 @@ using MathInsight.Modules.QuestionBank.Controllers;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Shared.Results;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +19,16 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 
 public sealed class ControllerErrorMappingTests
 {
+    [Fact]
+    public void QuestionImageEndpoint_RequiresExpertRole()
+    {
+        var authorizeAttribute = typeof(QuestionsController)
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        Assert.NotNull(authorizeAttribute);
+        Assert.Equal("Expert", authorizeAttribute.Roles);
+    }
+
     [Fact]
     public async Task DeleteQuestion_WhenHandlerReturnsQuestionInUse_Returns409WithStableCode()
     {
@@ -113,6 +125,35 @@ public sealed class ControllerErrorMappingTests
         var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
         Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
         Assert.Equal(QuestionBankErrors.ReportAlreadyPending.Code, error.Code);
+    }
+
+    [Theory]
+    [InlineData("IMAGE_TOO_LARGE", StatusCodes.Status413PayloadTooLarge)]
+    [InlineData("IMAGE_STORAGE_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable)]
+    [InlineData("IMAGE_UPLOAD_FAILED", StatusCodes.Status502BadGateway)]
+    public async Task UploadQuestionImage_WhenHandlerReturnsMappedError_ReturnsStableHttpStatus(
+        string errorCode,
+        int expectedStatusCode)
+    {
+        var error = errorCode switch
+        {
+            "IMAGE_TOO_LARGE" => QuestionBankErrors.ImageTooLarge,
+            "IMAGE_STORAGE_UNAVAILABLE" => QuestionBankErrors.ImageStorageUnavailable,
+            "IMAGE_UPLOAD_FAILED" => QuestionBankErrors.ImageUploadFailed,
+            _ => throw new InvalidOperationException("Unexpected error code.")
+        };
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<UploadQuestionImageCommand>(request);
+            return Result<QuestionImageUploadResponse>.Failure(error);
+        }));
+
+        var result = await controller.UploadQuestionImage(null, CancellationToken.None);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        var response = Assert.IsType<ApiErrorResponse>(objectResult.Value);
+        Assert.Equal(expectedStatusCode, objectResult.StatusCode);
+        Assert.Equal(error.Code, response.Code);
     }
 
     private static IMediator CreateMediator(Func<object, object> responseFactory)

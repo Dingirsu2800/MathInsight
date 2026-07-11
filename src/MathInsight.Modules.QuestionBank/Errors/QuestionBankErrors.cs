@@ -36,6 +36,26 @@ public static class QuestionBankErrors
         "QUESTION_CONTENT_REQUIRED",
         "Question content is required.");
 
+    public static readonly Error ImageRequired = new(
+        "IMAGE_REQUIRED",
+        "An image file is required.");
+
+    public static readonly Error ImageTypeNotSupported = new(
+        "IMAGE_TYPE_NOT_SUPPORTED",
+        "Only JPEG, PNG, and WebP images are supported.");
+
+    public static readonly Error ImageTooLarge = new(
+        "IMAGE_TOO_LARGE",
+        "Image size must not exceed 5 MB.");
+
+    public static readonly Error ImageStorageUnavailable = new(
+        "IMAGE_STORAGE_UNAVAILABLE",
+        "Image storage is not configured.");
+
+    public static readonly Error ImageUploadFailed = new(
+        "IMAGE_UPLOAD_FAILED",
+        "Image upload failed.");
+
     public static readonly Error QuestionInvalidType = new(
         "QUESTION_INVALID_TYPE",
         "Invalid question type.");

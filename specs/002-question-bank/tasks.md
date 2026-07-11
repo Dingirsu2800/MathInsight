@@ -66,7 +66,7 @@
 - [x] `TagsController` — ExpertOnly routes for topic/difficulty CRUD
 - [x] `ReportsController` — Student/Expert/Admin POST report; Expert owner GET report list/detail and PATCH resolve/dismiss
 - [ ] Admin report dashboard and Admin approve/reject Question workflows
-- [ ] Image upload helper endpoint -> Cloudinary REST client, return `picture_url`
+- [x] Image upload helper endpoint -> signed Cloudinary REST client, return `picture_url`; validate JPEG/PNG/WebP magic bytes and 5 MB limit; OCR/Pix2Text remains a separate backlog checkpoint
 - [ ] Register all inside `QuestionBankModuleExtensions.cs`:
   - DbContext, MediatR handlers, Parsers, MassTransit consumer
 

@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using MathInsight.Modules.QuestionBank.Commands.CreateQuestion;
 using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
+using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
@@ -116,6 +117,22 @@ public class QuestionsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [HttpPost("image-upload")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadQuestionImage(
+        [FromForm] IFormFile? file,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new UploadQuestionImageCommand(file),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToImageUploadErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
     [HttpPut("{questionId}")]
     public async Task<IActionResult> UpdateQuestion(
         string questionId,
@@ -206,6 +223,20 @@ public class QuestionsController : ControllerBase
         if (error == QuestionBankErrors.QuestionInUse ||
             error == QuestionBankErrors.QuestionHasPendingReports)
             return Conflict(new ApiErrorResponse(error));
+
+        return BadRequest(new ApiErrorResponse(error));
+    }
+
+    private IActionResult ToImageUploadErrorResult(Error error)
+    {
+        if (error == QuestionBankErrors.ImageTooLarge)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.ImageStorageUnavailable)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.ImageUploadFailed)
+            return StatusCode(StatusCodes.Status502BadGateway, new ApiErrorResponse(error));
 
         return BadRequest(new ApiErrorResponse(error));
     }

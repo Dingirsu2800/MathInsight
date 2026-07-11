@@ -94,7 +94,7 @@ The existing schema is kept unchanged. On SQL Server, report creation, report ha
 GET    /api/v1/questions                          # UC-19: list (paged + filter)
 GET    /api/v1/questions/dashboard                # UC-18: stats
 POST   /api/v1/questions                          # UC-20/21: create single question
-POST   /api/v1/questions/image-upload             # UC-22: upload image to Cloudinary
+POST   /api/question-bank/questions/image-upload  # UC-22: signed backend upload to Cloudinary
 POST   /api/v1/questions/import                   # UC-23: bulk import file → queue
 GET    /api/v1/questions/{id}/versions            # UC-24: version history
 PUT    /api/v1/questions/{id}                     # UC-25: update (auto-snapshot)
@@ -140,7 +140,7 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
 - **Testing/Grading modules** read `QuestionPart` for `Composite` questions and write per-part student answers to `TestAnswerPart`.
 - **Recommender/TestGen v2 contract**: Recommender stores Ptag by `StudentID + TagID` only. TestGen maps `TagsMastery.RecommendedDifficultyLevel` to `TagDifficulty.LevelValue`, then filters `Question.DifficultyID` plus `QuestionTopic.TagID`. If a `BlueprintSection` is used, TestGen also filters `Question.QuestionType` by the section's `QuestionType`. Do not remove `Question.DifficultyID`, `Question.QuestionType`, or `TagDifficulty` from QuestionBank.
 - **Testing module** references `question_id` in `test_questions` — a Question with any existing reference cannot be hard-deleted or deactivated and returns `409 QUESTION_IN_USE`.
-- **Cloudinary** integration for image upload (UC-22): REST call returns `picture_url`.
+- **Cloudinary** integration for image upload (UC-22): an Expert posts multipart field `file` to `POST /api/question-bank/questions/image-upload`. `IQuestionImageStorage` signs and forwards JPEG/PNG/WebP files (max 5 MB) to Cloudinary REST, then returns only `picture_url`. No Cloudinary secret, signature, raw response, or OCR behavior is exposed to frontend clients.
 - **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
 
 ## Verification Plan
@@ -162,3 +162,4 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
    - Expert question created → status = APPROVED (BR-55).
    - Recommender/TestGen mapping: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2`, then selects only approved active questions with the matching `Question.DifficultyID`, `QuestionTopic.TagID`, and section `Question.QuestionType` when provided.
    - API enum mapping persists correct DB values: `TRUE_FALSE` -> `TrueFalse`, `MULTIPLE_SELECT` -> `MultipleChoice`, `COMPOSITE` -> `Composite`.
+   - Image upload accepts valid JPEG/PNG/WebP and rejects empty, oversized, unsupported, forged MIME/magic-byte files. Mock Cloudinary tests cover missing configuration, timeout, HTTP error, and response without `secure_url`.

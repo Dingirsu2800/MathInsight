@@ -18,7 +18,7 @@
 | UC-19 | View Question List | Expert |
 | UC-20 | Input Single Question | Expert |
 | UC-21 | Manual Input | Expert |
-| UC-22 | Input by Image | Expert |
+| UC-22 | Upload/Attach Question Image | Expert |
 | UC-23 | Input by Excel/Word File | Expert |
 | UC-24 | View Question Version Control | Expert |
 | UC-25 | Update Question | Expert |
@@ -74,6 +74,7 @@
 - **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.
 - **BR-65**: Tag list APIs return only active records by default. Expert tag management may request inactive records with `includeInactive=true`; each response retains its `IsActive` state.
 - **BR-66**: A topic cannot be soft-disabled while it has an active descendant at any depth. The operation returns HTTP 409 (`TAG_TOPIC_HAS_ACTIVE_DESCENDANTS`) and leaves the topic unchanged.
+- **BR-70**: UC-22 uploads one optional question image through `POST /api/question-bank/questions/image-upload` as `multipart/form-data` field `file`. Only Experts may use the endpoint. The backend accepts JPEG, PNG, and WebP up to 5 MB, validates the declared MIME type and file magic bytes, then performs a signed Cloudinary upload. The API returns only `{ pictureUrl }`; Cloudinary credentials, signatures, raw provider responses, and internal exceptions must never be exposed to the client. GIF, SVG, PDF, OCR, LaTeX recognition, multiple images, and bulk import from images are outside this use case.
 
 ### Accepted Question Types
 
@@ -155,6 +156,6 @@ Question.IsActive = 1
 ## Assumptions
 
 - Target database is SQL Server. Backend maps to current DB script tables (`Question`, `Answer`, `QuestionVersion`, `QuestionReport`, `TagTopic`, `TagDifficulty`, `QuestionTopic`) instead of schema-prefixed tables.
-- Cloudinary is used for image upload (picture_url from UC-22).
+- Cloudinary is used for signed backend image upload (`picture_url` from UC-22). The `Cloudinary` section is supplied through user-secrets, Docker/Azure environment variables, or equivalent secret configuration; it is never committed to frontend code.
 - MediatR domain events handle async version snapshot creation.
 - Question and solution authoring is handled by a rich-text/WYSIWYG editor so non-technical Experts can input math content without technical markup syntax. Backend stores sanitized content and associated media URLs; frontend renders the stored rich text directly.
