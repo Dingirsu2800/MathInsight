@@ -26,15 +26,15 @@
 
 - [ ] **Question Commands**:
   - [x] `CreateQuestionCommand` — validate non-empty sanitized content, >=1 Topic + >=1 Difficulty tag, answer constraints per type, `Composite` part constraints, set `status = APPROVED` for Expert creator (BR-55)
-  - [x] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` (BR-54); validate constraints
+  - [x] `UpdateQuestionCommand` — capture `QuestionVersion` snapshot before save if current `status = APPROVED` or `REPORTED` (BR-54); validate constraints
   - [x] `ToggleQuestionActiveCommand` — check existing `TestQuestion` records (DC-02)
-  - [x] `DeleteQuestionCommand` — hard-delete if no `TestQuestion` reference; otherwise return `QUESTION_IN_USE` / HTTP 409 without mutation (DC-02)
+  - [x] `DeleteQuestionCommand` — hard-delete only when there is no `TestQuestion` reference, pending report, or `REPORTED` status; otherwise return the matching HTTP 409 without mutation (DC-02, BR-69)
   - [ ] `AdminApproveQuestionCommand` — set `status = APPROVED`
   - [ ] `AdminRejectQuestionCommand` — set `status = REJECTED`; requires non-empty reject reason
-- [ ] **Report Commands**:
-  - [ ] `ReportQuestionCommand` — Student: create `QuestionReport`, do NOT change question status (BR-58); Expert: create report, temporarily hide question from generation
-  - [ ] `ResolveReportCommand` — Expert resolves own question report; restore visibility (BR-60)
-  - [ ] Validate Teacher cannot report (BR-59) -> 403
+- [x] **Report Commands**:
+  - [x] `ReportQuestionCommand` — Student creates `QuestionReport` for any existing Question without changing it; Expert/Admin reports require active `Approved`/`Reported` Questions and move `Approved` to `Reported` without changing `IsActive`; Expert self-report is forbidden (BR-58, BR-67)
+  - [x] `HandleQuestionReportCommand` — Question owner resolves or dismisses a pending report; restores `Reported` to `Approved` only after the final pending Expert/Admin report is handled (BR-60, BR-68)
+  - [x] Validate Teacher cannot report (BR-59) -> 403
 - [x] **Tag Commands**:
   - [x] `CreateTagTopicCommand` — assign `parent_tag_id`, validate grade
   - [x] `CreateTagDifficultyCommand` — validate UNIQUE `level_value`; for MVP seed/accept normal levels `1..4` so Recommender `RecommendedDifficultyLevel` can resolve deterministically
@@ -44,7 +44,7 @@
   - [ ] `GetDashboardQuery` — count by `status`, `question_type`, `grade`; return last 5 reports
   - [x] `GetQuestionListQuery` — paged (pageSize, pageIndex), filter by `status`, `grade`, `tag_id`, `difficulty_id`, `question_type`, `expert_id`
   - [x] `GetQuestionVersionsQuery` — ordered by `created_time` DESC
-  - [ ] `GetReportedQuestionsQuery` — filter by `reporter_account_id` = current Expert's questions
+  - [x] `GetOwnedReportedQuestionsQuery` / `GetQuestionReportsQuery` — owner-only reported-question list (grouped/paged) and report detail ordered by newest first
   - [x] `GetTagListQuery`/tag queries — return hierarchical topic tree + flat difficulty list; active-only by default and support `includeInactive=true` (BR-65)
 - [ ] **Cross-module read contract**:
   - [ ] Provide/query by `QuestionTopic.TagID` + `Question.DifficultyID` + optional `Question.QuestionType` for TestGen.
@@ -64,7 +64,8 @@
 
 - [ ] `QuestionsController` — ExpertOnly + AdminOnly hybrid routes
 - [x] `TagsController` — ExpertOnly routes for topic/difficulty CRUD
-- [ ] `ReportsController` — Mixed: Student (POST report), Expert (GET + resolve), Admin (GET all + approve/reject)
+- [x] `ReportsController` — Student/Expert/Admin POST report; Expert owner GET report list/detail and PATCH resolve/dismiss
+- [ ] Admin report dashboard and Admin approve/reject Question workflows
 - [ ] Image upload helper endpoint -> Cloudinary REST client, return `picture_url`
 - [ ] Register all inside `QuestionBankModuleExtensions.cs`:
   - DbContext, MediatR handlers, Parsers, MassTransit consumer
@@ -82,10 +83,12 @@
   - [ ] UC-21: Create COMPOSITE with a NumericAnswer part and tolerance -> grading can compare within tolerance
   - [ ] UC-21: API enum `TRUE_FALSE` persists as DB value `TrueFalse`; `MULTIPLE_SELECT` persists as `MultipleChoice`; `COMPOSITE` persists as `Composite`
   - [ ] UC-21: Create SHORT_ANSWER with rich-text/image content in correct field -> 400 (BR-61)
-  - [ ] UC-25: Update APPROVED question -> QuestionVersion created before update (BR-54)
+  - [x] UC-25: Update APPROVED or REPORTED question -> QuestionVersion created before update (BR-54)
   - [x] UC-27: Delete/deactivate question used in `TestQuestion` -> `QUESTION_IN_USE` / 409 with no data mutation (DC-02)
-  - [ ] UC-28: Student report -> QuestionReport created, question status unchanged (BR-58)
-  - [ ] UC-28: Teacher attempts to report -> 403 (BR-59)
+  - [x] UC-28: Student report -> QuestionReport created, question status unchanged (BR-58)
+  - [x] UC-28: Teacher attempts to report -> 403 (BR-59)
+  - [x] UC-29/30/33: Expert/Admin report, owner-only report queries, resolve/dismiss state transitions, and HTTP error mapping
+  - [ ] Manual SQL Server smoke: verify `QuestionReportSqlServerLock` serializes report mutations for the same QuestionID in a disposable test database
   - [ ] UC-31/32: Admin approve/reject -> status transitions correct
   - [ ] UC-23: Import 10 questions from Excel -> all created, invalid rows rejected
   - [ ] UC-38: Delete tag with linked questions -> soft-delete (`is_active = false`) (DC-02)

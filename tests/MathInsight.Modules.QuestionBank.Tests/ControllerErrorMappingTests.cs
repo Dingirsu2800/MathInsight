@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Security.Claims;
 using MathInsight.Modules.QuestionBank.Commands.DeleteQuestion;
+using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
+using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Contracts.Tags;
 using MathInsight.Modules.QuestionBank.Controllers;
 using MathInsight.Modules.QuestionBank.Errors;
@@ -39,6 +41,29 @@ public sealed class ControllerErrorMappingTests
     }
 
     [Fact]
+    public async Task DeleteQuestion_WhenHandlerReturnsPendingReports_Returns409WithStableCode()
+    {
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<DeleteQuestionCommand>(request);
+            return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionHasPendingReports);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext()
+            }
+        };
+
+        var result = await controller.DeleteQuestion("question-1", CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Equal(QuestionBankErrors.QuestionHasPendingReports.Code, error.Code);
+    }
+
+    [Fact]
     public async Task UpdateTopic_WhenHandlerReturnsActiveDescendantsError_Returns409WithStableCode()
     {
         var controller = new TagsController(CreateMediator(request =>
@@ -64,6 +89,32 @@ public sealed class ControllerErrorMappingTests
         Assert.Equal(QuestionBankErrors.TagTopicHasActiveDescendants.Code, error.Code);
     }
 
+    [Fact]
+    public async Task ReportQuestion_WhenHandlerReturnsDuplicatePending_Returns409WithStableCode()
+    {
+        var controller = new ReportsController(CreateMediator(request =>
+        {
+            Assert.IsType<ReportQuestionCommand>(request);
+            return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportAlreadyPending);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext("expert-1", "Expert")
+            }
+        };
+
+        var result = await controller.ReportQuestion(
+            "question-1",
+            new ReportQuestionRequest { ReportReason = "Needs review." },
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Equal(QuestionBankErrors.ReportAlreadyPending.Code, error.Code);
+    }
+
     private static IMediator CreateMediator(Func<object, object> responseFactory)
     {
         var mediator = DispatchProxy.Create<IMediator, MediatorStub>();
@@ -71,11 +122,15 @@ public sealed class ControllerErrorMappingTests
         return mediator;
     }
 
-    private static DefaultHttpContext CreateAuthenticatedHttpContext()
+    private static DefaultHttpContext CreateAuthenticatedHttpContext(
+        string accountId = "expert-1",
+        string? role = null)
     {
-        var identity = new ClaimsIdentity(
-            new[] { new Claim("account_id", "expert-1") },
-            authenticationType: "Test");
+        var claims = new List<Claim> { new("account_id", accountId) };
+        if (!string.IsNullOrWhiteSpace(role))
+            claims.Add(new Claim(ClaimTypes.Role, role));
+
+        var identity = new ClaimsIdentity(claims, authenticationType: "Test");
 
         return new DefaultHttpContext
         {

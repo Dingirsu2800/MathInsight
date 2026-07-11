@@ -6,6 +6,7 @@ using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 
@@ -55,9 +56,12 @@ public sealed class UpdateQuestionCommandHandler
         if (referenceValidationError is not null)
             return Result<UpdateQuestionResponse>.Failure(referenceValidationError);
 
-        var versionCreated = string.Equals(question.Status, "Approved", StringComparison.OrdinalIgnoreCase);
+        var versionCreated = string.Equals(question.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(question.Status, "Reported", StringComparison.OrdinalIgnoreCase);
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction? transaction = _context.Database.IsRelational()
+            ? await _context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
 
         if (versionCreated)
             _context.QuestionVersions.Add(CreateSnapshot(question, command.ExpertId));
@@ -131,7 +135,8 @@ public sealed class UpdateQuestionCommandHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
 
         return Result<UpdateQuestionResponse>.Success(
             new UpdateQuestionResponse(question.QuestionId, question.Status, versionCreated));

@@ -203,7 +203,8 @@ public class QuestionsController : ControllerBase
         if (error == QuestionBankErrors.QuestionMutationForbidden)
             return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(error));
 
-        if (error == QuestionBankErrors.QuestionInUse)
+        if (error == QuestionBankErrors.QuestionInUse ||
+            error == QuestionBankErrors.QuestionHasPendingReports)
             return Conflict(new ApiErrorResponse(error));
 
         return BadRequest(new ApiErrorResponse(error));

@@ -28,6 +28,10 @@ public static class QuestionBankErrors
         "QUESTION_IN_USE",
         "Question is already used in a test and cannot be deactivated or hard-deleted.");
 
+    public static readonly Error QuestionHasPendingReports = new(
+        "QUESTION_HAS_PENDING_REPORTS",
+        "Question has pending reports or is currently reported and cannot be hard-deleted.");
+
     public static readonly Error QuestionContentRequired = new(
         "QUESTION_CONTENT_REQUIRED",
         "Question content is required.");
@@ -219,4 +223,40 @@ public static class QuestionBankErrors
     public static readonly Error TagTopicHasActiveDescendants = new(
         "TAG_TOPIC_HAS_ACTIVE_DESCENDANTS",
         "Topic has active descendant topics and cannot be deactivated.");
+
+    public static readonly Error ReportReasonRequired = new(
+        "REPORT_REASON_REQUIRED",
+        "Report reason is required.");
+
+    public static readonly Error ReportReasonTooLong = new(
+        "REPORT_REASON_TOO_LONG",
+        "Report reason must not exceed 2000 characters.");
+
+    public static readonly Error ReportStatusInvalid = new(
+        "REPORT_STATUS_INVALID",
+        "Invalid report status.");
+
+    public static readonly Error QuestionSelfReportForbidden = new(
+        "QUESTION_SELF_REPORT_FORBIDDEN",
+        "Experts cannot report their own questions.");
+
+    public static readonly Error ReportAccessForbidden = new(
+        "REPORT_ACCESS_FORBIDDEN",
+        "You are not allowed to access or handle this report.");
+
+    public static readonly Error ReportNotFound = new(
+        "REPORT_NOT_FOUND",
+        "Question report was not found.");
+
+    public static readonly Error ReportAlreadyPending = new(
+        "REPORT_ALREADY_PENDING",
+        "You already have a pending report for this question.");
+
+    public static readonly Error ReportAlreadyHandled = new(
+        "REPORT_ALREADY_HANDLED",
+        "Question report has already been handled.");
+
+    public static readonly Error QuestionNotReportable = new(
+        "QUESTION_NOT_REPORTABLE",
+        "Question cannot be reported in its current state.");
 }

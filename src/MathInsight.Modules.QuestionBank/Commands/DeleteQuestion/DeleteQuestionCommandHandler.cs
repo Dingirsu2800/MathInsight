@@ -1,9 +1,12 @@
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace MathInsight.Modules.QuestionBank.Commands.DeleteQuestion;
 
@@ -24,6 +27,13 @@ public sealed class DeleteQuestionCommandHandler
         if (string.IsNullOrWhiteSpace(command.QuestionId))
             return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionIdRequired);
 
+        await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
+            ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
+
+        if (transaction is not null)
+            await QuestionReportSqlServerLock.LockQuestionAsync(_context, command.QuestionId, cancellationToken);
+
         var question = await _context.Questions
             .Include(question => question.Answers)
             .Include(question => question.Parts)
@@ -39,6 +49,12 @@ public sealed class DeleteQuestionCommandHandler
 
         if (!string.Equals(question.ExpertId, command.ExpertId, StringComparison.OrdinalIgnoreCase))
             return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionMutationForbidden);
+
+        var hasPendingReports = string.Equals(question.Status, "Reported", StringComparison.OrdinalIgnoreCase) ||
+            question.Reports.Any(report => report.Status == "Pending");
+
+        if (hasPendingReports)
+            return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionHasPendingReports);
 
         var isUsedInTest = await _context.TestQuestionReadModels
             .AnyAsync(
@@ -56,6 +72,9 @@ public sealed class DeleteQuestionCommandHandler
         _context.Questions.Remove(question);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
 
         return Result<DeleteQuestionResponse>.Success(
             new DeleteQuestionResponse(command.QuestionId, "HardDeleted", false, "Deleted"));

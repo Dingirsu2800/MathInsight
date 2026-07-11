@@ -48,23 +48,27 @@
 
 ### Functional Requirements
 
-- **DC-02**: Referential history is protected. Taxonomy tags are soft-disabled through `IsActive = false` to preserve QuestionBank/TestGen/Recommender references. A Question with any existing `TestQuestion` reference cannot be hard-deleted or deactivated and returns HTTP 409 (`QUESTION_IN_USE`); an unreferenced Question may be hard-deleted.
+- **DC-02**: Referential history is protected. Taxonomy tags are soft-disabled through `IsActive = false` to preserve QuestionBank/TestGen/Recommender references. A Question with any existing `TestQuestion` reference cannot be hard-deleted or manually deactivated and returns HTTP 409 (`QUESTION_IN_USE`); an unreferenced Question may be hard-deleted. Report moderation may still move a referenced Question to `Reported` without changing `IsActive`.
 - **BR-04**: Mathematical questions and solutions must be entered through a user-friendly rich-text/WYSIWYG editor. Experts are not required to know or type technical markup syntax. The editor may provide toolbar-based math symbols, superscript/subscript, fractions, tables, and optional image upload for diagrams or complex formulas.
 - **BR-05**: A newly created question must be assigned at least one **Topic** tag and one **Difficulty** tag before saving.
 - **BR-50**: Each `SINGLE_CHOICE` question must have **exactly one** correct answer. `MULTIPLE_SELECT` must have **at least one** correct answer.
 - **BR-61**: The correct answer for a `SHORT_ANSWER` question must be plain text or numeric (max 100 chars), without rich-text formatting or images.
 - **BR-62**: `TRUE_FALSE` questions must have **exactly 2** options (True / False) with **exactly 1** correct answer.
 - **BR-52**: Topic tags are cascading: selecting a parent tag automatically filters child subtopics only.
-- **BR-54**: Changes to `APPROVED` questions must capture a `QuestionVersion` snapshot **before** applying the update.
+- **BR-54**: Changes to `APPROVED` or `REPORTED` questions must capture a `QuestionVersion` snapshot **before** applying the update.
 - **BR-55**: Expert-created questions are **published/approved by default** (`status = APPROVED`) and do not enter an Admin approval queue.
 - **BR-56**: UC-31 (Approve) and UC-32 (Reject) apply only to the Admin-initiated question rejection/re-review flow. If Admin rejects, the original Expert must fix and re-submit (sets `status = PENDING`); Admin reviews again before it becomes `APPROVED`.
 - **BR-57**: Question status semantics:
   - `APPROVED` — published and visible in test generation.
+  - `REPORTED` — excluded from newly generated tests while retained for existing tests and history; `IsActive` remains unchanged.
   - `REJECTED` — Admin-rejected; hidden until Expert handles.
   - `PENDING` — Expert re-submitted after Admin rejection; awaiting Admin re-review. **Not used for normal Expert creation.**
 - **BR-58**: When a Student reports a question (UC-28), system creates a `QuestionReport` record but **must not hide, deactivate, or change the `status` of the Question**.
 - **BR-59**: Teacher accounts are **not allowed** to report questions. Attempts → HTTP 403.
 - **BR-60**: When an Expert reports another Expert's question (UC-29), after the original Expert resolves it (UC-33), the question becomes visible again **automatically** without requiring additional Admin approval.
+- **BR-67**: Student reports create a `QuestionReport` only and may be submitted for any existing Question, including inactive or historical Questions. Expert and Admin reports require an active Question in `APPROVED` or `REPORTED` status; an Expert cannot report their own Question. Expert/Admin reports change an `APPROVED` Question to `REPORTED`.
+- **BR-68**: Resolving or dismissing the final pending Expert/Admin report restores a `REPORTED` Question to `APPROVED`. Pending Student reports do not prevent restoration.
+- **BR-69**: A Question with a pending report, or a Question in `REPORTED` status, cannot be hard-deleted. The API returns HTTP 409 (`QUESTION_HAS_PENDING_REPORTS`) and preserves the report audit trail.
 - **BR-53**: File import (Excel/Word) must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows.
 - **BR-63**: `TagDifficulty.LevelValue` is the stable cross-module difficulty contract. Values should be unique and normally map to Recommender v2 `RecommendedDifficultyLevel` values `1..4`. Question Bank owns `Question.DifficultyID`; Recommender v2 owns only student-topic mastery and does not store Ptag per difficulty.
 - **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.

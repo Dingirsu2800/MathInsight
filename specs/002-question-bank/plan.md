@@ -30,7 +30,7 @@ src/MathInsight.Modules.QuestionBank/
 │   ├── ToggleQuestionActive/   # UC-26: set is_active true/false
 │   ├── DeleteQuestion/         # UC-27: reject if used in TestQuestion, hard-delete if unused
 │   ├── ReportQuestion/         # UC-28/29: Student/Expert report → QuestionReport
-│   ├── ResolveReport/          # UC-33: Expert resolves their own question's report
+│   ├── HandleQuestionReport/   # UC-33: Question owner resolves or dismisses a report
 │   ├── AdminApproveQuestion/   # UC-31: set status = APPROVED
 │   ├── AdminRejectQuestion/    # UC-32: set status = REJECTED
 │   ├── CreateTagTopic/         # UC-35
@@ -41,7 +41,8 @@ src/MathInsight.Modules.QuestionBank/
 │   ├── GetDashboard/           # UC-18: counts by status, type, grade
 │   ├── GetQuestionList/        # UC-19: paged, filter by status/grade/tag/type
 │   ├── GetQuestionVersions/    # UC-24: version history for a question
-│   ├── GetReportedQuestions/   # UC-30: Expert views reports for own questions
+│   ├── GetOwnedReportedQuestions/ # UC-30: Expert views reports on own questions
+│   ├── GetQuestionReports/     # UC-33: Expert views report details for one owned question
 │   ├── GetTagList/             # UC-34: hierarchical topic tree + difficulty list
 │   └── GetAdminReports/        # Admin views all pending question reports
 ├── Events/
@@ -70,6 +71,10 @@ src/MathInsight.Modules.QuestionBank/
 
 ## Proposed Changes
 
+### Reporting Consistency
+
+The existing schema is kept unchanged. On SQL Server, report creation, report handling, and Question deletion use a `Serializable` transaction and an `UPDLOCK, HOLDLOCK` row lock on the related `QuestionID`. This serializes report mutations for one Question, preventing duplicate pending reports and stale `Reported` status transitions without introducing a migration. The in-memory test provider uses the same business rules without SQL Server locking.
+
 ### Database Layer (Current DB Script Tables)
 
 | Table | Key Indexes |
@@ -95,9 +100,10 @@ GET    /api/v1/questions/{id}/versions            # UC-24: version history
 PUT    /api/v1/questions/{id}                     # UC-25: update (auto-snapshot)
 PUT    /api/v1/questions/{id}/active              # UC-26: toggle active
 DELETE /api/question-bank/questions/{id}          # UC-27: hard-delete only when no TestQuestion reference; otherwise 409
-POST   /api/v1/questions/{id}/report              # UC-29: Expert report question
-GET    /api/v1/questions/reports                  # UC-30: view own questions' reports
-POST   /api/v1/questions/reports/{reportId}/resolve # UC-33: resolve report
+POST   /api/question-bank/questions/{id}/reports  # UC-28/29: Student, Expert, or Admin creates a report
+GET    /api/question-bank/reports/mine            # UC-30: Expert views reports on own questions
+GET    /api/question-bank/questions/{id}/reports  # UC-33: Expert views report details for an owned question
+PATCH  /api/question-bank/reports/{reportId}      # UC-33: Expert resolves or dismisses a report
 GET    /api/question-bank/tags/topics              # UC-34: topic tree; `includeInactive=false` by default
 POST   /api/v1/tags/topics                        # UC-35: create topic tag
 PUT    /api/question-bank/tags/topics/{id}         # UC-37: update; cannot disable with active descendants
@@ -110,7 +116,7 @@ DELETE /api/v1/tags/difficulties/{id}             # UC-38: delete difficulty tag
 
 **Student (StudentOnly policy)**
 ```
-POST   /api/v1/questions/{id}/report              # UC-28: report question (creates QuestionReport, no status change)
+POST   /api/question-bank/questions/{id}/reports  # UC-28: report question (creates QuestionReport, no status change)
 ```
 
 **Admin (AdminOnly policy)**
@@ -148,10 +154,11 @@ POST   /api/v1/admin/questions/{id}/reject        # UC-32: set status = REJECTED
    - Create TrueFalse with 3 options → 400 (BR-62).
    - Student report question → `QuestionReport` created, question `status` unchanged (BR-58).
    - Teacher attempt to report → 403 (BR-59).
-   - Update APPROVED question → `QuestionVersion` snapshot created before save (BR-54).
+   - Update APPROVED or REPORTED question → `QuestionVersion` snapshot created before save (BR-54).
    - Delete or deactivate question used in any existing TestQuestion record → 409 and no data mutation (DC-02).
    - Tag queries exclude inactive records by default and include them only when `includeInactive=true` (BR-65).
    - Disable or soft-delete a topic with an active child/grandchild → 409 and no data mutation (BR-66).
+   - In a disposable SQL Server test database, run `tests/MathInsight.Modules.QuestionBank.Tests/Manual/QuestionReportSqlServerLockSmoke.sql` in two sessions and verify the second `UPDLOCK, HOLDLOCK` request blocks while the first transaction is open.
    - Expert question created → status = APPROVED (BR-55).
    - Recommender/TestGen mapping: `RecommendedDifficultyLevel = 2` resolves to `TagDifficulty.LevelValue = 2`, then selects only approved active questions with the matching `Question.DifficultyID`, `QuestionTopic.TagID`, and section `Question.QuestionType` when provided.
    - API enum mapping persists correct DB values: `TRUE_FALSE` -> `TrueFalse`, `MULTIPLE_SELECT` -> `MultipleChoice`, `COMPOSITE` -> `Composite`.

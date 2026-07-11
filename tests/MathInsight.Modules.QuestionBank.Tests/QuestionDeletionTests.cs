@@ -46,6 +46,47 @@ public sealed class QuestionDeletionTests
     }
 
     [Fact]
+    public async Task DeleteQuestion_WhenPendingReportExists_ReturnsConflictAndPreservesReportAudit()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "question-pending-report");
+        database.Context.QuestionReports.Add(new QuestionReport
+        {
+            ReportId = "report-pending",
+            QuestionId = question.QuestionId,
+            ReporterAccountId = "student-1",
+            ReporterRole = "Student",
+            ReportReason = "Needs review.",
+            Status = "Pending",
+            CreatedTime = DateTime.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+
+        var result = await new DeleteQuestionCommandHandler(database.Context)
+            .Handle(new DeleteQuestionCommand(question.QuestionId, question.ExpertId), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionHasPendingReports, result.Error);
+        Assert.True(await database.Context.Questions.AnyAsync(item => item.QuestionId == question.QuestionId));
+        Assert.True(await database.Context.QuestionReports.AnyAsync(item => item.QuestionId == question.QuestionId));
+    }
+
+    [Fact]
+    public async Task DeleteQuestion_WhenReportedWithoutPendingReport_ReturnsConflict()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "question-reported");
+        question.Status = "Reported";
+        await database.Context.SaveChangesAsync();
+
+        var result = await new DeleteQuestionCommandHandler(database.Context)
+            .Handle(new DeleteQuestionCommand(question.QuestionId, question.ExpertId), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionHasPendingReports, result.Error);
+    }
+
+    [Fact]
     public async Task ToggleQuestionActive_WhenUsedInTest_ReturnsQuestionInUseAndKeepsQuestionActive()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
