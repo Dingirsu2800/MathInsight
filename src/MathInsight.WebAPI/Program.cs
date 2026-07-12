@@ -20,6 +20,7 @@ using MathInsight.Modules.Identity_Access.Services.Auth;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Ocr;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Storage;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -85,6 +86,18 @@ builder.Services.AddCors(options =>
 });
 
 // 4. Register Domain Modules (Composition Root)
+var cloudinaryOptions = new CloudinaryOptions
+{
+    CloudName = builder.Configuration["Cloudinary:CloudName"] ?? string.Empty,
+    ApiKey = builder.Configuration["Cloudinary:ApiKey"] ?? string.Empty,
+    ApiSecret = builder.Configuration["Cloudinary:ApiSecret"] ?? string.Empty
+};
+builder.Services.AddSingleton(cloudinaryOptions);
+builder.Services.AddHttpClient<IImageStorage, CloudinaryImageStorage>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
 builder.Services.AddIdentityModule(builder.Configuration);
 builder.Services.AddQuestionBankModule(builder.Configuration);
 builder.Services.AddTestingModule(builder.Configuration);
@@ -101,10 +114,18 @@ builder.Services.AddRateLimiter(options =>
 {
     options.OnRejected = async (context, cancellationToken) =>
     {
+        var policyName = context.HttpContext.GetEndpoint()?
+            .Metadata
+            .GetMetadata<EnableRateLimitingAttribute>()?
+            .PolicyName;
+        var error = policyName == QuestionOcrRateLimit.PolicyName
+            ? QuestionBankErrors.OcrRateLimitExceeded
+            : ApplicationErrors.RateLimitExceeded;
+
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.HttpContext.Response.ContentType = "application/json";
         await context.HttpContext.Response.WriteAsJsonAsync(
-            new ApiErrorResponse(QuestionBankErrors.OcrRateLimitExceeded),
+            new ApiErrorResponse(error),
             cancellationToken);
     };
 

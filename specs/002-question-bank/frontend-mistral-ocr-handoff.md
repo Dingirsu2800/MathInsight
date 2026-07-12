@@ -130,7 +130,7 @@ Implement a small pure mapper, preferably in `frontend/src/pages/expert/question
 ## Explicit Non-Goals
 
 - No client-side OCR, Mistral SDK, API key, or direct call from browser to Mistral.
-- No support for PDF, DOCX, multiple images, a whole exam page, batch OCR, auto-retry, background queue, or image cropper in this checkpoint.
+- No support for PDF, DOCX, multiple images, a whole exam page, batch OCR, auto-retry, or background queue in this checkpoint.
 - No automatic save, publish, topic tagging, difficulty assignment, grade assignment, or answer-key confirmation.
 - Do not modify Question Bank list, tag management, report flow, routes, backend API, schema, Docker, or environment configuration.
 

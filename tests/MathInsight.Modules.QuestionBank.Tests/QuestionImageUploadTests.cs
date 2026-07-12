@@ -1,12 +1,10 @@
 using System.Net;
 using System.Text;
 using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
-using MathInsight.Modules.QuestionBank.Configuration;
 using MathInsight.Modules.QuestionBank.Errors;
-using MathInsight.Modules.QuestionBank.Storage;
+using MathInsight.Shared.Storage;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace MathInsight.Modules.QuestionBank.Tests;
 
@@ -80,7 +78,7 @@ public sealed class QuestionImageUploadTests
         string contentType,
         string fileName)
     {
-        var storage = new StubQuestionImageStorage
+        var storage = new StubImageStorage
         {
             PictureUrl = "https://res.cloudinary.com/mathinsight/image/upload/test.webp"
         };
@@ -93,13 +91,14 @@ public sealed class QuestionImageUploadTests
         Assert.Equal(storage.PictureUrl, result.Value!.PictureUrl);
         Assert.Equal(contentType, storage.ContentType);
         Assert.Equal(fileName, storage.FileName);
+        Assert.Equal("mathinsight/questions", storage.Folder);
     }
 
     [Fact]
     public async Task UploadImage_WhenStorageIsNotConfigured_ReturnsUnavailableError()
     {
         var handler = new UploadQuestionImageCommandHandler(
-            new StubQuestionImageStorage { ExceptionToThrow = new QuestionImageStorageUnavailableException() });
+            new StubImageStorage { ExceptionToThrow = new ImageStorageUnavailableException() });
 
         var result = await handler.Handle(
             new UploadQuestionImageCommand(CreateFile(PngHeader, "image/png", "image.png")),
@@ -113,7 +112,7 @@ public sealed class QuestionImageUploadTests
     public async Task UploadImage_WhenStorageFails_ReturnsUploadFailedError()
     {
         var handler = new UploadQuestionImageCommandHandler(
-            new StubQuestionImageStorage { ExceptionToThrow = new QuestionImageUploadException() });
+            new StubImageStorage { ExceptionToThrow = new ImageUploadException() });
 
         var result = await handler.Handle(
             new UploadQuestionImageCommand(CreateFile(PngHeader, "image/png", "image.png")),
@@ -143,13 +142,13 @@ public sealed class QuestionImageUploadTests
             "ApiSecret" => new CloudinaryOptions { CloudName = options.CloudName, ApiKey = options.ApiKey },
             _ => throw new InvalidOperationException("Unexpected setting.")
         };
-        var storage = new CloudinaryQuestionImageStorage(
+        var storage = new CloudinaryImageStorage(
             client,
-            Options.Create(options),
-            NullLogger<CloudinaryQuestionImageStorage>.Instance);
+            options,
+            NullLogger<CloudinaryImageStorage>.Instance);
 
-        await Assert.ThrowsAsync<QuestionImageStorageUnavailableException>(() =>
-            storage.UploadAsync(new MemoryStream(PngHeader), "image.png", "image/png", CancellationToken.None));
+        await Assert.ThrowsAsync<ImageStorageUnavailableException>(() =>
+            storage.UploadAsync(CreateUploadRequest(), CancellationToken.None));
     }
 
     [Fact]
@@ -159,8 +158,8 @@ public sealed class QuestionImageUploadTests
             new HttpResponseMessage(HttpStatusCode.BadRequest)));
         var storage = CreateCloudinaryStorage(client);
 
-        await Assert.ThrowsAsync<QuestionImageUploadException>(() =>
-            storage.UploadAsync(new MemoryStream(PngHeader), "image.png", "image/png", CancellationToken.None));
+        await Assert.ThrowsAsync<ImageUploadException>(() =>
+            storage.UploadAsync(CreateUploadRequest(), CancellationToken.None));
     }
 
     [Fact]
@@ -173,8 +172,8 @@ public sealed class QuestionImageUploadTests
             }));
         var storage = CreateCloudinaryStorage(client);
 
-        await Assert.ThrowsAsync<QuestionImageUploadException>(() =>
-            storage.UploadAsync(new MemoryStream(PngHeader), "image.png", "image/png", CancellationToken.None));
+        await Assert.ThrowsAsync<ImageUploadException>(() =>
+            storage.UploadAsync(CreateUploadRequest(), CancellationToken.None));
     }
 
     [Fact]
@@ -183,8 +182,8 @@ public sealed class QuestionImageUploadTests
         using var client = new HttpClient(new StubHttpMessageHandler(_ => throw new OperationCanceledException()));
         var storage = CreateCloudinaryStorage(client);
 
-        await Assert.ThrowsAsync<QuestionImageUploadException>(() =>
-            storage.UploadAsync(new MemoryStream(PngHeader), "image.png", "image/png", CancellationToken.None));
+        await Assert.ThrowsAsync<ImageUploadException>(() =>
+            storage.UploadAsync(CreateUploadRequest(), CancellationToken.None));
     }
 
     [Fact]
@@ -204,11 +203,7 @@ public sealed class QuestionImageUploadTests
         }));
         var storage = CreateCloudinaryStorage(client);
 
-        var pictureUrl = await storage.UploadAsync(
-            new MemoryStream(PngHeader),
-            "image.png",
-            "image/png",
-            CancellationToken.None);
+        var pictureUrl = await storage.UploadAsync(CreateUploadRequest(), CancellationToken.None);
 
         Assert.Equal("https://res.cloudinary.com/mathinsight/image/upload/test.png", pictureUrl);
         Assert.NotNull(capturedRequest);
@@ -234,20 +229,29 @@ public sealed class QuestionImageUploadTests
 
     private static UploadQuestionImageCommandHandler CreateHandler()
     {
-        return new UploadQuestionImageCommandHandler(new StubQuestionImageStorage());
+        return new UploadQuestionImageCommandHandler(new StubImageStorage());
     }
 
-    private static CloudinaryQuestionImageStorage CreateCloudinaryStorage(HttpClient client)
+    private static CloudinaryImageStorage CreateCloudinaryStorage(HttpClient client)
     {
-        return new CloudinaryQuestionImageStorage(
+        return new CloudinaryImageStorage(
             client,
-            Options.Create(new CloudinaryOptions
+            new CloudinaryOptions
             {
                 CloudName = "mathinsight",
                 ApiKey = "api-key",
                 ApiSecret = "api-secret"
-            }),
-            NullLogger<CloudinaryQuestionImageStorage>.Instance);
+            },
+            NullLogger<CloudinaryImageStorage>.Instance);
+    }
+
+    private static ImageUploadRequest CreateUploadRequest()
+    {
+        return new ImageUploadRequest(
+            new MemoryStream(PngHeader),
+            "image.png",
+            "image/png",
+            "mathinsight/questions");
     }
 
     private static IFormFile CreateFile(byte[] content, string contentType, string fileName)
@@ -260,21 +264,21 @@ public sealed class QuestionImageUploadTests
         };
     }
 
-    private sealed class StubQuestionImageStorage : IQuestionImageStorage
+    private sealed class StubImageStorage : IImageStorage
     {
         public string PictureUrl { get; init; } = "https://res.cloudinary.com/mathinsight/image/upload/default.png";
         public Exception? ExceptionToThrow { get; init; }
         public string? FileName { get; private set; }
         public string? ContentType { get; private set; }
+        public string? Folder { get; private set; }
 
         public Task<string> UploadAsync(
-            Stream content,
-            string fileName,
-            string contentType,
+            ImageUploadRequest request,
             CancellationToken cancellationToken)
         {
-            FileName = fileName;
-            ContentType = contentType;
+            FileName = request.FileName;
+            ContentType = request.ContentType;
+            Folder = request.Folder;
 
             if (ExceptionToThrow is not null)
                 throw ExceptionToThrow;

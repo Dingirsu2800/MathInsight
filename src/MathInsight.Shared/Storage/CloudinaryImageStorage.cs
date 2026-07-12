@@ -1,79 +1,74 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using MathInsight.Modules.QuestionBank.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
-namespace MathInsight.Modules.QuestionBank.Storage;
+namespace MathInsight.Shared.Storage;
 
-public sealed class CloudinaryQuestionImageStorage : IQuestionImageStorage
+public sealed class CloudinaryImageStorage : IImageStorage
 {
-    private const string Folder = "mathinsight/questions";
     private readonly HttpClient _httpClient;
     private readonly CloudinaryOptions _options;
-    private readonly ILogger<CloudinaryQuestionImageStorage> _logger;
+    private readonly ILogger<CloudinaryImageStorage> _logger;
 
-    public CloudinaryQuestionImageStorage(
+    public CloudinaryImageStorage(
         HttpClient httpClient,
-        IOptions<CloudinaryOptions> options,
-        ILogger<CloudinaryQuestionImageStorage> logger)
+        CloudinaryOptions options,
+        ILogger<CloudinaryImageStorage> logger)
     {
         _httpClient = httpClient;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
 
     public async Task<string> UploadAsync(
-        Stream content,
-        string fileName,
-        string contentType,
+        ImageUploadRequest request,
         CancellationToken cancellationToken)
     {
         if (!IsConfigured())
         {
             _logger.LogWarning(
-                "Question image storage is unavailable. CloudName configured: {CloudNameConfigured}; ApiKey configured: {ApiKeyConfigured}; ApiSecret configured: {ApiSecretConfigured}.",
+                "Cloudinary image storage is unavailable. CloudName configured: {CloudNameConfigured}; ApiKey configured: {ApiKeyConfigured}; ApiSecret configured: {ApiSecretConfigured}.",
                 IsConfiguredValue(_options.CloudName),
                 IsConfiguredValue(_options.ApiKey),
                 IsConfiguredValue(_options.ApiSecret));
-            throw new QuestionImageStorageUnavailableException();
+            throw new ImageStorageUnavailableException();
         }
 
         var publicId = Guid.NewGuid().ToString("N");
 
         await using var fileBuffer = new MemoryStream();
-        await content.CopyToAsync(fileBuffer, cancellationToken);
+        await request.Content.CopyToAsync(fileBuffer, cancellationToken);
         using var multipart = new MultipartFormDataContent();
         using var fileContent = new ByteArrayContent(fileBuffer.ToArray());
-        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(request.ContentType);
 
-        multipart.Add(fileContent, "file", fileName);
-        multipart.Add(CreateFormField(Folder), "folder");
+        multipart.Add(fileContent, "file", request.FileName);
+        multipart.Add(CreateFormField(request.Folder), "folder");
         multipart.Add(CreateFormField(publicId), "public_id");
 
         try
         {
-            using var request = new HttpRequestMessage(
+            using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Post,
                 $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(_options.CloudName)}/image/upload")
             {
                 Content = multipart
             };
-            request.Headers.Authorization = new AuthenticationHeaderValue(
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic",
                 Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_options.ApiKey}:{_options.ApiSecret}")));
 
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
                 var errorMessage = await ReadCloudinaryErrorMessageAsync(response, cancellationToken);
                 _logger.LogWarning(
-                    "Cloudinary rejected question image upload. Status code: {StatusCode}; Error: {ErrorMessage}",
+                    "Cloudinary rejected image upload. Status code: {StatusCode}; Error: {ErrorMessage}",
                     (int)response.StatusCode,
                     errorMessage);
-                throw new QuestionImageUploadException();
+                throw new ImageUploadException();
             }
 
             await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -83,26 +78,26 @@ public sealed class CloudinaryQuestionImageStorage : IQuestionImageStorage
                 !Uri.TryCreate(secureUrlElement.GetString(), UriKind.Absolute, out var secureUrl) ||
                 secureUrl.Scheme != Uri.UriSchemeHttps)
             {
-                throw new QuestionImageUploadException();
+                throw new ImageUploadException();
             }
 
             return secureUrl.AbsoluteUri;
         }
-        catch (QuestionImageUploadException)
+        catch (ImageUploadException)
         {
             throw;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new QuestionImageUploadException();
+            throw new ImageUploadException();
         }
         catch (HttpRequestException exception)
         {
-            throw new QuestionImageUploadException(exception);
+            throw new ImageUploadException(exception);
         }
         catch (JsonException exception)
         {
-            throw new QuestionImageUploadException(exception);
+            throw new ImageUploadException(exception);
         }
     }
 
@@ -136,7 +131,7 @@ public sealed class CloudinaryQuestionImageStorage : IQuestionImageStorage
         }
         catch (JsonException)
         {
-            // A generic message is sufficient when Cloudinary does not return the expected JSON error shape.
+            // Cloudinary may return a non-JSON error body.
         }
 
         return "Cloudinary returned an unexpected error response.";

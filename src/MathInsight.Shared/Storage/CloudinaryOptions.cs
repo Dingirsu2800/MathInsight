@@ -1,4 +1,4 @@
-namespace MathInsight.Modules.QuestionBank.Configuration;
+namespace MathInsight.Shared.Storage;
 
 public sealed class CloudinaryOptions
 {
