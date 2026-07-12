@@ -78,5 +78,15 @@ export const questionBankApi = {
 
   submitQuestionReportReview(reportId) {
     return client.post(`/api/question-bank/reports/${reportId}/submit-review`);
+  },
+
+  extractQuestionOcrDraft(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return client.post("/api/question-bank/questions/ocr-draft", formData, {
+      headers: {
+        "Content-Type": undefined
+      }
+    });
   }
 };

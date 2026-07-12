@@ -729,7 +729,9 @@ export default function QuestionBankListPage() {
                               )}>
                                 {String.fromCharCode(65 + idx)}
                               </div>
-                              <span className="font-mono">{opt.answerContent || opt.content}</span>
+                              <div className="min-w-0">
+                                <LatexPreview content={opt.answerContent || opt.content} />
+                              </div>
                             </div>
                             {selectedQuestion.type === "TRUE_FALSE" && (
                               <Badge variant={opt.isCorrect ? "approved" : "secondary"}>
@@ -744,7 +746,10 @@ export default function QuestionBankListPage() {
                     {/* Short Answer */}
                     {selectedQuestion.type === "SHORT_ANSWER" && (
                       <div className="p-3 bg-surface-container rounded-lg border border-whisper-border font-mono text-[13px] text-primary font-bold mb-4">
-                        Đáp án đúng: {selectedQuestionDetails.answers?.find(a => a.isCorrect)?.answerContent || selectedQuestionDetails.answers?.[0]?.answerContent || "Chưa thiết lập"}
+                        <span className="font-bold">Đáp án đúng:</span>{" "}
+                        <LatexPreview
+                          content={selectedQuestionDetails.answers?.find(a => a.isCorrect)?.answerContent || selectedQuestionDetails.answers?.[0]?.answerContent || "Chưa thiết lập"}
+                        />
                       </div>
                     )}
 
@@ -770,16 +775,18 @@ export default function QuestionBankListPage() {
                             )}
 
                             {part.partType === "SHORT_ANSWER" && (
-                              <p className="text-[12px] text-emerald-success font-mono font-bold">
-                                Đáp án đúng: <span className="underline">{part.correctText}</span>
-                              </p>
+                              <div className="text-[12px] text-emerald-success font-mono font-bold">
+                                <span>Đáp án đúng:</span>
+                                <LatexPreview content={part.correctText} />
+                              </div>
                             )}
 
                             {part.partType === "NUMERIC_ANSWER" && (
                               <div className="space-y-0.5">
-                                <p className="text-[12px] text-emerald-success font-mono font-bold">
-                                  Số đúng: <span className="underline">{part.correctNumeric}</span>
-                                </p>
+                                <div className="text-[12px] text-emerald-success font-mono font-bold">
+                                  <span>Số đúng:</span>
+                                  <LatexPreview content={String(part.correctNumeric ?? "")} />
+                                </div>
                                 {part.numericTolerance > 0 && (
                                   <p className="text-[10px] text-on-surface-variant font-mono">
                                     Sai số cho phép: ±{part.numericTolerance}

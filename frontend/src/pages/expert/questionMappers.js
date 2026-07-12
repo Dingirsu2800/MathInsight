@@ -159,10 +159,18 @@ export function normalizeTrueFalseOptions(options = []) {
   const trueOption = options[0];
   const falseOption = options[1];
 
+  const isTrueCorrect = trueOption?.isCorrect === true;
   const isFalseCorrect = falseOption?.isCorrect === true;
 
+  if (!isTrueCorrect && !isFalseCorrect) {
+    return [
+      { content: "Đúng", isCorrect: false },
+      { content: "Sai", isCorrect: false }
+    ];
+  }
+
   return [
-    { content: "Đúng", isCorrect: !isFalseCorrect },
+    { content: "Đúng", isCorrect: isTrueCorrect && !isFalseCorrect },
     { content: "Sai", isCorrect: isFalseCorrect }
   ];
 }
@@ -198,7 +206,7 @@ export function mapEditorStateToCreateUpdateRequest(state) {
         partLabel: String.fromCharCode(97 + index), // a, b, c, ...
         partContent: p.partContent,
         partType: p.partType, // TRUE_FALSE, SHORT_ANSWER, NUMERIC_ANSWER
-        correctBoolean: p.partType === "TRUE_FALSE" ? (p.correctBoolean === true || p.correctBoolean === "true") : null,
+        correctBoolean: p.partType === "TRUE_FALSE" ? (p.correctBoolean === true || p.correctBoolean === "true" ? true : (p.correctBoolean === false || p.correctBoolean === "false" ? false : null)) : null,
         correctText: p.partType === "SHORT_ANSWER" ? p.correctText : null,
         correctNumeric: p.partType === "NUMERIC_ANSWER" ? (Number.isFinite(parsedNumeric) ? parsedNumeric : null) : null,
         numericTolerance: p.partType === "NUMERIC_ANSWER" ? (Number.isFinite(parsedTolerance) ? parsedTolerance : null) : null,
@@ -226,4 +234,71 @@ export function mapEditorStateToCreateUpdateRequest(state) {
   }
 
   return payload;
+}
+
+export function mapOcrDraftToEditorStatePatch(draft) {
+  if (!draft) return null;
+
+  const questionType = mapBackendTypeToUiType(draft.suggestedQuestionType);
+
+  const patch = {
+    questionContent: draft.questionContent || "",
+    solutionContent: draft.solutionContent || "",
+  };
+
+  if (questionType !== "UNKNOWN") {
+    patch.questionType = questionType;
+  }
+
+  // Options mapping for SINGLE_CHOICE / MULTIPLE_CHOICE
+  if (questionType === "SINGLE_CHOICE" || questionType === "MULTIPLE_CHOICE") {
+    const rawAnswers = draft.answers || [];
+    patch.options = rawAnswers.map(ans => ({
+      content: ans.content || ans.answerContent || "",
+      isCorrect: false
+    }));
+    // Ensure at least two options exist as required by editor
+    if (patch.options.length === 0) {
+      patch.options = [
+        { content: "", isCorrect: false },
+        { content: "", isCorrect: false }
+      ];
+    }
+  } else if (questionType === "TRUE_FALSE") {
+    patch.options = [
+      { content: "Đúng", isCorrect: false },
+      { content: "Sai", isCorrect: false }
+    ];
+  } else if (questionType === "SHORT_ANSWER") {
+    patch.shortAnswer = "";
+  } else if (questionType === "COMPOSITE") {
+    const rawParts = draft.parts || [];
+    let ignoredCount = 0;
+    const validParts = [];
+
+    rawParts.forEach((part, index) => {
+      const pType = mapBackendPartTypeToUiType(part.partType);
+      if (pType === "UNKNOWN") {
+        ignoredCount++;
+        return;
+      }
+      validParts.push({
+        partOrder: validParts.length + 1,
+        partLabel: part.label || part.partLabel || String.fromCharCode(97 + index),
+        partContent: part.content || part.partContent || "",
+        partType: pType,
+        correctBoolean: null,
+        correctText: null,
+        correctNumeric: null,
+        numericTolerance: null,
+        explanation: part.explanation || "",
+        defaultPoint: 0.05
+      });
+    });
+
+    patch.parts = validParts;
+    patch.ignoredPartsCount = ignoredCount;
+  }
+
+  return patch;
 }

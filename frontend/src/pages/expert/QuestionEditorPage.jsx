@@ -6,8 +6,9 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { CustomSelect } from "../../components/ui/custom-select";
 import { questionBankApi } from "../../services/questionBankApi";
-import { mapQuestionDetailToEditorState, mapEditorStateToCreateUpdateRequest, flattenTopicTree, normalizeTrueFalseOptions } from "./questionMappers";
+import { mapQuestionDetailToEditorState, mapEditorStateToCreateUpdateRequest, flattenTopicTree, normalizeTrueFalseOptions, mapOcrDraftToEditorStatePatch } from "./questionMappers";
 import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/questionLabels";
+import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 function getRoleLabel(role) {
@@ -15,6 +16,69 @@ function getRoleLabel(role) {
   if (role === "Expert") return "Chuyên gia";
   if (role === "Admin") return "Quản trị viên";
   return role;
+}
+
+function createFileFromDataUrl(dataUrl, fileName) {
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(dataUrl || "");
+  if (!match) {
+    throw new Error("OCR did not return a valid extracted image.");
+  }
+
+  const binary = window.atob(match[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new File([bytes], fileName, { type: match[1] });
+}
+
+async function createCroppedImageFile(file, selection) {
+  if (!file || !selection) {
+    throw new Error("A source image and crop selection are required.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const sourceImage = new Image();
+      sourceImage.onload = () => resolve(sourceImage);
+      sourceImage.onerror = () => reject(new Error("Could not load the source image for cropping."));
+      sourceImage.src = sourceUrl;
+    });
+    const sourceX = Math.round(selection.x * image.naturalWidth);
+    const sourceY = Math.round(selection.y * image.naturalHeight);
+    const sourceWidth = Math.max(1, Math.min(image.naturalWidth - sourceX, Math.round(selection.width * image.naturalWidth)));
+    const sourceHeight = Math.max(1, Math.min(image.naturalHeight - sourceY, Math.round(selection.height * image.naturalHeight)));
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceWidth;
+    canvas.height = sourceHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Could not initialize the crop canvas.");
+    }
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      sourceWidth,
+      sourceHeight);
+
+    const outputType = ["image/jpeg", "image/png", "image/webp"].includes(file.type)
+      ? file.type
+      : "image/png";
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Could not create the cropped image.")), outputType, 0.95);
+    });
+    const extension = outputType === "image/jpeg" ? "jpg" : outputType.split("/")[1];
+    return new File([blob], `ocr-crop.${extension}`, { type: outputType });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 export default function QuestionEditorPage() {
@@ -109,8 +173,20 @@ export default function QuestionEditorPage() {
   }, []);
 
   // OCR state helper
-  const [ocrImage, setOcrImage] = React.useState(null);
+  const [ocrFile, setOcrFile] = React.useState(null);
   const [ocrPreviewUrl, setOcrPreviewUrl] = React.useState("");
+  const [ocrScanning, setOcrScanning] = React.useState(false);
+  const [ocrScanError, setOcrScanError] = React.useState("");
+  const [ocrResult, setOcrResult] = React.useState(null);
+  const [reviewDraft, setReviewDraft] = React.useState(null);
+  const [isOcrReviewOpen, setIsOcrReviewOpen] = React.useState(false);
+  const [attachSourceImage, setAttachSourceImage] = React.useState(false);
+  const [selectedExtractedImageId, setSelectedExtractedImageId] = React.useState(null);
+  const [manualCropSelection, setManualCropSelection] = React.useState(null);
+  const [ocrImageUploading, setOcrImageUploading] = React.useState(false);
+  const [ocrImageUploadError, setOcrImageUploadError] = React.useState("");
+
+  const isOcrBusy = ocrScanning || ocrImageUploading;
 
   // Cleanup OCR object URL to prevent memory leaks
   React.useEffect(() => {
@@ -121,6 +197,7 @@ export default function QuestionEditorPage() {
 
   // Cloudinary Upload States and Handler
   const fileInputRef = React.useRef(null);
+  const ocrFileInputRef = React.useRef(null);
   const questionTextareaRef = React.useRef(null);
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState(null);
@@ -522,11 +599,195 @@ export default function QuestionEditorPage() {
 
   // OCR file handler
   const handleOcrImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setOcrImage(file);
-      setOcrPreviewUrl(URL.createObjectURL(file));
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset error state
+    setOcrScanError("");
+
+    // Validate type: JPEG, PNG, WebP only
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+        setOcrScanError("Định dạng ảnh không được hỗ trợ. Vui lòng chọn ảnh JPEG, PNG, hoặc WebP.");
+        // Clear file inputs and preview state
+        setOcrFile(null);
+        setManualCropSelection(null);
+      if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+      setOcrPreviewUrl("");
+      if (e.target) e.target.value = "";
+      if (ocrFileInputRef.current) ocrFileInputRef.current.value = "";
+      return;
     }
+
+    // Validate size: 5 MB limit
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+        setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
+        // Clear file inputs and preview state
+        setOcrFile(null);
+        setManualCropSelection(null);
+      if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+      setOcrPreviewUrl("");
+      if (e.target) e.target.value = "";
+      if (ocrFileInputRef.current) ocrFileInputRef.current.value = "";
+      return;
+    }
+
+    setOcrFile(file);
+    setManualCropSelection(null);
+    if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+    setOcrPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleOcrScan = async () => {
+    if (!ocrFile) return;
+    setOcrScanning(true);
+    setOcrScanError("");
+    try {
+      const res = await questionBankApi.extractQuestionOcrDraft(ocrFile);
+      const data = res.data;
+      if (!data || !data.draft) {
+        throw new Error("Không nhận được dữ liệu bản nháp từ server.");
+      }
+      setOcrResult(data);
+      // Initialize editable state
+      setReviewDraft({
+        questionContent: data.draft.questionContent || "",
+        solutionContent: data.draft.solutionContent || "",
+        suggestedQuestionType: data.draft.suggestedQuestionType || "UNKNOWN",
+        answers: (data.draft.answers || []).map(a => ({ ...a })),
+        parts: (data.draft.parts || []).map(p => ({ ...p }))
+      });
+      setAttachSourceImage(false);
+      setSelectedExtractedImageId(null);
+      setManualCropSelection(null);
+      setOcrImageUploadError("");
+      setIsOcrReviewOpen(true);
+    } catch (err) {
+      console.error("OCR Scan error:", err);
+      const errorCode = err.response?.data?.code;
+      if (err.response?.status === 413 || errorCode === "IMAGE_TOO_LARGE") {
+        setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
+      } else if (errorCode === "IMAGE_REQUIRED" || errorCode === "IMAGE_TYPE_NOT_SUPPORTED") {
+        setOcrScanError("Định dạng ảnh không hợp lệ hoặc thiếu tệp ảnh.");
+      } else if (errorCode === "OCR_DRAFT_UNAVAILABLE") {
+        setOcrScanError("Ảnh chứa nhiều hơn một câu hỏi hoặc không đủ rõ nét. Vui lòng cắt/chụp lại duy nhất một câu hỏi hoàn chỉnh.");
+      } else if (errorCode === "OCR_RATE_LIMIT_EXCEEDED" || errorCode === "OCR_PROVIDER_RATE_LIMITED") {
+        setOcrScanError("Lượt quét giới hạn đã vượt quá. Vui lòng đợi một phút và thử lại.");
+      } else if (errorCode === "OCR_PROVIDER_UNAVAILABLE" || errorCode === "OCR_INVALID_RESPONSE") {
+        setOcrScanError("Dịch vụ nhận diện Mistral OCR gặp lỗi hoặc phản hồi không hợp lệ. Vui lòng thử lại sau.");
+      } else if (errorCode === "OCR_NOT_CONFIGURED") {
+        setOcrScanError("Tính năng Mistral OCR chưa được cấu hình trên server.");
+      } else if (errorCode === "OCR_TIMEOUT") {
+        setOcrScanError("Thời gian quét ảnh đề vượt quá giới hạn. Vui lòng thử lại.");
+      } else {
+        setOcrScanError(err.response?.data?.message || err.message || "Tải ảnh và quét bản nháp thất bại. Vui lòng thử lại.");
+      }
+    } finally {
+      setOcrScanning(false);
+    }
+  };
+
+  const handleApplyDraft = async (applyType) => {
+    let pictureUrl = null;
+    const selectedExtractedImage = ocrResult?.extractedImages?.find(
+      (image) => image.id === selectedExtractedImageId);
+
+    if (selectedExtractedImage || (manualCropSelection && ocrFile) || (attachSourceImage && ocrFile)) {
+      setOcrImageUploading(true);
+      setOcrImageUploadError("");
+      try {
+        const imageToUpload = selectedExtractedImage
+          ? createFileFromDataUrl(selectedExtractedImage.dataUrl, `${selectedExtractedImage.id}.png`)
+          : manualCropSelection
+            ? await createCroppedImageFile(ocrFile, manualCropSelection)
+            : ocrFile;
+        const uploadRes = await questionBankApi.uploadQuestionImage(imageToUpload);
+        pictureUrl = uploadRes.data?.pictureUrl;
+        if (!pictureUrl) {
+          throw new Error("Không nhận được URL ảnh từ server.");
+        }
+      } catch (err) {
+        console.error("OCR Image Upload failed:", err);
+        setOcrImageUploadError("Tải ảnh nguồn lên thất bại. Bạn có thể thử lại hoặc bỏ tích chọn đính kèm để áp dụng không ảnh.");
+        setOcrImageUploading(false);
+        return; // Stop apply so user can retry or uncheck
+      }
+      setOcrImageUploading(false);
+    }
+
+    // Close review dialog
+    setIsOcrReviewOpen(false);
+
+    if (applyType === "content") {
+      setForm(prev => {
+        const updated = {
+          ...prev,
+          questionContent: reviewDraft.questionContent,
+        };
+        if (reviewDraft.solutionContent && reviewDraft.solutionContent.trim()) {
+          updated.solutionContent = reviewDraft.solutionContent;
+        }
+        if (pictureUrl) {
+          updated.pictureUrl = pictureUrl;
+        }
+        return updated;
+      });
+      setInfoMessage("Đã áp dụng nội dung câu hỏi từ bản nháp OCR.");
+      setError(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      // Map full draft state
+      const mapped = mapOcrDraftToEditorStatePatch(reviewDraft);
+      if (!mapped) return;
+
+      setForm(prev => {
+        const updated = {
+          ...prev,
+          questionContent: mapped.questionContent,
+        };
+        if (mapped.solutionContent && mapped.solutionContent.trim()) {
+          updated.solutionContent = mapped.solutionContent;
+        }
+        if (mapped.questionType) {
+          updated.questionType = mapped.questionType;
+        }
+        if (mapped.options) {
+          updated.options = mapped.options;
+        }
+        if (mapped.shortAnswer !== undefined) {
+          updated.shortAnswer = mapped.shortAnswer;
+        }
+        if (mapped.parts) {
+          updated.parts = mapped.parts;
+        }
+        if (pictureUrl) {
+          updated.pictureUrl = pictureUrl;
+        }
+        return updated;
+      });
+
+      if (mapped.ignoredPartsCount > 0) {
+        setInfoMessage('Đã áp dụng bản nháp OCR. Bỏ qua ' + mapped.ignoredPartsCount + ' mệnh đề không xác định.');
+      } else {
+        setInfoMessage("Đã áp dụng toàn bộ bản nháp OCR thành công.");
+      }
+      setError(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    // Clean up OCR preview and file state
+    setOcrFile(null);
+    setSelectedExtractedImageId(null);
+    setManualCropSelection(null);
+    if (ocrFileInputRef.current) {
+      ocrFileInputRef.current.value = "";
+    }
+    if (ocrPreviewUrl) {
+      URL.revokeObjectURL(ocrPreviewUrl);
+      setOcrPreviewUrl("");
+    }
+    setIsOcrPanelOpen(false);
   };
 
   // Insert LaTeX at active cursor position (and replace selection if any)
@@ -627,6 +888,10 @@ export default function QuestionEditorPage() {
         const part = form.parts[i];
         if (!part.partContent.trim()) {
           showError(`Nội dung câu hỏi phụ phần (${part.partLabel}) không được để trống!`);
+          return;
+        }
+        if (part.partType === "TRUE_FALSE" && part.correctBoolean !== true && part.correctBoolean !== false) {
+          showError(`Vui lòng chọn đáp án Đúng hoặc Sai cho câu hỏi phụ phần (${part.partLabel})!`);
           return;
         }
         if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
@@ -941,7 +1206,7 @@ export default function QuestionEditorPage() {
                       }`}
                     >
                       <span className="material-symbols-outlined text-[16px]">photo_camera</span>
-                      Quét công thức
+                      Tạo bản nháp từ ảnh đề
                     </button>
                   </div>
 
@@ -1004,53 +1269,101 @@ export default function QuestionEditorPage() {
                     <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 mi-panel-down">
                       <div className="p-3.5 bg-primary/5 border border-primary/10 rounded-lg space-y-1.5">
                         <h4 className="text-[11px] font-bold text-primary flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[16px]">info</span>
-                          Quét công thức toán từ ảnh chụp (Mockup)
+                          <span className="material-symbols-outlined text-[16px]">photo_camera</span>
+                          Tạo bản nháp từ ảnh đề
                         </h4>
                         <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                          Tải lên hình ảnh chứa công thức toán học để quét và tự động chuyển đổi thành mã LaTeX.
+                          Tải lên hình ảnh chứa <strong>một câu hỏi hoàn chỉnh</strong> (bao gồm đề bài, các phương án lựa chọn hoặc các mệnh đề nếu có) để quét và tạo bản nháp câu hỏi tự động. Không tải ảnh chứa công thức toán riêng lẻ hoặc toàn bộ trang đề thi.
                         </p>
+                      </div>
+
+                      {/* Before request checklist */}
+                      <div className="p-3 bg-surface-container rounded-lg text-[10px] text-on-surface-variant space-y-1 border border-whisper-border">
+                        <span className="font-bold text-on-surface">Lưu ý trước khi quét:</span>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          <li>Chỉ chứa duy nhất một câu hỏi hoàn chỉnh.</li>
+                          <li>Cắt bỏ các câu hỏi, ghi chú hoặc nội dung không liên quan xung quanh.</li>
+                          <li>Vui lòng kiểm tra và sửa lại tất cả kết quả nhận diện trước khi lưu câu hỏi.</li>
+                        </ul>
                       </div>
 
                       <div className="flex flex-col gap-3">
                         <label className="border border-dashed border-outline-variant rounded-xl p-4 text-center hover:border-primary transition-colors flex flex-col items-center gap-1 cursor-pointer bg-pure-surface">
                           <span className="material-symbols-outlined text-[24px] text-on-surface-variant">photo_camera</span>
-                          <span className="text-[11px] font-bold text-on-surface">Chọn ảnh công thức toán</span>
+                          <span className="text-[11px] font-bold text-on-surface">
+                            {ocrFile ? "Chọn ảnh khác" : "Chọn ảnh câu hỏi (JPEG, PNG, WebP)"}
+                          </span>
+                          <span className="text-[9px] text-on-surface-variant">Tối đa 5MB</span>
                           <input
+                            ref={ocrFileInputRef}
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/webp"
                             onChange={handleOcrImageUpload}
                             className="hidden"
+                            disabled={isOcrBusy}
                           />
                         </label>
 
+                        {/* Error Alert */}
+                        {ocrScanError && (
+                          <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg flex items-start gap-1.5" role="alert">
+                            <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+                            <span>{ocrScanError}</span>
+                          </div>
+                        )}
+
+                        {/* Preview and Scan button */}
                         {ocrPreviewUrl && (
-                          <div className="border border-whisper-border rounded-xl p-3 bg-pure-surface space-y-2 max-w-md">
-                            <p className="text-[10px] font-bold text-on-surface-variant">Ảnh xem trước:</p>
+                          <div className="border border-whisper-border rounded-xl p-3 bg-pure-surface space-y-3 max-w-md">
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-on-surface-variant">Ảnh đã chọn:</p>
+                              {ocrFile && (
+                                <p className="text-[9px] text-on-surface-variant">
+                                  {ocrFile.name} ({(ocrFile.size / 1024 / 1024).toFixed(2)} MB)
+                                </p>
+                              )}
+                            </div>
                             <img src={ocrPreviewUrl} alt="OCR Preview" className="max-h-32 mx-auto object-contain rounded border border-whisper-border" />
+
                             <div className="flex gap-2 justify-end pt-1">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
-                                  handleInsertLatex("$f(x) = x^2 - 2x + 1$");
-                                  showError("Mockup: Đã chuyển đổi công thức toán trong ảnh thành LaTeX $f(x) = x^2 - 2x + 1$");
+                                  setOcrFile(null);
+                                  setManualCropSelection(null);
+                                  if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+                                  setOcrPreviewUrl("");
+                                  setOcrScanError("");
+                                  if (ocrFileInputRef.current) {
+                                    ocrFileInputRef.current.value = "";
+                                  }
                                 }}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer active:scale-[0.98] transition-all"
+                                disabled={isOcrBusy}
+                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer"
                               >
-                                Chuyển sang LaTeX
+                                Xóa ảnh
                               </Button>
                               <Button
                                 type="button"
-                                variant="secondary"
+                                variant="primary"
                                 size="sm"
-                                onClick={() => {
-                                  showError("Mockup: Tính năng upload ảnh thật đang chờ tích hợp API lưu trữ. Giao diện hiện tại giữ tệp này làm preview tạm thời.");
-                                }}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer active:scale-[0.98] transition-all"
+                                onClick={handleOcrScan}
+                                disabled={isOcrBusy || !ocrFile}
+                                className="normal-case h-7 text-[10px] px-3 font-bold cursor-pointer flex items-center gap-1"
                               >
-                                Lưu ảnh xem trước
+                                {ocrScanning ? (
+                                  <>
+                                    <span className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full mr-1"></span>
+                                    Đang đọc ảnh đề…
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="material-symbols-outlined text-[14px]">scanner</span>
+                                    Quét tạo bản nháp
+                                  </>
+                                )}
                               </Button>
                             </div>
                           </div>
@@ -1726,7 +2039,9 @@ export default function QuestionEditorPage() {
                               }`}>
                                 {String.fromCharCode(65 + oIdx)}
                               </div>
-                              <span className="font-mono">{opt.content}</span>
+                              <div className="min-w-0">
+                                <LatexPreview content={opt.content} />
+                              </div>
                             </div>
                             {form.questionType === "TRUE_FALSE" && (
                               <Badge variant={opt.isCorrect ? "approved" : "secondary"} className="scale-90 origin-right">
@@ -1741,7 +2056,12 @@ export default function QuestionEditorPage() {
                     {/* SHORT_ANSWER */}
                     {form.questionType === "SHORT_ANSWER" && (
                       <div className="p-2 bg-surface-container rounded-lg border border-whisper-border font-mono text-[12px] text-primary font-bold mt-1.5 text-center">
-                        Đáp án đúng: {form.shortAnswer || <span className="italic text-on-surface-variant font-body">Trống</span>}
+                        <span className="font-bold text-primary">Đáp án đúng:</span>{" "}
+                        {form.shortAnswer ? (
+                          <LatexPreview content={form.shortAnswer} />
+                        ) : (
+                          <span className="italic text-on-surface-variant font-body">Trống</span>
+                        )}
                       </div>
                     )}
 
@@ -1763,14 +2083,17 @@ export default function QuestionEditorPage() {
                               </p>
                             )}
                             {part.partType === "SHORT_ANSWER" && (
-                              <p className="text-[10px] text-emerald-success font-bold font-mono">
-                                Đáp án: {part.correctText}
-                              </p>
+                              <div className="text-[10px] text-emerald-success font-bold font-mono">
+                                <span>Đáp án:</span>
+                                <LatexPreview content={part.correctText} />
+                              </div>
                             )}
                             {part.partType === "NUMERIC_ANSWER" && (
-                              <p className="text-[10px] text-emerald-success font-bold font-mono">
-                                Số đúng: {part.correctNumeric} (±{part.numericTolerance})
-                              </p>
+                              <div className="text-[10px] text-emerald-success font-bold font-mono">
+                                <span>Số đúng:</span>
+                                <LatexPreview content={String(part.correctNumeric ?? "")} />
+                                <span>(±{part.numericTolerance})</span>
+                              </div>
                             )}
                           </div>
                         ))}
@@ -1795,6 +2118,44 @@ export default function QuestionEditorPage() {
         </div>
 
       </div>
+
+      {/* OCR Draft Review Dialog */}
+      <QuestionOcrDraftReviewDialog
+        isOpen={isOcrReviewOpen}
+        onClose={() => setIsOcrReviewOpen(false)}
+        ocrResult={ocrResult}
+        reviewDraft={reviewDraft}
+        setReviewDraft={setReviewDraft}
+        attachSourceImage={attachSourceImage}
+        setAttachSourceImage={(isAttached) => {
+          setAttachSourceImage(isAttached);
+          if (isAttached) {
+            setSelectedExtractedImageId(null);
+            setManualCropSelection(null);
+          }
+        }}
+        selectedExtractedImageId={selectedExtractedImageId}
+        setSelectedExtractedImageId={(imageId) => {
+          setSelectedExtractedImageId(imageId);
+          if (imageId) {
+            setAttachSourceImage(false);
+            setManualCropSelection(null);
+          }
+        }}
+        manualCropSelection={manualCropSelection}
+        setManualCropSelection={(selection) => {
+          setManualCropSelection(selection);
+          if (selection) {
+            setAttachSourceImage(false);
+            setSelectedExtractedImageId(null);
+          }
+        }}
+        ocrImageUploading={ocrImageUploading}
+        ocrImageUploadError={ocrImageUploadError}
+        onApplyDraft={handleApplyDraft}
+        ocrPreviewUrl={ocrPreviewUrl}
+        isOcrBusy={isOcrBusy}
+      />
 
       {/* Right-side Slide-over Panel */}
       {isTopicPanelOpen && (
