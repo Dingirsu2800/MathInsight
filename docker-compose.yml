@@ -31,6 +31,9 @@ services:
       Cloudinary__CloudName: ${Cloudinary__CloudName:-your-cloud-name}
       Cloudinary__ApiKey: ${Cloudinary__ApiKey:-your-api-key}
       Cloudinary__ApiSecret: ${Cloudinary__ApiSecret:-your-api-secret}
+      MistralOcr__ApiKey: ${MistralOcr__ApiKey:-your-api-key}
+      MistralOcr__BaseUrl: ${MistralOcr__BaseUrl:-https://api.mistral.ai}
+      MistralOcr__Model: ${MistralOcr__Model:-mistral-ocr-latest}
     restart: on-failure
 
   frontend:

@@ -14,7 +14,7 @@ Builds the `MathInsight.Modules.QuestionBank` component managing the full lifecy
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
 | Storage | SQL Server; map to current DB script tables |
-| Media Storage | Cloudinary (image upload for UC-22) |
+| Media/OCR | Cloudinary (image upload for UC-22), Mistral OCR (unpersisted draft for UC-39) |
 | File Parsing | EPPlus (Excel), OpenXml SDK (Word) |
 | Testing | xUnit / Integration tests |
 | Project Type | Modular Monolith Web API |
@@ -95,6 +95,7 @@ GET    /api/v1/questions                          # UC-19: list (paged + filter)
 GET    /api/v1/questions/dashboard                # UC-18: stats
 POST   /api/v1/questions                          # UC-20/21: create single question
 POST   /api/question-bank/questions/image-upload  # UC-22: authenticated backend upload to Cloudinary
+POST   /api/question-bank/questions/ocr-draft     # UC-39: one-image OCR draft; 10 requests/minute per Expert
 POST   /api/v1/questions/import                   # UC-23: bulk import file → queue
 GET    /api/v1/questions/{id}/versions            # UC-24: version history
 PUT    /api/v1/questions/{id}                     # UC-25: update (auto-snapshot)
@@ -142,6 +143,7 @@ POST   /api/question-bank/admin/reports/{reportId}/reject  # Original Admin repo
 - **Recommender/TestGen v2 contract**: Recommender stores Ptag by `StudentID + TagID` only. TestGen maps `TagsMastery.RecommendedDifficultyLevel` to `TagDifficulty.LevelValue`, then filters `Question.DifficultyID` plus `QuestionTopic.TagID`. If a `BlueprintSection` is used, TestGen also filters `Question.QuestionType` by the section's `QuestionType`. Do not remove `Question.DifficultyID`, `Question.QuestionType`, or `TagDifficulty` from QuestionBank.
 - **Testing module** references `question_id` in `test_questions` — a Question with any existing reference cannot be hard-deleted or deactivated and returns `409 QUESTION_IN_USE`.
 - **Cloudinary** integration for image upload (UC-22): an Expert posts multipart field `file` to `POST /api/question-bank/questions/image-upload`. `IQuestionImageStorage` authenticates and forwards JPEG/PNG/WebP files (max 5 MB) to Cloudinary REST using server-side HTTP Basic authentication, then returns only `picture_url`. No Cloudinary secret, authorization header, raw response, or OCR behavior is exposed to frontend clients.
+- **Mistral OCR** integration (UC-39): an Expert posts exactly one complete question image as multipart field `file` to `POST /api/question-bank/questions/ocr-draft`. The backend applies the same JPEG/PNG/WebP 5 MB magic-byte validation, rate limits by authenticated Expert (10/minute, no queue), and returns an unpersisted draft plus up to three detected image candidates. The Expert may choose one candidate or the original source image; selection is uploaded through the existing Cloudinary endpoint only when applying the draft. Mistral credentials and raw provider failures stay server-side; answer suggestions and image candidates are never authoritative.
 - **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
 
 ## Verification Plan

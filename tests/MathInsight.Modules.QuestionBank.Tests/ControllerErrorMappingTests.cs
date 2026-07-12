@@ -7,6 +7,7 @@ using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
 using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
 using MathInsight.Modules.QuestionBank.Commands.ToggleQuestionActive;
 using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
+using MathInsight.Modules.QuestionBank.Commands.ExtractQuestionOcrDraft;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
@@ -275,6 +276,41 @@ public sealed class ControllerErrorMappingTests
         var result = await controller.UploadQuestionImage(null, CancellationToken.None);
 
         var objectResult = Assert.IsType<ObjectResult>(result);
+        var response = Assert.IsType<ApiErrorResponse>(objectResult.Value);
+        Assert.Equal(expectedStatusCode, objectResult.StatusCode);
+        Assert.Equal(error.Code, response.Code);
+    }
+
+    [Theory]
+    [InlineData("OCR_NOT_CONFIGURED", StatusCodes.Status503ServiceUnavailable)]
+    [InlineData("OCR_PROVIDER_UNAVAILABLE", StatusCodes.Status502BadGateway)]
+    [InlineData("OCR_PROVIDER_RATE_LIMITED", StatusCodes.Status429TooManyRequests)]
+    [InlineData("OCR_TIMEOUT", StatusCodes.Status504GatewayTimeout)]
+    [InlineData("OCR_INVALID_RESPONSE", StatusCodes.Status502BadGateway)]
+    [InlineData("OCR_DRAFT_UNAVAILABLE", StatusCodes.Status422UnprocessableEntity)]
+    public async Task ExtractQuestionOcrDraft_WhenHandlerReturnsMappedError_ReturnsStableHttpStatus(
+        string errorCode,
+        int expectedStatusCode)
+    {
+        var error = errorCode switch
+        {
+            "OCR_NOT_CONFIGURED" => QuestionBankErrors.OcrNotConfigured,
+            "OCR_PROVIDER_UNAVAILABLE" => QuestionBankErrors.OcrProviderUnavailable,
+            "OCR_PROVIDER_RATE_LIMITED" => QuestionBankErrors.OcrProviderRateLimited,
+            "OCR_TIMEOUT" => QuestionBankErrors.OcrTimeout,
+            "OCR_INVALID_RESPONSE" => QuestionBankErrors.OcrInvalidResponse,
+            "OCR_DRAFT_UNAVAILABLE" => QuestionBankErrors.OcrDraftUnavailable,
+            _ => throw new InvalidOperationException("Unexpected error code.")
+        };
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<ExtractQuestionOcrDraftCommand>(request);
+            return Result<QuestionOcrDraftResponse>.Failure(error);
+        }));
+
+        var result = await controller.ExtractQuestionOcrDraft(null, CancellationToken.None);
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
         var response = Assert.IsType<ApiErrorResponse>(objectResult.Value);
         Assert.Equal(expectedStatusCode, objectResult.StatusCode);
         Assert.Equal(error.Code, response.Code);

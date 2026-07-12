@@ -1,4 +1,5 @@
 using MathInsight.Modules.QuestionBank.Configuration;
+using MathInsight.Modules.QuestionBank.Ocr;
 using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Modules.QuestionBank.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,14 @@ public static class QuestionBankModuleExtensions
         services.AddHttpClient<IQuestionImageStorage, CloudinaryQuestionImageStorage>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services
+            .AddOptions<MistralOcrOptions>()
+            .Bind(configuration.GetSection(MistralOcrOptions.SectionName));
+        services.AddHttpClient<IQuestionOcrService, MistralQuestionOcrService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
         });
 
         services.AddMediatR(config =>

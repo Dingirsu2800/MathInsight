@@ -31,6 +31,7 @@
   - [x] `DeleteQuestionCommand` — hard-delete only when there is no `TestQuestion` reference, pending report, or `REPORTED` status; otherwise return the matching HTTP 409 without mutation (DC-02, BR-69)
   - [x] `SubmitQuestionReportReviewCommand` — owning Expert submits an Admin `PendingFix` report as `PendingReview`
   - [x] `AdminApproveQuestionReportCommand` / `AdminRejectQuestionReportCommand` — only the original Admin reporter reviews `PendingReview`; approve restores `Approved` only when no Expert `Pending` report remains, reject requires review note and sets `Rejected`
+- [x] `ExtractQuestionOcrDraftCommand` - validates one JPEG/PNG/WebP image and returns an unpersisted Mistral OCR draft with untrusted answer suggestions and up to three user-selectable visual candidates (BR-72)
 - [x] **Report Commands**:
   - [x] `ReportQuestionCommand` — Student/Expert reports create `Pending`; Admin creates `PendingFix`; one active Admin workflow per Question is enforced under the SQL Server question lock (BR-58, BR-67, BR-71)
   - [x] `HandleQuestionReportCommand` — Question owner resolves or dismisses only Student/Expert `Pending` reports; Admin reports require submit/review flow; restoration accounts for active Admin workflow (BR-60, BR-68)
@@ -71,6 +72,7 @@
 - [x] Expert frontend report workflow: distinguish `Pending`, `PendingFix`, and `PendingReview` in reported-question list and editor; integrate submit-review; preserve regular resolve/dismiss for Student/Expert reports
 - [ ] Admin frontend report dashboard and approve/reject UI
 - [x] Image upload helper endpoint -> authenticated Cloudinary REST client using server-side HTTP Basic authentication, return `picture_url`; validate JPEG/PNG/WebP magic bytes and 5 MB limit; OCR/Pix2Text remains a separate backlog checkpoint
+- [x] OCR draft endpoint -> Expert-only Mistral OCR client, one JPEG/PNG/WebP question image, 5 MB magic-byte validation, 10 requests/minute per Expert, no database write or automatic answer confirmation (BR-72)
 - [ ] Register all inside `QuestionBankModuleExtensions.cs`:
   - DbContext, MediatR handlers, Parsers, MassTransit consumer
 

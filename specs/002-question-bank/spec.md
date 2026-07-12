@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-question-bank`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-10
+**Created**: 2026-06-23 | **Updated**: 2026-07-12
 
 **Status**: Approved
 
@@ -35,6 +35,7 @@
 | UC-36 | Create Tag for Difficulty | Expert |
 | UC-37 | Update Tag | Expert |
 | UC-38 | Delete Tag | Expert |
+| UC-39 | Create OCR Question Draft | Expert |
 
 ### Edge Cases
 
@@ -74,7 +75,8 @@
 - **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.
 - **BR-65**: Tag list APIs return only active records by default. Expert tag management may request inactive records with `includeInactive=true`; each response retains its `IsActive` state.
 - **BR-66**: A topic cannot be soft-disabled while it has an active descendant at any depth. The operation returns HTTP 409 (`TAG_TOPIC_HAS_ACTIVE_DESCENDANTS`) and leaves the topic unchanged.
-- **BR-70**: UC-22 uploads one optional question image through `POST /api/question-bank/questions/image-upload` as `multipart/form-data` field `file`. Only Experts may use the endpoint. The backend accepts JPEG, PNG, and WebP up to 5 MB, validates the declared MIME type and file magic bytes, then performs an authenticated Cloudinary upload using server-side HTTP Basic authentication. The API returns only `{ pictureUrl }`; Cloudinary credentials, authorization headers, raw provider responses, and internal exceptions must never be exposed to the client. GIF, SVG, PDF, OCR, LaTeX recognition, multiple images, and bulk import from images are outside this use case.
+- **BR-72**: UC-39 creates an in-memory OCR draft from exactly one complete question image through `POST /api/question-bank/questions/ocr-draft` as `multipart/form-data` field `file`. Only Experts may call it. It applies the same JPEG/PNG/WebP magic-byte validation and 5 MB file limit as UC-22, limits each Expert to 10 requests per minute with no queue, and calls Mistral OCR only from the backend. The response may contain `questionContent`, `solutionContent`, a suggested question type, options/parts, raw markdown, confidence, warnings, and up to three detected image candidates. For option/composite questions, `questionContent` must exclude option/statement text that belongs in `answers` or `parts`. It never creates or updates Question Bank records. Suggested answers and detected images are untrusted suggestions: the Expert must choose an image explicitly, and only the selected image is uploaded through UC-22 to become `PictureUrl`. When OCR does not return an image candidate for a scan/photo, the Expert may manually select a rectangular crop from the source image in the review UI; the browser creates that crop locally and uploads it only on apply. Full-page/multi-question images, PDFs, automatic topic/difficulty/grade assignment, automatic publication, and retries are outside this MVP.
+- **BR-70**: UC-22 uploads one optional question image through `POST /api/question-bank/questions/image-upload` as `multipart/form-data` field `file`. Only Experts may use the endpoint. The backend accepts JPEG, PNG, and WebP up to 5 MB, validates the declared MIME type and file magic bytes, then performs an authenticated Cloudinary upload using server-side HTTP Basic authentication. The API returns only `{ pictureUrl }`; Cloudinary credentials, authorization headers, raw provider responses, and internal exceptions must never be exposed to the client. GIF, SVG, PDF, multiple images, and bulk import from images are outside this use case.
 
 ### Accepted Question Types
 
@@ -157,5 +159,6 @@ Question.IsActive = 1
 
 - Target database is SQL Server. Backend maps to current DB script tables (`Question`, `Answer`, `QuestionVersion`, `QuestionReport`, `TagTopic`, `TagDifficulty`, `QuestionTopic`) instead of schema-prefixed tables.
 - Cloudinary is used for authenticated backend image upload (`picture_url` from UC-22). The `Cloudinary` section is supplied through user-secrets, Docker/Azure environment variables, or equivalent secret configuration; it is never committed to frontend code.
+- Mistral OCR is used only for UC-39 draft extraction. `MistralOcr:ApiKey` is supplied through user-secrets, Docker/Azure environment variables, or equivalent secret configuration; it is never committed to frontend code or `VITE_*` variables.
 - MediatR domain events handle async version snapshot creation.
 - Question and solution authoring is handled by a rich-text/WYSIWYG editor so non-technical Experts can input math content without technical markup syntax. Backend stores sanitized content and associated media URLs; frontend renders the stored rich text directly.

@@ -2,6 +2,7 @@
 using MathInsight.Modules.QuestionBank.Commands.CreateQuestion;
 using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
+using MathInsight.Modules.QuestionBank.Commands.ExtractQuestionOcrDraft;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
@@ -14,6 +15,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MathInsight.Modules.QuestionBank.Commands.DeleteQuestion;
 using MathInsight.Modules.QuestionBank.Commands.ToggleQuestionActive;
+using MathInsight.Modules.QuestionBank.Ocr;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MathInsight.Modules.QuestionBank.Controllers;
 
@@ -133,6 +136,24 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [HttpPost("ocr-draft")]
+    [Consumes("multipart/form-data")]
+    [EnableRateLimiting(QuestionOcrRateLimit.PolicyName)]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IActionResult> ExtractQuestionOcrDraft(
+        [FromForm] IFormFile? file,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new ExtractQuestionOcrDraftCommand(file),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return ToOcrErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
     [HttpPut("{questionId}")]
     public async Task<IActionResult> UpdateQuestion(
         string questionId,
@@ -237,6 +258,31 @@ public class QuestionsController : ControllerBase
 
         if (error == QuestionBankErrors.ImageUploadFailed)
             return StatusCode(StatusCodes.Status502BadGateway, new ApiErrorResponse(error));
+
+        return BadRequest(new ApiErrorResponse(error));
+    }
+
+    private IActionResult ToOcrErrorResult(Error error)
+    {
+        if (error == QuestionBankErrors.ImageTooLarge)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.OcrNotConfigured)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.OcrProviderRateLimited ||
+            error == QuestionBankErrors.OcrRateLimitExceeded)
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.OcrTimeout)
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.OcrProviderUnavailable ||
+            error == QuestionBankErrors.OcrInvalidResponse)
+            return StatusCode(StatusCodes.Status502BadGateway, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.OcrDraftUnavailable)
+            return UnprocessableEntity(new ApiErrorResponse(error));
 
         return BadRequest(new ApiErrorResponse(error));
     }

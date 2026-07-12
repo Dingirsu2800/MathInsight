@@ -17,6 +17,11 @@ using MathInsight.Modules.Notification_Report;
 using MathInsight.Modules.Grading_Analytics.Handlers;
 using System.IdentityModel.Tokens.Jwt;
 using MathInsight.Modules.Identity_Access.Services.Auth;
+using MathInsight.Modules.QuestionBank.Errors;
+using MathInsight.Modules.QuestionBank.Ocr;
+using MathInsight.Shared.Results;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 const string CorsPolicyName = "MathInsightCors";
@@ -92,6 +97,35 @@ builder.Services.AddNotificationModule(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddRateLimiter(options =>
+{
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new ApiErrorResponse(QuestionBankErrors.OcrRateLimitExceeded),
+            cancellationToken);
+    };
+
+    options.AddPolicy(QuestionOcrRateLimit.PolicyName, httpContext =>
+    {
+        var partitionKey = httpContext.User.FindFirst("account_id")?.Value
+            ?? httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+});
 
 //5 .Jwt
 var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
@@ -180,6 +214,7 @@ app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
 
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -56,6 +56,34 @@ public static class QuestionBankErrors
         "IMAGE_UPLOAD_FAILED",
         "Image upload failed.");
 
+    public static readonly Error OcrNotConfigured = new(
+        "OCR_NOT_CONFIGURED",
+        "OCR service is not configured.");
+
+    public static readonly Error OcrProviderUnavailable = new(
+        "OCR_PROVIDER_UNAVAILABLE",
+        "OCR provider is currently unavailable.");
+
+    public static readonly Error OcrProviderRateLimited = new(
+        "OCR_PROVIDER_RATE_LIMITED",
+        "OCR provider is temporarily rate limited. Please try again later.");
+
+    public static readonly Error OcrTimeout = new(
+        "OCR_TIMEOUT",
+        "OCR request timed out. Please try again.");
+
+    public static readonly Error OcrInvalidResponse = new(
+        "OCR_INVALID_RESPONSE",
+        "OCR provider returned an invalid response.");
+
+    public static readonly Error OcrDraftUnavailable = new(
+        "OCR_DRAFT_UNAVAILABLE",
+        "OCR could not extract a usable question draft from this image.");
+
+    public static readonly Error OcrRateLimitExceeded = new(
+        "OCR_RATE_LIMIT_EXCEEDED",
+        "Too many OCR requests. Please wait before trying again.");
+
     public static readonly Error QuestionInvalidType = new(
         "QUESTION_INVALID_TYPE",
         "Invalid question type.");
