@@ -6,17 +6,17 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all Learning entities mapped to the current DB script table and column names:
-  - [ ] `LectureConfiguration` — map to `Lecture`; include `Likes`; `TagID` FK, `TeacherID` FK; check DB values `Draft`, `Published`, `Deactivated`; index `(Status, TagID)`.
-  - [ ] `LectureLikeConfiguration` — map to `LectureLike`; composite PK `(LectureID, StudentID)`; FK to `Lecture` + `Student`.
-  - [ ] `MaterialConfiguration` — map to `Material`; `TeacherID` FK; `FileType`; check DB values `Active`, `Deactivated`.
-  - [ ] `LectureMaterialConfiguration` — map to `LectureMaterial`; composite PK `(LectureID, MaterialID)`.
-  - [ ] `DiscussionQuestionConfiguration` — map to `DiscussionQuestion`; `LectureID` FK; `StudentID` FK; check DB values `Active`, `Hidden`, `Deleted`.
-  - [ ] `DiscussionAnswerConfiguration` — map to `DiscussionAnswer`; `DiscussionQuestionID` FK; `AccountID` FK; check DB values `Active`, `Hidden`, `Deleted`.
-  - [ ] `DiscussionReportConfiguration` — map to `DiscussionReport`; exactly one of `DiscussionQuestionID`/`DiscussionAnswerID` non-null; check DB values `Pending`, `Resolved`, `Dismissed`.
-- [ ] Create `LearningDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
-- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
-- [ ] Seed only through SQL script or an approved seed strategy; do not create conflicting EF seed migrations.
+- [x] Create EF `IEntityTypeConfiguration` for all Learning entities mapped to the current DB script table and column names:
+  - [x] `LectureConfiguration` — map to `Lecture`; include `Likes`; `TagID` FK, `TeacherID` FK; check DB values `Draft`, `Published`, `Deactivated`; index `(Status, TagID)`.
+  - [x] `LectureLikeConfiguration` — map to `LectureLike`; composite PK `(LectureID, StudentID)`; FK to `Lecture` + `Student`.
+  - [x] `MaterialConfiguration` — map to `Material`; `TeacherID` FK; `FileType`; check DB values `Active`, `Deactivated`.
+  - [x] `LectureMaterialConfiguration` — map to `LectureMaterial`; composite PK `(LectureID, MaterialID)`.
+  - [x] `DiscussionQuestionConfiguration` — map to `DiscussionQuestion`; `LectureID` FK; `StudentID` FK; check DB values `Active`, `Hidden`, `Deleted`.
+  - [x] `DiscussionAnswerConfiguration` — map to `DiscussionAnswer`; `DiscussionQuestionID` FK; `AccountID` FK; check DB values `Active`, `Hidden`, `Deleted`.
+  - [x] `DiscussionReportConfiguration` — map to `DiscussionReport`; exactly one of `DiscussionQuestionID`/`DiscussionAnswerID` non-null; check DB values `Pending`, `Resolved`, `Dismissed`.
+- [x] Create `LearningDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [x] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
+- [x] Seed only through SQL script or an approved seed strategy; do not create conflicting EF seed migrations.
 
 ---
 
