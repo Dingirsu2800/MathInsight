@@ -22,46 +22,46 @@
 
 ## Phase 2: Core Domain Logic
 
-- [ ] **Lecture Commands**:
-  - [ ] `CreateLectureCommand` — validate `TagID` exists, `TeacherID = currentUserId`, default `Status = 'Draft'`.
-  - [ ] `UpdateLectureCommand` — validate ownership; reject if `Status = 'Deactivated'`.
-  - [ ] `PublishLectureCommand` — `Draft → Published`; validate `VideoUrl` or `Content` is set.
-  - [ ] `DeactivateLectureCommand` — `Published → Deactivated`; validate ownership.
-  - [ ] `LikeLectureCommand` — Student only; validate lecture is `Published`; insert `LectureLike`; increment `Lecture.Likes`; prevent duplicate `(LectureID, StudentID)`.
-  - [ ] `UnlikeLectureCommand` — Student only; remove own `LectureLike`; decrement `Lecture.Likes` but never below 0.
+- [x] **Lecture Commands**:
+  - [x] `CreateLectureCommand` — validate `TagID` exists, `TeacherID = currentUserId`, default `Status = 'Draft'`.
+  - [x] `UpdateLectureCommand` — validate ownership; reject if `Status = 'Deactivated'`.
+  - [x] `PublishLectureCommand` — `Draft → Published`; validate `VideoUrl` or `Content` is set.
+  - [x] `DeactivateLectureCommand` — `Published → Deactivated`; validate ownership.
+  - [x] `LikeLectureCommand` — Student only; validate lecture is `Published`; insert `LectureLike`; increment `Lecture.Likes`; prevent duplicate `(LectureID, StudentID)`.
+  - [x] `UnlikeLectureCommand` — Student only; remove own `LectureLike`; decrement `Lecture.Likes` but never below 0.
 
-- [ ] **Material Commands**:
-  - [ ] `UploadMaterialCommand`:
+- [x] **Material Commands**:
+  - [x] `UploadMaterialCommand`:
     - Validate file format: PDF, MP4, DOCX only.
     - Validate file size ≤ 500 MB.
     - Upload to Cloudinary via `CloudinaryService.UploadAsync()`.
     - Save `Material` with returned `FileUrl`.
-  - [ ] `UpdateMaterialCommand` — validate ownership.
-  - [ ] `DeactivateMaterialCommand` — set `Status = 'Deactivated'`.
-  - [ ] `AttachMaterialToLectureCommand` — validate ownership of both; insert `LectureMaterial`.
+  - [x] `UpdateMaterialCommand` — validate ownership.
+  - [x] `DeactivateMaterialCommand` — set `Status = 'Deactivated'`.
+  - [x] `AttachMaterialToLectureCommand` — validate ownership of both; insert `LectureMaterial`.
 
-- [ ] **Discussion Commands**:
-  - [ ] `AskDiscussionQuestionCommand` — validate lecture is `Published`; insert `DiscussionQuestion` with `Status = 'Active'`; publish `DiscussionQuestionPostedEvent`.
-  - [ ] `AnswerDiscussionQuestionCommand` — insert `DiscussionAnswer` with `Status = 'Active'`; publish `DiscussionAnsweredEvent`.
-  - [ ] `UpdateDiscussionCommentCommand` — validate `AccountID = currentUserId` or Teacher/Admin permission.
-  - [ ] `DeleteDiscussionCommentCommand` — set target question/answer `Status = 'Deleted'`.
-  - [ ] `HideDiscussionCommentCommand` — Teacher/Admin only; set target question/answer `Status = 'Hidden'`.
-  - [ ] `ReportDiscussionCommand`:
+- [x] **Discussion Commands**:
+  - [x] `AskDiscussionQuestionCommand` — validate lecture is `Published`; insert `DiscussionQuestion` with `Status = 'Active'`; publish `DiscussionQuestionPostedEvent`.
+  - [x] `AnswerDiscussionQuestionCommand` — insert `DiscussionAnswer` with `Status = 'Active'`; publish `DiscussionAnsweredEvent`.
+  - [x] `UpdateDiscussionCommentCommand` — validate `AccountID = currentUserId` or Teacher/Admin permission.
+  - [x] `DeleteDiscussionCommentCommand` — set target question/answer `Status = 'Deleted'`.
+  - [x] `HideDiscussionCommentCommand` — Teacher/Admin only; set target question/answer `Status = 'Hidden'`.
+  - [x] `ReportDiscussionCommand`:
     - Validate DC-06: exactly one of `DiscussionQuestionID` or `DiscussionAnswerID` non-null.
     - Create `DiscussionReport` with `Status = 'Pending'`.
     - Do not update target question/answer status because DB has no `Reported` value.
-  - [ ] `ResolveModerationCommand` — Teacher/Admin: `Pending → Resolved` or `Pending → Dismissed`.
+  - [x] `ResolveModerationCommand` — Teacher/Admin: `Pending → Resolved` or `Pending → Dismissed`.
 
-- [ ] **Queries**:
-  - [ ] `GetLectureListQuery` — paged; Teacher sees own lectures; Students see `Published` only.
-  - [ ] `GetLectureQuery` — includes materials via `LectureMaterial`, like count, discussion count; logs `ActivityLoggedEvent`.
-  - [ ] `GetMaterialListQuery` — paged; Teacher sees own materials; Students see active materials only through published lectures.
-  - [ ] `GetTopicListQuery` — read `TagTopic` hierarchical tree.
-  - [ ] `GetDiscussionsQuery` — paginated questions + answers for a lecture; exclude `Deleted`, hide `Hidden` from Students.
-  - [ ] `GetModerationQueueQuery` — pending `DiscussionReport` records for Teacher's lectures or all for Admin.
+- [x] **Queries**:
+  - [x] `GetLectureListQuery` — paged; Teacher sees own lectures; Students see `Published` only.
+  - [x] `GetLectureQuery` — includes materials via `LectureMaterial`, like count, discussion count; logs `ActivityLoggedEvent`.
+  - [x] `GetMaterialListQuery` — paged; Teacher sees own materials; Students see active materials only through published lectures.
+  - [x] `GetTopicListQuery` — read `TagTopic` hierarchical tree.
+  - [x] `GetDiscussionsQuery` — paginated questions + answers for a lecture; exclude `Deleted`, hide `Hidden` from Students.
+  - [x] `GetModerationQueueQuery` — pending `DiscussionReport` records for Teacher's lectures or all for Admin.
 
-- [ ] **CloudinaryService**: upload file bytes to Cloudinary and return HTTPS `secure_url`.
-- [ ] **Activity Events**: publish `ActivityLoggedEvent` on lecture view and material download.
+- [x] **CloudinaryService**: upload file bytes to Cloudinary and return HTTPS `secure_url`.
+- [x] **Activity Events**: publish `ActivityLoggedEvent` on lecture view and material download.
 
 ---
 

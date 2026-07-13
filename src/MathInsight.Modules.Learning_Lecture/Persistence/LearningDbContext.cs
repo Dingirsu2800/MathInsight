@@ -17,6 +17,7 @@ public class LearningDbContext : DbContext
     public DbSet<DiscussionQuestion> DiscussionQuestions => Set<DiscussionQuestion>();
     public DbSet<DiscussionAnswer> DiscussionAnswers => Set<DiscussionAnswer>();
     public DbSet<DiscussionReport> DiscussionReports => Set<DiscussionReport>();
+    public DbSet<TagTopicReadOnly> TagTopics => Set<TagTopicReadOnly>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,3 +28,4 @@ public class LearningDbContext : DbContext
             t => t.Namespace != null && t.Namespace.Contains("Learning_Lecture"));
     }
 }
+
