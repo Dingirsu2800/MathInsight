@@ -77,21 +77,21 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` — zero compile errors
-- [ ] Integration tests (xUnit):
-  - [ ] Practice: 40-question session graded in < 2.0s
-  - [ ] Exam: session graded synchronously and persisted as `Graded`
-  - [ ] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
-  - [ ] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
-  - [ ] SHORT_ANSWER case-insensitive match → `is_correct = true`
-  - [ ] Abandoned answer (per BR-16b) → `is_correct = false`, counted in `num_abandoned`
-  - [ ] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × default_point` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
-  - [ ] COMPOSITE general (mixed parts) — parent score = sum of part points earned
-  - [ ] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
-  - [ ] UC-51: Chatbot returns explanation JSON within 10s (happy path)
-  - [ ] UC-51: Chatbot API times out after 10s → endpoint returns structured error (e.g. 503); student session is NOT affected (U1)
-  - [ ] UC-51: Second chatbot call same session → rate limited (429)
+- [x] `dotnet build` — zero compile errors
+- [x] Integration tests (xUnit):
+  - [x] Practice: 40-question session graded in < 2.0s
+  - [x] Exam: session graded synchronously and persisted as `Graded`
+  - [x] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
+  - [x] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
+  - [x] SHORT_ANSWER case-insensitive match → `is_correct = true`
+  - [x] Abandoned answer (per BR-16b) → `is_correct = false`, counted in `num_abandoned`
+  - [x] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × default_point` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
+  - [x] COMPOSITE general (mixed parts) — parent score = sum of part points earned
+  - [x] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
+  - [x] UC-51: Chatbot returns explanation JSON within 10s (happy path)
+  - [x] UC-51: Chatbot API times out after 10s → endpoint returns structured error (e.g. 503); student session is NOT affected (U1)
+  - [x] UC-51: Second chatbot call same session → rate limited (429)
