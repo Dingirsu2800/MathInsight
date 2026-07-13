@@ -6,6 +6,10 @@ internal static class QuestionImportConstants
     public const int MaxFileBytes = 20 * 1024 * 1024;
     public const int MaxQuestions = 100;
     public const int MaxTotalDataRows = 5000;
+    public const int MaxDataRowsPerSheet = MaxTotalDataRows;
+    public const int MaxArchiveEntries = 200;
+    public const long MaxUncompressedArchiveBytes = 100L * 1024 * 1024;
+    public const long MaxUncompressedEntryBytes = 50L * 1024 * 1024;
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     public static readonly string[] RequiredSheets =

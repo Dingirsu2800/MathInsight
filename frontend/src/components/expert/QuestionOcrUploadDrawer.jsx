@@ -130,7 +130,7 @@ export default function QuestionOcrUploadDrawer({
             id="ocr-upload-file-picker"
           />
         </div>
-        
+
         <p className="text-[10px] text-on-surface-variant/80 font-medium text-center">
           * Hỗ trợ tệp định dạng JPG, PNG, WebP (Tối đa 5MB)
         </p>

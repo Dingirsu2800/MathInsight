@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using System.IO.Compression;
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Errors;
 
@@ -15,9 +16,14 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
     {
         try
         {
+            EnsureArchiveLimits(stream);
             using var workbook = new XLWorkbook(stream);
             EnsureRequiredSheets(workbook);
             EnsureTemplateVersion(workbook.Worksheet("_Meta"));
+            EnsureInputSheetRowLimit(workbook.Worksheet("Questions"));
+            EnsureInputSheetRowLimit(workbook.Worksheet("Answers"));
+            EnsureInputSheetRowLimit(workbook.Worksheet("Parts"));
+            EnsureInputSheetRowLimit(workbook.Worksheet("Topics"));
 
             var issues = new List<QuestionImportIssueResponse>();
             var questions = ReadQuestions(workbook.Worksheet("Questions"), issues);
@@ -48,6 +54,44 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
             if (!workbook.Worksheets.Contains(name))
                 throw new QuestionImportException(QuestionBankErrors.QuestionImportTemplateInvalid);
         }
+    }
+
+    private static void EnsureArchiveLimits(Stream stream)
+    {
+        if (!stream.CanSeek)
+            throw new QuestionImportException(QuestionBankErrors.QuestionImportTemplateInvalid);
+
+        var originalPosition = stream.Position;
+        try
+        {
+            stream.Position = 0;
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            if (archive.Entries.Count > QuestionImportConstants.MaxArchiveEntries)
+                throw new QuestionImportException(QuestionBankErrors.QuestionImportLimitExceeded);
+
+            long totalUncompressedBytes = 0;
+            foreach (var entry in archive.Entries)
+            {
+                if (entry.Length > QuestionImportConstants.MaxUncompressedEntryBytes ||
+                    entry.Length > QuestionImportConstants.MaxUncompressedArchiveBytes - totalUncompressedBytes)
+                {
+                    throw new QuestionImportException(QuestionBankErrors.QuestionImportLimitExceeded);
+                }
+
+                totalUncompressedBytes += entry.Length;
+            }
+        }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
+    }
+
+    private static void EnsureInputSheetRowLimit(IXLWorksheet worksheet)
+    {
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+        if (lastRow - 1 > QuestionImportConstants.MaxDataRowsPerSheet)
+            throw new QuestionImportException(QuestionBankErrors.QuestionImportLimitExceeded);
     }
 
     private static void EnsureTemplateVersion(IXLWorksheet worksheet)

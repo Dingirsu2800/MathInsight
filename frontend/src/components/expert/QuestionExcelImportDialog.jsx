@@ -6,37 +6,52 @@ import { cn } from "../../utils/cn";
 import { questionBankApi } from "../../services/questionBankApi";
 import { getQuestionTypeLabel } from "../../utils/questionLabels";
 
-const mapIssueCodeToVietnamese = (code, defaultMessage) => {
-  switch (code) {
-    case "QUESTION_IMPORT_FILE_REQUIRED":
-      return "Vui lòng chọn một tệp Excel để nhập.";
-    case "QUESTION_IMPORT_FILE_TOO_LARGE":
-      return "Tệp tải lên vượt quá giới hạn dung lượng cho phép.";
-    case "QUESTION_IMPORT_FILE_TYPE_NOT_SUPPORTED":
-      return "Định dạng tệp không được hỗ trợ. Vui lòng tải lên tệp Excel (.xlsx).";
-    case "QUESTION_IMPORT_TEMPLATE_INVALID":
-      return "Tệp mẫu Excel không hợp lệ. Vui lòng tải lại tệp mẫu chính xác từ hệ thống.";
-    case "QUESTION_IMPORT_TEMPLATE_VERSION_UNSUPPORTED":
-      return "Phiên bản tệp mẫu Excel không còn được hỗ trợ. Vui lòng sử dụng tệp mẫu mới nhất.";
-    case "QUESTION_IMPORT_LIMIT_EXCEEDED":
-      return "Số lượng câu hỏi vượt quá giới hạn cho phép trong một lần nhập.";
-    case "QUESTION_IMPORT_VALIDATION_FAILED":
-      return "Xác thực dữ liệu nhập thất bại. Vui lòng kiểm tra lại lỗi của từng dòng.";
-    case "QUESTION_CONTENT_REQUIRED":
-      return "Nội dung câu hỏi không được để trống.";
-    case "QUESTION_TYPE_INVALID":
-      return "Thể loại câu hỏi không hợp lệ hoặc không được hỗ trợ.";
-    case "TOPIC_TAG_REQUIRED":
-      return "Vui lòng chọn ít nhất một chủ đề cho câu hỏi.";
-    case "DIFFICULTY_TAG_REQUIRED":
-      return "Vui lòng chọn mức độ khó cho câu hỏi.";
-    case "ANSWERS_REQUIRED":
-      return "Vui lòng nhập danh sách các lựa chọn đáp án.";
-    case "CORRECT_ANSWER_REQUIRED":
-      return "Vui lòng chọn ít nhất một đáp án đúng.";
-    default:
-      return defaultMessage || `Lỗi xác thực: ${code}`;
+const questionImportIssueMessages = {
+  QUESTION_CONTENT_REQUIRED: "Nội dung câu hỏi không được để trống.",
+  QUESTION_INVALID_TYPE: "Thể loại câu hỏi không hợp lệ hoặc không được hỗ trợ.",
+  QUESTION_DIFFICULTY_REQUIRED: "Vui lòng chọn mức độ khó cho câu hỏi.",
+  QUESTION_DIFFICULTY_NOT_FOUND: "Mức độ khó không tồn tại hoặc không còn hoạt động.",
+  QUESTION_GRADE_INVALID: "Khối lớp phải là 10, 11 hoặc 12.",
+  QUESTION_DEFAULT_POINT_INVALID: "Điểm mặc định phải nằm trong khoảng từ 0 đến 10.",
+  QUESTION_TOPIC_REQUIRED: "Vui lòng chọn ít nhất một chủ đề cho câu hỏi.",
+  QUESTION_TOPIC_NOT_FOUND: "Chủ đề không tồn tại, không còn hoạt động hoặc không khớp khối lớp.",
+  QUESTION_PRIMARY_TOPIC_REQUIRED: "Vui lòng chọn chủ đề chính cho câu hỏi.",
+  QUESTION_PRIMARY_TOPIC_INVALID: "Câu hỏi phải có đúng một chủ đề chính.",
+  QUESTION_TOPIC_DUPLICATE: "Không được gán trùng chủ đề cho câu hỏi.",
+  QUESTION_ANSWER_REQUIRED: "Vui lòng nhập danh sách phương án trả lời.",
+  QUESTION_ANSWER_CONTENT_REQUIRED: "Nội dung phương án trả lời không được để trống.",
+  QUESTION_CORRECT_ANSWER_REQUIRED: "Vui lòng chọn đáp án đúng theo thể loại câu hỏi.",
+  QUESTION_TRUE_FALSE_ANSWER_COUNT_INVALID: "Câu hỏi Đúng/Sai phải có đúng hai phương án.",
+  QUESTION_TRUE_FALSE_CORRECT_ANSWER_REQUIRED: "Câu hỏi Đúng/Sai phải có đúng một đáp án đúng.",
+  QUESTION_SHORT_ANSWER_CORRECT_ANSWER_REQUIRED: "Câu hỏi trả lời ngắn phải có đúng một đáp án hợp lệ.",
+  QUESTION_PART_REQUIRED: "Câu hỏi tổng hợp phải có ít nhất một mệnh đề hoặc câu hỏi phụ.",
+  QUESTION_PART_CONTENT_REQUIRED: "Nội dung mệnh đề hoặc câu hỏi phụ không được để trống.",
+  QUESTION_PART_ORDER_INVALID: "Thứ tự mệnh đề hoặc câu hỏi phụ phải lớn hơn 0.",
+  QUESTION_PART_ORDER_DUPLICATE: "Không được trùng thứ tự mệnh đề hoặc câu hỏi phụ.",
+  QUESTION_PART_DEFAULT_POINT_INVALID: "Điểm của mệnh đề hoặc câu hỏi phụ phải nằm trong khoảng từ 0 đến 10.",
+  QUESTION_PART_NUMERIC_TOLERANCE_INVALID: "Dung sai đáp án số phải lớn hơn hoặc bằng 0.",
+  QUESTION_PART_INVALID_TYPE: "Thể loại mệnh đề hoặc câu hỏi phụ không hợp lệ.",
+  QUESTION_PART_ANSWER_INVALID: "Đáp án của mệnh đề hoặc câu hỏi phụ không phù hợp với thể loại.",
+  QUESTION_ANSWER_NOT_ALLOWED: "Câu hỏi tổng hợp không được có phương án trả lời cấp trên.",
+  QUESTION_PART_NOT_ALLOWED: "Câu hỏi không tổng hợp không được có mệnh đề hoặc câu hỏi phụ.",
+};
+
+const importErrorMessages = {
+  QUESTION_IMPORT_FILE_REQUIRED: "Vui lòng chọn một tệp Excel để nhập.",
+  QUESTION_IMPORT_FILE_TOO_LARGE: "Tệp tải lên vượt quá giới hạn dung lượng cho phép.",
+  QUESTION_IMPORT_FILE_TYPE_NOT_SUPPORTED: "Định dạng tệp không được hỗ trợ. Vui lòng tải lên tệp Excel (.xlsx).",
+  QUESTION_IMPORT_TEMPLATE_INVALID: "Tệp mẫu Excel không hợp lệ. Vui lòng tải lại tệp mẫu chính xác từ hệ thống.",
+  QUESTION_IMPORT_TEMPLATE_VERSION_UNSUPPORTED: "Phiên bản tệp mẫu Excel không còn được hỗ trợ. Vui lòng sử dụng tệp mẫu mới nhất.",
+  QUESTION_IMPORT_LIMIT_EXCEEDED: "Số lượng câu hỏi vượt quá giới hạn cho phép trong một lần nhập.",
+  QUESTION_IMPORT_VALIDATION_FAILED: "Dữ liệu nhập chưa hợp lệ. Vui lòng kiểm tra lại lỗi của từng dòng.",
+};
+
+const mapIssueCodeToVietnamese = (code) => {
+  if (questionImportIssueMessages[code]) {
+    return questionImportIssueMessages[code];
   }
+
+  return importErrorMessages[code] || "Dữ liệu nhập chưa hợp lệ. Vui lòng kiểm tra lại và thử lại.";
 };
 
 const mapErrorCodeToVietnamese = (code) => {
@@ -68,7 +83,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
   const [expandedQuestionKeys, setExpandedQuestionKeys] = React.useState(new Set());
   const [fileErrors, setFileErrors] = React.useState([]);
   const [generalConfirmErrors, setGeneralConfirmErrors] = React.useState([]);
-  
+
   // Custom validations / confirm status locks
   const [confirmLocked, setConfirmLocked] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
@@ -126,7 +141,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Delayed cleanup to prevent browser interrupts
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
@@ -184,7 +199,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
       const data = res.data;
       setPreviewData(data);
       setFileErrors(data.fileErrors || []);
-      
+
       // Auto-select all valid rows
       const validKeys = new Set();
       if (data.items) {
@@ -283,7 +298,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
         // Validation error on confirm
         const data = response.data;
         const serverErrors = data.errors || [];
-        
+
         // Lock confirm & stay on preview step
         setConfirmLocked(true);
         setConfirmError("Xác thực dữ liệu nhập thất bại. Vui lòng kiểm tra lại lỗi của các câu hỏi bị ảnh hưởng.");
@@ -343,16 +358,15 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
   const renderIssueText = (err) => {
     if (!err) return "";
     if (typeof err === "string") return err;
-    
-    const msg = err.message || err.Message;
+
     const code = err.code || err.Code;
-    
+
     // Map code if possible
-    const mapped = mapIssueCodeToVietnamese(code, msg);
-    
+    const mapped = mapIssueCodeToVietnamese(code);
+
     const column = err.column || err.Column;
     const row = err.row || err.Row;
-    
+
     if (column && row) {
       return `Dòng ${row}, Cột ${column}: ${mapped}`;
     }
@@ -363,10 +377,10 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
   };
 
   return (
-    <Dialog 
-      isOpen={isOpen} 
+    <Dialog
+      isOpen={isOpen}
       onClose={isConfirming ? () => {} : handleClose}
-      variant="modal" 
+      variant="modal"
       className="max-w-6xl w-[min(96vw,1200px)] h-[85vh] max-h-[85vh] flex flex-col"
     >
       <DialogHeader className="shrink-0 pb-4 border-b border-outline-variant">
@@ -394,10 +408,10 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
                 <li>Mã hóa LaTeX cho công thức toán cần được bọc trong cặp dấu đô la (ví dụ: <code className="bg-surface-container px-1 py-0.5 rounded font-mono font-bold">$x^2 - 4 = 0$</code>).</li>
               </ul>
               <div className="pt-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={handleDownloadTemplate}
                   className="font-bold flex items-center gap-1.5 cursor-pointer"
                 >
@@ -408,7 +422,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
             </div>
 
             {/* Drag drop area */}
-            <div 
+            <div
               onDragOver={(e) => {
                 if (isUploading) return;
                 e.preventDefault();
@@ -634,7 +648,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
                               )}
                             </td>
                           </tr>
-                          
+
                           {/* Expanded LaTeX preview block */}
                           {isExpanded && (
                             <tr className="bg-surface-container-lowest border-b border-outline-variant">
@@ -722,7 +736,7 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
                                                       <LatexPreview content={part.partContent || ""} />
                                                     </div>
                                                   </div>
-                                                  
+
                                                   {/* Answers based on partType */}
                                                   <div className="pl-4 py-1 border-l-2 border-outline-variant flex flex-wrap gap-x-4 gap-y-1 font-semibold text-on-surface-variant text-[11px]">
                                                     {part.partType === "TRUE_FALSE" && (
@@ -853,10 +867,10 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
       <DialogFooter className="shrink-0 pt-4 border-t border-outline-variant bg-surface-container-lowest">
         {step === "upload" && (
           <div className="flex gap-2 w-full justify-end">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={handleClose} 
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
               disabled={isUploading}
               className="cursor-pointer"
             >
@@ -886,9 +900,9 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
 
         {step === "preview" && (
           <div className="flex justify-between w-full items-center">
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => {
                 setStep("upload");
                 setConfirmError("");
@@ -901,10 +915,10 @@ export default function QuestionExcelImportDialog({ isOpen, onClose, onImportSuc
               Quay lại tải file
             </Button>
             <div className="flex gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={handleClose} 
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
                 disabled={isConfirming}
                 className="cursor-pointer"
               >

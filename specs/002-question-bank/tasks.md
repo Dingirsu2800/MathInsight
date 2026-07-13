@@ -97,7 +97,8 @@
   - [x] UC-29/30/33: Expert/Admin report, owner-only report queries, resolve/dismiss state transitions, and HTTP error mapping
   - [ ] Manual SQL Server smoke: verify `QuestionReportSqlServerLock` serializes report mutations for the same QuestionID in a disposable test database
   - [x] UC-31/32: Admin workflow submit, approve/reject, ownership, active-workflow and question-status transitions correct
-  - [x] UC-23: Excel template, preview without writes, invalid formula/inactive taxonomy rejection, and atomic confirm are covered by automated tests
+  - [x] UC-23: Excel template, preview without writes, invalid formula/template/taxonomy rejection, supported question types, and confirm draft revalidation are covered by automated tests
+  - [ ] UC-23: SQL Server relational transaction rollback smoke test for confirm import in a disposable database
   - [ ] UC-38: Delete tag with linked questions -> soft-delete (`is_active = false`) (DC-02)
   - [x] UC-38: Disable/delete topic with active descendant -> `TAG_TOPIC_HAS_ACTIVE_DESCENDANTS` / 409 with no data mutation (BR-66)
   - [x] UC-34: Tag queries exclude inactive records by default and return them with `includeInactive=true` (BR-65)
