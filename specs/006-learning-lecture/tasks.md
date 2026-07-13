@@ -67,13 +67,13 @@
 
 ## Phase 3: Controller and Routing
 
-- [ ] `LecturesController` — Teacher CRUD; Student read-only for `Published` lectures.
-  - [ ] `POST /api/v1/lectures/{id}/like`
-  - [ ] `DELETE /api/v1/lectures/{id}/like`
-- [ ] `MaterialsController` — Teacher CRUD; Student download.
-- [ ] `DiscussionsController` — mixed roles per endpoint.
-- [ ] Apply `[Authorize]` and ownership checks.
-- [ ] Register inside `LearningModuleExtensions.cs`:
+- [x] `LecturesController` — Teacher CRUD; Student read-only for `Published` lectures.
+  - [x] `POST /api/v1/lectures/{id}/like`
+  - [x] `DELETE /api/v1/lectures/{id}/like`
+- [x] `MaterialsController` — Teacher CRUD; Student download.
+- [x] `DiscussionsController` — mixed roles per endpoint.
+- [x] Apply `[Authorize]` and ownership checks.
+- [x] Register inside `LearningModuleExtensions.cs`:
   - DbContext, Cloudinary service, MediatR handlers, domain events.
 
 ---
