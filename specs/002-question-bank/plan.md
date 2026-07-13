@@ -12,10 +12,10 @@ Builds the `MathInsight.Modules.QuestionBank` component managing the full lifecy
 | Property | Value |
 |----------|-------|
 | Language | C# / .NET 10.0 |
-| Primary Dependencies | MediatR, EF Core, MassTransit (RabbitMQ client) |
+| Primary Dependencies | MediatR, EF Core, ClosedXML |
 | Storage | SQL Server; map to current DB script tables |
 | Media/OCR | Cloudinary (image upload for UC-22), Mistral OCR (unpersisted draft for UC-39) |
-| File Parsing | EPPlus (Excel), OpenXml SDK (Word) |
+| File Parsing | ClosedXML (.xlsx); Word parsing deferred post-MVP |
 | Testing | xUnit / Integration tests |
 | Project Type | Modular Monolith Web API |
 
@@ -25,7 +25,8 @@ Builds the `MathInsight.Modules.QuestionBank` component managing the full lifecy
 src/MathInsight.Modules.QuestionBank/
 ├── Commands/
 │   ├── CreateQuestion/         # UC-20/21: CreateQuestionCommand + Handler
-│   ├── ImportQuestions/        # UC-23: BulkImportCommand → MassTransit queue
+│   ├── PreviewQuestionImport/ # UC-23: validate Excel without writes
+│   ├── ConfirmQuestionImport/ # UC-23: atomic selected-draft creation
 │   ├── UpdateQuestion/         # UC-25: captures QuestionVersion snapshot before save
 │   ├── ToggleQuestionActive/   # UC-26: set is_active true/false
 │   ├── DeleteQuestion/         # UC-27: reject if used in TestQuestion, hard-delete if unused
@@ -47,10 +48,10 @@ src/MathInsight.Modules.QuestionBank/
 │   └── GetAdminReports/        # Admin views all pending question reports
 ├── Events/
 │   └── QuestionReportedEvent.cs        # MediatR notification → Notification module
-├── Parsers/
-│   ├── IQuestionFileParser.cs
-│   ├── ExcelQuestionParser.cs  # EPPlus
-│   └── WordQuestionParser.cs   # OpenXml SDK
+├── Imports/
+│   ├── QuestionImportWorkbookParser.cs
+│   ├── QuestionImportTemplateService.cs
+│   └── QuestionImportValidationService.cs
 ├── Persistence/
 │   ├── QuestionBankDbContext.cs
 │   ├── Configurations/
@@ -96,7 +97,9 @@ GET    /api/v1/questions/dashboard                # UC-18: stats
 POST   /api/v1/questions                          # UC-20/21: create single question
 POST   /api/question-bank/questions/image-upload  # UC-22: authenticated backend upload to Cloudinary
 POST   /api/question-bank/questions/ocr-draft     # UC-39: one-image OCR draft; 10 requests/minute per Expert
-POST   /api/v1/questions/import                   # UC-23: bulk import file → queue
+GET    /api/question-bank/questions/import-template # UC-23: download template
+POST   /api/question-bank/questions/import-preview  # UC-23: validate Excel without writes
+POST   /api/question-bank/questions/import-confirm  # UC-23: atomically create selected drafts
 GET    /api/v1/questions/{id}/versions            # UC-24: version history
 PUT    /api/v1/questions/{id}                     # UC-25: update (auto-snapshot)
 PUT    /api/v1/questions/{id}/active              # UC-26: toggle active
@@ -134,7 +137,6 @@ POST   /api/question-bank/admin/reports/{reportId}/reject  # Original Admin repo
 |-------|-----------|----------|---------|
 | `QuestionReportedEvent` | QuestionBank | Notification | Notify question owner of new report |
 | `QuestionApprovedEvent` | QuestionBank | Notification | Notify Expert their question is now active |
-| `BulkImportCompletedEvent` | MassTransit consumer | Notification | Admin/Expert notified of import result |
 
 ### Cross-Module Dependencies
 
@@ -144,7 +146,7 @@ POST   /api/question-bank/admin/reports/{reportId}/reject  # Original Admin repo
 - **Testing module** references `question_id` in `test_questions` — a Question with any existing reference cannot be hard-deleted or deactivated and returns `409 QUESTION_IN_USE`.
 - **Cloudinary** integration for image upload (UC-22): an Expert posts multipart field `file` to `POST /api/question-bank/questions/image-upload`. `IQuestionImageStorage` authenticates and forwards JPEG/PNG/WebP files (max 5 MB) to Cloudinary REST using server-side HTTP Basic authentication, then returns only `picture_url`. No Cloudinary secret, authorization header, raw response, or OCR behavior is exposed to frontend clients.
 - **Mistral OCR** integration (UC-39): an Expert posts exactly one complete question image as multipart field `file` to `POST /api/question-bank/questions/ocr-draft`. The backend applies the same JPEG/PNG/WebP 5 MB magic-byte validation, rate limits by authenticated Expert (10/minute, no queue), and returns an unpersisted draft plus up to three detected image candidates. The Expert may choose one candidate or the original source image; selection is uploaded through the existing Cloudinary endpoint only when applying the draft. Mistral credentials and raw provider failures stay server-side; answer suggestions and image candidates are never authoritative.
-- **MassTransit queue**: `excel_import_queue` — file upload pushed to background worker.
+- **Excel import MVP**: synchronous Preview -> Confirm using ClosedXML. No queue, Redis, MassTransit, batch table, or schema migration is required. Word import and asynchronous processing remain post-MVP.
 
 ## Verification Plan
 

@@ -3,6 +3,7 @@ using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
+using MathInsight.Modules.QuestionBank.Validation;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -28,12 +29,9 @@ public sealed class UpdateQuestionCommandHandler
             return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionIdRequired);
 
         var request = command.Request;
-        var dbQuestionType = MapQuestionType(request.QuestionType);
-
-        if (dbQuestionType is null)
-            return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionInvalidType);
-
-        var validationError = ValidateRequest(request, dbQuestionType);
+        var validationError = QuestionRequestValidator.Validate(
+            ToCreateQuestionRequest(request),
+            out var dbQuestionType);
         if (validationError is not null)
             return Result<UpdateQuestionResponse>.Failure(validationError);
 
@@ -85,7 +83,7 @@ public sealed class UpdateQuestionCommandHandler
         question.PictureUrl = request.PictureUrl;
         question.DifficultyId = request.DifficultyId;
         question.Grade = request.Grade;
-        question.QuestionType = dbQuestionType;
+        question.QuestionType = dbQuestionType!;
         question.DefaultPoint = request.DefaultPoint;
 
         foreach (var topic in request.Topics)
@@ -197,6 +195,20 @@ public sealed class UpdateQuestionCommandHandler
             ExpertId = expertId
         };
     }
+
+    private static CreateQuestionRequest ToCreateQuestionRequest(UpdateQuestionRequest request) => new()
+    {
+        QuestionContent = request.QuestionContent,
+        SolutionContent = request.SolutionContent,
+        PictureUrl = request.PictureUrl,
+        DifficultyId = request.DifficultyId,
+        Grade = request.Grade,
+        QuestionType = request.QuestionType,
+        DefaultPoint = request.DefaultPoint,
+        Topics = request.Topics,
+        Answers = request.Answers,
+        Parts = request.Parts
+    };
 
     private async Task<Error?> ValidateReferencesAsync(
         UpdateQuestionRequest request,
