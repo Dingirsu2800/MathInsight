@@ -88,5 +88,25 @@ export const questionBankApi = {
         "Content-Type": undefined
       }
     });
+  },
+
+  getQuestionImportTemplate() {
+    return client.get("/api/question-bank/questions/import-template", {
+      responseType: "blob"
+    });
+  },
+
+  previewQuestionImport(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return client.post("/api/question-bank/questions/import-preview", formData, {
+      headers: {
+        "Content-Type": undefined
+      }
+    });
+  },
+
+  confirmQuestionImport(payload) {
+    return client.post("/api/question-bank/questions/import-confirm", payload);
   }
 };
