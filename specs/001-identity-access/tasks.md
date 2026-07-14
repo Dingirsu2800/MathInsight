@@ -6,18 +6,18 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all 8 entities mapped to current DB script tables:
+- [x] Create EF `IEntityTypeConfiguration` for all 8 entities mapped to current DB script tables:
   - [x] `AccountConfiguration` — unique indexes on `username`, `email`; FK to `roles`
-  - [ ] `RoleConfiguration` — seed 4 roles (Admin, Expert, Teacher, Student)
-  - [ ] `PermissionConfiguration` — seed permission keys from Permission Matrix
-  - [ ] `RolePermissionConfiguration` — composite PK, seed default role-permissions
+  - [x] `RoleConfiguration` — seed 4 roles (Admin, Expert, Teacher, Student) — seeded via `database/002_Seed_MathInsight_Demo.sql`
+  - [x] `PermissionConfiguration` — seed permission keys from Permission Matrix — seeded via `database/003_Seed_Permissions.sql`
+  - [x] `RolePermissionConfiguration` — composite PK, seed default role-permissions — seeded via `database/003_Seed_Permissions.sql`
   - [x] `StudentConfiguration` — 1:1 with Account
   - [x] `TeacherConfiguration` — 1:1 with Account
   - [x] `ExpertConfiguration` — 1:1 with Account
-  - [ ] `TeacherApplicationConfiguration` — status enum constraint
+  - [x] `TeacherApplicationConfiguration` — status enum constraint
 - [x] Create `IdentityDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
 - [x] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
-- [ ] Add seed data per TDS §3.6 (5 accounts + roles)
+- [x] Add seed data per TDS §3.6 (5 accounts + roles)
 
 ---
 
@@ -37,21 +37,21 @@
   - [x] Ensure login response includes role information for frontend role-based routing
 - [ ] **Profile Commands**:
   - [ ] `UpdateProfileCommand` — validate unique email if changed
-- [ ] **Admin Commands**:
-  - [ ] `CreateAccountManuallyCommand` — any role, send welcome notification
-  - [ ] `ImportFromExcelCommand` — push to `excel_import_queue`, validate format
-  - [ ] `ToggleAccountStatusCommand` — Activate/Deactivate, terminate active sessions
-  - [ ] `ResolveApplicationCommand` — Approve (set `is_verified = true`, `is_active = true`) / Reject
-  - [ ] `AdjustPermissionCommand` — add/remove permissions for a role
-  - [ ] `UpdateRoleCommand` — update role name or description
+- [x] **Admin Commands**:
+  - [x] `CreateAccountManuallyCommand` — any role, publishes `AccountCreatedEvent`
+  - [x] `ImportFromExcelCommand` — implemented synchronously (ClosedXML parse + validate + bulk insert in-request) instead of `excel_import_queue`; per-row success/skip report returned directly
+  - [x] `ToggleAccountStatusCommand` — Activate/Deactivate, self-deactivation guard; termination of active sessions enforced via `IsActive` re-check in JWT `OnTokenValidated` (Program.cs) for all roles
+  - [x] `ResolveApplicationCommand` — Approve (set `is_verified = true`, `is_active = true`) / Reject (comments required), publishes `ApplicationResolvedEvent`
+  - [x] `AdjustPermissionCommand` — replaces a role's permission set; self-admin-permission guard (`identity:admin_access` key)
+  - [x] `UpdateRoleCommand` — update role name or description; system-role rename guard
 - [ ] **Queries**:
   - [ ] `GetProfileQuery` — return own profile with role
-  - [ ] `GetAccountListQuery` — paged, filter by role/status/name
-  - [ ] `GetTeacherApplicationsQuery` — paged, filter by status
+  - [x] `GetAccountListQuery` — paged, filter by role/status/search
+  - [x] `GetTeacherApplicationsQuery` — paged, filter by status (+ `GetTeacherApplicationDetailQuery`, `GetRolesQuery` added for UC-10 detail view and UC-16/17 read-side)
 - [ ] **Domain Events**:
-  - [ ] `TeacherApplicationSubmittedEvent` (MediatR notification)
-  - [ ] `AccountCreatedEvent` (MediatR notification)
-  - [ ] `ApplicationResolvedEvent` (MediatR notification)
+  - [ ] `TeacherApplicationSubmittedEvent` (MediatR notification) — belongs to UC-08 (teacher self-registration), not yet implemented
+  - [x] `AccountCreatedEvent` (MediatR notification) — published, no consumer wired yet (Notification module is out of scope)
+  - [x] `ApplicationResolvedEvent` (MediatR notification) — published, no consumer wired yet (Notification module is out of scope)
 - [x] **Lock mechanism**: Redis `login:fail:{accountId}` counter with 10-min TTL; lock 15 min on 5 fails
 - [ ] **Auth session service**:
   - [x] Create `IAuthSessionService` under `Services/Auth`
@@ -63,10 +63,10 @@
 
 ## Phase 3: Controller and Routing
 
-- [ ] `AuthController` — public routes: login, register, Google, reset, confirm-email; JWT-required route: logout
+- [ ] `AuthController` — public routes: login, register, Google, reset, confirm-email; JWT-required route: logout (login/logout only so far)
 - [ ] `AccountsController` — secured (any role): profile GET/PUT, change-password
-- [ ] `AdminController` — AdminOnly: accounts CRUD, import, applications, roles/permissions
-- [ ] Apply `[Authorize]` / `[Authorize(Policy = "AdminOnly")]` attributes
+- [x] `AdminController` — AdminOnly: accounts CRUD, import, applications, roles/permissions
+- [x] Apply `[Authorize]` / `[Authorize(Policy = "AdminOnly")]` attributes — `AdminOnly` policy registered in `Program.cs`
 - [ ] Register all services inside `IdentityModuleExtensions.cs`:
   ```csharp
   services.AddIdentityModule(configuration);
@@ -78,8 +78,8 @@
 ## Phase 4: Verification
 
 - [x] `dotnet build` — zero compile errors
-- [ ] EF mappings match the current SQL script tables and `dotnet build` succeeds
-- [ ] Integration tests (xUnit):
+- [x] EF mappings match the current SQL script tables and `dotnet build` succeeds
+- [ ] Integration tests (xUnit) — no test project exists yet for this module; deferred to a follow-up pass:
   - [ ] UC-01: Valid login → 200 + JWT with correct claims
   - [ ] UC-01: Wrong password × 5 → account locked (BR-03)
   - [ ] UC-01: Unconfirmed email login → 401 (BR-04)
