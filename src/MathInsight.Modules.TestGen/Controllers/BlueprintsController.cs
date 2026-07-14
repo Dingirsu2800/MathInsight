@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using MathInsight.Modules.TestGen.Commands.CloneBlueprint;
 using MathInsight.Modules.TestGen.Commands.CreateBlueprint;
+using MathInsight.Modules.TestGen.Commands.DeleteBlueprint;
 using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
 using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
 using MathInsight.Modules.TestGen.Commands.UpdateBlueprint;
@@ -159,6 +161,40 @@ public sealed class BlueprintsController : ControllerBase
 
         var result = await _mediator.Send(
             new ReviewBlueprintCommand(blueprintId, request, currentExpertId),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [HttpPost("{blueprintId}/clone")]
+    public async Task<IActionResult> CloneBlueprint(
+        string blueprintId,
+        CancellationToken cancellationToken)
+    {
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new CloneBlueprintCommand(blueprintId, currentExpertId),
+            cancellationToken);
+
+        return result.IsFailure
+            ? ToErrorResult(result.Error!)
+            : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpDelete("{blueprintId}")]
+    public async Task<IActionResult> DeleteBlueprint(
+        string blueprintId,
+        CancellationToken cancellationToken)
+    {
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new DeleteBlueprintCommand(blueprintId, currentExpertId),
             cancellationToken);
 
         return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);

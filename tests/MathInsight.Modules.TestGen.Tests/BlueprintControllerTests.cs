@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using MathInsight.Modules.TestGen.Blueprints;
+using MathInsight.Modules.TestGen.Commands.CloneBlueprint;
+using MathInsight.Modules.TestGen.Commands.DeleteBlueprint;
 using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
 using MathInsight.Modules.TestGen.Commands.UpdateBlueprint;
 using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
@@ -115,6 +117,42 @@ public sealed class BlueprintControllerTests
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(badRequest.Value).Code);
+    }
+
+    [Fact]
+    public async Task Clone_Success_Returns201()
+    {
+        var response = new CloneBlueprintResponse(
+            "cloned-blueprint",
+            "Blueprint (Copy)",
+            BlueprintStatuses.Draft);
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(x => x.Send(It.IsAny<CloneBlueprintCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<CloneBlueprintResponse>.Success(response));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.CloneBlueprint("source-blueprint", CancellationToken.None);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status201Created, objectResult.StatusCode);
+        Assert.Same(response, objectResult.Value);
+    }
+
+    [Fact]
+    public async Task Delete_InUseError_MapsTo409()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(x => x.Send(It.IsAny<DeleteBlueprintCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<DeleteBlueprintResponse>.Failure(BlueprintErrors.InUse));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.DeleteBlueprint("blueprint-id", CancellationToken.None);
+
+        var objectResult = Assert.IsType<ConflictObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+        Assert.Equal(BlueprintErrors.InUse.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
     }
 
     private static BlueprintsController CreateController(IMediator mediator)

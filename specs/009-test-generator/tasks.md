@@ -81,16 +81,16 @@
 
 ## Phase 5: Clone and Delete
 
-- [ ] Implement `CloneBlueprintCommand`:
-  - [ ] Clone any visible non-deactivated aggregate.
-  - [ ] Generate all new IDs, assign current Expert, set `Draft`, clear audit.
-  - [ ] Append ` (Copy)` while respecting the 100-character name limit.
-- [ ] Implement `DeleteBlueprintCommand`:
-  - [ ] Owner-only.
-  - [ ] Hard-delete unused `Draft`, `Rejected`, or `Approved` aggregate.
-  - [ ] Return 409 for `PendingReview`.
-  - [ ] Change `Active` or Test-linked aggregate to `Deactivated`.
-- [ ] Implement clone and delete controller routes with 403/404/409 mapping.
+- [x] Implement `CloneBlueprintCommand`:
+  - [x] Clone any visible non-deactivated aggregate.
+  - [x] Generate all new IDs, assign current Expert, set `Draft`, clear audit.
+  - [x] Append ` (Copy)` while respecting the 100-character name limit.
+- [x] Implement `DeleteBlueprintCommand`:
+  - [x] Owner-only.
+  - [x] Hard-delete unused `Draft`, `Rejected`, or `Approved` aggregate.
+  - [x] Return 409 for `PendingReview`.
+  - [x] Change `Active` or Test-linked aggregate to `Deactivated`.
+- [x] Implement clone and delete controller routes with 403/404/409 mapping.
 
 ## Phase 6: Expert Frontend
 
@@ -113,12 +113,12 @@
 - [x] Valid submit -> `PendingReview` and audit reset.
 - [x] Self-review -> 403; non-owner approve -> `Approved`.
 - [x] Reject without note/over 2000 chars -> 400.
-- [ ] Clone deep-copies all children with independent IDs.
-- [ ] Delete unused Draft -> hard delete.
-- [ ] Delete PendingReview -> 409.
-- [ ] Delete Active/Test-linked -> `Deactivated` and history retained.
-- [ ] Controller tests cover 400/403/404/409/422.
-- [ ] `dotnet test` and `dotnet build MathInsight.sln --no-restore` pass.
+- [x] Clone deep-copies all children with independent IDs.
+- [x] Delete unused Draft -> hard delete.
+- [x] Delete PendingReview -> 409.
+- [x] Delete Active/Test-linked -> `Deactivated` and history retained.
+- [x] Controller tests cover 400/403/404/409/422.
+- [x] `dotnet test` and `dotnet build MathInsight.sln --no-restore` pass.
 - [ ] Manual SQL Server smoke: composite FK and concurrent submit/review transitions.
 
 ## Phase 8: Test Generation Backlog

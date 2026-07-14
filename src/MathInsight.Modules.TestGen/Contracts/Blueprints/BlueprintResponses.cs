@@ -18,6 +18,16 @@ public sealed record ReviewBlueprintResponse(
     string ReviewedBy,
     DateTime ReviewTime);
 
+public sealed record CloneBlueprintResponse(
+    string BlueprintId,
+    string BlueprintName,
+    string Status);
+
+public sealed record DeleteBlueprintResponse(
+    string BlueprintId,
+    bool WasDeactivated,
+    string? Status);
+
 public sealed record BlueprintListItemResponse(
     string BlueprintId,
     string BlueprintName,
