@@ -16,6 +16,7 @@ using MathInsight.Modules.Notification_Report;
 // using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
 using System.IdentityModel.Tokens.Jwt;
+using MathInsight.Modules.Identity_Access.Persistence;
 using MathInsight.Modules.Identity_Access.Services.Auth;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Ocr;
@@ -23,6 +24,7 @@ using MathInsight.Shared.Results;
 using MathInsight.Shared.Storage;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 const string CorsPolicyName = "MathInsightCors";
@@ -84,7 +86,6 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
-
 // 4. Register Domain Modules (Composition Root)
 var cloudinaryOptions = new CloudinaryOptions
 {
@@ -207,16 +208,32 @@ builder.Services
                     return;
                 }
 
-                // BR-02 applies to Student accounts.
-                if (!string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
                 var accountId = principal.FindFirst("account_id")?.Value;
                 if (string.IsNullOrWhiteSpace(accountId))
                 {
                     context.Fail("Missing account_id claim.");
+                    return;
+                }
+
+                // UC-14: deactivating an account must take effect immediately for every
+                // outstanding JWT, not just at the next login, so re-check IsActive here.
+                var identityDbContext = context.HttpContext.RequestServices
+                    .GetRequiredService<IdentityDbContext>();
+
+                var isActive = await identityDbContext.Accounts
+                    .Where(account => account.AccountId == accountId)
+                    .Select(account => account.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (!isActive)
+                {
+                    context.Fail("Account is deactivated.");
+                    return;
+                }
+
+                // BR-02 applies to Student accounts.
+                if (!string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
+                {
                     return;
                 }
 
@@ -229,8 +246,12 @@ builder.Services
         };
     });
 
-var app = builder.Build();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+});
 
+var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
 
