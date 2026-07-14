@@ -36,8 +36,14 @@ export default function LoginPage() {
         throw new Error("Không nhận được mã xác thực (Token) từ hệ thống.");
       }
 
-      if (roleName !== "Expert") {
-        setError("Tài khoản này không có quyền Chuyên gia (Expert).");
+      const roleHomePaths = {
+        Admin: "/admin/accounts",
+        Expert: "/expert/questions",
+      };
+
+      const homePath = roleHomePaths[roleName];
+      if (!homePath) {
+        setError(`Tài khoản với vai trò "${roleName}" chưa được hỗ trợ trên cổng này.`);
         setLoading(false);
         return;
       }
@@ -45,7 +51,7 @@ export default function LoginPage() {
       localStorage.setItem("token", token);
       localStorage.setItem("AccountId", accountId);
       localStorage.setItem("RoleName", roleName);
-      navigate("/expert/questions");
+      navigate(homePath);
     } catch (err) {
       console.error(err);
       const errMsg = err.response?.data?.message || err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại.";
