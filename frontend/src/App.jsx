@@ -9,6 +9,7 @@ import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AccountManagementPage from './pages/admin/AccountManagementPage.jsx';
+import TeacherApplicationsPage from './pages/admin/TeacherApplicationsPage.jsx';
 
 
 
@@ -39,6 +40,7 @@ export default function App() {
       {/* Admin Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/admin/accounts" element={<AccountManagementPage />} />
+        <Route path="/admin/applications" element={<TeacherApplicationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
