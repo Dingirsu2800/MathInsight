@@ -1,9 +1,26 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import StudentLayout from '../../components/layout/StudentLayout';
 import HistoryStatsRow from './test-history/HistoryStatsRow';
 import HistoryFilters from './test-history/HistoryFilters';
 import HistoryTable from './test-history/HistoryTable';
 
 export default function TestHistoryPage() {
+  const navigate = useNavigate();
+  const [filters, setFilters] = useState({
+    testFormat: '',
+    fromDate: '',
+    toDate: '',
+  });
+
+  const handleFilter = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleViewDetail = (sessionId) => {
+    navigate(`/student/test-result/${sessionId}`);
+  };
+
   return (
     <StudentLayout>
       <div className="space-y-8">
@@ -19,11 +36,12 @@ export default function TestHistoryPage() {
         <HistoryStatsRow />
 
         {/* Filters */}
-        <HistoryFilters />
+        <HistoryFilters onFilter={handleFilter} />
 
         {/* Data table with pagination */}
-        <HistoryTable />
+        <HistoryTable filters={filters} onViewDetail={handleViewDetail} />
       </div>
     </StudentLayout>
   );
 }
+

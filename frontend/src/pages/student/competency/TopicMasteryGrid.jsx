@@ -1,7 +1,9 @@
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import ProgressBar from '../../../components/ui/ProgressBar';
 
-// TODO: Replace with API data
+// TODO: Replace with real API data.
+// Needs endpoint: GET /api/v1/reports/topic-mastery (not yet implemented in backend)
+// Expected DTO: { tagId, tagName, subtitle, officialPoint, masteryStatus }
 const MOCK_TOPICS = [
   {
     name: 'Hàm số & Đồ thị',

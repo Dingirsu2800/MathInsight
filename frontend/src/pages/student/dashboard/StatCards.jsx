@@ -1,6 +1,11 @@
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
-// TODO: Replace with API data
+// TODO: Replace with real API data.
+// Needs multiple endpoints (not yet implemented in backend):
+//   - Điểm năng lực: GET /api/v1/reports/competency-summary → competencyPoint
+//   - Bài đã làm: GET /api/v1/reports/student-stats → totalSessionsCompleted
+//   - Chuỗi ngày: GET /api/v1/gamification/streak → currentStreak
+//   - Huy hiệu: GET /api/v1/gamification/badges → badgeCount
 const MOCK_STATS = [
   { label: 'Điểm năng lực', value: '6.8 / 10', icon: 'insights', colorClass: 'text-primary', hoverBg: 'group-hover:bg-primary' },
   { label: 'Bài đã làm', value: '1,248', icon: 'history_edu', colorClass: 'text-primary', hoverBg: 'group-hover:bg-primary' },

@@ -1,6 +1,8 @@
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
-// TODO: Replace with API data from recent activity endpoint
+// TODO: Replace with real API data.
+// Needs endpoint: GET /api/v1/reports/recent-activity (not yet implemented in backend)
+// Expected DTO: { id, type, title, highlight, meta, time }
 const MOCK_ACTIVITIES = [
   {
     id: 1,

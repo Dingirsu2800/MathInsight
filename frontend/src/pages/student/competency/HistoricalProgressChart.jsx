@@ -2,7 +2,9 @@
  * Historical competency progress line chart (SVG-based).
  */
 export default function HistoricalProgressChart() {
-  // TODO: Replace with API data
+  // TODO: Replace with real API data.
+  // Needs endpoint: GET /api/v1/reports/competency-history?months=6 (not yet implemented in backend)
+  // Expected DTO: { labels: string[], values: number[] } where values are officialPoint per period
   const months = ['Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12', 'Tháng 1', 'Hiện tại'];
   const values = [2.5, 3.0, 4.0, 4.5, 6.0, 7.0]; // mapped to y coordinates
   const yCoords = values.map((v) => 300 - (v / 10) * 300);

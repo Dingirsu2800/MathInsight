@@ -1,6 +1,8 @@
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
-// TODO: Replace with API data from /reports/competency-summary
+// TODO: Replace with real API data.
+// Needs endpoint: GET /api/v1/reports/competency-summary (not yet implemented in backend)
+// Expected DTO: { userName, grade, competencyPoint, weeklyProgressPercent, trendDelta }
 const MOCK_DATA = {
   userName: 'Nguyễn Văn A',
   grade: 'Khối 12 — Học kỳ 2',

@@ -2,7 +2,9 @@
  * Overall competency summary card with radial progress gauge.
  */
 export default function CompetencySummaryCard() {
-  // TODO: Replace with API data from /reports/competency-summary
+  // TODO: Replace with real API data.
+  // Needs endpoint: GET /api/v1/reports/competency-summary (not yet implemented in backend)
+  // Expected DTO: { officialPoint, trendDelta, masteryLabel }
   const score = 6.8;
   const maxScore = 10;
   const trend = '+0.3';
