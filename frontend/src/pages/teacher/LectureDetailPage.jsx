@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { getLecture } from "../../services/learningApi";
+import { getLecture, getDiscussions, answerQuestion, hideComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function LectureDetailPage() {
@@ -10,6 +10,35 @@ export default function LectureDetailPage() {
   const navigate = useNavigate();
   const [lecture, setLecture] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [discussions, setDiscussions] = useState([]);
+  const [replyContent, setReplyContent] = useState({});
+  const [submittingReply, setSubmittingReply] = useState(null);
+
+  const fetchDiscussionsData = async () => {
+    try {
+      const res = await getDiscussions(id, { page: 1, pageSize: 50 });
+      const mappedDiscussions = (res.data || []).map(d => ({
+        id: d.discussionQuestionId,
+        author: d.studentId || "Học sinh ẩn danh",
+        authorInitials: d.studentId ? d.studentId.substring(0, 2).toUpperCase() : "HS",
+        timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
+        title: d.title,
+        content: d.content,
+        status: d.status,
+        answers: (d.answers || []).map(a => ({
+          id: a.discussionAnswerId,
+          author: a.accountId || "Giáo viên",
+          role: "Giáo viên",
+          timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
+          content: a.content,
+          status: a.status
+        }))
+      }));
+      setDiscussions(mappedDiscussions);
+    } catch (err) {
+      console.error("Lỗi tải thảo luận", err);
+    }
+  };
 
   useEffect(() => {
     getLecture(id)
@@ -19,7 +48,36 @@ export default function LectureDetailPage() {
         setLecture(null);
       })
       .finally(() => setLoading(false));
+
+    fetchDiscussionsData();
   }, [id]);
+
+  const handleSubmitReply = async (questionId) => {
+    const content = replyContent[questionId];
+    if (!content || content.trim() === "") return;
+    setSubmittingReply(questionId);
+    try {
+      await answerQuestion(questionId, { content });
+      setReplyContent(prev => ({ ...prev, [questionId]: "" }));
+      await fetchDiscussionsData();
+    } catch (err) {
+      console.error("Lỗi khi gửi câu trả lời", err);
+      alert("Lỗi khi gửi câu trả lời!");
+    } finally {
+      setSubmittingReply(null);
+    }
+  };
+
+  const handleHideComment = async (commentId, isQuestion) => {
+    if (!window.confirm("Bạn có chắc chắn muốn ẩn bình luận này?")) return;
+    try {
+      await hideComment(commentId, isQuestion);
+      await fetchDiscussionsData();
+    } catch (err) {
+      console.error("Lỗi khi ẩn bình luận", err);
+      alert("Lỗi khi ẩn bình luận!");
+    }
+  };
 
   if (loading) {
     return (
@@ -91,7 +149,7 @@ export default function LectureDetailPage() {
               </div>
               <div className="flex gap-4 ml-auto">
                 <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">visibility</span> 1,204</span>
-                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">chat_bubble</span> {lecture.discussions?.length || 0}</span>
+                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">chat_bubble</span> {discussions.length}</span>
               </div>
             </div>
 
@@ -140,68 +198,98 @@ export default function LectureDetailPage() {
         )}
 
         {/* Discussion Section */}
-        {lecture.discussions && (
-          <section>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-[20px] font-semibold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined">forum</span>
-                Thảo luận ({lecture.discussions.length} câu hỏi)
-              </h2>
-            </div>
-            
-            <div className="space-y-6">
-              {lecture.discussions.map((disc) => (
-                <div key={disc.id} className="bg-pure-surface rounded-xl border border-whisper-border p-6">
-                  {/* Question */}
-                  <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-medium text-[16px] shrink-0">
-                      {disc.authorInitials}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-1">
-                        <div>
-                          <h4 className="text-[16px] font-medium text-on-surface">{disc.author}</h4>
-                          <p className="text-[13px] text-on-surface-variant">{disc.timeAgo}</p>
-                        </div>
-                      </div>
-                      <h5 className="text-[16px] font-medium text-on-surface mt-2 mb-1">{disc.title}</h5>
-                      <p className="text-[14px] text-on-surface-variant">{disc.content}</p>
-                    </div>
-                  </div>
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-[20px] font-semibold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined">forum</span>
+              Thảo luận ({discussions.length} câu hỏi)
+            </h2>
+          </div>
+          
+          <div className="space-y-6">
+            {discussions.map((disc) => (
+              <div key={disc.id} className="bg-pure-surface rounded-xl border border-whisper-border p-6 relative group">
+                {/* Hide Button Question */}
+                <button 
+                  onClick={() => handleHideComment(disc.id, true)}
+                  className="absolute top-6 right-6 text-on-surface-variant hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Ẩn câu hỏi"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility_off</span>
+                </button>
 
-                  {/* Answers */}
-                  {disc.answers?.map((ans) => (
-                    <div key={ans.id} className="mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4">
-                      <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center font-medium shrink-0">
-                        {ans.author?.[0] || "GV"}
-                      </div>
-                      <div className="flex-1 bg-surface-container-low rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 className="text-[16px] font-medium text-on-surface">
-                              {ans.author}
-                              {ans.role === "Giáo viên" && (
-                                <span className="bg-primary-container/20 text-primary text-[10px] px-2 py-0.5 rounded ml-2 uppercase font-semibold">Giáo viên</span>
-                              )}
-                            </h4>
-                            <p className="text-[13px] text-on-surface-variant">{ans.timeAgo}</p>
-                          </div>
-                        </div>
-                        <p className="text-[14px] text-on-surface">{ans.content}</p>
+                {/* Question */}
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-medium text-[16px] shrink-0">
+                    {disc.authorInitials}
+                  </div>
+                  <div className="flex-1 pr-6">
+                    <div className="flex justify-between items-start mb-1">
+                      <div>
+                        <h4 className="text-[16px] font-medium text-on-surface truncate max-w-[200px] sm:max-w-[400px]">{disc.author}</h4>
+                        <p className="text-[13px] text-on-surface-variant">{disc.timeAgo}</p>
                       </div>
                     </div>
-                  ))}
-                  
-                  {/* Reply Input Box */}
-                  <div className="mt-4 ml-14 pl-4 flex gap-4">
-                     <input className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-2 text-[14px] focus:ring-primary focus:border-primary" placeholder="Nhập câu trả lời..." />
-                     <button className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-medium">Gửi</button>
+                    <h5 className="text-[16px] font-medium text-on-surface mt-2 mb-1">{disc.title}</h5>
+                    <p className="text-[14px] text-on-surface-variant">{disc.content}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+
+                {/* Answers */}
+                {disc.answers?.map((ans) => (
+                  <div key={ans.id} className="mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans">
+                    {/* Hide Button Answer */}
+                    <button 
+                      onClick={() => handleHideComment(ans.id, false)}
+                      className="absolute top-4 right-4 text-on-surface-variant hover:text-error opacity-0 group-hover/ans:opacity-100 transition-opacity"
+                      title="Ẩn bình luận"
+                    >
+                      <span className="material-symbols-outlined text-sm">visibility_off</span>
+                    </button>
+
+                    <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center font-medium shrink-0">
+                      {ans.author?.[0] || "GV"}
+                    </div>
+                    <div className="flex-1 bg-surface-container-low rounded-lg p-4 pr-8">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="text-[16px] font-medium text-on-surface truncate max-w-[150px] sm:max-w-[300px]">
+                            {ans.author}
+                            {ans.role === "Giáo viên" && (
+                              <span className="bg-primary-container/20 text-primary text-[10px] px-2 py-0.5 rounded ml-2 uppercase font-semibold">Giáo viên</span>
+                            )}
+                          </h4>
+                          <p className="text-[13px] text-on-surface-variant">{ans.timeAgo}</p>
+                        </div>
+                      </div>
+                      <p className="text-[14px] text-on-surface">{ans.content}</p>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Reply Input Box */}
+                <div className="mt-4 ml-14 pl-4 flex gap-4">
+                    <input 
+                      className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-2 text-[14px] focus:ring-primary focus:border-primary" 
+                      placeholder="Nhập câu trả lời..." 
+                      value={replyContent[disc.id] || ""}
+                      onChange={(e) => setReplyContent(prev => ({ ...prev, [disc.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSubmitReply(disc.id);
+                      }}
+                    />
+                    <button 
+                      className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-medium flex items-center justify-center min-w-[70px] disabled:opacity-50"
+                      onClick={() => handleSubmitReply(disc.id)}
+                      disabled={submittingReply === disc.id || !replyContent[disc.id]?.trim()}
+                    >
+                      {submittingReply === disc.id ? "Đang gửi" : "Gửi"}
+                    </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </TeacherLayout>
   );

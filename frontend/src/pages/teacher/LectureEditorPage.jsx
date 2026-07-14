@@ -20,16 +20,32 @@ export default function LectureEditorPage() {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [topics, setTopics] = useState([]);
+  const [selectedGrade, setSelectedGrade] = useState("12");
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
 
   useEffect(() => {
-    getTopics()
-      .then((res) => setTopics(res.data || []))
+    const flattenTopics = (nodes, parentPath = "") => {
+      let result = [];
+      nodes.forEach(node => {
+        const currentPath = parentPath ? `${parentPath} > ${node.tagName}` : node.tagName;
+        result.push({ tagId: node.tagId, tagName: currentPath });
+        if (node.children && node.children.length > 0) {
+          result = result.concat(flattenTopics(node.children, currentPath));
+        }
+      });
+      return result;
+    };
+
+    getTopics(selectedGrade)
+      .then((res) => {
+        const rawTopics = res.data || [];
+        setTopics(flattenTopics(rawTopics));
+      })
       .catch((err) => {
         console.error("Lỗi khi tải danh sách chủ đề:", err);
         setTopics([]);
       });
-  }, []);
+  }, [selectedGrade]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -137,25 +153,59 @@ export default function LectureEditorPage() {
                 )}
               </div>
 
-              {/* Topic */}
-              <div className="space-y-2">
-                <label className="block text-[16px] font-medium text-on-surface" htmlFor="topic">
-                  Chủ đề <span className="text-error">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    className={`appearance-none ${fieldClass("tagId")} pr-10`}
-                    id="topic"
-                    value={form.tagId}
-                    onChange={(e) => setForm((f) => ({ ...f, tagId: e.target.value }))}
-                  >
-                    <option value="">Chọn chủ đề</option>
-                    {topics.map((t) => (
-                      <option key={t.tagId} value={t.tagId}>{t.tagName}</option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
-                    <span className="material-symbols-outlined">expand_more</span>
+              {/* Classification Info */}
+              <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant space-y-6 shadow-inner">
+                <h3 className="text-xs font-black uppercase text-primary tracking-wider border-b border-whisper-border pb-2.5 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px]">label</span>
+                  Thông tin phân loại
+                </h3>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                  <div className="space-y-4">
+                    {/* Grade Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp học</label>
+                      <div className="relative">
+                        <select
+                          className={`appearance-none ${fieldClass("")} pr-10`}
+                          value={selectedGrade}
+                          onChange={(e) => {
+                            setSelectedGrade(e.target.value);
+                            setForm((f) => ({ ...f, tagId: "" }));
+                          }}
+                        >
+                          <option value="10">Lớp 10</option>
+                          <option value="11">Lớp 11</option>
+                          <option value="12">Lớp 12</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
+                          <span className="material-symbols-outlined">expand_more</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Topic Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Chủ đề bài giảng <span className="text-error">*</span></label>
+                      <div className="relative">
+                        <select
+                          className={`appearance-none ${fieldClass("tagId")} pr-10`}
+                          id="topic"
+                          value={form.tagId}
+                          onChange={(e) => setForm((f) => ({ ...f, tagId: e.target.value }))}
+                        >
+                          <option value="">Chọn chủ đề</option>
+                          {topics.map((t) => (
+                            <option key={t.tagId} value={t.tagId}>{t.tagName}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
+                          <span className="material-symbols-outlined">expand_more</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
