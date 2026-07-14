@@ -8,6 +8,7 @@ import TagManagementPage from './pages/expert/TagManagementPage.jsx';
 import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
+import AccountManagementPage from './pages/admin/AccountManagementPage.jsx';
 
 
 
@@ -34,6 +35,10 @@ export default function App() {
         <Route path="/expert/questions/:id/edit" element={<QuestionEditorPage />} />
         <Route path="/expert/tags" element={<TagManagementPage />} />
         <Route path="/expert/profile" element={<ExpertProfilePage />} />
+      </Route>
+      {/* Admin Routes */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/admin/accounts" element={<AccountManagementPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
