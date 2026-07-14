@@ -56,28 +56,28 @@
 
 ## Phase 3: Update and Submit
 
-- [ ] Implement `UpdateBlueprintCommand`:
-  - [ ] Owner-only and status limited to `Draft` or `Rejected`.
-  - [ ] Validate full replacement before mutation.
-  - [ ] Replace child sections/details in one transaction.
-- [ ] Implement `SubmitBlueprintForReviewCommand`:
-  - [ ] Owner-only and status limited to `Draft` or `Rejected`.
-  - [ ] Require positive duration and totals.
-  - [ ] Validate sum of sections equals Blueprint total.
-  - [ ] Validate sum of details equals each Section total.
-  - [ ] Revalidate active taxonomy.
-  - [ ] Set `PendingReview` and clear old review audit fields.
-- [ ] Map workflow errors to stable 403/404/422 responses.
+- [x] Implement `UpdateBlueprintCommand`:
+  - [x] Owner-only and status limited to `Draft` or `Rejected`.
+  - [x] Validate full replacement before mutation.
+  - [x] Replace child sections/details in one transaction.
+- [x] Implement `SubmitBlueprintForReviewCommand`:
+  - [x] Owner-only and status limited to `Draft` or `Rejected`.
+  - [x] Require positive duration and totals.
+  - [x] Validate sum of sections equals Blueprint total.
+  - [x] Validate sum of details equals each Section total.
+  - [x] Revalidate active taxonomy.
+  - [x] Set `PendingReview` and clear old review audit fields.
+- [x] Map workflow errors to stable 403/404/422 responses.
 
 ## Phase 4: Peer Review
 
-- [ ] Implement `ReviewBlueprintCommand`:
-  - [ ] Require `PendingReview`.
-  - [ ] Reject self-review with 403.
-  - [ ] Approve -> `Approved`, clear note, set review actor/time.
-  - [ ] Reject -> `Rejected`, require trimmed note of 1-2000 chars, set actor/time.
-- [ ] Implement POST `/{blueprintId}/review`.
-- [ ] Do not publish notification events in the Blueprint MVP.
+- [x] Implement `ReviewBlueprintCommand`:
+  - [x] Require `PendingReview`.
+  - [x] Reject self-review with 403.
+  - [x] Approve -> `Approved`, clear note, set review actor/time.
+  - [x] Reject -> `Rejected`, require trimmed note of 1-2000 chars, set actor/time.
+- [x] Implement POST `/{blueprintId}/review`.
+- [x] Do not publish notification events in the Blueprint MVP.
 
 ## Phase 5: Clone and Delete
 
@@ -104,15 +104,15 @@
 
 ## Phase 7: Backend Verification
 
-- [ ] Create aggregate -> `Draft`, owner from claims, all child rows persisted.
+- [x] Create aggregate -> `Draft`, owner from claims, all child rows persisted.
 - [ ] Invalid/inactive/wrong-grade taxonomy -> 400 and no writes.
 - [ ] Duplicate section order or detail slot -> 422 and no writes.
-- [ ] Update non-owner -> 403; update Approved -> 422.
-- [ ] Submit section sum mismatch -> 422.
-- [ ] Submit detail sum mismatch -> 422.
-- [ ] Valid submit -> `PendingReview` and audit reset.
-- [ ] Self-review -> 403; non-owner approve -> `Approved`.
-- [ ] Reject without note/over 2000 chars -> 400.
+- [x] Update non-owner -> 403; update Approved -> 422.
+- [x] Submit section sum mismatch -> 422.
+- [x] Submit detail sum mismatch -> 422.
+- [x] Valid submit -> `PendingReview` and audit reset.
+- [x] Self-review -> 403; non-owner approve -> `Approved`.
+- [x] Reject without note/over 2000 chars -> 400.
 - [ ] Clone deep-copies all children with independent IDs.
 - [ ] Delete unused Draft -> hard delete.
 - [ ] Delete PendingReview -> 409.

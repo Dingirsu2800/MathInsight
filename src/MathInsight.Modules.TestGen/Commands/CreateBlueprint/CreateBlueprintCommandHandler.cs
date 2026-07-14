@@ -1,7 +1,6 @@
 using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Persistence;
-using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Validation;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -39,52 +38,7 @@ public sealed class CreateBlueprintCommandHandler
         if (validationResult.IsFailure)
             return Result<CreateBlueprintResponse>.Failure(validationResult.Error!);
 
-        var validated = validationResult.Value!;
-        var blueprintId = Guid.NewGuid().ToString();
-        var blueprint = new Blueprint
-        {
-            BlueprintId = blueprintId,
-            BlueprintName = validated.BlueprintName,
-            Grade = validated.Grade,
-            TotalQuestions = validated.TotalQuestions,
-            DurationMinutes = validated.DurationMinutes,
-            ExpertId = command.ExpertId,
-            Status = BlueprintStatuses.Draft
-        };
-
-        foreach (var sectionRequest in validated.Sections)
-        {
-            var sectionId = Guid.NewGuid().ToString();
-            var section = new BlueprintSection
-            {
-                BlueprintSectionId = sectionId,
-                BlueprintId = blueprintId,
-                SectionOrder = sectionRequest.SectionOrder,
-                SectionCode = sectionRequest.SectionCode,
-                SectionName = sectionRequest.SectionName,
-                QuestionType = sectionRequest.QuestionType,
-                InstructionText = sectionRequest.InstructionText,
-                TotalQuestions = sectionRequest.TotalQuestions,
-                DefaultPointPerQuestion = sectionRequest.DefaultPointPerQuestion,
-                DefaultPointPerPart = sectionRequest.DefaultPointPerPart,
-                PartCountPerQuestion = sectionRequest.PartCountPerQuestion
-            };
-
-            foreach (var detailRequest in sectionRequest.Details)
-            {
-                section.Details.Add(new BlueprintDetail
-                {
-                    BlueprintDetailId = Guid.NewGuid().ToString(),
-                    BlueprintId = blueprintId,
-                    BlueprintSectionId = sectionId,
-                    TagId = detailRequest.TagId,
-                    DifficultyId = detailRequest.DifficultyId,
-                    Quantity = detailRequest.Quantity
-                });
-            }
-
-            blueprint.Sections.Add(section);
-        }
+        var blueprint = BlueprintAggregateFactory.Create(validationResult.Value!, command.ExpertId);
 
         _context.Blueprints.Add(blueprint);
         await _context.SaveChangesAsync(cancellationToken);

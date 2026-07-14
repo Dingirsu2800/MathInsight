@@ -4,6 +4,20 @@ public sealed record CreateBlueprintResponse(
     string BlueprintId,
     string Status);
 
+public sealed record UpdateBlueprintResponse(
+    string BlueprintId,
+    string Status);
+
+public sealed record SubmitBlueprintResponse(
+    string BlueprintId,
+    string Status);
+
+public sealed record ReviewBlueprintResponse(
+    string BlueprintId,
+    string Status,
+    string ReviewedBy,
+    DateTime ReviewTime);
+
 public sealed record BlueprintListItemResponse(
     string BlueprintId,
     string BlueprintName,

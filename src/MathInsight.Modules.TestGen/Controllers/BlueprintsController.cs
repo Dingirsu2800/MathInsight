@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using MathInsight.Modules.TestGen.Commands.CreateBlueprint;
+using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
+using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
+using MathInsight.Modules.TestGen.Commands.UpdateBlueprint;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintDetail;
@@ -103,6 +106,62 @@ public sealed class BlueprintsController : ControllerBase
         return result.IsFailure
             ? ToErrorResult(result.Error!)
             : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpPut("{blueprintId}")]
+    public async Task<IActionResult> UpdateBlueprint(
+        string blueprintId,
+        [FromBody] BlueprintRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(BlueprintErrors.RequestInvalid));
+
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new UpdateBlueprintCommand(blueprintId, request, currentExpertId),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [HttpPost("{blueprintId}/submit")]
+    public async Task<IActionResult> SubmitBlueprintForReview(
+        string blueprintId,
+        CancellationToken cancellationToken)
+    {
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new SubmitBlueprintForReviewCommand(blueprintId, currentExpertId),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [HttpPost("{blueprintId}/review")]
+    public async Task<IActionResult> ReviewBlueprint(
+        string blueprintId,
+        [FromBody] ReviewBlueprintRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(BlueprintErrors.RequestInvalid));
+
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new ReviewBlueprintCommand(blueprintId, request, currentExpertId),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
     }
 
     private string? GetCurrentExpertId()
