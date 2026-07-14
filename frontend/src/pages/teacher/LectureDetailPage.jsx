@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
 import { getLecture } from "../../services/learningApi";
+import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function LectureDetailPage() {
   const { id } = useParams();
@@ -95,7 +96,7 @@ export default function LectureDetailPage() {
             </div>
 
             <div className="prose max-w-none text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap">
-              {lecture.content}
+              <LatexPreview content={lecture.content} />
             </div>
           </div>
         </article>

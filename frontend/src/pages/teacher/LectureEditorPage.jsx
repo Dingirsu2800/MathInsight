@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
 import { createLecture, getLecture, updateLecture, getTopics } from "../../services/learningApi";
+import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function LectureEditorPage() {
   const navigate = useNavigate();
@@ -24,11 +25,10 @@ export default function LectureEditorPage() {
   useEffect(() => {
     getTopics()
       .then((res) => setTopics(res.data || []))
-      .catch(() => setTopics([
-        { tagId: "1", tagName: "Đại số > Phương trình > Phương trình bậc 2" },
-        { tagId: "2", tagName: "Hình học > Không gian" },
-        { tagId: "3", tagName: "Giải tích > Đạo hàm" },
-      ]));
+      .catch((err) => {
+        console.error("Lỗi khi tải danh sách chủ đề:", err);
+        setTopics([]);
+      });
   }, []);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function LectureEditorPage() {
               {/* Content */}
               <div className="space-y-2">
                 <label className="block text-[16px] font-medium text-on-surface" htmlFor="content">
-                  Nội dung bài giảng
+                  Nội dung bài giảng (Hỗ trợ LaTeX)
                 </label>
                 <div className="border border-outline-variant rounded-lg overflow-hidden bg-pure-surface focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
                   {/* Toolbar */}
@@ -183,11 +183,18 @@ export default function LectureEditorPage() {
                   <textarea
                     className="w-full min-h-[200px] bg-pure-surface px-4 py-3 text-[14px] text-on-surface placeholder:text-outline border-none focus:ring-0 resize-y"
                     id="content"
-                    placeholder="Nhập nội dung chi tiết..."
+                    placeholder="Nhập nội dung chi tiết... Hỗ trợ mã LaTeX bọc trong dấu $ hoặc $$"
                     value={form.content}
                     onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                   />
                 </div>
+                {/* Preview Box */}
+                {form.content && (
+                  <div className="mt-4 p-4 border border-whisper-border rounded-lg bg-surface-container-lowest">
+                    <h4 className="text-[12px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Xem trước nội dung:</h4>
+                    <LatexPreview content={form.content} />
+                  </div>
+                )}
               </div>
 
               {/* Video URL */}

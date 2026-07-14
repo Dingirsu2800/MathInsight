@@ -12,7 +12,8 @@ export default function ModerationPage() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const res = await getModerationQueue({ status: statusFilter === "all" ? "" : statusFilter, search });
+      // Fetch all reports to calculate accurate statistics
+      const res = await getModerationQueue({ search });
       setReports(res.data?.items || res.data || []);
     } catch (err) {
       console.error("Lỗi khi tải danh sách báo cáo:", err);
@@ -45,6 +46,18 @@ export default function ModerationPage() {
     return { label: "Đã bác bỏ", bg: "bg-gray-100", text: "text-gray-800", bar: "bg-gray-500", iconBg: "bg-gray-50", iconText: "text-gray-600" };
   };
 
+  const pendingCount = reports.filter(r => r.status === "Pending").length;
+  const resolvedCount = reports.filter(r => r.status === "Resolved").length;
+  const rejectedCount = reports.filter(r => r.status !== "Pending" && r.status !== "Resolved").length;
+
+  const displayReports = reports.filter(r => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "pending") return r.status === "Pending";
+    if (statusFilter === "resolved") return r.status === "Resolved";
+    if (statusFilter === "rejected") return r.status !== "Pending" && r.status !== "Resolved";
+    return true;
+  });
+
   return (
     <TeacherLayout>
       <div className="p-gutter flex flex-col gap-8 w-full max-w-6xl mx-auto">
@@ -56,19 +69,19 @@ export default function ModerationPage() {
             <div className="bg-pure-surface rounded-xl p-4 border border-whisper-border flex flex-col gap-2">
               <span className="text-[12px] font-semibold text-on-surface-variant uppercase tracking-wider">Chờ xử lý</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-[32px] font-semibold text-amber-600">5</span>
+                <span className="text-[32px] font-semibold text-amber-600">{pendingCount}</span>
               </div>
             </div>
             <div className="bg-pure-surface rounded-xl p-4 border border-whisper-border flex flex-col gap-2">
               <span className="text-[12px] font-semibold text-on-surface-variant uppercase tracking-wider">Đã xử lý</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-[32px] font-semibold text-emerald-600">23</span>
+                <span className="text-[32px] font-semibold text-emerald-600">{resolvedCount}</span>
               </div>
             </div>
             <div className="bg-pure-surface rounded-xl p-4 border border-whisper-border flex flex-col gap-2">
               <span className="text-[12px] font-semibold text-on-surface-variant uppercase tracking-wider">Đã bác bỏ</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-[32px] font-semibold text-outline">8</span>
+                <span className="text-[32px] font-semibold text-outline">{rejectedCount}</span>
               </div>
             </div>
           </div>
@@ -103,7 +116,7 @@ export default function ModerationPage() {
 
         {/* Report Cards List */}
         <div className="flex flex-col gap-4">
-          {reports.map((report) => {
+          {displayReports.map((report) => {
             const statusInfo = getStatusInfo(report.status);
             const isPending = report.status === "Pending";
             return (
