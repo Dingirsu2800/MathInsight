@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
-import { getLectures, publishLecture, deactivateLecture } from "../../services/learningApi";
+import { getLectures, publishLecture, deactivateLecture, getTopics } from "../../services/learningApi";
 
 const STATUS_BADGES = {
   Draft: { label: "Nháp", bg: "bg-[#F59E0B]/10", text: "text-[#F59E0B]" },
@@ -16,7 +16,9 @@ export default function LectureListPage() {
   const [lectures, setLectures] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("12");
   const [topicFilter, setTopicFilter] = useState("");
+  const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -38,6 +40,32 @@ export default function LectureListPage() {
   }, [page, search, statusFilter, topicFilter]);
 
   useEffect(() => { fetchLectures(); }, [fetchLectures]);
+
+  useEffect(() => {
+    const flattenTopics = (nodes, parentPath = "") => {
+      let result = [];
+      nodes.forEach(node => {
+        const currentPath = parentPath ? `${parentPath} > ${node.tagName}` : node.tagName;
+        result.push({ tagId: node.tagId, tagName: currentPath });
+        if (node.children && node.children.length > 0) {
+          result = result.concat(flattenTopics(node.children, currentPath));
+        }
+      });
+      return result;
+    };
+
+    if (!gradeFilter) {
+      setTopics([]);
+      return;
+    }
+
+    getTopics(gradeFilter)
+      .then((res) => setTopics(flattenTopics(res.data || [])))
+      .catch((err) => {
+        console.error("Lỗi khi tải danh sách chủ đề:", err);
+        setTopics([]);
+      });
+  }, [gradeFilter]);
 
   const handlePublish = async (id) => {
     try { await publishLecture(id); fetchLectures(); } catch (e) { console.error(e); }
@@ -84,7 +112,7 @@ export default function LectureListPage() {
           </div>
           <div className="flex gap-4 w-full md:w-auto">
             <select
-              className="flex-1 md:w-48 py-2 px-3 border border-outline-variant rounded-lg bg-pure-surface text-[13px] focus:ring-1 focus:ring-primary"
+              className="flex-1 md:w-32 py-2 px-3 border border-outline-variant rounded-lg bg-pure-surface text-[13px] focus:ring-1 focus:ring-primary"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             >
@@ -94,16 +122,25 @@ export default function LectureListPage() {
               <option value="Deactivated">Ngừng hoạt động</option>
             </select>
             <select
+              className="flex-1 md:w-28 py-2 px-3 border border-outline-variant rounded-lg bg-pure-surface text-[13px] focus:ring-1 focus:ring-primary"
+              value={gradeFilter}
+              onChange={(e) => { setGradeFilter(e.target.value); setTopicFilter(""); setPage(1); }}
+            >
+              <option value="">Khối lớp</option>
+              <option value="10">Lớp 10</option>
+              <option value="11">Lớp 11</option>
+              <option value="12">Lớp 12</option>
+            </select>
+            <select
               className="flex-1 md:w-48 py-2 px-3 border border-outline-variant rounded-lg bg-pure-surface text-[13px] focus:ring-1 focus:ring-primary"
               value={topicFilter}
               onChange={(e) => { setTopicFilter(e.target.value); setPage(1); }}
+              disabled={!gradeFilter}
             >
-              <option value="">Chủ đề</option>
-              <option value="dai-so">Đại số</option>
-              <option value="hinh-hoc">Hình học</option>
-              <option value="giai-tich">Giải tích</option>
-              <option value="xac-suat">Xác suất</option>
-              <option value="luong-giac">Lượng giác</option>
+              <option value="">Tất cả Chủ đề</option>
+              {topics.map((t) => (
+                <option key={t.tagId} value={t.tagId}>{t.tagName}</option>
+              ))}
             </select>
           </div>
         </div>

@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { createLecture, getLecture, updateLecture, getTopics } from "../../services/learningApi";
+import { createLecture, getLecture, updateLecture, getTopics, getMaterials, attachMaterial, publishLecture } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function LectureEditorPage() {
@@ -16,10 +16,13 @@ export default function LectureEditorPage() {
     content: "",
     videoUrl: "",
     thumbnailFile: null,
+    materialIds: [],
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [topics, setTopics] = useState([]);
+  const [availableMaterials, setAvailableMaterials] = useState([]);
   const [selectedGrade, setSelectedGrade] = useState("12");
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
 
@@ -48,6 +51,11 @@ export default function LectureEditorPage() {
   }, [selectedGrade]);
 
   useEffect(() => {
+    // Load available materials
+    getMaterials({ pageSize: 100 })
+      .then(res => setAvailableMaterials(res.data?.items || res.data || []))
+      .catch(err => console.error("Lỗi tải tài liệu:", err));
+
     if (!isEdit) return;
     getLecture(id)
       .then((res) => {
@@ -58,6 +66,7 @@ export default function LectureEditorPage() {
           content: data.content || "",
           videoUrl: data.videoUrl || "",
           thumbnailFile: null,
+          materialIds: (data.materials || []).map(m => m.id || m.materialId)
         });
       })
       .catch(() => {});
@@ -70,22 +79,56 @@ export default function LectureEditorPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, isPublish = false) => {
+    if (e) e.preventDefault();
     if (!validate()) return;
-    setSaving(true);
+    
+    if (isPublish) setPublishing(true);
+    else setSaving(true);
+
     try {
+      let currentLectureId = id;
       if (isEdit) {
-        await updateLecture(id, form);
+        await updateLecture(currentLectureId, form);
       } else {
-        await createLecture(form);
+        const res = await createLecture(form);
+        currentLectureId = res.data?.id || res.data?.lectureId;
       }
+
+      // Attach materials sequentially
+      if (currentLectureId && form.materialIds.length > 0) {
+        for (const matId of form.materialIds) {
+          try {
+            await attachMaterial(matId, currentLectureId);
+          } catch (ex) { 
+            console.error(`Không thể đính kèm tài liệu ${matId}:`, ex);
+          }
+        }
+      }
+
+      if (isPublish && currentLectureId) {
+        await publishLecture(currentLectureId);
+      }
+
       navigate("/teacher/lectures");
     } catch (err) {
       console.error("Lưu bài giảng thất bại:", err);
+      alert("Đã xảy ra lỗi khi lưu bài giảng!");
     } finally {
       setSaving(false);
+      setPublishing(false);
     }
+  };
+
+  const toggleMaterial = (matId) => {
+    setForm(prev => {
+      const isSelected = prev.materialIds.includes(matId);
+      if (isSelected) {
+        return { ...prev, materialIds: prev.materialIds.filter(id => id !== matId) };
+      } else {
+        return { ...prev, materialIds: [...prev.materialIds, matId] };
+      }
+    });
   };
 
   const handleFileSelect = (e) => {
@@ -267,6 +310,31 @@ export default function LectureEditorPage() {
                 </div>
               </div>
 
+              {/* Attach Materials */}
+              <div className="space-y-3">
+                <label className="block text-[16px] font-medium text-on-surface">
+                  Đính kèm Tài liệu <span className="text-[13px] text-on-surface-variant font-normal">({form.materialIds.length} đã chọn)</span>
+                </label>
+                <div className="max-h-48 overflow-y-auto border border-outline-variant rounded-lg bg-pure-surface p-2 space-y-1">
+                  {availableMaterials.length === 0 ? (
+                    <p className="p-3 text-[14px] text-on-surface-variant text-center">Chưa có tài liệu nào. Hãy upload tài liệu trước.</p>
+                  ) : (
+                    availableMaterials.map((mat) => (
+                      <label key={mat.materialId || mat.id} className="flex items-center gap-3 p-2 hover:bg-surface-container-lowest rounded cursor-pointer transition-colors">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-primary border-outline-variant rounded focus:ring-primary"
+                          checked={form.materialIds.includes(mat.materialId || mat.id)}
+                          onChange={() => toggleMaterial(mat.materialId || mat.id)}
+                        />
+                        <span className="text-[14px] text-on-surface flex-1 truncate">{mat.materialName || mat.name}</span>
+                        <span className="text-[12px] text-on-surface-variant px-2 py-0.5 bg-surface-variant rounded">{(mat.fileType || mat.format || "FILE").toUpperCase()}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {/* Thumbnail Upload */}
               <div className="space-y-2">
                 <label className="block text-[16px] font-medium text-on-surface">
@@ -292,7 +360,7 @@ export default function LectureEditorPage() {
           </div>
 
           {/* Bottom Actions */}
-          <div className="mt-8 flex items-center justify-end gap-4">
+          <div className="mt-8 flex items-center justify-between">
             <button
               onClick={() => navigate("/teacher/lectures")}
               className="px-6 py-2.5 rounded-lg border border-outline-variant bg-pure-surface text-on-surface text-[16px] font-medium hover:bg-surface-container-low transition-all"
@@ -300,14 +368,25 @@ export default function LectureEditorPage() {
             >
               Hủy bỏ
             </button>
-            <button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="px-6 py-2.5 rounded-lg bg-primary text-on-primary text-[16px] font-medium hover:opacity-90 transition-all shadow-sm disabled:opacity-50"
-              type="submit"
-            >
-              {saving ? "Đang lưu..." : "Lưu nháp"}
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={(e) => handleSubmit(e, false)}
+                disabled={saving || publishing}
+                className="px-6 py-2.5 rounded-lg border border-primary text-primary bg-pure-surface text-[16px] font-medium hover:bg-primary-container/20 transition-all shadow-sm disabled:opacity-50"
+                type="button"
+              >
+                {saving ? "Đang lưu..." : "Lưu nháp"}
+              </button>
+              <button
+                onClick={(e) => handleSubmit(e, true)}
+                disabled={saving || publishing}
+                className="px-6 py-2.5 rounded-lg bg-primary text-on-primary text-[16px] font-medium hover:opacity-90 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[20px]">publish</span>
+                {publishing ? "Đang xuất bản..." : "Xuất bản"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

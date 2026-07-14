@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import TeacherLayout from "./TeacherLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
-import { getMaterials, uploadMaterial, deactivateMaterial } from "../../services/learningApi";
+import { getMaterials, uploadMaterial, deactivateMaterial, updateMaterial } from "../../services/learningApi";
 
 export default function MaterialListPage() {
   const [materials, setMaterials] = useState([]);
@@ -14,6 +14,10 @@ export default function MaterialListPage() {
   const [file, setFile] = useState(null);
   const [docName, setDocName] = useState("");
   const fileInputRef = useRef(null);
+
+  // Inline Edit
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState("");
 
   const fetchMaterials = useCallback(async () => {
     setLoading(true);
@@ -31,9 +35,22 @@ export default function MaterialListPage() {
   useEffect(() => { fetchMaterials(); }, [fetchMaterials]);
 
   const handleFileChange = (e) => {
-    if (e.target.files?.[0]) {
-      setFile(e.target.files[0]);
-      if (!docName) setDocName(e.target.files[0].name.split('.')[0]);
+    const selected = e.target.files?.[0];
+    if (selected) {
+      // Validate Size (500MB)
+      if (selected.size > 500 * 1024 * 1024) {
+        alert("Kích thước tệp vượt quá 500MB!");
+        return;
+      }
+      // Validate Format
+      const ext = selected.name.split('.').pop().toLowerCase();
+      if (!['pdf', 'mp4', 'docx'].includes(ext)) {
+        alert("Chỉ hỗ trợ tệp định dạng PDF, MP4, DOCX!");
+        return;
+      }
+
+      setFile(selected);
+      if (!docName) setDocName(selected.name.split('.')[0]);
     }
   };
 
@@ -43,7 +60,7 @@ export default function MaterialListPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("title", docName);
+      formData.append("name", docName); // Match DB / Backend DTO if necessary, but DTO might expect specific casing. Usually forms use Title or Name. Let's use 'Name'.
       await uploadMaterial(formData);
       setShowUploadModal(false);
       setFile(null);
@@ -51,8 +68,32 @@ export default function MaterialListPage() {
       fetchMaterials();
     } catch (err) {
       console.error(err);
+      alert("Tải lên thất bại!");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeactivate = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn ngừng hoạt động tài liệu này?")) return;
+    try {
+      await deactivateMaterial(id);
+      fetchMaterials();
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi khi ngừng hoạt động!");
+    }
+  };
+
+  const handleSaveRename = async (id) => {
+    if (!editName.trim()) return;
+    try {
+      await updateMaterial(id, { name: editName });
+      setEditingId(null);
+      fetchMaterials();
+    } catch (e) {
+      console.error(e);
+      alert("Đổi tên thất bại!");
     }
   };
 
@@ -101,11 +142,31 @@ export default function MaterialListPage() {
                   return (
                     <tr key={item.id} className="hover:bg-surface-container-lowest transition-colors group">
                       <td className="py-3 px-4 text-on-surface-variant font-mono">{String(idx + 1).padStart(2, '0')}</td>
-                      <td className="py-3 px-4 font-medium text-[16px] text-on-surface">{item.name}</td>
+                      <td className="py-3 px-4 font-medium text-[16px] text-on-surface">
+                        {editingId === (item.id || item.materialId) ? (
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="text" 
+                              className="px-2 py-1 border border-outline-variant rounded focus:ring-primary focus:border-primary text-[14px]"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRename(item.id || item.materialId);
+                                if (e.key === 'Escape') setEditingId(null);
+                              }}
+                              autoFocus
+                            />
+                            <button onClick={() => handleSaveRename(item.id || item.materialId)} className="text-primary hover:text-primary-container"><span className="material-symbols-outlined text-[18px]">check</span></button>
+                            <button onClick={() => setEditingId(null)} className="text-error hover:text-error-container"><span className="material-symbols-outlined text-[18px]">close</span></button>
+                          </div>
+                        ) : (
+                          item.name || item.materialName
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className={`material-symbols-outlined ${formatInfo.color} text-[18px]`}>{formatInfo.icon}</span>
-                          <span>{item.format}</span>
+                          <span>{item.format || item.fileType}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -115,7 +176,7 @@ export default function MaterialListPage() {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-[#ffe4e6] text-[#9f1239]">Ngừng hoạt động</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-on-surface-variant font-mono">{new Date(item.uploadedAt).toLocaleDateString("vi-VN")}</td>
+                      <td className="py-3 px-4 text-on-surface-variant font-mono">{new Date(item.uploadedAt || item.uploadedTime).toLocaleDateString("vi-VN")}</td>
                       <td className="py-3 px-4">
                         {item.lectureName ? (
                           <a className="text-primary hover:underline font-medium" href="#">{item.lectureName}</a>
@@ -125,16 +186,16 @@ export default function MaterialListPage() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2 text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="hover:text-primary transition-colors p-1" title="Chỉnh sửa">
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                          {isActive && (
-                            <button className="hover:text-primary transition-colors p-1" title="Gắn vào bài giảng">
-                              <span className="material-symbols-outlined text-[18px]">link</span>
+                          {isActive && editingId !== (item.id || item.materialId) && (
+                            <button 
+                              onClick={() => { setEditingId(item.id || item.materialId); setEditName(item.name || item.materialName); }}
+                              className="hover:text-primary transition-colors p-1" title="Chỉnh sửa tên"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">edit</span>
                             </button>
                           )}
                           {isActive && (
-                            <button className="hover:text-error transition-colors p-1" title="Ngừng hoạt động">
+                            <button onClick={() => handleDeactivate(item.id || item.materialId)} className="hover:text-error transition-colors p-1" title="Ngừng hoạt động">
                               <span className="material-symbols-outlined text-[18px]">block</span>
                             </button>
                           )}
