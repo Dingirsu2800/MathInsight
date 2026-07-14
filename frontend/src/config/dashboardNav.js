@@ -26,3 +26,33 @@ export const expertNavItems = [
     disabled: true
   }
 ];
+
+export const teacherNavItems = [
+  {
+    label: "Bài giảng",
+    path: "/teacher/lectures",
+    icon: "auto_stories"
+  },
+  {
+    label: "Tài liệu",
+    path: "/teacher/materials",
+    icon: "folder"
+  },
+  {
+    label: "Thảo luận",
+    path: "/teacher/discussions",
+    icon: "forum",
+    disabled: true
+  },
+  {
+    label: "Kiểm duyệt",
+    path: "/teacher/moderation",
+    icon: "verified_user"
+  },
+  {
+    label: "Cài đặt",
+    path: "/teacher/settings",
+    icon: "settings",
+    disabled: true
+  }
+];

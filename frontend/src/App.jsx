@@ -9,7 +9,12 @@ import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
-
+// Teacher Pages
+import LectureListPage from './pages/teacher/LectureListPage.jsx';
+import LectureEditorPage from './pages/teacher/LectureEditorPage.jsx';
+import LectureDetailPage from './pages/teacher/LectureDetailPage.jsx';
+import MaterialListPage from './pages/teacher/MaterialListPage.jsx';
+import ModerationPage from './pages/teacher/ModerationPage.jsx';
 
 export default function App() {
   return (
@@ -26,14 +31,23 @@ export default function App() {
           />
         }
       />
-      {/* Expert Routes */}
+      {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
+        {/* Expert Routes */}
         <Route path="/expert/questions" element={<QuestionBankListPage />} />
         <Route path="/expert/questions/reported" element={<ReportedQuestionsPage />} />
         <Route path="/expert/questions/new" element={<QuestionEditorPage />} />
         <Route path="/expert/questions/:id/edit" element={<QuestionEditorPage />} />
         <Route path="/expert/tags" element={<TagManagementPage />} />
         <Route path="/expert/profile" element={<ExpertProfilePage />} />
+        
+        {/* Teacher Routes */}
+        <Route path="/teacher/lectures" element={<LectureListPage />} />
+        <Route path="/teacher/lectures/new" element={<LectureEditorPage />} />
+        <Route path="/teacher/lectures/:id/edit" element={<LectureEditorPage />} />
+        <Route path="/teacher/lectures/:id" element={<LectureDetailPage />} />
+        <Route path="/teacher/materials" element={<MaterialListPage />} />
+        <Route path="/teacher/moderation" element={<ModerationPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
