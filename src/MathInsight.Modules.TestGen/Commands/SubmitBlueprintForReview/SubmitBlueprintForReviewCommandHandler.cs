@@ -36,14 +36,20 @@ public sealed class SubmitBlueprintForReviewCommandHandler
         if (string.IsNullOrWhiteSpace(command.ExpertId))
             return Result<SubmitBlueprintResponse>.Failure(ApplicationErrors.AuthInvalidToken);
 
+        SubmitVerificationState? original = null;
         return await BlueprintExecutionStrategy.ExecuteAsync(
             _context,
-            () => ExecuteAsync(command, cancellationToken),
+            () => ExecuteAsync(
+                command,
+                state => original = state,
+                cancellationToken),
+            () => VerifySucceededAsync(command, original, cancellationToken),
             cancellationToken);
     }
 
     private async Task<Result<SubmitBlueprintResponse>> ExecuteAsync(
         SubmitBlueprintForReviewCommand command,
+        Action<SubmitVerificationState> captureOriginal,
         CancellationToken cancellationToken)
     {
 
@@ -69,6 +75,12 @@ public sealed class SubmitBlueprintForReviewCommandHandler
 
         if (blueprint.Status is not (BlueprintStatuses.Draft or BlueprintStatuses.Rejected))
             return Result<SubmitBlueprintResponse>.Failure(BlueprintErrors.StatusInvalid);
+
+        captureOriginal(new SubmitVerificationState(
+            blueprint.Status,
+            blueprint.ApprovedBy,
+            blueprint.ReviewNote,
+            blueprint.ReviewTime));
 
         if (blueprint.DurationMinutes <= 0 ||
             blueprint.TotalQuestions <= 0 ||
@@ -101,6 +113,41 @@ public sealed class SubmitBlueprintForReviewCommandHandler
             new SubmitBlueprintResponse(blueprint.BlueprintId, blueprint.Status));
     }
 
+    private async Task<(bool IsSuccessful, Result<SubmitBlueprintResponse> Result)> VerifySucceededAsync(
+        SubmitBlueprintForReviewCommand command,
+        SubmitVerificationState? original,
+        CancellationToken cancellationToken)
+    {
+        if (original is null)
+            return (false, default!);
+
+        var persisted = await _context.Blueprints
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.BlueprintId == command.BlueprintId &&
+                    item.ExpertId == command.ExpertId,
+                cancellationToken);
+        if (persisted is null)
+            return (false, default!);
+
+        var reachedSubmittedState = persisted.Status is
+            BlueprintStatuses.PendingReview or
+            BlueprintStatuses.Approved or
+            BlueprintStatuses.Active or
+            BlueprintStatuses.Deactivated;
+        var wasReviewedAndRejectedAfterSubmit =
+            persisted.Status == BlueprintStatuses.Rejected &&
+            (persisted.ApprovedBy != original.ApprovedBy ||
+                persisted.ReviewNote != original.ReviewNote ||
+                persisted.ReviewTime != original.ReviewTime);
+        var succeeded = reachedSubmittedState || wasReviewedAndRejectedAfterSubmit;
+
+        return succeeded
+            ? (true, Result<SubmitBlueprintResponse>.Success(
+                new SubmitBlueprintResponse(persisted.BlueprintId, persisted.Status)))
+            : (false, default!);
+    }
+
     private static BlueprintRequest ToRequest(Blueprint blueprint)
         => new()
         {
@@ -131,4 +178,10 @@ public sealed class SubmitBlueprintForReviewCommandHandler
                 })
                 .ToList()
         };
+
+    private sealed record SubmitVerificationState(
+        string Status,
+        string? ApprovedBy,
+        string? ReviewNote,
+        DateTime? ReviewTime);
 }

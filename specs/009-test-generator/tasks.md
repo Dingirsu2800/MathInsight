@@ -27,7 +27,7 @@
   - [x] Unique `(BlueprintSectionID, TagID, DifficultyID)`.
 - [x] Correct `Test` mapping to `TestMode`, SQL status casing, lengths, checks, and indexes.
 - [x] Complete `TestQuestion` mapping, including source-detail and recommendation audit fields.
-- [x] Add read models for `Expert`, `TagTopic`, and `TagDifficulty` with `ExcludeFromMigrations()`.
+- [x] Add read models for `Account`, `Expert`, `TagTopic`, and `TagDifficulty` with `ExcludeFromMigrations()`.
 - [x] Register TestGen DbContext and MediatR in `TestGenModuleExtensions`.
 - [x] Create `tests/MathInsight.Modules.TestGen.Tests` and add it to `MathInsight.sln`.
 - [x] Add EF model metadata tests for all five owned tables and external read models.
@@ -91,6 +91,7 @@
   - [x] Return 409 for `PendingReview`.
   - [x] Change `Active` or Test-linked aggregate to `Deactivated`.
 - [x] Implement clone and delete controller routes with 403/404/409 mapping.
+- [x] Verify persisted post-conditions after ambiguous SQL commits; use a stable clone ID across retries.
 
 ## Phase 6: Expert Frontend
 
@@ -105,8 +106,8 @@
 ## Phase 7: Backend Verification
 
 - [x] Create aggregate -> `Draft`, owner from claims, all child rows persisted.
-- [ ] Invalid/inactive/wrong-grade taxonomy -> 400 and no writes.
-- [ ] Duplicate section order or detail slot -> 422 and no writes.
+- [x] Invalid/inactive/wrong-grade taxonomy -> 400 and no writes.
+- [x] Duplicate section order or detail slot -> 422 and no writes.
 - [x] Update non-owner -> 403; update Approved -> 422.
 - [x] Submit section sum mismatch -> 422.
 - [x] Submit detail sum mismatch -> 422.
@@ -119,7 +120,7 @@
 - [x] Delete Active/Test-linked -> `Deactivated` and history retained.
 - [x] Controller tests cover 400/403/404/409/422.
 - [x] `dotnet test` and `dotnet build MathInsight.sln --no-restore` pass.
-- [ ] Manual SQL Server smoke: composite FK and concurrent submit/review transitions.
+- [x] Disposable SQL Server smoke: current schema, composite FK, and concurrent submit/review transitions.
 
 ## Phase 8: Test Generation Backlog
 

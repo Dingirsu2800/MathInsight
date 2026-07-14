@@ -30,9 +30,8 @@ internal static class BlueprintAggregateFactory
         blueprint.Sections = CreateSections(blueprint.BlueprintId, validated.Sections);
     }
 
-    public static Blueprint Clone(Blueprint source, string expertId)
+    public static Blueprint Clone(Blueprint source, string expertId, string blueprintId)
     {
-        var blueprintId = Guid.NewGuid().ToString();
         var clone = new Blueprint
         {
             BlueprintId = blueprintId,

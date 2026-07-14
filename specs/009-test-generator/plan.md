@@ -63,7 +63,7 @@ MathInsight.Modules.TestGen/
 ### Checkpoint 0: Persistence Foundation
 
 - Correct all five existing entity/configuration mappings against the SQL script.
-- Add `Expert`, `TagTopic`, and `TagDifficulty` read models needed for validation, configured with `ExcludeFromMigrations()`.
+- Add `Account`, `Expert`, `TagTopic`, and `TagDifficulty` read models needed for display/validation, configured with `ExcludeFromMigrations()`.
 - Keep Question/QuestionTopic read models for the later generation checkpoint.
 - Register MediatR and TestGen services in `TestGenModuleExtensions`.
 - Create TestGen test project with EF model metadata tests for every owned table.
@@ -135,6 +135,7 @@ Controllers obtain the Expert ID from `account_id`, falling back to `ClaimTypes.
 - Generate IDs with `Guid.NewGuid().ToString()`.
 - Use an explicit transaction for aggregate create/update/clone/delete.
 - Submit/review/delete should use a SQL transaction and reload current state before transition to avoid stale workflow decisions.
+- Supply a persisted post-condition verifier to the SQL execution strategy so an ambiguous commit is not blindly replayed.
 - Do not expose `ApprovedBy` in write requests.
 
 ## Cross-Module Boundaries
@@ -150,7 +151,7 @@ Controllers obtain the Expert ID from `account_id`, falling back to `ClaimTypes.
 2. EF metadata tests assert exact table/column names, SQL types, nullability, keys, indexes, relationships, and status values.
 3. Handler tests cover ownership, state transitions, sum validation, taxonomy validation, deep cloning, and delete/deactivate behavior.
 4. Controller tests cover 400/403/404/409/422 mapping and authenticated claim extraction.
-5. A disposable SQL Server smoke test verifies composite BlueprintDetail FK and concurrent submit/review transitions before merge.
+5. The opt-in disposable SQL Server smoke test verifies the current schema, composite BlueprintDetail FK, and concurrent submit/review transitions. Set `TESTGEN_SQLSERVER_CONNECTION` to a disposable SQL Server `master` connection to run it.
 6. Frontend checkpoint runs `npm run build` and performs desktop workflow smoke tests.
 
 ## Commit Boundaries

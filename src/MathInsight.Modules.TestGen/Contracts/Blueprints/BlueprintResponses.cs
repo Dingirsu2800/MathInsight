@@ -35,6 +35,7 @@ public sealed record BlueprintListItemResponse(
     int TotalQuestions,
     int DurationMinutes,
     string ExpertId,
+    string? ExpertName,
     string Status,
     int SectionCount,
     int DetailSlotCount);
@@ -46,8 +47,10 @@ public sealed record BlueprintDetailResponse(
     int TotalQuestions,
     int DurationMinutes,
     string ExpertId,
+    string? ExpertName,
     string Status,
     string? ApprovedBy,
+    string? ApprovedByName,
     string? ReviewNote,
     DateTime? ReviewTime,
     IReadOnlyList<BlueprintSectionResponse> Sections);

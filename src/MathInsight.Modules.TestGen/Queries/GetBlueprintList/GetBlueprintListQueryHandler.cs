@@ -79,6 +79,10 @@ public sealed class GetBlueprintListQueryHandler
                 blueprint.TotalQuestions,
                 blueprint.DurationMinutes,
                 blueprint.ExpertId,
+                _context.Accounts
+                    .Where(account => account.AccountId == blueprint.ExpertId)
+                    .Select(account => account.FirstName + " " + account.LastName)
+                    .FirstOrDefault(),
                 blueprint.Status,
                 blueprint.Sections.Count,
                 blueprint.Sections.SelectMany(section => section.Details).Count()))

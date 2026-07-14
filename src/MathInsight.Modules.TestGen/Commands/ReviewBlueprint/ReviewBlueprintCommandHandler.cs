@@ -49,9 +49,21 @@ public sealed class ReviewBlueprintCommandHandler
         if (action == BlueprintReviewActions.Reject && reviewNote!.Length > MaxReviewNoteLength)
             return Result<ReviewBlueprintResponse>.Failure(BlueprintErrors.ReviewNoteTooLong);
 
+        DateTime? expectedReviewTime = null;
         return await BlueprintExecutionStrategy.ExecuteAsync(
             _context,
-            () => ExecuteAsync(command, action, reviewNote, cancellationToken),
+            () => ExecuteAsync(
+                command,
+                action,
+                reviewNote,
+                reviewTime => expectedReviewTime = reviewTime,
+                cancellationToken),
+            () => VerifySucceededAsync(
+                command,
+                action,
+                reviewNote,
+                expectedReviewTime,
+                cancellationToken),
             cancellationToken);
     }
 
@@ -59,6 +71,7 @@ public sealed class ReviewBlueprintCommandHandler
         ReviewBlueprintCommand command,
         string action,
         string? reviewNote,
+        Action<DateTime> captureReviewTime,
         CancellationToken cancellationToken)
     {
         await using IDbContextTransaction? transaction = _context.Database.IsRelational()
@@ -99,6 +112,7 @@ public sealed class ReviewBlueprintCommandHandler
         var reviewTime = new DateTime(
             utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerSecond,
             DateTimeKind.Utc);
+        captureReviewTime(reviewTime);
         blueprint.Status = action == BlueprintReviewActions.Approve
             ? BlueprintStatuses.Approved
             : BlueprintStatuses.Rejected;
@@ -116,5 +130,40 @@ public sealed class ReviewBlueprintCommandHandler
                 blueprint.Status,
                 command.ReviewerExpertId,
                 reviewTime));
+    }
+
+    private async Task<(bool IsSuccessful, Result<ReviewBlueprintResponse> Result)> VerifySucceededAsync(
+        ReviewBlueprintCommand command,
+        string action,
+        string? reviewNote,
+        DateTime? expectedReviewTime,
+        CancellationToken cancellationToken)
+    {
+        if (expectedReviewTime is null)
+            return (false, default!);
+
+        var expectedStatus = action == BlueprintReviewActions.Approve
+            ? BlueprintStatuses.Approved
+            : BlueprintStatuses.Rejected;
+        var expectedNote = action == BlueprintReviewActions.Reject ? reviewNote : null;
+        var persisted = await _context.Blueprints
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.BlueprintId == command.BlueprintId,
+                cancellationToken);
+        var succeeded = persisted is not null &&
+            persisted.Status == expectedStatus &&
+            persisted.ApprovedBy == command.ReviewerExpertId &&
+            persisted.ReviewNote == expectedNote &&
+            persisted.ReviewTime == expectedReviewTime;
+
+        return succeeded
+            ? (true, Result<ReviewBlueprintResponse>.Success(
+                new ReviewBlueprintResponse(
+                    persisted!.BlueprintId,
+                    persisted.Status,
+                    command.ReviewerExpertId,
+                    expectedReviewTime.Value)))
+            : (false, default!);
     }
 }

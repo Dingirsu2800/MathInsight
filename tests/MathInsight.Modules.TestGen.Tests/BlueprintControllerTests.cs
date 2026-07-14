@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Commands.CloneBlueprint;
+using MathInsight.Modules.TestGen.Commands.CreateBlueprint;
 using MathInsight.Modules.TestGen.Commands.DeleteBlueprint;
 using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
 using MathInsight.Modules.TestGen.Commands.UpdateBlueprint;
@@ -153,6 +154,42 @@ public sealed class BlueprintControllerTests
         var objectResult = Assert.IsType<ConflictObjectResult>(result);
         Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
         Assert.Equal(BlueprintErrors.InUse.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
+    }
+
+    [Fact]
+    public async Task Create_TaxonomyError_MapsTo400AndUsesAccountClaim()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(x => x.Send(
+                It.Is<CreateBlueprintCommand>(command =>
+                    command.ExpertId == "controller-expert"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<CreateBlueprintResponse>.Failure(BlueprintErrors.TaxonomyInvalid));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.CreateBlueprint(ValidRequest(), CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(
+            BlueprintErrors.TaxonomyInvalid.Code,
+            Assert.IsType<ApiErrorResponse>(badRequest.Value).Code);
+        mediator.VerifyAll();
+    }
+
+    [Fact]
+    public async Task Create_StructureError_MapsTo422()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(x => x.Send(It.IsAny<CreateBlueprintCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<CreateBlueprintResponse>.Failure(BlueprintErrors.StructureInvalid));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.CreateBlueprint(ValidRequest(), CancellationToken.None);
+
+        var objectResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, objectResult.StatusCode);
     }
 
     private static BlueprintsController CreateController(IMediator mediator)

@@ -37,8 +37,16 @@ public sealed class GetBlueprintDetailQueryHandler
                 item.TotalQuestions,
                 item.DurationMinutes,
                 item.ExpertId,
+                _context.Accounts
+                    .Where(account => account.AccountId == item.ExpertId)
+                    .Select(account => account.FirstName + " " + account.LastName)
+                    .FirstOrDefault(),
                 item.Status,
                 item.ApprovedBy,
+                _context.Accounts
+                    .Where(account => account.AccountId == item.ApprovedBy)
+                    .Select(account => account.FirstName + " " + account.LastName)
+                    .FirstOrDefault(),
                 item.ReviewNote,
                 item.ReviewTime,
                 item.Sections

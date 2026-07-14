@@ -126,6 +126,7 @@ public sealed class TestGenModelMetadataTests
     }
 
     [Theory]
+    [InlineData(typeof(AccountReadModel), "Account")]
     [InlineData(typeof(ExpertReadModel), "Expert")]
     [InlineData(typeof(TagTopicReadModel), "TagTopic")]
     [InlineData(typeof(TagDifficultyReadModel), "TagDifficulty")]

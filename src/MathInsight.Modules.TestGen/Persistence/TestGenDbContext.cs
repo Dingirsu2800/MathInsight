@@ -16,6 +16,7 @@ public class TestGenDbContext : DbContext
     public DbSet<BlueprintDetail> BlueprintDetails => Set<BlueprintDetail>();
     public DbSet<Test> Tests => Set<Test>();
     public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
+    public DbSet<AccountReadModel> Accounts => Set<AccountReadModel>();
     public DbSet<ExpertReadModel> Experts => Set<ExpertReadModel>();
     public DbSet<TagTopicReadModel> TagTopics => Set<TagTopicReadModel>();
     public DbSet<TagDifficultyReadModel> TagDifficulties => Set<TagDifficultyReadModel>();

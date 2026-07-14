@@ -141,6 +141,81 @@ public sealed class BlueprintCreateAndReadTests
         Assert.Equal(BlueprintErrors.TaxonomyInvalid, result.Error);
     }
 
+    [Theory]
+    [InlineData(Grade11TopicId, EasyDifficultyId)]
+    [InlineData(InactiveTopicId, EasyDifficultyId)]
+    [InlineData(Grade12TopicId, InactiveDifficultyId)]
+    public async Task Create_InvalidTaxonomy_ReturnsTaxonomyInvalidWithoutWrites(
+        string topicId,
+        string difficultyId)
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = ValidRequest();
+        request.Sections[0].Details[0].TagId = topicId;
+        request.Sections[0].Details[0].DifficultyId = difficultyId;
+
+        var result = await CreateHandler(testContext).Handle(
+            new CreateBlueprintCommand(request, CurrentExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.TaxonomyInvalid, result.Error);
+        Assert.Empty(await testContext.Context.Blueprints.ToListAsync());
+        Assert.Empty(await testContext.Context.BlueprintSections.ToListAsync());
+        Assert.Empty(await testContext.Context.BlueprintDetails.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("section")]
+    [InlineData("detail")]
+    public async Task Create_DuplicateStructure_ReturnsStructureInvalidWithoutWrites(string duplicateKind)
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = ValidRequest();
+
+        if (duplicateKind == "section")
+        {
+            request.Sections.Add(new BlueprintSectionRequest
+            {
+                SectionOrder = request.Sections[0].SectionOrder,
+                SectionName = "Duplicate section order",
+                QuestionType = BlueprintQuestionTypes.SingleChoice,
+                TotalQuestions = 1,
+                DefaultPointPerQuestion = 1m,
+                Details =
+                [
+                    new BlueprintDetailRequest
+                    {
+                        TagId = Grade12TopicId,
+                        DifficultyId = EasyDifficultyId,
+                        Quantity = 1
+                    }
+                ]
+            });
+        }
+        else
+        {
+            request.Sections[0].Details.Add(new BlueprintDetailRequest
+            {
+                TagId = Grade12TopicId.ToUpperInvariant(),
+                DifficultyId = EasyDifficultyId.ToUpperInvariant(),
+                Quantity = 1
+            });
+        }
+
+        var result = await CreateHandler(testContext).Handle(
+            new CreateBlueprintCommand(request, CurrentExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.StructureInvalid, result.Error);
+        Assert.Empty(await testContext.Context.Blueprints.ToListAsync());
+        Assert.Empty(await testContext.Context.BlueprintSections.ToListAsync());
+        Assert.Empty(await testContext.Context.BlueprintDetails.ToListAsync());
+    }
+
     [Fact]
     public async Task List_IncludeDeactivated_OnlyRevealsCurrentExpertsHiddenRows()
     {
@@ -162,6 +237,7 @@ public sealed class BlueprintCreateAndReadTests
         Assert.Equal(["active-a", "active-b", "own-hidden"], result.Value.Items.Select(item => item.BlueprintId));
         Assert.Equal(2, result.Value.Items[0].SectionCount);
         Assert.Equal(2, result.Value.Items[0].DetailSlotCount);
+        Assert.Equal("Other Expert", result.Value.Items[0].ExpertName);
         Assert.DoesNotContain(result.Value.Items, item => item.BlueprintId == "other-hidden");
     }
 
@@ -197,6 +273,7 @@ public sealed class BlueprintCreateAndReadTests
             BlueprintStatuses.Draft,
             sectionCount: 2,
             reverseSectionOrder: true);
+        blueprint.ApprovedBy = OtherExpertId;
         await testContext.Context.SaveChangesAsync();
         var handler = new GetBlueprintDetailQueryHandler(testContext.Context);
 
@@ -205,6 +282,8 @@ public sealed class BlueprintCreateAndReadTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
+        Assert.Equal("Current Expert", result.Value!.ExpertName);
+        Assert.Equal("Other Expert", result.Value.ApprovedByName);
         Assert.Equal([1, 2], result.Value!.Sections.Select(section => section.SectionOrder));
         Assert.All(result.Value.Sections, section =>
         {
@@ -273,6 +352,19 @@ public sealed class BlueprintCreateAndReadTests
         testContext.Context.Experts.AddRange(
             new ExpertReadModel { ExpertId = CurrentExpertId },
             new ExpertReadModel { ExpertId = OtherExpertId });
+        testContext.Context.Accounts.AddRange(
+            new AccountReadModel
+            {
+                AccountId = CurrentExpertId,
+                FirstName = "Current",
+                LastName = "Expert"
+            },
+            new AccountReadModel
+            {
+                AccountId = OtherExpertId,
+                FirstName = "Other",
+                LastName = "Expert"
+            });
         testContext.Context.TagTopics.AddRange(
             new TagTopicReadModel
             {

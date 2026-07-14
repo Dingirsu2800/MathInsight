@@ -2,7 +2,7 @@
 
 **Feature Branch**: `testgen-blueprint`
 **Created**: 2026-06-23 | **Clarified**: 2026-07-14
-**Status**: Ready for Blueprint MVP implementation
+**Status**: Blueprint MVP backend complete; Expert frontend pending
 **Database Contract**: `Implementation/Database/database/001_Create_MathInsight_Azure.sql`
 
 ## Scope and Delivery Order
@@ -34,6 +34,7 @@ The Expert Blueprint MVP does not create or edit `Test` records. No database mig
 - The owner cannot review their own blueprint.
 - The pending-review list excludes the current Expert's own blueprints.
 - `ExpertID`, review actor ID, and clone owner ID always come from authenticated claims, never the request body.
+- Read responses expose nullable owner/reviewer display names resolved from `Account`; IDs remain the authorization source of truth.
 
 ## Current SQL Contract
 
@@ -108,6 +109,7 @@ Active or any blueprint linked to Test       -> Deactivated
 - **BP-11 Delete history**: unused `Draft`, `Rejected`, or `Approved` aggregates are hard-deleted. `PendingReview` returns 409. `Active` or any aggregate referenced by `Test` becomes `Deactivated`.
 - **BP-12 Candidate shape**: later generation filters approved active questions by detail `TagID`, `DifficultyID`, and section `QuestionType`.
 - **BP-13 Legacy exam**: pre-2025 multiple-choice structures use one `SingleChoice` section.
+- **BP-14 Commit verification**: SQL retry verifies the persisted post-condition after an ambiguous commit. Create/clone use stable operation IDs so retry cannot create duplicate aggregates.
 
 ## API Contract
 
@@ -142,6 +144,7 @@ List defaults: `pageIndex=1`, `pageSize=20`, maximum `pageSize=100`. Deactivated
 | `BLUEPRINT_REVIEW_NOTE_TOO_LONG` | 400 | Reject note exceeds 2000 characters |
 | `BLUEPRINT_TAXONOMY_INVALID` | 400 | Topic/difficulty missing, inactive, or wrong grade |
 | `BLUEPRINT_IN_USE` | 409 | Pending review or historical reference blocks hard delete |
+| `REQUEST_INVALID` | 400 | Malformed JSON or model-binding failure handled before the controller action |
 
 Frontend localizes these codes; backend messages remain developer-facing English.
 
@@ -158,6 +161,7 @@ Frontend localizes these codes; backend messages remain developer-facing English
 
 - EF mappings match the current SQL column names, types, nullability, statuses, and constraints without migration.
 - Create/update/clone are atomic at aggregate level.
+- SQL transient retry does not duplicate create/clone or report a false failure after a verified commit.
 - Submit catches both levels of total mismatch.
 - Self-review is blocked 100% of the time.
 - Pending list excludes the current Expert's own records.

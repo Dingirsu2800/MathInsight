@@ -33,6 +33,7 @@ public sealed class DeleteBlueprintCommandHandler
         return await BlueprintExecutionStrategy.ExecuteAsync(
             _context,
             () => ExecuteAsync(command, cancellationToken),
+            () => VerifySucceededAsync(command, cancellationToken),
             cancellationToken);
     }
 
@@ -105,5 +106,37 @@ public sealed class DeleteBlueprintCommandHandler
                 command.BlueprintId,
                 WasDeactivated: false,
                 Status: null));
+    }
+
+    private async Task<(bool IsSuccessful, Result<DeleteBlueprintResponse> Result)> VerifySucceededAsync(
+        DeleteBlueprintCommand command,
+        CancellationToken cancellationToken)
+    {
+        var persisted = await _context.Blueprints
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.BlueprintId == command.BlueprintId,
+                cancellationToken);
+
+        if (persisted is null)
+        {
+            return (true, Result<DeleteBlueprintResponse>.Success(
+                new DeleteBlueprintResponse(
+                    command.BlueprintId,
+                    WasDeactivated: false,
+                    Status: null)));
+        }
+
+        if (persisted.ExpertId == command.ExpertId &&
+            persisted.Status == BlueprintStatuses.Deactivated)
+        {
+            return (true, Result<DeleteBlueprintResponse>.Success(
+                new DeleteBlueprintResponse(
+                    command.BlueprintId,
+                    WasDeactivated: true,
+                    BlueprintStatuses.Deactivated)));
+        }
+
+        return (false, default!);
     }
 }

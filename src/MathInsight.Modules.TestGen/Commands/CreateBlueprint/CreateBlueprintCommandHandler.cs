@@ -1,6 +1,8 @@
 using MathInsight.Modules.TestGen.Blueprints;
+using MathInsight.Modules.TestGen.Commands.Common;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Persistence;
+using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Validation;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -40,10 +42,31 @@ public sealed class CreateBlueprintCommandHandler
 
         var blueprint = BlueprintAggregateFactory.Create(validationResult.Value!, command.ExpertId);
 
-        _context.Blueprints.Add(blueprint);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        return Result<CreateBlueprintResponse>.Success(
-            new CreateBlueprintResponse(blueprint.BlueprintId, blueprint.Status));
+        return await BlueprintExecutionStrategy.ExecuteAsync(
+            _context,
+            async () =>
+            {
+                _context.Blueprints.Add(blueprint);
+                await _context.SaveChangesAsync(cancellationToken);
+                return Success(blueprint);
+            },
+            async () =>
+            {
+                var persisted = await _context.Blueprints
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        item => item.BlueprintId == blueprint.BlueprintId,
+                        cancellationToken);
+                var succeeded = persisted is not null &&
+                    persisted.ExpertId == command.ExpertId &&
+                    persisted.Status == BlueprintStatuses.Draft;
+                return (succeeded, succeeded ? Success(persisted!) : default!);
+            },
+            cancellationToken);
     }
+
+    private static Result<CreateBlueprintResponse> Success(
+        Blueprint blueprint)
+        => Result<CreateBlueprintResponse>.Success(
+            new CreateBlueprintResponse(blueprint.BlueprintId, blueprint.Status));
 }

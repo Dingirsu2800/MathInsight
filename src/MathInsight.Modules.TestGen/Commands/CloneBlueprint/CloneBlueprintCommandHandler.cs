@@ -30,14 +30,20 @@ public sealed class CloneBlueprintCommandHandler
         if (string.IsNullOrWhiteSpace(command.ExpertId))
             return Result<CloneBlueprintResponse>.Failure(ApplicationErrors.AuthInvalidToken);
 
+        var cloneBlueprintId = Guid.NewGuid().ToString();
         return await BlueprintExecutionStrategy.ExecuteAsync(
             _context,
-            () => ExecuteAsync(command, cancellationToken),
+            () => ExecuteAsync(command, cloneBlueprintId, cancellationToken),
+            () => VerifySucceededAsync(
+                command,
+                cloneBlueprintId,
+                cancellationToken),
             cancellationToken);
     }
 
     private async Task<Result<CloneBlueprintResponse>> ExecuteAsync(
         CloneBlueprintCommand command,
+        string cloneBlueprintId,
         CancellationToken cancellationToken)
     {
         await using IDbContextTransaction? transaction = _context.Database.IsRelational()
@@ -65,7 +71,10 @@ public sealed class CloneBlueprintCommandHandler
         if (source is null || source.Status == BlueprintStatuses.Deactivated)
             return Result<CloneBlueprintResponse>.Failure(BlueprintErrors.NotFound);
 
-        var clone = BlueprintAggregateFactory.Clone(source, command.ExpertId);
+        var clone = BlueprintAggregateFactory.Clone(
+            source,
+            command.ExpertId,
+            cloneBlueprintId);
         _context.Blueprints.Add(clone);
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -74,5 +83,28 @@ public sealed class CloneBlueprintCommandHandler
 
         return Result<CloneBlueprintResponse>.Success(
             new CloneBlueprintResponse(clone.BlueprintId, clone.BlueprintName, clone.Status));
+    }
+
+    private async Task<(bool IsSuccessful, Result<CloneBlueprintResponse> Result)> VerifySucceededAsync(
+        CloneBlueprintCommand command,
+        string cloneBlueprintId,
+        CancellationToken cancellationToken)
+    {
+        var persisted = await _context.Blueprints
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.BlueprintId == cloneBlueprintId,
+                cancellationToken);
+        var succeeded = persisted is not null &&
+            persisted.ExpertId == command.ExpertId &&
+            persisted.Status == BlueprintStatuses.Draft;
+
+        return succeeded
+            ? (true, Result<CloneBlueprintResponse>.Success(
+                new CloneBlueprintResponse(
+                    persisted!.BlueprintId,
+                    persisted.BlueprintName,
+                    persisted.Status)))
+            : (false, default!);
     }
 }
