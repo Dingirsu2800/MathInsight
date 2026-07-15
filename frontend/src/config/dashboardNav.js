@@ -44,12 +44,6 @@ export const teacherNavItems = [
     icon: "folder"
   },
   {
-    label: "Thảo luận",
-    path: "/teacher/discussions",
-    icon: "forum",
-    disabled: true
-  },
-  {
     label: "Kiểm duyệt",
     path: "/teacher/moderation",
     icon: "verified_user"

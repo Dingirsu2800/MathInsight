@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import StudentLayout from "./StudentLayout";
-import { getLecture, getDiscussions, askQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment } from "../../services/learningApi";
+import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function StudentLectureDetailPage() {
@@ -13,6 +13,7 @@ export default function StudentLectureDetailPage() {
   const [discussions, setDiscussions] = useState([]);
   const [newQuestionTitle, setNewQuestionTitle] = useState("");
   const currentAccountId = localStorage.getItem("AccountId");
+  const userRole = localStorage.getItem("RoleName");
   
   const getFormatIcon = (format) => {
     const f = format?.toUpperCase() || "";
@@ -28,6 +29,10 @@ export default function StudentLectureDetailPage() {
   
   const [editingComment, setEditingComment] = useState(null);
   const [editContent, setEditContent] = useState("");
+  
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyContent, setReplyContent] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   const fetchDiscussionsData = async () => {
     try {
@@ -106,6 +111,22 @@ export default function StudentLectureDetailPage() {
       alert("Lỗi khi gửi câu hỏi!");
     } finally {
       setSubmittingQuestion(false);
+    }
+  };
+
+  const handleAnswerQuestion = async (questionId) => {
+    if (!replyContent.trim()) return;
+    setSubmittingReply(true);
+    try {
+      await answerQuestion(questionId, { content: replyContent });
+      setReplyContent("");
+      setReplyingTo(null);
+      await fetchDiscussionsData();
+    } catch (err) {
+      console.error("Lỗi khi gửi câu trả lời", err);
+      alert("Lỗi khi gửi câu trả lời!");
+    } finally {
+      setSubmittingReply(false);
     }
   };
 
@@ -366,6 +387,14 @@ export default function StudentLectureDetailPage() {
                         </h4>
                         <p className="text-[13px] text-on-surface-variant">{disc.timeAgo}</p>
                       </div>
+                      {(userRole === "Teacher" || userRole === "Admin") && (
+                        <button 
+                          onClick={() => setReplyingTo(replyingTo === disc.id ? null : disc.id)}
+                          className="px-3 py-1.5 bg-surface-variant text-on-surface-variant rounded-lg text-[13px] font-medium hover:bg-outline-variant transition-colors"
+                        >
+                          {replyingTo === disc.id ? "Hủy" : "Trả lời"}
+                        </button>
+                      )}
                     </div>
                     <h5 className="text-[16px] font-medium text-on-surface mt-2 mb-1">{disc.title}</h5>
                     {editingComment === disc.id ? (
@@ -378,6 +407,26 @@ export default function StudentLectureDetailPage() {
                       </div>
                     ) : (
                       <p className="text-[14px] text-on-surface-variant">{disc.content}</p>
+                    )}
+                    
+                    {replyingTo === disc.id && (
+                      <div className="mt-4 bg-surface-container-low p-4 rounded-xl border border-outline-variant">
+                        <textarea 
+                          className="w-full px-4 py-3 bg-pure-surface border border-outline-variant rounded-lg text-[14px] focus:ring-primary focus:border-primary resize-y min-h-[100px] mb-3"
+                          placeholder="Nhập câu trả lời của bạn..."
+                          value={replyContent}
+                          onChange={(e) => setReplyContent(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-3">
+                          <button 
+                            className="px-5 py-2 bg-primary text-on-primary rounded-lg text-[14px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                            onClick={() => handleAnswerQuestion(disc.id)}
+                            disabled={!replyContent.trim() || submittingReply}
+                          >
+                            {submittingReply ? "Đang gửi..." : "Gửi câu trả lời"}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

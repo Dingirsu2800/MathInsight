@@ -17,6 +17,7 @@ export default function LectureDetailPage() {
   
   const [editingComment, setEditingComment] = useState(null);
   const [editContent, setEditContent] = useState("");
+  const currentAccountId = localStorage.getItem("AccountId");
 
   const fetchDiscussionsData = async () => {
     try {
@@ -31,6 +32,7 @@ export default function LectureDetailPage() {
         status: d.status,
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
+          authorId: a.accountId,
           author: a.accountId || "Giáo viên",
           role: "Giáo viên",
           timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
@@ -83,22 +85,6 @@ export default function LectureDetailPage() {
     }
   };
 
-  const handleSubmitReport = async () => {
-    if (!reportModal.reason.trim()) return;
-    try {
-      const payload = {
-        discussionQuestionId: reportModal.isQuestion ? reportModal.targetId : null,
-        discussionAnswerId: reportModal.isQuestion ? null : reportModal.targetId,
-        reportReason: reportModal.reason
-      };
-      await reportDiscussion(payload);
-      alert("Đã gửi báo cáo vi phạm thành công!");
-      setReportModal({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
-    } catch (err) {
-      console.error("Lỗi khi gửi báo cáo:", err);
-      alert("Lỗi khi gửi báo cáo vi phạm!");
-    }
-  };
 
   const handleDeleteComment = async (id, isQuestion) => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
@@ -159,16 +145,20 @@ export default function LectureDetailPage() {
 
         {/* Lecture Card */}
         <article className="bg-pure-surface rounded-xl border border-whisper-border shadow-sm overflow-hidden mb-10">
-          {/* Video Placeholder */}
-          <div className="relative aspect-video bg-gradient-to-br from-primary-container to-secondary-container group cursor-pointer">
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
-            <button className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-pure-surface/90 rounded-full flex items-center justify-center text-primary shadow-lg group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-3xl ml-1" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
-            </button>
-            {/* Progress Bar */}
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-surface-variant">
-              <div className="h-full bg-primary w-[45%]"></div>
-            </div>
+          {/* Video Player */}
+          <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
+            {lecture.videoUrl ? (
+              <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+            ) : lecture.thumbnailUrl ? (
+              <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-tr from-surface-variant to-surface-container-high"></div>
+            )}
+            {!lecture.videoUrl && (
+              <button className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-pure-surface/90 rounded-full flex items-center justify-center text-primary shadow-lg group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-3xl ml-1" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
+              </button>
+            )}
           </div>
 
           <div className="p-8">
@@ -198,7 +188,6 @@ export default function LectureDetailPage() {
                 </div>
               </div>
               <div className="flex gap-4 ml-auto">
-                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">visibility</span> 1,204</span>
                 <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">chat_bubble</span> {discussions.length}</span>
               </div>
             </div>
@@ -261,20 +250,6 @@ export default function LectureDetailPage() {
               <div key={disc.id} className="bg-pure-surface rounded-xl border border-whisper-border p-6 relative group">
                 {/* Actions Question */}
                 <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
-                  <button onClick={() => startEdit(disc.id, disc.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
-                    <span className="material-symbols-outlined text-sm">edit</span>
-                  </button>
-                  <button onClick={() => handleDeleteComment(disc.id, true)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
-                    <span className="material-symbols-outlined text-sm">delete</span>
-                  </button>
-                  <div className="w-[1px] h-4 bg-outline-variant mx-1"></div>
-                  <button 
-                    onClick={() => setReportModal({ isOpen: true, targetId: disc.id, isQuestion: true, reason: "" })}
-                    className="text-on-surface-variant hover:text-[#f59e0b] p-1"
-                    title="Báo cáo vi phạm"
-                  >
-                    <span className="material-symbols-outlined text-sm">flag</span>
-                  </button>
                   <button 
                     onClick={() => handleHideComment(disc.id, true)}
                     className="text-on-surface-variant hover:text-error p-1"
@@ -316,27 +291,26 @@ export default function LectureDetailPage() {
                   <div key={ans.id} className="mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans">
                     {/* Actions Answer */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
-                      <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
-                        <span className="material-symbols-outlined text-sm">edit</span>
-                      </button>
-                      <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
-                      <div className="w-[1px] h-4 bg-outline-variant mx-1"></div>
-                      <button 
-                        onClick={() => setReportModal({ isOpen: true, targetId: ans.id, isQuestion: false, reason: "" })}
-                        className="text-on-surface-variant hover:text-[#f59e0b] p-1"
-                        title="Báo cáo vi phạm"
-                      >
-                        <span className="material-symbols-outlined text-sm">flag</span>
-                      </button>
-                      <button 
-                        onClick={() => handleHideComment(ans.id, false)}
-                        className="text-on-surface-variant hover:text-error p-1"
-                        title="Ẩn bình luận"
-                      >
-                        <span className="material-symbols-outlined text-sm">visibility_off</span>
-                      </button>
+                      {ans.authorId === currentAccountId && (
+                        <>
+                          <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                          </button>
+                          <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                          <div className="w-[1px] h-4 bg-outline-variant mx-1"></div>
+                        </>
+                      )}
+                      {ans.authorId !== currentAccountId && (
+                        <button 
+                          onClick={() => handleHideComment(ans.id, false)}
+                          className="text-on-surface-variant hover:text-error p-1"
+                          title="Ẩn bình luận"
+                        >
+                          <span className="material-symbols-outlined text-sm">visibility_off</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center font-medium shrink-0">
@@ -383,49 +357,6 @@ export default function LectureDetailPage() {
           </div>
         </section>
       </div>
-
-      {/* Report Modal */}
-      {reportModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm" onClick={() => setReportModal({ ...reportModal, isOpen: false })}></div>
-          <div className="relative bg-pure-surface w-full max-w-md rounded-xl shadow-lg border border-outline-variant flex flex-col m-4">
-            <div className="px-6 py-4 border-b border-whisper-border flex justify-between items-center">
-              <h3 className="text-[20px] font-semibold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#f59e0b]">flag</span>
-                Báo cáo vi phạm
-              </h3>
-              <button className="text-on-surface-variant hover:text-on-surface transition-colors" onClick={() => setReportModal({ ...reportModal, isOpen: false })}>
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6">
-              <p className="text-[14px] text-on-surface-variant mb-4">Vui lòng cung cấp lý do báo cáo bình luận này. Quản trị viên sẽ xem xét và xử lý.</p>
-              <textarea 
-                className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-3 text-[14px] focus:ring-primary focus:border-primary resize-y min-h-[100px]"
-                placeholder="Lý do báo cáo (VD: Ngôn từ đả kích, Spam, ...)"
-                value={reportModal.reason}
-                onChange={(e) => setReportModal({ ...reportModal, reason: e.target.value })}
-                autoFocus
-              />
-            </div>
-            <div className="px-6 py-4 bg-surface-container-low border-t border-whisper-border flex justify-end gap-3 rounded-b-xl">
-              <button 
-                className="px-4 py-2 border border-outline-variant rounded-lg text-[16px] font-medium text-on-surface hover:bg-surface-variant transition-colors"
-                onClick={() => setReportModal({ ...reportModal, isOpen: false })}
-              >
-                Hủy
-              </button>
-              <button 
-                className="px-4 py-2 bg-primary rounded-lg text-[16px] font-medium text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
-                onClick={handleSubmitReport}
-                disabled={!reportModal.reason.trim()}
-              >
-                Gửi báo cáo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </TeacherLayout>
   );
