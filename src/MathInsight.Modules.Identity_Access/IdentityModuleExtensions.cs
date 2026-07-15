@@ -26,6 +26,13 @@ public static class IdentityModuleExtensions
         // Teacher certificates are stored via the shared blob/image storage (BR-05).
         services.AddScoped<ICertificateStorage, BlobCertificateStorage>();
 
+        // Google OAuth 2.0 (UC-07, Flow A). Secrets come from the GoogleOAuth section
+        // (environment variables / user secrets). A typed HttpClient handles the token exchange.
+        var googleOptions = configuration.GetSection(GoogleOAuthOptions.SectionName).Get<GoogleOAuthOptions>()
+            ?? new GoogleOAuthOptions();
+        services.AddSingleton(googleOptions);
+        services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
+
         // Email delivery: real SMTP (MailKit) when configured, otherwise a logging fallback so
         // local development runs without SMTP credentials.
         var smtpOptions = configuration.GetSection(SmtpOptions.SectionName).Get<SmtpOptions>() ?? new SmtpOptions();
@@ -59,6 +66,9 @@ public static class IdentityModuleExtensions
 
             // Password-reset tokens (UC-06, password:reset:{token}, 15m TTL).
             services.AddScoped<IPasswordResetTokenStore, RedisPasswordResetTokenStore>();
+
+            // Google OAuth CSRF state (UC-07, oauth:state:{state}, 10m TTL).
+            services.AddScoped<IOAuthStateStore, RedisOAuthStateStore>();
         }
         else
         {
@@ -70,6 +80,9 @@ public static class IdentityModuleExtensions
 
             // In-memory fallback for reset tokens; singleton so they survive across requests.
             services.AddSingleton<IPasswordResetTokenStore, InMemoryPasswordResetTokenStore>();
+
+            // In-memory fallback for OAuth state; singleton so it survives across requests.
+            services.AddSingleton<IOAuthStateStore, InMemoryOAuthStateStore>();
         }
 
         return services;

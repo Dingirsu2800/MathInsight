@@ -1,28 +1,13 @@
 import * as React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import client from "../services/questionBankApiClient";
 import { setAuthSession } from "../services/authStorage";
-import { mapAuthError } from "../services/authErrors";
+import { mapAuthError, mapOAuthUrlError } from "../services/authErrors";
+import { resolveHomePath } from "../utils/roleRoutes";
 
 const LOGIN_FALLBACK_ERROR = "Đăng nhập thất bại. Vui lòng thử lại sau.";
 
 const REMEMBERED_EMAIL_KEY = "remembered_email";
-
-// Landing page per role after a successful login.
-function resolveHomePath(roleName) {
-  switch (String(roleName || "").toLowerCase()) {
-    case "student":
-      return "/student";
-    case "teacher":
-      return "/teacher";
-    case "expert":
-      return "/expert/questions";
-    case "admin":
-      return "/admin";
-    default:
-      return "/";
-  }
-}
 
 function GoogleLogo() {
   return (
@@ -37,6 +22,7 @@ function GoogleLogo() {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -52,6 +38,14 @@ export default function LoginPage() {
       setRememberMe(true);
     }
   }, []);
+
+  // Surface a Google OAuth failure passed back as ?error=google_failed by the backend redirect.
+  React.useEffect(() => {
+    const oauthError = searchParams.get("error");
+    if (oauthError) {
+      setError(mapOAuthUrlError(oauthError));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -213,18 +207,16 @@ export default function LoginPage() {
           <div className="flex-1 h-px bg-slate-200"></div>
         </div>
 
-        {/* Google (not implemented yet) */}
+        {/* Google — starts the backend Authorization Code flow (full-page redirect). */}
         <button
           type="button"
-          disabled
-          title="Sắp có"
-          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 cursor-not-allowed opacity-70"
+          onClick={() => {
+            window.location.href = `${client.defaults.baseURL}/api/v1/auth/google`;
+          }}
+          className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
         >
           <GoogleLogo />
           Google
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-            Sắp có
-          </span>
         </button>
 
         {/* Register */}

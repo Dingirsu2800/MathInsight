@@ -1,14 +1,18 @@
 using MediatR;
 using MathInsight.Modules.Identity_Access.Commands.ConfirmEmail;
 using MathInsight.Modules.Identity_Access.Commands.ConfirmResetPassword;
+using MathInsight.Modules.Identity_Access.Commands.GoogleCallback;
 using MathInsight.Modules.Identity_Access.Commands.Login;
 using MathInsight.Modules.Identity_Access.Commands.RefreshToken;
 using MathInsight.Modules.Identity_Access.Commands.Register;
 using MathInsight.Modules.Identity_Access.Commands.ResetPassword;
 using MathInsight.Modules.Identity_Access.Contracts;
 using MathInsight.Modules.Identity_Access.Contracts.Auth;
+using MathInsight.Modules.Identity_Access.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.IdentityModel.Tokens.Jwt;
 using MathInsight.Modules.Identity_Access.Commands.Logout;
 using MathInsight.Shared.Results;
@@ -20,10 +24,26 @@ namespace MathInsight.Modules.Identity_Access.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IOAuthStateStore _oauthStateStore;
+    private readonly IGoogleOAuthService _googleOAuthService;
+    private readonly GoogleOAuthOptions _googleOptions;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IMediator mediator)
+    public AuthController(
+        IMediator mediator,
+        IOAuthStateStore oauthStateStore,
+        IGoogleOAuthService googleOAuthService,
+        GoogleOAuthOptions googleOptions,
+        IConfiguration configuration,
+        ILogger<AuthController> logger)
     {
         _mediator = mediator;
+        _oauthStateStore = oauthStateStore;
+        _googleOAuthService = googleOAuthService;
+        _googleOptions = googleOptions;
+        _configuration = configuration;
+        _logger = logger;
     }
 
     [HttpPost("login")]
@@ -58,6 +78,94 @@ public class AuthController : ControllerBase
         }
 
         return Ok(result.Value);
+    }
+
+    // UC-07 (Flow A). Builds the Google consent URL with a server-side CSRF state and redirects
+    // the browser to Google. Public.
+    [HttpGet("google")]
+    public async Task<IActionResult> GoogleLogin(CancellationToken cancellationToken)
+    {
+        var state = await _oauthStateStore.CreateAsync(cancellationToken);
+        var authorizationUrl = _googleOAuthService.BuildAuthorizationUrl(state);
+
+        // Diagnostic: ClientId comes from config (GoogleOAuth:ClientId). If it is empty, the URL
+        // builder drops client_id and Google returns "Missing required parameter: client_id".
+        _logger.LogInformation(
+            "Google OAuth start — ClientId='{ClientId}' (length={Length}), authorization URL: {Url}",
+            _googleOptions.ClientId,
+            _googleOptions.ClientId?.Length ?? 0,
+            authorizationUrl);
+
+        if (string.IsNullOrEmpty(_googleOptions.ClientId))
+        {
+            _logger.LogError(
+                "GoogleOAuth:ClientId is EMPTY at runtime. Set GoogleOAuth__ClientId (and __ClientSecret) " +
+                "in the environment feeding the process (docker-compose defaults it to empty via " +
+                "${{GoogleOAuth__ClientId:-}}, so the .env file must define it).");
+        }
+
+        return Redirect(authorizationUrl);
+    }
+
+    // UC-07 callback (the redirect URI registered in the Google Console). Verifies the CSRF state,
+    // exchanges the code for tokens, and redirects the browser back to the frontend — carrying the
+    // issued tokens on success, or ?error=google_failed on any failure. Public.
+    [HttpGet("google/callback")]
+    public async Task<IActionResult> GoogleCallback(
+            [FromQuery] string? code,
+            [FromQuery] string? state,
+            [FromQuery] string? error,
+            CancellationToken cancellationToken)
+    {
+        var frontendBaseUrl = (_configuration["FrontendBaseUrl"] ?? string.Empty).TrimEnd('/');
+        var failureRedirect = $"{frontendBaseUrl}/login?error=google_failed";
+
+        // The user denied consent, Google returned an error, or required parameters are missing.
+        if (!string.IsNullOrEmpty(error) ||
+            string.IsNullOrWhiteSpace(code) ||
+            string.IsNullOrWhiteSpace(state))
+        {
+            _logger.LogWarning(
+                "Google callback rejected before handler — googleError={Error}, hasCode={HasCode}, hasState={HasState}.",
+                error, !string.IsNullOrWhiteSpace(code), !string.IsNullOrWhiteSpace(state));
+            return Redirect(failureRedirect);
+        }
+
+        // CSRF: the state must match a value we issued and have not yet consumed (single-use).
+        if (!await _oauthStateStore.ConsumeAsync(state, cancellationToken))
+        {
+            _logger.LogWarning("Google callback: CSRF state did not match or was already consumed.");
+            return Redirect(failureRedirect);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(new GoogleOAuthCallbackCommand(code), cancellationToken);
+
+            if (result.IsFailure)
+            {
+                _logger.LogWarning(
+                    "Google callback: handler returned failure — code={Code}, message={Message}.",
+                    result.Error?.Code, result.Error?.Message);
+                return Redirect(failureRedirect);
+            }
+
+            var login = result.Value!;
+            var successRedirect =
+                $"{frontendBaseUrl}/auth/google/success" +
+                $"?accessToken={Uri.EscapeDataString(login.AccessToken)}" +
+                $"&refreshToken={Uri.EscapeDataString(login.RefreshToken)}" +
+                $"&role={Uri.EscapeDataString(login.RoleName)}";
+
+            return Redirect(successRedirect);
+        }
+        catch (Exception ex)
+        {
+            // Never let an exception surface as an unhandled 500 to the browser mid-redirect;
+            // log it and fail closed to the frontend login page.
+            _logger.LogError(ex, "Google callback: unhandled exception while resolving the account or issuing tokens.");
+            return Redirect(failureRedirect);
+        }
     }
 
     [HttpPost("reset-password")]

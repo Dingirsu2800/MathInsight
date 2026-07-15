@@ -15,9 +15,21 @@ export const AUTH_ERROR_MESSAGES = {
   AUTH_TOKEN_INVALID: "Liên kết không hợp lệ.",
   AUTH_EMAIL_ALREADY_CONFIRMED: "Email này đã được xác nhận. Vui lòng đăng nhập.",
   AUTH_CERTIFICATE_INVALID: "Chứng chỉ không hợp lệ.",
+  AUTH_GOOGLE_FAILED: "Đăng nhập bằng Google thất bại. Vui lòng thử lại.",
 };
 
 export const GENERIC_AUTH_ERROR = "Đã có lỗi xảy ra. Vui lòng thử lại sau.";
+
+// The Google OAuth flow is a browser redirect, so a failure arrives as a ?error= query value
+// on /login (not an axios { code } body). Map those values onto the shared message map.
+const OAUTH_URL_ERROR_CODES = {
+  google_failed: "AUTH_GOOGLE_FAILED",
+};
+
+export function mapOAuthUrlError(errorParam) {
+  const code = OAUTH_URL_ERROR_CODES[errorParam];
+  return (code && AUTH_ERROR_MESSAGES[code]) || GENERIC_AUTH_ERROR;
+}
 
 // Pull the backend error code out of an axios error, tolerating camel/Pascal casing.
 export function getAuthErrorCode(err) {

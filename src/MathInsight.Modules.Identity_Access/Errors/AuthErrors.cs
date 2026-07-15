@@ -21,6 +21,12 @@ public static class AuthErrors
         AuthErrorCodes.AccountDeactivated,
         "This account has been deactivated.");
 
+    // UC-07: any Google OAuth failure (code exchange, unverified email). The controller redirects
+    // to the frontend with ?error=google_failed; the specific code is not surfaced to the browser.
+    public static readonly Error GoogleAuthFailed = new(
+        AuthErrorCodes.GoogleAuthFailed,
+        "Google authentication failed.");
+
     public static readonly Error ApplicationPending = new(
         AuthErrorCodes.ApplicationPending,
         "Teacher application is awaiting Admin review.");

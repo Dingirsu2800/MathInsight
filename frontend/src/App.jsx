@@ -11,6 +11,7 @@ import RegisterStudentPage from './pages/RegisterStudentPage.jsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+import GoogleSuccessPage from './pages/GoogleSuccessPage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/confirm-email" element={<ConfirmEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/auth/google/success" element={<GoogleSuccessPage />} />
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route
         path="/student/test"

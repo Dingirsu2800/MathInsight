@@ -34,4 +34,7 @@ public static class AuthErrorCodes
 
     /// <summary>Teacher certificate rejected (wrong type or too large, BR-05). HTTP 400.</summary>
     public const string CertificateInvalid = "AUTH_CERTIFICATE_INVALID";
+
+    /// <summary>Google OAuth failed: code exchange error, or the Google email is unverified (UC-07).</summary>
+    public const string GoogleAuthFailed = "AUTH_GOOGLE_FAILED";
 }

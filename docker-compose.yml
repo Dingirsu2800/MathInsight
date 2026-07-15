@@ -43,6 +43,9 @@ services:
       Smtp__FromName: MathInsight
       Smtp__EnableSsl: "true"
       FrontendBaseUrl: ${FrontendBaseUrl:-http://localhost:5173}
+      GoogleOAuth__ClientId: ${GoogleOAuth__ClientId:-}
+      GoogleOAuth__ClientSecret: ${GoogleOAuth__ClientSecret:-}
+      GoogleOAuth__RedirectUri: http://localhost:8080/api/v1/auth/google/callback
     restart: on-failure
 
   frontend:
