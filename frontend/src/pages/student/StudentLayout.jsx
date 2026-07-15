@@ -1,0 +1,43 @@
+import * as React from "react";
+import { useNavigate } from "react-router-dom";
+import DashboardLayout from "../../components/layout/DashboardLayout";
+import { studentNavItems } from "../../config/dashboardNav";
+
+export default function StudentLayout({ children }) {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("AccountId");
+    localStorage.removeItem("RoleName");
+    navigate("/login");
+  };
+
+  const topNavItems = [
+    { label: "Trang chủ", to: "/student/dashboard" },
+    { label: "Cộng đồng", to: "/student/community", disabled: true }
+  ];
+
+  return (
+    <DashboardLayout
+      brandName="MathInsight"
+      roleLabel="Học sinh"
+      appTitle="Hệ thống Học tập & Đánh giá"
+      navItems={studentNavItems}
+      topNavItems={topNavItems}
+      userName="Học sinh"
+      userRoleLabel="Student"
+      userInitials="HS"
+      profilePath="/student/profile"
+      primaryAction={{
+        label: "Làm bài tập",
+        icon: "play_arrow",
+        to: "/student/test"
+      }}
+      onLogout={handleLogout}
+    >
+      {children}
+    </DashboardLayout>
+  );
+}

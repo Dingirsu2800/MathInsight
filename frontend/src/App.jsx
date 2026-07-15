@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import StudentDashboard from './pages/student/Dashboard.jsx';
+import StudentLectureListPage from './pages/student/StudentLectureListPage.jsx';
+import StudentLectureDetailPage from './pages/student/StudentLectureDetailPage.jsx';
 import TestSession from './pages/student/TestSession.jsx';
 import QuestionBankListPage from './pages/expert/QuestionBankListPage.jsx';
 import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
@@ -34,6 +36,8 @@ export default function App() {
           />
         }
       />
+      <Route path="/student/lectures" element={<StudentLectureListPage />} />
+      <Route path="/student/lectures/:id" element={<StudentLectureDetailPage />} />
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
         {/* Expert Routes */}

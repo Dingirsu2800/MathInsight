@@ -61,3 +61,28 @@ export const teacherNavItems = [
     disabled: true
   }
 ];
+
+export const studentNavItems = [
+  {
+    label: "Bảng điều khiển",
+    path: "/student/dashboard",
+    icon: "dashboard"
+  },
+  {
+    label: "Học bài",
+    path: "/student/lectures",
+    icon: "menu_book"
+  },
+  {
+    label: "Kiểm tra",
+    path: "/student/test",
+    icon: "quiz",
+    disabled: true
+  },
+  {
+    label: "Hồ sơ của tôi",
+    path: "/student/profile",
+    icon: "person",
+    disabled: true
+  }
+];

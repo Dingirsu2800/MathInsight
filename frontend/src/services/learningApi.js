@@ -66,6 +66,12 @@ export const resolveReport = (reportId, isDismissed) =>
 export const hideComment = (id, isQuestion) =>
   client.post(`/api/v1/discussions/comments/${id}/hide`, { isQuestion });
 
+export const updateComment = (id, isQuestion, content) =>
+  client.put(`/api/v1/discussions/comments/${id}`, { isQuestion, content });
+
+export const deleteComment = (id, isQuestion) =>
+  client.delete(`/api/v1/discussions/comments/${id}`, { params: { isQuestion } });
+
 // ── Topics ────────────────────────────────────────────
 export const getTopics = (grade) =>
   client.get('/api/v1/topics', { params: { grade } });
