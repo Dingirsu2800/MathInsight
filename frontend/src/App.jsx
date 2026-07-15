@@ -7,6 +7,11 @@ import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
 import TagManagementPage from './pages/expert/TagManagementPage.jsx';
 import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import RegisterStudentPage from './pages/RegisterStudentPage.jsx';
+import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 
@@ -16,6 +21,10 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterStudentPage />} />
+      <Route path="/confirm-email" element={<ConfirmEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route
         path="/student/test"
@@ -26,6 +35,12 @@ export default function App() {
           />
         }
       />
+      {/* Role landing pages (placeholders until their dashboards are built) */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/student" element={<PlaceholderPage showLogout title="Không gian học tập" description="Trang tổng quan học sinh đang được phát triển." />} />
+        <Route path="/teacher" element={<PlaceholderPage showLogout title="Không gian giáo viên" description="Trang tổng quan giáo viên đang được phát triển." />} />
+        <Route path="/admin" element={<PlaceholderPage showLogout title="Quản trị hệ thống" description="Trang quản trị đang được phát triển." />} />
+      </Route>
       {/* Expert Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/expert/questions" element={<QuestionBankListPage />} />

@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import { CustomSelect } from "../../components/ui/custom-select";
 import { questionBankApi } from "../../services/questionBankApi";
+import { getAccountId } from "../../services/authStorage";
 import { mapQuestionListItemToViewModel, mapQuestionDetailToViewModel, flattenTopicTree } from "./questionMappers";
 import {
   getQuestionTypeLabel,
@@ -55,7 +56,7 @@ export default function QuestionBankListPage() {
   const [error, setError] = React.useState(null);
   const [usingMockData, setUsingMockData] = React.useState(false);
 
-  const currentAccountId = localStorage.getItem("AccountId");
+  const currentAccountId = getAccountId();
 
   // Delete states
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = React.useState(false);
