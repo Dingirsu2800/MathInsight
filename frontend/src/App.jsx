@@ -6,6 +6,7 @@ import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
 import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
 import TagManagementPage from './pages/expert/TagManagementPage.jsx';
 import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
+import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterStudentPage from './pages/RegisterStudentPage.jsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
@@ -14,13 +15,26 @@ import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import GoogleSuccessPage from './pages/GoogleSuccessPage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
+import { getAccessToken, getRoleName } from './services/authStorage.js';
+import { resolveHomePath } from './utils/roleRoutes.js';
 
-
+// "/" shows the marketing landing page for visitors, but sends an already
+// authenticated user straight to their role home so they skip the marketing page.
+function HomeRoute() {
+  if (getAccessToken()) {
+    const home = resolveHomePath(getRoleName());
+    // resolveHomePath falls back to "/" for unknown roles — guard against a redirect loop.
+    if (home !== '/') {
+      return <Navigate to={home} replace />;
+    }
+  }
+  return <LandingPage />;
+}
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<HomeRoute />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterStudentPage />} />
       <Route path="/confirm-email" element={<ConfirmEmailPage />} />
