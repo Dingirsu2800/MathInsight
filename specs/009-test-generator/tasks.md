@@ -95,13 +95,13 @@
 
 ## Phase 6: Expert Frontend
 
-- [ ] Blueprint list with All/Mine/Pending views and status, grade, and search filters.
-- [ ] Full-page Blueprint editor for sections and detail slots.
-- [ ] Load active topic/difficulty catalogs from existing QuestionBank APIs.
-- [ ] Blueprint detail view with state/ownership-aware actions.
-- [ ] Confirm destructive delete/deactivate actions.
-- [ ] Map backend error codes to Vietnamese; never show backend English messages directly.
-- [ ] Run `npm run build` and desktop workflow smoke tests.
+- [x] Blueprint list with All/Mine/Pending views and status, grade, and search filters.
+- [x] Full-page Blueprint editor for sections and detail slots.
+- [x] Load active topic/difficulty catalogs from existing QuestionBank APIs.
+- [x] Blueprint detail view with state/ownership-aware actions.
+- [x] Confirm destructive delete/deactivate actions.
+- [x] Map backend error codes to Vietnamese; never show backend English messages directly.
+- [x] Run `npm run build` and desktop workflow smoke tests.
 
 ## Phase 7: Backend Verification
 

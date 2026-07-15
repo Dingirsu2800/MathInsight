@@ -6,6 +6,9 @@ Run after: 001_Create_MathInsight_Azure.sql
 WARNING: Creates predictable development accounts whose password is "password".
 Do not run this file against a production database.
 The script is idempotent and may be run again on the same development database.
+
+When using sqlcmd, disable variable substitution and force UTF-8 input:
+    sqlcmd ... -x -f 65001 -i database/002_Seed_MathInsight_Demo.sql
 ==========================================================
 */
 
@@ -64,6 +67,7 @@ MERGE [Account] AS target
 USING (VALUES
     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', N'admin',      @PasswordHash, 'admin@mathinsight.local',      N'Admin',   N'User',    @AdminRoleId,   CAST(1 AS BIT)),
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', N'expert_01',  @PasswordHash, 'expert01@mathinsight.local',   N'Expert',  N'One',     @ExpertRoleId,  CAST(1 AS BIT)),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', N'expert_02',  @PasswordHash, 'expert02@mathinsight.local',   N'Expert',  N'Two',     @ExpertRoleId,  CAST(1 AS BIT)),
     ('cccccccc-cccc-cccc-cccc-cccccccccccc', N'teacher_01', @PasswordHash, 'teacher01@mathinsight.local',  N'Teacher', N'One',     @TeacherRoleId, CAST(1 AS BIT)),
     ('dddddddd-dddd-dddd-dddd-dddddddddddd', N'student_01', @PasswordHash, 'student01@mathinsight.local',  N'Student', N'One',     @StudentRoleId, CAST(1 AS BIT)),
     ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', N'student_02', @PasswordHash, 'student02@mathinsight.local',  N'Student', N'Two',     @StudentRoleId, CAST(1 AS BIT))
@@ -83,7 +87,8 @@ WHEN NOT MATCHED THEN
 
 MERGE [Expert] AS target
 USING (VALUES
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Mathematics')
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Mathematics'),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'Mathematics')
 ) AS source ([ExpertID], [Specialty])
 ON target.[ExpertID] = source.[ExpertID]
 WHEN MATCHED THEN
@@ -129,7 +134,7 @@ SELECT
     [isActive],
     [RoleID]
 FROM [Account]
-WHERE [Username] IN (N'admin', N'expert_01', N'teacher_01', N'student_01', N'student_02')
+WHERE [Username] IN (N'admin', N'expert_01', N'expert_02', N'teacher_01', N'student_01', N'student_02')
 ORDER BY [Username];
 
 GO

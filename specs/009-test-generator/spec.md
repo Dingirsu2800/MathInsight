@@ -2,7 +2,7 @@
 
 **Feature Branch**: `testgen-blueprint`
 **Created**: 2026-06-23 | **Clarified**: 2026-07-14
-**Status**: Blueprint MVP backend complete; Expert frontend pending
+**Status**: Expert Blueprint MVP complete
 **Database Contract**: `Implementation/Database/database/001_Create_MathInsight_Azure.sql`
 
 ## Scope and Delivery Order
@@ -155,6 +155,22 @@ Frontend localizes these codes; backend messages remain developer-facing English
 - `TestQuestion` stores ordering plus `SourceBlueprintDetailID` and recommendation audit fields.
 - TestGen owns read models for QuestionBank taxonomy/questions and marks them `ExcludeFromMigrations()`.
 - TestGen calls the existing in-process Recommender service. `RecommendedDifficultyLevel` is resolved through `TagDifficulty.LevelValue`; it is never compared directly with `DifficultyID`.
+- **BR-52 Expert ownership of generated tests**: experts do not directly create, update, or delete `Test` or `TestQuestion` records in MVP. Experts manage `Question` and `Blueprint` data; the backend GenerationEngine creates generated test records.
+- **BR-53 Optional test code**: `TestCode` is generated only for shareable or code-entry tests; personal adaptive and recommendation sessions keep `TestCode = NULL`.
+- **BR-51 Composite metadata**: composite sections must define their part metadata before generation; non-composite sections leave that metadata null.
+- **BR-50 Question type filtering**: generated candidates must match the `QuestionType` declared by their blueprint section.
+- The generation engine applies the following adaptive constraints:
+  - **WeakTag Cap**: WeakTag-biased questions may occupy at most 20% of a generated test.
+  - **Adaptive Bias Probability**: for each matching blueprint slot, WeakTag question selection has a 40% bias probability.
+  - **Difficulty Downscaling**: a `Hard` or `Very Hard` slot for a WeakTag topic (`official_point < 5.00`) is selected at `Medium`; a `Medium` slot for a topic with `official_point < 3.00` is selected at `Easy`.
+  - **Difficulty Upscaling**: when `official_point >= 8.00` and `mastery_status = Mastered`, the engine may select one difficulty level higher.
+  - **Easy-Level Protection**: when `official_point < 5.00` at `Easy`, bias probability is reduced to 10%, no further downscaling is applied, and foundational learning content is prioritized.
+- **Student Practice and Exam Flow**: later student endpoints expose two initial formats:
+  - **Exam Mode**: a full-length session generated from an approved blueprint.
+  - **Practice Mode**: exactly 10 questions targeting one diagnosed WeakTag topic, using that topic's `RecommendedDifficultyLevel`.
+- **BR-54 Student Practice and Exam Flow**: after an Exam session is completed and the student's WeakTags are updated, the student may choose:
+  - **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: generate a new `Exam` session from the original blueprint structure, retaining its sections and slot quantities while applying adaptive adjustments such as WeakTag Cap, Adaptive Bias, and Difficulty Downscaling based on the student's latest results and current level.
+  - **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: generate a `Practice` session of exactly 10 questions for a selected WeakTag topic. Answers update the topic's practice point using the Elo-inspired formula; the practice series then applies the defined blend/reset behavior.
 - Generation and Student endpoints are intentionally outside the current Expert Blueprint checkpoint.
 
 ## Acceptance Criteria
