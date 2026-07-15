@@ -22,6 +22,7 @@ using MathInsight.Modules.QuestionBank.Ocr;
 using MathInsight.Shared.Results;
 using MathInsight.Shared.Storage;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Mvc;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -108,7 +109,14 @@ builder.Services.AddLearningModule(builder.Configuration);
 builder.Services.AddGamificationModule(builder.Configuration);
 builder.Services.AddNotificationModule(builder.Configuration);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = _ =>
+            new BadRequestObjectResult(
+                new ApiErrorResponse(ApplicationErrors.RequestInvalid));
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRateLimiter(options =>
 {

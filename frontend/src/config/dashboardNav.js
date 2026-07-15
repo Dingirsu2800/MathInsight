@@ -15,6 +15,11 @@ export const expertNavItems = [
     ]
   },
   {
+    label: "Cấu trúc đề",
+    path: "/expert/blueprints",
+    icon: "description"
+  },
+  {
     label: "Quản lý Tag",
     path: "/expert/tags",
     icon: "category"

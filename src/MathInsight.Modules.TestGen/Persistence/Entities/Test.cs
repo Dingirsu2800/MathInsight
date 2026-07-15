@@ -1,5 +1,3 @@
-using System;
-
 namespace MathInsight.Modules.TestGen.Persistence.Entities;
 
 /// <summary>
@@ -8,21 +6,18 @@ namespace MathInsight.Modules.TestGen.Persistence.Entities;
 /// </summary>
 public class Test
 {
-    public Guid TestId { get; set; }
-    public Guid? BlueprintId { get; set; }
-    
-    /// <summary>Practice | Exam</summary>
-    public string TestFormat { get; set; } = "Exam";
-    
-    public Guid? GeneratedForStudentId { get; set; }
+    public string TestId { get; set; } = string.Empty;
+    public string? BlueprintId { get; set; }
+    public string TestStatus { get; set; } = "Active";
+    public string TestMode { get; set; } = "BlueprintExam";
+    public string? GeneratedForStudentId { get; set; }
     public string GeneratedBy { get; set; } = "System";
     public string TestName { get; set; } = string.Empty;
     public string? TestCode { get; set; }
     public int DurationMinutes { get; set; }
     public int TotalQuestions { get; set; }
-    
-    /// <summary>ACTIVE | ARCHIVED</summary>
-    public string TestStatus { get; set; } = "ACTIVE";
-    
     public DateTime CreatedTime { get; set; } = DateTime.UtcNow;
+
+    public Blueprint? Blueprint { get; set; }
+    public ICollection<TestQuestion> Questions { get; set; } = new List<TestQuestion>();
 }
