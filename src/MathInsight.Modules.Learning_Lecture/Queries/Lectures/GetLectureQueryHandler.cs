@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,16 +31,23 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
 
         if (lecture == null) throw new Exception("Lecture not found");
 
-        if (!string.IsNullOrEmpty(request.StudentId) && lecture.Status == "Published")
+        bool isLiked = false;
+        if (!string.IsNullOrEmpty(request.StudentId))
         {
-            // Background event publish for activity logging
-            _ = _mediator.Publish(new ActivityLoggedEvent(
-                StudentId: request.StudentId,
-                ActivityType: "VIEW_LECTURE",
-                LectureId: request.LectureId,
-                MaterialId: null,
-                DurationSeconds: 0
-            ), cancellationToken);
+            if (lecture.Status == "Published")
+            {
+                // Background event publish for activity logging
+                _ = _mediator.Publish(new ActivityLoggedEvent(
+                    StudentId: request.StudentId,
+                    ActivityType: "VIEW_LECTURE",
+                    LectureId: request.LectureId,
+                    MaterialId: null,
+                    DurationSeconds: 0
+                ), cancellationToken);
+            }
+
+            isLiked = await _dbContext.LectureLikes
+                .AnyAsync(l => l.LectureId == request.LectureId && l.StudentId == request.StudentId, cancellationToken);
         }
 
         return new LectureDto
@@ -53,6 +60,7 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
             Likes = lecture.Likes,
             TeacherId = lecture.TeacherId,
             TagId = lecture.TagId,
+            IsLiked = isLiked,
             Status = lecture.Status,
             CreatedTime = lecture.CreatedTime,
             UpdatedTime = lecture.UpdatedTime,

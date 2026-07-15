@@ -12,6 +12,15 @@ export default function StudentLectureDetailPage() {
   const [loading, setLoading] = useState(true);
   const [discussions, setDiscussions] = useState([]);
   const [newQuestionTitle, setNewQuestionTitle] = useState("");
+  const currentAccountId = localStorage.getItem("AccountId");
+  
+  const getFormatIcon = (format) => {
+    const f = format?.toUpperCase() || "";
+    if (f.includes("PDF")) return "picture_as_pdf";
+    if (f.includes("MP4") || f.includes("VIDEO")) return "movie";
+    if (f.includes("DOC") || f.includes("WORD")) return "description";
+    return "insert_drive_file";
+  };
   const [newQuestionContent, setNewQuestionContent] = useState("");
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [reportModal, setReportModal] = useState({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
@@ -25,6 +34,7 @@ export default function StudentLectureDetailPage() {
       const res = await getDiscussions(id, { page: 1, pageSize: 50 });
       const mappedDiscussions = (res.data || []).map(d => ({
         id: d.discussionQuestionId,
+        authorId: d.studentId,
         author: d.studentId || "Học sinh ẩn danh",
         authorInitials: d.studentId ? d.studentId.substring(0, 2).toUpperCase() : "HS",
         timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
@@ -33,6 +43,7 @@ export default function StudentLectureDetailPage() {
         status: d.status,
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
+          authorId: a.accountId,
           author: a.accountId || "Giáo viên",
           role: "Giáo viên",
           timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
@@ -50,9 +61,9 @@ export default function StudentLectureDetailPage() {
     getLecture(id)
       .then((res) => {
         setLecture(res.data);
-        // Assuming backend might send if current user liked it, but we can just allow toggling
-        // If not sent, we just use a local state for demo.
-        // setIsLiked(res.data.isLikedByCurrentUser); 
+        if (res.data.isLiked !== undefined) {
+          setIsLiked(res.data.isLiked);
+        }
       })
       .catch((err) => {
         console.error("Lỗi khi tải chi tiết bài giảng:", err);
@@ -102,9 +113,9 @@ export default function StudentLectureDetailPage() {
     if (!reportModal.reason.trim()) return;
     try {
       const payload = {
-        discussionQuestionId: reportModal.isQuestion ? reportModal.targetId : null,
-        discussionAnswerId: reportModal.isQuestion ? null : reportModal.targetId,
-        reportReason: reportModal.reason
+        questionId: reportModal.isQuestion ? reportModal.targetId : null,
+        answerId: reportModal.isQuestion ? null : reportModal.targetId,
+        reason: reportModal.reason
       };
       await reportDiscussion(payload);
       alert("Đã gửi báo cáo vi phạm thành công!");
@@ -211,7 +222,7 @@ export default function StudentLectureDetailPage() {
                 <button 
                   onClick={handleLikeToggle}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium text-[16px] ${
-                    isLiked ? "bg-error-container/20 text-error hover:bg-error-container/30" : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-error"
+                    isLiked ? "bg-[#fee2e2] text-[#ef4444] hover:bg-[#fecaca]" : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-[#ef4444]"
                   }`}
                 >
                   <span className="material-symbols-outlined" style={{ fontVariationSettings: isLiked ? "'FILL' 1" : "'FILL' 0" }}>favorite</span>
@@ -231,7 +242,6 @@ export default function StudentLectureDetailPage() {
                 </div>
               </div>
               <div className="flex gap-4 ml-auto">
-                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">visibility</span> 1,204</span>
                 <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">chat_bubble</span> {discussions.length}</span>
               </div>
             </div>
@@ -251,7 +261,7 @@ export default function StudentLectureDetailPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {lecture.materials.map((mat) => {
-                const fmt = mat.format?.toUpperCase() || "";
+                const fmt = (mat.format || mat.fileType)?.toUpperCase() || "";
                 let icon = "insert_drive_file";
                 let color = "text-on-surface-variant";
                 if (fmt.includes("PDF")) { icon = "picture_as_pdf"; color = "text-[#ef4444]"; }
@@ -265,13 +275,13 @@ export default function StudentLectureDetailPage() {
                         <span className="material-symbols-outlined text-[20px]">{icon}</span>
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-[14px] font-medium text-on-surface truncate pr-2">{mat.name}</h4>
-                        <p className="text-[12px] text-on-surface-variant uppercase tracking-wider">{mat.format}</p>
+                        <h4 className="text-[14px] font-medium text-on-surface truncate pr-2">{mat.name || mat.materialName}</h4>
+                        <p className="text-[12px] text-on-surface-variant uppercase tracking-wider">{mat.format || mat.fileType}</p>
                       </div>
                     </div>
-                    <button className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center shrink-0" title="Tải xuống">
+                    <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center shrink-0" title="Tải xuống">
                       <span className="material-symbols-outlined text-[20px]">download</span> 
-                    </button>
+                    </a>
                   </div>
                 );
               })}
@@ -322,20 +332,24 @@ export default function StudentLectureDetailPage() {
               <div key={disc.id} className="bg-pure-surface rounded-xl border border-whisper-border p-6 relative group">
                 {/* Actions Question */}
                 <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border">
-                  <button onClick={() => startEdit(disc.id, disc.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
-                    <span className="material-symbols-outlined text-sm">edit</span>
-                  </button>
-                  <button onClick={() => handleDeleteComment(disc.id, true)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
-                    <span className="material-symbols-outlined text-sm">delete</span>
-                  </button>
-                  <div className="w-[1px] h-4 bg-outline-variant mx-1"></div>
-                  <button 
-                    onClick={() => setReportModal({ isOpen: true, targetId: disc.id, isQuestion: true, reason: "" })}
-                    className="text-on-surface-variant hover:text-[#f59e0b] p-1"
-                    title="Báo cáo vi phạm"
-                  >
-                    <span className="material-symbols-outlined text-sm">flag</span>
-                  </button>
+                  {disc.authorId === currentAccountId ? (
+                    <>
+                      <button onClick={() => startEdit(disc.id, disc.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button onClick={() => handleDeleteComment(disc.id, true)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      onClick={() => setReportModal({ isOpen: true, targetId: disc.id, isQuestion: true, reason: "" })}
+                      className="text-on-surface-variant hover:text-[#f59e0b] p-1"
+                      title="Báo cáo vi phạm"
+                    >
+                      <span className="material-symbols-outlined text-sm">flag</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Question */}
@@ -346,7 +360,10 @@ export default function StudentLectureDetailPage() {
                   <div className="flex-1 pr-6">
                     <div className="flex justify-between items-start mb-1">
                       <div>
-                        <h4 className="text-[16px] font-medium text-on-surface truncate max-w-[200px] sm:max-w-[400px]">{disc.author}</h4>
+                        <h4 className="text-[16px] font-medium text-on-surface truncate max-w-[200px] sm:max-w-[400px]">
+                          {disc.author}
+                          {disc.status === "Hidden" && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider bg-[#fee2e2] text-[#ef4444] px-2 py-0.5 rounded-full">Đã bị ẩn</span>}
+                        </h4>
                         <p className="text-[13px] text-on-surface-variant">{disc.timeAgo}</p>
                       </div>
                     </div>
@@ -370,20 +387,24 @@ export default function StudentLectureDetailPage() {
                   <div key={ans.id} className="mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans">
                     {/* Actions Answer */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
-                      <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
-                        <span className="material-symbols-outlined text-sm">edit</span>
-                      </button>
-                      <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
-                      <div className="w-[1px] h-4 bg-outline-variant mx-1"></div>
-                      <button 
-                        onClick={() => setReportModal({ isOpen: true, targetId: ans.id, isQuestion: false, reason: "" })}
-                        className="text-on-surface-variant hover:text-[#f59e0b] p-1"
-                        title="Báo cáo vi phạm"
-                      >
-                        <span className="material-symbols-outlined text-sm">flag</span>
-                      </button>
+                      {ans.authorId === currentAccountId ? (
+                        <>
+                          <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                          </button>
+                          <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button 
+                          onClick={() => setReportModal({ isOpen: true, targetId: ans.id, isQuestion: false, reason: "" })}
+                          className="text-on-surface-variant hover:text-[#f59e0b] p-1"
+                          title="Báo cáo vi phạm"
+                        >
+                          <span className="material-symbols-outlined text-sm">flag</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center font-medium shrink-0">
@@ -395,6 +416,7 @@ export default function StudentLectureDetailPage() {
                         <span className="text-[10px] uppercase tracking-wider font-semibold bg-surface-variant text-on-surface-variant px-1.5 py-0.5 rounded-sm">
                           {ans.role}
                         </span>
+                        {ans.status === "Hidden" && <span className="text-[10px] font-bold uppercase tracking-wider bg-[#fee2e2] text-[#ef4444] px-2 py-0.5 rounded-full">Đã bị ẩn</span>}
                       </div>
                       <p className="text-[12px] text-on-surface-variant mb-2">{ans.timeAgo}</p>
                       {editingComment === ans.id ? (

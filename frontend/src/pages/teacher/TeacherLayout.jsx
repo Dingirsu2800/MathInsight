@@ -17,6 +17,7 @@ export default function TeacherLayout({ children }) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("AccountId");
       localStorage.removeItem("RoleName");
+      localStorage.removeItem("UserName");
       navigate("/login");
     }
   };
@@ -26,6 +27,9 @@ export default function TeacherLayout({ children }) {
     { label: "Thống kê", to: "/teacher/stats", disabled: true }
   ];
 
+  const userName = localStorage.getItem("UserName") || "Giáo viên";
+  const userInitials = userName.substring(0, 2).toUpperCase() || "GV";
+
   return (
     <DashboardLayout
       brandName="MathInsight"
@@ -33,9 +37,9 @@ export default function TeacherLayout({ children }) {
       appTitle="Hệ thống Quản lý Toán học"
       navItems={teacherNavItems}
       topNavItems={topNavItems}
-      userName="Giáo viên"
+      userName={userName}
       userRoleLabel="Teacher"
-      userInitials="GV"
+      userInitials={userInitials}
       profilePath="/teacher/profile"
       primaryAction={{
         label: "Tạo bài giảng mới",

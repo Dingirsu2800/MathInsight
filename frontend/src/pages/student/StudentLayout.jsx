@@ -11,6 +11,7 @@ export default function StudentLayout({ children }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("AccountId");
     localStorage.removeItem("RoleName");
+    localStorage.removeItem("UserName");
     navigate("/login");
   };
 
@@ -19,6 +20,9 @@ export default function StudentLayout({ children }) {
     { label: "Cộng đồng", to: "/student/community", disabled: true }
   ];
 
+  const userName = localStorage.getItem("UserName") || "Học sinh";
+  const userInitials = userName.substring(0, 2).toUpperCase() || "HS";
+
   return (
     <DashboardLayout
       brandName="MathInsight"
@@ -26,9 +30,9 @@ export default function StudentLayout({ children }) {
       appTitle="Hệ thống Học tập & Đánh giá"
       navItems={studentNavItems}
       topNavItems={topNavItems}
-      userName="Học sinh"
+      userName={userName}
       userRoleLabel="Student"
-      userInitials="HS"
+      userInitials={userInitials}
       profilePath="/student/profile"
       primaryAction={{
         label: "Làm bài tập",

@@ -10,6 +10,11 @@ export const getLecture = (id) =>
 export const createLecture = (data) =>
   client.post('/api/v1/lectures', data);
 
+export const uploadLectureThumbnail = (formData) =>
+  client.post('/api/v1/lectures/upload-thumbnail', formData, {
+    headers: { 'Content-Type': undefined }
+  });
+
 export const updateLecture = (id, data) =>
   client.put(`/api/v1/lectures/${id}`, data);
 
@@ -31,7 +36,7 @@ export const getMaterials = (params) =>
 
 export const uploadMaterial = (formData) =>
   client.post('/api/v1/materials', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined }
   });
 
 export const updateMaterial = (id, data) =>
@@ -39,6 +44,9 @@ export const updateMaterial = (id, data) =>
 
 export const deactivateMaterial = (id) =>
   client.post(`/api/v1/materials/${id}/deactivate`);
+
+export const activateMaterial = (id) =>
+  client.post(`/api/v1/materials/${id}/activate`);
 
 export const attachMaterial = (materialId, lectureId) =>
   client.post(`/api/v1/materials/${materialId}/attach`, { lectureId });

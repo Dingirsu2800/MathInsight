@@ -135,7 +135,7 @@ export default function ModerationPage() {
                             {statusInfo.label}
                           </span>
                         </div>
-                        <p className="text-[13px] text-on-surface-variant m-0">{timeAgo(report.createdAt)}</p>
+                        <p className="text-[13px] text-on-surface-variant m-0">{timeAgo(report.createdTime)}</p>
                       </div>
                     </div>
                   </div>
@@ -145,8 +145,8 @@ export default function ModerationPage() {
                       <>
                         <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Người báo cáo:</span> <span>{report.reporterName} (Học sinh)</span></div>
                         <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Mục tiêu:</span> <span>{report.targetType === "Question" ? "Câu hỏi" : "Câu trả lời"} — "{report.targetPreview}"</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Lý do:</span> <span className="text-error">{report.reason}</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Bài giảng:</span> <a className="text-primary hover:underline" href="#">{report.lectureTitle}</a></div>
+                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Lý do:</span> <span className="text-error">{report.reportReason}</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Bài giảng:</span> <span className="text-primary font-medium">{report.lectureTitle}</span></div>
                       </>
                     ) : (
                       <>
@@ -160,10 +160,8 @@ export default function ModerationPage() {
                   <div className="flex items-center justify-end gap-3 mt-2">
                     {isPending ? (
                       <>
-                        <button className="px-4 py-2 text-[16px] font-medium border border-outline text-on-surface rounded-lg hover:bg-surface-container-low transition-colors">Xem nội dung gốc</button>
-                        <button className="px-4 py-2 text-[16px] font-medium border border-amber-600 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">Ẩn nội dung</button>
                         <button onClick={() => handleResolve(report.reportId, true)} className="px-4 py-2 text-[16px] font-medium border border-outline text-on-surface-variant rounded-lg hover:bg-surface-container-low transition-colors">Bác bỏ báo cáo</button>
-                        <button onClick={() => handleResolve(report.reportId, false)} className="px-4 py-2 text-[16px] font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">Xử lý xong</button>
+                        <button onClick={() => handleResolve(report.reportId, false)} className="px-4 py-2 text-[16px] font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">Ghi nhận vi phạm & Ẩn</button>
                       </>
                     ) : (
                       <button className="px-4 py-2 text-[16px] font-medium border border-outline text-on-surface rounded-lg hover:bg-surface-container-low transition-colors">Xem chi tiết</button>

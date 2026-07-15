@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using MathInsight.Modules.Learning_Lecture.Entities;
 
@@ -8,17 +8,17 @@ public class DiscussionAnswerConfiguration : IEntityTypeConfiguration<Discussion
 {
     public void Configure(EntityTypeBuilder<DiscussionAnswer> builder)
     {
-        builder.ToTable("discussion_answers");
+        builder.ToTable(nameof(DiscussionAnswer));
 
         builder.HasKey(x => x.DiscussionAnswerId);
 
-        builder.Property(x => x.DiscussionAnswerId).HasColumnName("discussion_answer_id").HasMaxLength(36);
-        builder.Property(x => x.DiscussionQuestionId).HasColumnName("discussion_question_id").HasMaxLength(36).IsRequired();
-        builder.Property(x => x.AccountId).HasColumnName("account_id").HasMaxLength(36).IsRequired();
-        builder.Property(x => x.Content).HasColumnName("content").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).IsRequired().HasDefaultValue("Active");
-        builder.Property(x => x.CreatedTime).HasColumnName("created_time");
-        builder.Property(x => x.UpdatedTime).HasColumnName("updated_time");
+        builder.Property(x => x.DiscussionAnswerId).HasMaxLength(36);
+        builder.Property(x => x.DiscussionQuestionId).HasMaxLength(36).IsRequired();
+        builder.Property(x => x.AccountId).HasMaxLength(36).IsRequired();
+        builder.Property(x => x.Content).IsRequired();
+        builder.Property(x => x.Status).HasMaxLength(20).IsRequired().HasDefaultValue("Active");
+        builder.Property(x => x.CreatedTime);
+        builder.Property(x => x.UpdatedTime);
 
         builder.HasMany(x => x.Reports)
             .WithOne(x => x.Answer)

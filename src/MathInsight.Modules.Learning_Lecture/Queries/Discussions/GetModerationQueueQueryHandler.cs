@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,8 +23,7 @@ public class GetModerationQueueQueryHandler : IRequestHandler<GetModerationQueue
         var skip = (request.Page - 1) * request.PageSize;
 
         var query = _dbContext.DiscussionReports
-            .AsNoTracking()
-            .Where(x => x.Status == "Pending");
+            .AsNoTracking();
 
         if (!string.IsNullOrEmpty(request.TeacherId))
         {
@@ -43,9 +42,15 @@ public class GetModerationQueueQueryHandler : IRequestHandler<GetModerationQueue
                 DiscussionQuestionId = x.DiscussionQuestionId,
                 DiscussionAnswerId = x.DiscussionAnswerId,
                 ReporterAccountId = x.ReporterAccountId,
+                ReporterName = x.ReporterAccountId,
                 ReportReason = x.ReportReason,
                 Status = x.Status,
-                CreatedTime = x.CreatedTime
+                CreatedTime = x.CreatedTime,
+                TargetType = x.DiscussionQuestionId != null ? "Question" : "Answer",
+                TargetPreview = x.DiscussionQuestionId != null ? x.Question!.Content : x.Answer!.Content,
+                LectureTitle = x.DiscussionQuestionId != null ? x.Question!.Lecture.Title : x.Answer!.Question.Lecture.Title,
+                ResolvedBy = x.ResolverAccountId,
+                ResolvedAt = x.ResolvedTime
             }).ToListAsync(cancellationToken);
 
         return reports;

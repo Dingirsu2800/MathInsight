@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { createLecture, getLecture, updateLecture, getTopics, getMaterials, attachMaterial, publishLecture } from "../../services/learningApi";
+import { createLecture, getLecture, updateLecture, getTopics, getMaterials, attachMaterial, publishLecture, uploadLectureThumbnail } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function LectureEditorPage() {
@@ -16,6 +16,7 @@ export default function LectureEditorPage() {
     content: "",
     videoUrl: "",
     thumbnailFile: null,
+    thumbnailUrl: "",
     materialIds: [],
   });
   const [errors, setErrors] = useState({});
@@ -66,8 +67,12 @@ export default function LectureEditorPage() {
           content: data.content || "",
           videoUrl: data.videoUrl || "",
           thumbnailFile: null,
+          thumbnailUrl: data.thumbnailUrl || "",
           materialIds: (data.materials || []).map(m => m.id || m.materialId)
         });
+        if (data.thumbnailUrl) {
+          setThumbnailPreview(data.thumbnailUrl);
+        }
       })
       .catch(() => {});
   }, [id, isEdit]);
@@ -75,6 +80,7 @@ export default function LectureEditorPage() {
   const validate = () => {
     const e = {};
     if (!form.title.trim()) e.title = "Vui lòng nhập tiêu đề";
+    if (!form.tagId) e.tagId = "Vui lòng chọn chủ đề";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -88,10 +94,19 @@ export default function LectureEditorPage() {
 
     try {
       let currentLectureId = id;
+      let finalForm = { ...form };
+
+      if (form.thumbnailFile) {
+        const formData = new FormData();
+        formData.append("file", form.thumbnailFile);
+        const uploadRes = await uploadLectureThumbnail(formData);
+        finalForm.thumbnailUrl = uploadRes.data.url;
+      }
+
       if (isEdit) {
-        await updateLecture(currentLectureId, form);
+        await updateLecture(currentLectureId, finalForm);
       } else {
-        const res = await createLecture(form);
+        const res = await createLecture(finalForm);
         currentLectureId = res.data?.id || res.data?.lectureId;
       }
 
@@ -108,6 +123,9 @@ export default function LectureEditorPage() {
 
       if (isPublish && currentLectureId) {
         await publishLecture(currentLectureId);
+        alert("Xuất bản bài giảng thành công!");
+      } else {
+        alert(isEdit ? "Cập nhật bài giảng thành công!" : "Tạo bài giảng thành công!");
       }
 
       navigate("/teacher/lectures");
@@ -244,6 +262,12 @@ export default function LectureEditorPage() {
                             <option key={t.tagId} value={t.tagId}>{t.tagName}</option>
                           ))}
                         </select>
+                        {errors.tagId && (
+                          <p className="text-[13px] text-error mt-1 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">error</span>
+                            {errors.tagId}
+                          </p>
+                        )}
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
                           <span className="material-symbols-outlined">expand_more</span>
                         </div>

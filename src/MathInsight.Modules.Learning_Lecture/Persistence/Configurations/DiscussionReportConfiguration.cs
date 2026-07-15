@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using MathInsight.Modules.Learning_Lecture.Entities;
 
@@ -8,21 +8,31 @@ public class DiscussionReportConfiguration : IEntityTypeConfiguration<Discussion
 {
     public void Configure(EntityTypeBuilder<DiscussionReport> builder)
     {
-        builder.ToTable("discussion_reports");
+        builder.ToTable(nameof(DiscussionReport));
 
         builder.HasKey(x => x.ReportId);
 
-        builder.Property(x => x.ReportId).HasColumnName("report_id").HasMaxLength(36);
-        builder.Property(x => x.DiscussionQuestionId).HasColumnName("discussion_question_id").HasMaxLength(36);
-        builder.Property(x => x.DiscussionAnswerId).HasColumnName("discussion_answer_id").HasMaxLength(36);
-        builder.Property(x => x.ReporterAccountId).HasColumnName("reporter_account_id").HasMaxLength(36).IsRequired();
-        builder.Property(x => x.ReportReason).HasColumnName("report_reason").IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).IsRequired().HasDefaultValue("Pending");
-        builder.Property(x => x.CreatedTime).HasColumnName("created_time");
-        builder.Property(x => x.ResolvedTime).HasColumnName("resolved_time");
-        builder.Property(x => x.ResolverAccountId).HasColumnName("resolver_account_id").HasMaxLength(36);
+        builder.Property(x => x.ReportId).HasMaxLength(36);
+        builder.Property(x => x.DiscussionQuestionId).HasMaxLength(36);
+        builder.Property(x => x.DiscussionAnswerId).HasMaxLength(36);
+        builder.Property(x => x.ReporterAccountId).HasMaxLength(36).IsRequired();
+        builder.Property(x => x.ReportReason).IsRequired();
+        builder.Property(x => x.Status).HasMaxLength(20).IsRequired().HasDefaultValue("Pending");
+        builder.Property(x => x.CreatedTime);
+        builder.Property(x => x.ResolvedTime);
+        builder.Property(x => x.ResolverAccountId).HasColumnName("ResolvedByAccountID").HasMaxLength(36);
+
+        builder.HasOne(x => x.Question)
+            .WithMany(x => x.Reports)
+            .HasForeignKey(x => x.DiscussionQuestionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.Answer)
+            .WithMany(x => x.Reports)
+            .HasForeignKey(x => x.DiscussionAnswerId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.ToTable(t => t.HasCheckConstraint("CK_DiscussionReport_Target",
-            "([discussion_question_id] IS NOT NULL AND [discussion_answer_id] IS NULL) OR ([discussion_question_id] IS NULL AND [discussion_answer_id] IS NOT NULL)"));
+            "([DiscussionQuestionId] IS NOT NULL AND [DiscussionAnswerId] IS NULL) OR ([DiscussionQuestionId] IS NULL AND [DiscussionAnswerId] IS NOT NULL)"));
     }
 }

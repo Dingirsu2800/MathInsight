@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,9 +27,10 @@ public class MaterialsController : ControllerBase
     private bool IsStudent => User.FindFirst(ClaimTypes.Role)?.Value == "Student";
 
     [HttpGet]
-    public async Task<IActionResult> GetMaterials([FromQuery] string teacherId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetMaterials([FromQuery] string teacherId = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetMaterialListQuery(teacherId, page, pageSize), cancellationToken);
+        var targetTeacherId = string.IsNullOrEmpty(teacherId) ? CurrentUserId : teacherId;
+        var result = await _mediator.Send(new GetMaterialListQuery(targetTeacherId, page, pageSize), cancellationToken);
         return Ok(result);
     }
 
@@ -71,6 +72,21 @@ public class MaterialsController : ControllerBase
         try
         {
             await _mediator.Send(new DeactivateMaterialCommand(id, CurrentUserId), cancellationToken);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/activate")]
+    public async Task<IActionResult> ActivateMaterial(string id, CancellationToken cancellationToken)
+    {
+        if (IsStudent) return Forbid();
+        try
+        {
+            await _mediator.Send(new ActivateMaterialCommand(id, CurrentUserId), cancellationToken);
             return NoContent();
         }
         catch (Exception ex)

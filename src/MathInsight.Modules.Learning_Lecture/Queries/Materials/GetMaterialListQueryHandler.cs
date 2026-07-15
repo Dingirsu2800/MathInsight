@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,7 +36,8 @@ public class GetMaterialListQueryHandler : IRequestHandler<GetMaterialListQuery,
                 FileType = x.FileType,
                 TeacherId = x.TeacherId,
                 Status = x.Status,
-                UploadedTime = x.UploadedTime
+                UploadedTime = x.UploadedTime,
+                LectureName = string.Join(", ", x.LectureMaterials.Select(lm => lm.Lecture.Title))
             }).ToListAsync(cancellationToken);
 
         return materials;

@@ -17,6 +17,7 @@ export default function ExpertLayout({ children }) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("AccountId");
       localStorage.removeItem("RoleName");
+      localStorage.removeItem("UserName");
       navigate("/login");
     }
   };
@@ -27,6 +28,9 @@ export default function ExpertLayout({ children }) {
     { label: "Báo cáo", to: "/expert/reports", disabled: true }
   ];
 
+  const userName = localStorage.getItem("UserName") || "Chuyên gia nội dung";
+  const userInitials = userName.substring(0, 2).toUpperCase() || "CG";
+
   return (
     <DashboardLayout
       brandName="MathInsight"
@@ -34,9 +38,9 @@ export default function ExpertLayout({ children }) {
       appTitle="Hệ thống Quản lý Toán học"
       navItems={expertNavItems}
       topNavItems={topNavItems}
-      userName="Chuyên gia nội dung"
+      userName={userName}
       userRoleLabel="Expert"
-      userInitials="CG"
+      userInitials={userInitials}
       profilePath="/expert/profile"
       primaryAction={{
         label: "Tạo câu hỏi mới",

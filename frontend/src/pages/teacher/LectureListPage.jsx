@@ -27,7 +27,7 @@ export default function LectureListPage() {
   const fetchLectures = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getLectures({ page, pageSize, search, status: statusFilter, topic: topicFilter });
+      const res = await getLectures({ page, pageSize, search, status: statusFilter, topic: topicFilter, grade: gradeFilter });
       setLectures(res.data?.items || res.data || []);
       setTotalCount(res.data?.totalCount || res.data?.length || 0);
     } catch (err) {
@@ -37,7 +37,7 @@ export default function LectureListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, topicFilter]);
+  }, [page, search, statusFilter, topicFilter, gradeFilter]);
 
   useEffect(() => { fetchLectures(); }, [fetchLectures]);
 

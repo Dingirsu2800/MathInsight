@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -45,9 +45,13 @@ public class ReportDiscussionCommandHandler : IRequestHandler<ReportDiscussionCo
             DiscussionQuestionId = report.DiscussionQuestionId,
             DiscussionAnswerId = report.DiscussionAnswerId,
             ReporterAccountId = report.ReporterAccountId,
+            ReporterName = report.ReporterAccountId, // Simplified for now
             ReportReason = report.ReportReason,
             Status = report.Status,
-            CreatedTime = report.CreatedTime
+            CreatedTime = report.CreatedTime,
+            TargetType = request.DiscussionQuestionId != null ? "Question" : "Answer",
+            TargetPreview = "",
+            LectureTitle = ""
         };
     }
 }

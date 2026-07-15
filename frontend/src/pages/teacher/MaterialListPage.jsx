@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import TeacherLayout from "./TeacherLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
-import { getMaterials, uploadMaterial, deactivateMaterial, updateMaterial } from "../../services/learningApi";
+import { getMaterials, uploadMaterial, deactivateMaterial, updateMaterial, activateMaterial } from "../../services/learningApi";
 
 export default function MaterialListPage() {
   const [materials, setMaterials] = useState([]);
@@ -60,7 +60,7 @@ export default function MaterialListPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("name", docName); // Match DB / Backend DTO if necessary, but DTO might expect specific casing. Usually forms use Title or Name. Let's use 'Name'.
+      formData.append("materialName", docName);
       await uploadMaterial(formData);
       setShowUploadModal(false);
       setFile(null);
@@ -68,7 +68,7 @@ export default function MaterialListPage() {
       fetchMaterials();
     } catch (err) {
       console.error(err);
-      alert("Tải lên thất bại!");
+      alert("Tải lên thất bại: " + (err.response?.data?.message || err.message || "Lỗi không xác định"));
     } finally {
       setUploading(false);
     }
@@ -85,10 +85,20 @@ export default function MaterialListPage() {
     }
   };
 
+  const handleActivate = async (id) => {
+    try {
+      await activateMaterial(id);
+      fetchMaterials();
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi khi kích hoạt lại!");
+    }
+  };
+
   const handleSaveRename = async (id) => {
     if (!editName.trim()) return;
     try {
-      await updateMaterial(id, { name: editName });
+      await updateMaterial(id, { materialName: editName });
       setEditingId(null);
       fetchMaterials();
     } catch (e) {
@@ -137,8 +147,8 @@ export default function MaterialListPage() {
               </thead>
               <tbody className="text-[13px] text-on-surface divide-y divide-whisper-border">
                 {materials.map((item, idx) => {
-                  const formatInfo = getFormatIcon(item.format);
-                  const isActive = item.status !== "Inactive";
+                  const formatInfo = getFormatIcon(item.format || item.fileType);
+                  const isActive = item.status === "Active";
                   return (
                     <tr key={item.id} className="hover:bg-surface-container-lowest transition-colors group">
                       <td className="py-3 px-4 text-on-surface-variant font-mono">{String(idx + 1).padStart(2, '0')}</td>
@@ -194,9 +204,13 @@ export default function MaterialListPage() {
                               <span className="material-symbols-outlined text-[18px]">edit</span>
                             </button>
                           )}
-                          {isActive && (
+                          {isActive ? (
                             <button onClick={() => handleDeactivate(item.id || item.materialId)} className="hover:text-error transition-colors p-1" title="Ngừng hoạt động">
                               <span className="material-symbols-outlined text-[18px]">block</span>
+                            </button>
+                          ) : (
+                            <button onClick={() => handleActivate(item.id || item.materialId)} className="hover:text-[#10B981] transition-colors p-1" title="Kích hoạt lại">
+                              <span className="material-symbols-outlined text-[18px]">check_circle</span>
                             </button>
                           )}
                         </div>

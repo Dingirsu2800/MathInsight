@@ -31,13 +31,14 @@ export default function LoginPage() {
       const token = data.accessToken || data.AccessToken;
       const roleName = data.roleName || data.RoleName || "";
       const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
+      const userName = data.username || data.Username || data.email || data.Email || roleName;
 
       if (!token) {
         throw new Error("Không nhận được mã xác thực (Token) từ hệ thống.");
       }
 
-      if (roleName !== "Expert") {
-        setError("Tài khoản này không có quyền Chuyên gia (Expert).");
+      if (!["Expert", "Teacher", "Student"].includes(roleName)) {
+        setError("Tài khoản này không có quyền truy cập cổng thông tin này.");
         setLoading(false);
         return;
       }
@@ -45,7 +46,15 @@ export default function LoginPage() {
       localStorage.setItem("token", token);
       localStorage.setItem("AccountId", accountId);
       localStorage.setItem("RoleName", roleName);
-      navigate("/expert/questions");
+      localStorage.setItem("UserName", userName);
+      
+      if (roleName === "Teacher") {
+        navigate("/teacher/lectures");
+      } else if (roleName === "Student") {
+        navigate("/student/dashboard");
+      } else {
+        navigate("/expert/questions");
+      }
     } catch (err) {
       console.error(err);
       const errMsg = err.response?.data?.message || err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại.";
@@ -60,9 +69,9 @@ export default function LoginPage() {
       <section className="card auth-card max-w-md w-full bg-pure-surface border border-whisper-border p-8 rounded-2xl diffused-shadow space-y-6">
         <div className="text-center space-y-2">
           <p className="text-primary text-[11px] font-black tracking-widest uppercase">MathInsight Portal</p>
-          <h1 className="text-2xl font-bold text-on-surface">Đăng nhập Chuyên gia</h1>
+          <h1 className="text-2xl font-bold text-on-surface">Đăng nhập MathInsight</h1>
           <p className="text-xs text-on-surface-variant leading-relaxed">
-            Nhập tài khoản và mật khẩu của bạn để truy cập hệ thống Quản lý và Soạn thảo Ngân hàng câu hỏi.
+            Nhập tài khoản và mật khẩu của bạn để truy cập hệ thống.
           </p>
         </div>
 

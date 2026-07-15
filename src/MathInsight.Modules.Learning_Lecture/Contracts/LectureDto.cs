@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MathInsight.Modules.Learning_Lecture.Contracts;
@@ -13,6 +13,8 @@ public class LectureDto
     public int Likes { get; set; }
     public string TeacherId { get; set; } = default!;
     public string TagId { get; set; } = default!;
+    public string? TagName { get; set; }
+    public bool IsLiked { get; set; }
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }
     public DateTime UpdatedTime { get; set; }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,9 +27,10 @@ public class LecturesController : ControllerBase
     private bool IsAdmin => User.FindFirst(ClaimTypes.Role)?.Value == "Admin";
 
     [HttpGet]
-    public async Task<IActionResult> GetLectures([FromQuery] string? teacherId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetLectures([FromQuery] string? teacherId, [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? topic, [FromQuery] int? grade, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
-        var query = new GetLectureListQuery(teacherId, IsStudent, page, pageSize);
+        var targetTeacherId = string.IsNullOrEmpty(teacherId) && !IsStudent && !IsAdmin ? CurrentUserId : teacherId;
+        var query = new GetLectureListQuery(targetTeacherId, IsStudent, page, pageSize, search, status, topic, grade);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(result);
     }
@@ -57,6 +58,23 @@ public class LecturesController : ControllerBase
         var cmd = new CreateLectureCommand(request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId);
         var result = await _mediator.Send(cmd, cancellationToken);
         return Ok(result);
+    }
+
+    [HttpPost("upload-thumbnail")]
+    public async Task<IActionResult> UploadThumbnail([FromForm] Microsoft.AspNetCore.Http.IFormFile file, CancellationToken cancellationToken)
+    {
+        if (IsStudent) return Forbid();
+        try
+        {
+            using var stream = file.OpenReadStream();
+            var cmd = new UploadLectureThumbnailCommand(stream, file.FileName);
+            var fileUrl = await _mediator.Send(cmd, cancellationToken);
+            return Ok(new { url = fileUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id}")]

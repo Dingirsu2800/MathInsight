@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MathInsight.Modules.Learning_Lecture.Contracts;
@@ -32,7 +32,13 @@ public class DiscussionReportDto
     public string? DiscussionQuestionId { get; set; }
     public string? DiscussionAnswerId { get; set; }
     public string ReporterAccountId { get; set; } = default!;
+    public string ReporterName { get; set; } = default!;
     public string ReportReason { get; set; } = default!;
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }
+    public string TargetType { get; set; } = default!;
+    public string TargetPreview { get; set; } = default!;
+    public string LectureTitle { get; set; } = default!;
+    public string? ResolvedBy { get; set; }
+    public DateTime? ResolvedAt { get; set; }
 }

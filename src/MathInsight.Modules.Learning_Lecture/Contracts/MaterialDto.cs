@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace MathInsight.Modules.Learning_Lecture.Contracts;
 
@@ -11,4 +11,5 @@ public class MaterialDto
     public string TeacherId { get; set; } = default!;
     public string Status { get; set; } = default!;
     public DateTime UploadedTime { get; set; }
+    public string? LectureName { get; set; }
 }

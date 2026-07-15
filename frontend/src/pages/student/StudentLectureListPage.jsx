@@ -18,9 +18,9 @@ export default function StudentLectureListPage() {
       .then(res => {
         let flat = [];
         res.data.forEach(ch => {
-          flat.push({ id: ch.topicId, name: ch.name, isChapter: true });
+          flat.push({ id: ch.tagId, name: ch.tagName, isChapter: true });
           ch.children?.forEach(top => {
-            flat.push({ id: top.topicId, name: top.name, isChapter: false });
+            flat.push({ id: top.tagId, name: top.tagName, isChapter: false });
           });
         });
         setTopics(flat);
@@ -36,7 +36,8 @@ export default function StudentLectureListPage() {
         page: 1, 
         pageSize: 50, 
         search, 
-        tagId: topicFilter || undefined,
+        topic: topicFilter || undefined,
+        grade: gradeFilter || undefined,
         isStudent: true 
       });
       setLectures(res.data?.items || res.data || []);
@@ -46,7 +47,7 @@ export default function StudentLectureListPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, topicFilter]);
+  }, [search, topicFilter, gradeFilter]);
 
   useEffect(() => { fetchLectures(); }, [fetchLectures]);
 
