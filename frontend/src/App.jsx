@@ -3,6 +3,9 @@ import StudentDashboard from './pages/student/Dashboard.jsx';
 import StudentLectureListPage from './pages/student/StudentLectureListPage.jsx';
 import StudentLectureDetailPage from './pages/student/StudentLectureDetailPage.jsx';
 import TestSession from './pages/student/TestSession.jsx';
+import TestHistoryPage from './pages/student/TestHistoryPage.jsx';
+import CompetencyPage from './pages/student/CompetencyPage.jsx';
+import TestResultPage from './pages/student/TestResultPage.jsx';
 import QuestionBankListPage from './pages/expert/QuestionBankListPage.jsx';
 import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
 import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
@@ -26,7 +29,12 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      {/* Student Routes */}
       <Route path="/student/dashboard" element={<StudentDashboard />} />
+      <Route path="/student/history" element={<TestHistoryPage />} />
+      <Route path="/student/competency" element={<CompetencyPage />} />
+      <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
+      <Route path="/student/test-result" element={<TestResultPage />} />
       <Route
         path="/student/test"
         element={
