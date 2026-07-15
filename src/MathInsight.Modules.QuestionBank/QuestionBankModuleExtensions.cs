@@ -1,5 +1,6 @@
 using MathInsight.Modules.QuestionBank.Configuration;
 using MathInsight.Modules.QuestionBank.Ocr;
+using MathInsight.Modules.QuestionBank.Imports;
 using MathInsight.Modules.QuestionBank.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +22,10 @@ public static class QuestionBankModuleExtensions
         {
             client.Timeout = TimeSpan.FromSeconds(60);
         });
+
+        services.AddScoped<IQuestionImportWorkbookParser, QuestionImportWorkbookParser>();
+        services.AddScoped<IQuestionImportTemplateService, QuestionImportTemplateService>();
+        services.AddScoped<QuestionImportValidationService>();
 
         services.AddMediatR(config =>
         {

@@ -8,7 +8,10 @@ using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
 using MathInsight.Modules.QuestionBank.Commands.ToggleQuestionActive;
 using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
 using MathInsight.Modules.QuestionBank.Commands.ExtractQuestionOcrDraft;
+using MathInsight.Modules.QuestionBank.Commands.PreviewQuestionImport;
+using MathInsight.Modules.QuestionBank.Commands.ConfirmQuestionImport;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
+using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Contracts.Tags;
@@ -314,6 +317,59 @@ public sealed class ControllerErrorMappingTests
         var response = Assert.IsType<ApiErrorResponse>(objectResult.Value);
         Assert.Equal(expectedStatusCode, objectResult.StatusCode);
         Assert.Equal(error.Code, response.Code);
+    }
+
+    [Fact]
+    public async Task PreviewQuestionImport_WhenHandlerReturnsUnsupportedType_Returns415WithStableCode()
+    {
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<PreviewQuestionImportCommand>(request);
+            return Result<QuestionImportPreviewResponse>.Failure(QuestionBankErrors.QuestionImportFileTypeNotSupported);
+        }));
+
+        var result = await controller.PreviewQuestionImport(null, CancellationToken.None);
+
+        var unsupported = Assert.IsType<ObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(unsupported.Value);
+        Assert.Equal(StatusCodes.Status415UnsupportedMediaType, unsupported.StatusCode);
+        Assert.Equal(QuestionBankErrors.QuestionImportFileTypeNotSupported.Code, error.Code);
+    }
+
+    [Fact]
+    public async Task ConfirmQuestionImport_WhenHandlerReturnsRowErrors_Returns400WithoutMappingEnglishMessage()
+    {
+        var response = new QuestionImportConfirmResponse(
+            QuestionBankErrors.QuestionImportValidationFailed.Code,
+            "import-1",
+            0,
+            [],
+            [new QuestionImportIssueResponse(
+                QuestionBankErrors.QuestionTopicNotFound.Code,
+                "Topic is missing or inactive.",
+                "Confirm",
+                null,
+                "Topics",
+                "Q001")]);
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<ConfirmQuestionImportCommand>(request);
+            return Result<QuestionImportConfirmResponse>.Success(response);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext()
+            }
+        };
+
+        var result = await controller.ConfirmQuestionImport(
+            new ConfirmQuestionImportRequest(),
+            CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var body = Assert.IsType<QuestionImportConfirmResponse>(badRequest.Value);
+        Assert.Equal(QuestionBankErrors.QuestionImportValidationFailed.Code, body.Code);
     }
 
     private static IMediator CreateMediator(Func<object, object> responseFactory)
