@@ -6,6 +6,9 @@ import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
 import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
 import TagManagementPage from './pages/expert/TagManagementPage.jsx';
 import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
+import BlueprintListPage from './pages/expert/BlueprintListPage.jsx';
+import BlueprintEditorPage from './pages/expert/BlueprintEditorPage.jsx';
+import BlueprintDetailPage from './pages/expert/BlueprintDetailPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -40,7 +43,11 @@ export default function App() {
         <Route path="/expert/questions/:id/edit" element={<QuestionEditorPage />} />
         <Route path="/expert/tags" element={<TagManagementPage />} />
         <Route path="/expert/profile" element={<ExpertProfilePage />} />
-        
+        <Route path="/expert/blueprints" element={<BlueprintListPage />} />
+        <Route path="/expert/blueprints/new" element={<BlueprintEditorPage />} />
+        <Route path="/expert/blueprints/:blueprintId" element={<BlueprintDetailPage />} />
+        <Route path="/expert/blueprints/:blueprintId/edit" element={<BlueprintEditorPage />} />
+
         {/* Teacher Routes */}
         <Route path="/teacher/lectures" element={<LectureListPage />} />
         <Route path="/teacher/lectures/new" element={<LectureEditorPage />} />

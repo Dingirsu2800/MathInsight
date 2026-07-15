@@ -1,118 +1,193 @@
 # Feature Specification: Test Generator Module
 
-**Feature Branch**: `009-test-generator`
+**Feature Branch**: `testgen-blueprint`
+**Created**: 2026-06-23 | **Clarified**: 2026-07-14
+**Status**: Expert Blueprint MVP complete
+**Database Contract**: `Implementation/Database/database/001_Create_MathInsight_Azure.sql`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-04
+## Scope and Delivery Order
 
-**Status**: Approved
+The module is delivered in two explicit slices:
 
-**Source Documents**: PRD §4 (FT-03), UCS UC-40–UC-46, TDS §2.2 (TestGen layer), §2.4
+1. **Expert Blueprint MVP (current scope)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
+2. **Test generation (later checkpoint)**: create `Test` and `TestQuestion` records, integrate Recommender advice, and expose Student generation endpoints.
 
-## User Scenarios & Testing *(mandatory)*
+The Expert Blueprint MVP does not create or edit `Test` records. No database migration is part of this feature.
 
-### Core Use Cases (Priority: P1)
+## Use Cases
 
-| UC-ID | Name | Primary Actor | Notes |
-|-------|------|---------------|-------|
-| UC-40 | View Pending Blueprints | Expert | List blueprints in `PENDING_REVIEW` created by others |
-| UC-41 | Approve / Reject Blueprint | Expert | Expert peer-review workflow |
-| UC-42 | Manage Blueprint | Expert | List, search, filter own + all blueprints |
-| UC-43 | Create Blueprint | Expert | Design sectioned topic/difficulty distribution |
-| UC-44 | Clone Blueprint | Expert | Deep-copy independent instance |
-| UC-45 | Update Blueprint | Expert | Only DRAFT or REJECTED blueprints |
-| UC-46 | Delete Blueprint | Expert | Hard-delete if DRAFT/unused; soft-delete if used |
+| UC-ID | Name | Actor | Result |
+|---|---|---|---|
+| UC-40 | View pending blueprints | Expert | Pending blueprints created by other Experts |
+| UC-41 | Review blueprint | Expert | Approve or reject another Expert's submission |
+| UC-42 | Manage blueprints | Expert | Paged list and detail views |
+| UC-43 | Create blueprint | Expert | New owned `Draft` aggregate |
+| UC-44 | Clone blueprint | Expert | Independent owned `Draft` copy |
+| UC-45 | Update blueprint | Expert owner | Replace editable aggregate data |
+| UC-46 | Delete blueprint | Expert owner | Hard-delete unused data or deactivate historical data |
 
-### Edge Cases
+## Authorization
 
-- **Self-Approval Blocked** (BR-Blueprint-01): Expert cannot view or approve their own submitted blueprints in pending list.
-- **Sum Verification** (BR-07): Blueprint section totals must sum to `blueprint.total_questions`; each section's detail quantities must sum to `section.total_questions`.
-- **Active Locking**: Blueprints associated with generated `Test` records cannot be modified or hard-deleted.
-- **Empty Matrix**: Blueprint with zero `BlueprintSection` or zero `BlueprintDetail` rows → cannot submit for review.
-- **Legacy Multiple Choice Blueprint**: Old/pre-2025 style tests are represented as one default `BlueprintSection` with `question_type = SingleChoice`.
-- **Clone of non-existent**: Clone a deleted blueprint → 404.
+- All Blueprint endpoints require the `Expert` role.
+- Any Expert may view a non-deactivated blueprint and clone it.
+- Only the owner may update, submit, or delete a blueprint.
+- The owner cannot review their own blueprint.
+- The pending-review list excludes the current Expert's own blueprints.
+- `ExpertID`, review actor ID, and clone owner ID always come from authenticated claims, never the request body.
+- Read responses expose nullable owner/reviewer display names resolved from `Account`; IDs remain the authorization source of truth.
 
-## Requirements *(mandatory)*
+## Current SQL Contract
 
-### Functional Requirements
+### Blueprint
 
-- **BR-Blueprint-01**: Experts cannot review or approve blueprints they created. Pending list excludes creator's own blueprints (filter `expert_id != currentUserId`).
-- **BR-Blueprint-02**: Blueprint review action requires `status = PENDING_REVIEW`. Attempt to review a DRAFT/APPROVED → 422.
-- **BR-Blueprint-03**: Rejection requires a **non-empty** `review_note` describing corrective actions.
-- **BR-07**: Blueprint quantity validation has two levels: `SUM(BlueprintSection.total_questions) == Blueprint.total_questions`, and for each section `SUM(BlueprintDetail.quantity) == BlueprintSection.total_questions`. Validation runs on submit-for-review and on update.
-- **BR-09**: Cloning creates a **completely independent** entity with a new UUID. Changes to the clone do not affect the original.
-- **BR-47**: Only blueprints with `status = DRAFT` or `REJECTED` can be updated (UC-45). `APPROVED`, `PENDING_REVIEW`, and `ACTIVE` blueprints are locked.
-- **BR-48**: Blueprints with `status = APPROVED` that have been used to generate tests transition to `ACTIVE` status — they cannot be modified or hard-deleted.
-- **BR-49**: A blueprint must contain at least one `BlueprintSection`. Each `BlueprintDetail` must belong to exactly one `BlueprintSection`.
-- **BR-50**: `BlueprintSection.question_type` constrains candidate questions during generation. TestGen must filter candidates by matching `Question.question_type`.
-- **BR-51**: `Composite` sections must define `part_count_per_question` and `default_point_per_part`. Non-composite sections must leave these fields null.
-- **BR-52**: Experts do not directly create/update/delete `Test` records in MVP. Experts manage `Question` and `Blueprint` data; the backend `GenerationEngine` creates `Test` and `TestQuestion` records.
-- **BR-53**: `Test.test_code` is optional. Generate it only for shareable/code-entry tests; personal adaptive/recommendation tests keep `test_code = NULL`.
-- **Dynamic WeakTag Adjustment Loop** (for `TestGen` service):
-  - **WeakTag Cap**: Max **20%** of total questions in a generated test may be WeakTag-biased.
-  - **Adaptive Bias Probability**: WeakTag question selection bias = **40%** per matching blueprint slot.
-  - **Difficulty Downscaling**: If a blueprint detail slot specifies a `Hard` (level 3) or `Very Hard` (level 4) difficulty, and the topic is a WeakTag for the student (student's `official_point < 5.00`), the engine downscales the question selection for that slot to `Medium` (level 2) to rebuild confidence. If the slot specifies `Medium` (level 2) and the topic's `official_point < 3.00` (which maps to level 1 `Easy`), the engine downscales the question selection to `Easy` (level 1) (F2 resolution). Scale back to the original slot difficulty (e.g., Hard) only when the topic's `official_point >= 5.00` (meaning it is no longer a WeakTag) (F3 resolution).
-  - **Difficulty Upscaling (Challenge Mode)**: If `official_point >= 8.0` AND `mastery_status = Mastered` → select one difficulty level higher (F6 resolution).
-  - **Remedial Learning (Easy-Level Protection)**: If `official_point < 5.0` at `Easy` → bias probability drops to **10%**; no further downscaling; prioritize foundational lectures (F6 resolution).
+| Column | SQL contract | Application meaning |
+|---|---|---|
+| `BlueprintID` | `VARCHAR(36)` PK | String UUID generated by backend |
+| `BlueprintName` | `NVARCHAR(100)` | Required name |
+| `Grade` | `10`, `11`, `12` | Target grade |
+| `TotalQuestions` | `INT >= 0` | Expected total; must be positive before submit |
+| `DurationMinutes` | `INT >= 0` | Expected duration; must be positive before submit |
+| `ExpertID` | FK to `Expert` | Owner |
+| `Status` | `Draft`, `PendingReview`, `Approved`, `Rejected`, `Active`, `Deactivated` | Workflow state |
+| `ApprovedBy` | nullable FK to `Expert` | Legacy SQL column used as the review actor for both approve and reject |
+| `ReviewNote` | `NVARCHAR(MAX)` nullable | Rejection reason; application limit 2000 characters |
+| `ReviewTime` | nullable `DATETIME2(0)` | Review timestamp in UTC |
 
-- **Student Practice & Exam Flow Options** (BR-54):
-  - **Initial Generation Formats**: Students have access to two primary test formats:
-    1. **Exam Mode**: A full-length test session generated from an approved blueprint (`test_format = Exam`).
-    2. **Practice Mode**: A practice session of exactly **10 questions** targeting a specific diagnosed WeakTag topic (`test_format = Practice`).
-  - **Post-Exam Choices**: After completing an Exam session and receiving/updating WeakTags, the student can choose between:
-    1. **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: Generate a new `Exam` test session from the same blueprint structure (retains the original slot quantities and sections, but applies standard WeakTag adjustments like Cap, Bias, and Downscale based on the student's updated WeakTag state).
-    2. **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: Generate a `Practice` session of exactly 10 questions for a selected WeakTag topic, using the student's `recommended_difficulty_level` for that topic. Answers in this session will update the `practice_point` using the Elo-inspired formula and blend/reset after completing the 10-question series.
+The current table has no `CreatedTime`. List queries use stable ordering by `BlueprintName`, then `BlueprintID`.
 
-### Blueprint Status Machine
+### BlueprintSection
 
+- IDs are `VARCHAR(36)` strings.
+- `SectionOrder > 0` and unique within a blueprint.
+- `SectionName` is required and at most 100 characters; `SectionCode` is optional and at most 20 characters.
+- `QuestionType` uses DB values `SingleChoice`, `MultipleChoice`, `TrueFalse`, `ShortAnswer`, or `Composite`.
+- `TotalQuestions >= 0`; `DefaultPointPerQuestion` is required and between 0 and 10.
+- A `Composite` section requires `PartCountPerQuestion > 0` and `DefaultPointPerPart` between 0 and 10.
+- Non-composite sections must leave `PartCountPerQuestion` and `DefaultPointPerPart` null.
+
+### BlueprintDetail
+
+- IDs and references are `VARCHAR(36)` strings.
+- The row belongs to the same aggregate through composite FK `(BlueprintSectionID, BlueprintID)`.
+- `(BlueprintSectionID, TagID, DifficultyID)` is unique.
+- The database allows `Quantity >= 0`; Blueprint business requests require `Quantity >= 1`.
+- Topic and difficulty must exist and be active. Topic grade must equal the blueprint grade.
+
+## Workflow
+
+```text
+Draft -> PendingReview -> Approved -> Active
+  ^            |             |
+  |            v             +-> Deactivated
+  +--------- Rejected
+
+Draft/Rejected/Approved without linked Test -> hard delete
+Active or any blueprint linked to Test       -> Deactivated
 ```
-[Create]
-    │
-    ▼
-  DRAFT ──(submit for review)──────▶ PENDING_REVIEW
-    ▲                                      │
-    │                                      ├──(approve)──▶ APPROVED ──(test generated)──▶ ACTIVE
-    └──(rejection)◀─── REJECTED ◀──(reject)─┘
-                            │
-                            └──(Expert fixes & re-submits)──▶ PENDING_REVIEW (again)
-```
 
-| Status | Can Edit | Can Delete | Can Generate Test |
-|--------|----------|------------|-------------------|
-| DRAFT | Yes | Yes (hard) | No |
-| PENDING_REVIEW | No | No | No |
-| APPROVED | No | No | Yes |
-| REJECTED | Yes | Yes (hard) | No |
-| ACTIVE | No | No (soft only) | Yes |
+| Status | Owner edits | Submit | Peer review | Generate later | Delete behavior |
+|---|---:|---:|---:|---:|---|
+| `Draft` | Yes | Yes | No | No | Hard delete if unused |
+| `PendingReview` | No | No | Yes, non-owner | No | Rejected with 409 |
+| `Approved` | No | No | No | Yes | Hard delete if unused |
+| `Rejected` | Yes | Yes | No | No | Hard delete if unused |
+| `Active` | No | No | No | Yes | Change to `Deactivated` |
+| `Deactivated` | No | No | No | No | Already deleted from active views |
 
-### Key Entities *(include if feature involves data)*
+## Business Rules
 
-- **Blueprint**: `blueprint_id` (PK), `blueprint_name` (VARCHAR 100), `grade` (10/11/12), `total_questions` (INT), `duration_minutes` (INT), `expert_id` (FK → experts), `status` (**DRAFT** | **PENDING_REVIEW** | **APPROVED** | **REJECTED** | **ACTIVE**), `review_note` (VARCHAR 255, nullable), `reviewed_by` (FK → experts, nullable), `reviewed_time` (nullable), `created_time`
-- **BlueprintSection**: `blueprint_section_id` (PK), `blueprint_id` (FK), `section_order`, `section_code`, `section_name`, `question_type`, `instruction_text`, `total_questions`, `default_point_per_question`, `default_point_per_part`, `part_count_per_question`
-- **BlueprintDetail**: `blueprint_detail_id` (PK), `blueprint_id`, `blueprint_section_id` (FK), `tag_id` (FK → tag_topics), `difficulty_id` (FK → tag_difficulties), `quantity` (INT) — composite UNIQUE `(blueprint_section_id, tag_id, difficulty_id)`
-- **Test**: `test_id` (PK), `blueprint_id` (nullable FK), `test_format` (**Practice** | **Exam**), `generated_for_student_id` (nullable FK → students), `generated_by` (`System` by default), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`
+- **BP-01 Self review**: an Expert cannot approve or reject their own blueprint.
+- **BP-02 Review state**: review requires `PendingReview`; otherwise return 422.
+- **BP-03 Rejection note**: reject requires a trimmed note of 1-2000 characters. Approve clears `ReviewNote`.
+- **BP-04 Editable state**: only an owned `Draft` or `Rejected` blueprint can be updated.
+- **BP-05 Aggregate ownership**: create, update, and clone persist Blueprint, Sections, and Details atomically.
+- **BP-06 Structure**: create requires at least one section and each section requires at least one detail. Draft totals may be inconsistent until submit.
+- **BP-07 Submit validation**: before `PendingReview`, section totals must sum to `Blueprint.TotalQuestions`; each section's detail quantities must sum to its `TotalQuestions`; all totals and duration must be positive.
+- **BP-08 Submit audit reset**: resubmitting a rejected blueprint clears `ApprovedBy`, `ReviewNote`, and `ReviewTime`.
+- **BP-09 Review audit**: approve/reject sets `ApprovedBy` to the reviewing Expert and `ReviewTime = UTC now`.
+- **BP-10 Clone**: clone any visible non-deactivated blueprint into a new owned `Draft`, generate all new IDs, append ` (Copy)` without exceeding 100 characters, and clear review audit fields.
+- **BP-11 Delete history**: unused `Draft`, `Rejected`, or `Approved` aggregates are hard-deleted. `PendingReview` returns 409. `Active` or any aggregate referenced by `Test` becomes `Deactivated`.
+- **BP-12 Candidate shape**: later generation filters approved active questions by detail `TagID`, `DifficultyID`, and section `QuestionType`.
+- **BP-13 Legacy exam**: pre-2025 multiple-choice structures use one `SingleChoice` section.
+- **BP-14 Commit verification**: SQL retry verifies the persisted post-condition after an ambiguous commit. Create/clone use stable operation IDs so retry cannot create duplicate aggregates.
 
-### Enums
+## API Contract
 
-| Entity | Field | Allowed Values |
-|--------|-------|----------------|
-| Blueprint | status | `DRAFT`, `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `ACTIVE` |
-| Blueprint | grade | `10`, `11`, `12` |
-| BlueprintSection | question_type | `SingleChoice`, `MultipleChoice`, `TrueFalse`, `ShortAnswer`, `Composite` |
-| Test | test_format | `Practice`, `Exam` |
+Base route: `/api/test-generator/blueprints`
 
-## Success Criteria *(mandatory)*
+| Method | Route | Behavior |
+|---|---|---|
+| `GET` | `/` | Paged list; filters `status`, `grade`, `expertId`, `search`, `includeDeactivated=false` |
+| `GET` | `/pending` | Pending peer-review list excluding current owner |
+| `GET` | `/{blueprintId}` | Full aggregate detail |
+| `POST` | `/` | Create owned Draft aggregate |
+| `PUT` | `/{blueprintId}` | Replace owned editable aggregate |
+| `POST` | `/{blueprintId}/submit` | Validate and submit for review |
+| `POST` | `/{blueprintId}/review` | Body action `Approve` or `Reject`, optional review note |
+| `POST` | `/{blueprintId}/clone` | Deep clone into current Expert ownership |
+| `DELETE` | `/{blueprintId}` | Hard-delete or deactivate according to BP-11 |
 
-### Measurable Outcomes
+List defaults: `pageIndex=1`, `pageSize=20`, maximum `pageSize=100`. Deactivated records behave as not found on detail/clone unless explicitly requested by the owner list.
 
-- Blueprint section/detail validation (sum check) runs within **500ms**.
-- Pending blueprint list loads within **1.5 seconds** (NFR-P04).
-- Test generation from approved blueprint completes within **3 seconds** for 40-question tests.
-- Backend maps TestGen entities to the current SQL script tables; no separate `tst` schema is created for MVP.
-- Self-approval is blocked 100% of the time (BR-Blueprint-01).
+## Stable Errors
 
-## Assumptions
+| Code | HTTP | Meaning |
+|---|---:|---|
+| `BLUEPRINT_NOT_FOUND` | 404 | Missing or hidden/deactivated aggregate |
+| `BLUEPRINT_REQUEST_INVALID` | 400 | Missing/malformed request |
+| `BLUEPRINT_MUTATION_FORBIDDEN` | 403 | Current Expert is not owner |
+| `BLUEPRINT_SELF_REVIEW_FORBIDDEN` | 403 | Owner attempted review |
+| `BLUEPRINT_STATUS_INVALID` | 422 | Action is invalid in current state |
+| `BLUEPRINT_STRUCTURE_INVALID` | 422 | Sections/details or composite metadata invalid |
+| `BLUEPRINT_TOTAL_MISMATCH` | 422 | Blueprint/section/detail totals do not match |
+| `BLUEPRINT_REVIEW_NOTE_REQUIRED` | 400 | Reject note missing |
+| `BLUEPRINT_REVIEW_NOTE_TOO_LONG` | 400 | Reject note exceeds 2000 characters |
+| `BLUEPRINT_TAXONOMY_INVALID` | 400 | Topic/difficulty missing, inactive, or wrong grade |
+| `BLUEPRINT_IN_USE` | 409 | Pending review or historical reference blocks hard delete |
+| `REQUEST_INVALID` | 400 | Malformed JSON or model-binding failure handled before the controller action |
 
-- Database is SQL Server. Backend maps to current DB script tables (`Blueprint`, `BlueprintSection`, `BlueprintDetail`, `Test`, `TestQuestion`) instead of schema-prefixed tables.
-- Expert accounts and roles verified via Identity module (001).
-- `IRecommenderService.GetStudentWeakTagsAsync()` is called in-process from Recommender module (005) during test generation.
-- Test generation creates `Test` + `TestQuestion` records in current DB script tables with `generated_by = System`. The source expert is derived through `Test.blueprint_id -> Blueprint.expert_id` when a blueprint is used.
+Frontend localizes these codes; backend messages remain developer-facing English.
+
+## Later Test Generation Contract
+
+- `Test` uses `TestMode`, not `TestFormat`: `BlueprintExam`, `AdaptivePractice`, `TopicPractice`, or `Diagnostic`.
+- Blueprint generation creates `TestMode = BlueprintExam`, `GeneratedBy = System`, and a nullable `TestCode`.
+- `TestQuestion` stores ordering plus `SourceBlueprintDetailID` and recommendation audit fields.
+- TestGen owns read models for QuestionBank taxonomy/questions and marks them `ExcludeFromMigrations()`.
+- TestGen calls the existing in-process Recommender service. `RecommendedDifficultyLevel` is resolved through `TagDifficulty.LevelValue`; it is never compared directly with `DifficultyID`.
+- **BR-52 Expert ownership of generated tests**: experts do not directly create, update, or delete `Test` or `TestQuestion` records in MVP. Experts manage `Question` and `Blueprint` data; the backend GenerationEngine creates generated test records.
+- **BR-53 Optional test code**: `TestCode` is generated only for shareable or code-entry tests; personal adaptive and recommendation sessions keep `TestCode = NULL`.
+- **BR-51 Composite metadata**: composite sections must define their part metadata before generation; non-composite sections leave that metadata null.
+- **BR-50 Question type filtering**: generated candidates must match the `QuestionType` declared by their blueprint section.
+- The generation engine applies the following adaptive constraints:
+  - **WeakTag Cap**: WeakTag-biased questions may occupy at most 20% of a generated test.
+  - **Adaptive Bias Probability**: for each matching blueprint slot, WeakTag question selection has a 40% bias probability.
+  - **Difficulty Downscaling**: a `Hard` or `Very Hard` slot for a WeakTag topic (`official_point < 5.00`) is selected at `Medium`; a `Medium` slot for a topic with `official_point < 3.00` is selected at `Easy`.
+  - **Difficulty Upscaling**: when `official_point >= 8.00` and `mastery_status = Mastered`, the engine may select one difficulty level higher.
+  - **Easy-Level Protection**: when `official_point < 5.00` at `Easy`, bias probability is reduced to 10%, no further downscaling is applied, and foundational learning content is prioritized.
+- **Student Practice and Exam Flow**: later student endpoints expose two initial formats:
+  - **Exam Mode**: a full-length session generated from an approved blueprint.
+  - **Practice Mode**: exactly 10 questions targeting one diagnosed WeakTag topic, using that topic's `RecommendedDifficultyLevel`.
+- **BR-54 Student Practice and Exam Flow**: after an Exam session is completed and the student's WeakTags are updated, the student may choose:
+  - **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: generate a new `Exam` session from the original blueprint structure, retaining its sections and slot quantities while applying adaptive adjustments such as WeakTag Cap, Adaptive Bias, and Difficulty Downscaling based on the student's latest results and current level.
+  - **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: generate a `Practice` session of exactly 10 questions for a selected WeakTag topic. Answers update the topic's practice point using the Elo-inspired formula; the practice series then applies the defined blend/reset behavior.
+- Generation and Student endpoints are intentionally outside the current Expert Blueprint checkpoint.
+
+## Acceptance Criteria
+
+- EF mappings match the current SQL column names, types, nullability, statuses, and constraints without migration.
+- Create/update/clone are atomic at aggregate level.
+- SQL transient retry does not duplicate create/clone or report a false failure after a verified commit.
+- Submit catches both levels of total mismatch.
+- Self-review is blocked 100% of the time.
+- Pending list excludes the current Expert's own records.
+- Blueprint validation completes within 500 ms for an aggregate of up to 10 sections and 100 details.
+- Paged list responds within 1.5 seconds under normal MVP data volume.
+
+## Out of Scope for Current Checkpoint
+
+- Student test generation endpoints and adaptive selection.
+- Expert CRUD over `Test` or `TestQuestion`.
+- Redis, RabbitMQ, background queues, or EF migrations.
+- Notification events; review responses are synchronous for MVP.
+- Adding `CreatedTime` or renaming legacy SQL columns.

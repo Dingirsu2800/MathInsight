@@ -1,187 +1,163 @@
 # Implementation Plan: Test Generator Module
 
-**Branch**: `009-test-generator` | **Date**: 2026-06-23 | **Updated**: 2026-07-04
+**Branch**: `testgen-blueprint` | **Updated**: 2026-07-14
 **Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Builds `MathInsight.Modules.TestGen` managing blueprint lifecycle (CRUD, peer review, clone) and adaptive test generation engine. Communicates with Recommender module in-process for WeakTag data. Creates `Test` + `TestQuestion` records consumed by Testing module (003).
+Implement the Expert Blueprint lifecycle first. Test generation remains a later slice after Blueprint APIs and frontend are stable. The current SQL creation script is the persistence contract; no migration or table rename is permitted in this work.
 
 ## Technical Context
 
-| Property | Value |
-|----------|-------|
-| Language | C# / .NET 10.0 |
-| Primary Dependencies | MediatR, EF Core |
-| Storage | SQL Server; map to current DB script tables shared with Testing |
-| Internal API | `IRecommenderService` from Recommender module (005) |
-| Testing | xUnit / Integration tests |
-| Project Type | Modular Monolith Web API |
+| Property | Decision |
+|---|---|
+| Runtime | .NET 10, ASP.NET Core modular monolith |
+| Application pattern | Thin controller, MediatR commands/queries, `Result<T>` and stable errors |
+| Persistence | EF Core + SQL Server, separate `TestGenDbContext` |
+| IDs | C# `string`; SQL `VARCHAR(36)` UUID text |
+| Database naming | Exact PascalCase SQL columns from `001_Create_MathInsight_Azure.sql` |
+| Migrations | Disabled; SQL scripts remain source of truth |
+| Tests | New `MathInsight.Modules.TestGen.Tests` xUnit project |
+| Frontend | React JavaScript + existing Tailwind/UI components, after backend contracts |
 
-## Project Structure
+## Resolved Schema Drift
+
+The existing TestGen foundation must be corrected before use:
+
+- Replace `Guid` entity IDs with `string` IDs.
+- Replace snake_case column mappings with exact names such as `BlueprintID`, `SectionOrder`, and `TestMode`.
+- Persist Blueprint statuses exactly as `Draft`, `PendingReview`, `Approved`, `Rejected`, `Active`, `Deactivated`.
+- Map review audit to existing `ApprovedBy`, `ReviewNote`, and `ReviewTime`; remove the non-existent Blueprint `CreatedTime` mapping.
+- Align section required/null fields and decimal precision with SQL.
+- Map BlueprintDetail through composite FK `(BlueprintSectionID, BlueprintID)`.
+- Replace Test `TestFormat` with SQL `TestMode`, and complete TestQuestion recommendation audit mappings before generation work.
+
+## Module Structure
 
 ```text
-src/MathInsight.Modules.TestGen/
-├── Commands/
-│   ├── CreateBlueprint/         # UC-43: create DRAFT blueprint with detail slots
-│   ├── SubmitBlueprintForReview/# Transition DRAFT → PENDING_REVIEW; validate sum (BR-07)
-│   ├── ReviewBlueprint/         # UC-41: Approve (→ APPROVED) / Reject (→ REJECTED + note)
-│   ├── UpdateBlueprint/         # UC-45: only if DRAFT or REJECTED
-│   ├── CloneBlueprint/          # UC-44: deep-copy with new UUID
-│   ├── DeleteBlueprint/         # UC-46: hard-delete if unused; soft if ACTIVE
-│   └── GenerateTest/            # Create Test + TestQuestion records from approved blueprint
-├── Queries/
-│   ├── GetBlueprintList/        # UC-42: paged, filter by status/grade/name
-│   ├── GetPendingBlueprints/    # UC-40: PENDING_REVIEW excluding currentExpert's own
-│   └── GetBlueprintById/        # Single blueprint with detail slots
-├── Services/
-│   ├── IGenerationEngine.cs
-│   └── GenerationEngine.cs      # Adaptive question selection with WeakTag bias
-├── Events/
-│   └── BlueprintRejectedEvent.cs # MediatR → Notification module (notify creator)
-├── Persistence/
-│   ├── TestGenDbContext.cs       # maps to current DB script table names
-│   ├── Configurations/
-│   │   ├── BlueprintConfiguration.cs
-│   │   ├── BlueprintSectionConfiguration.cs
-│   │   ├── BlueprintDetailConfiguration.cs
-│   │   ├── TestConfiguration.cs
-│   │   └── TestQuestionConfiguration.cs
-│   └── Migrations/
-├── Controllers/
-│   ├── BlueprintsController.cs
-│   └── TestGenerationController.cs
-└── TestGenModuleExtensions.cs
+MathInsight.Modules.TestGen/
+|-- Commands/
+|   |-- CreateBlueprint/
+|   |-- UpdateBlueprint/
+|   |-- SubmitBlueprintForReview/
+|   |-- ReviewBlueprint/
+|   |-- CloneBlueprint/
+|   `-- DeleteBlueprint/
+|-- Queries/
+|   |-- GetBlueprintList/
+|   |-- GetPendingBlueprints/
+|   `-- GetBlueprintDetail/
+|-- Contracts/Blueprints/
+|-- Errors/TestGenErrors.cs
+|-- Persistence/
+|   |-- Entities/
+|   |-- Configurations/
+|   `-- ReadModels/
+|-- Validation/BlueprintAggregateValidator.cs
+|-- Controllers/BlueprintsController.cs
+`-- TestGenModuleExtensions.cs
 ```
 
-## Proposed Changes
+## Delivery Checkpoints
 
-### Database Layer (Current DB Script Tables)
+### Checkpoint 0: Persistence Foundation
 
-| Table | Key Constraints |
-|-------|----------------|
-| `Blueprint` | Blueprint metadata; status check from DB script; `ExpertID` FK |
-| `BlueprintSection` | Exam part structure; `BlueprintID`, `SectionOrder`, `QuestionType`, `TotalQuestions`; UNIQUE `(BlueprintID, SectionOrder)` |
-| `BlueprintDetail` | Section slot details; `BlueprintSectionID`, `BlueprintID`, `TagID`, `DifficultyID`, `Quantity`; UNIQUE `(BlueprintSectionID, TagID, DifficultyID)` |
-| `Test` | Generated test; `BlueprintID` FK (nullable); `TestFormat` (`Practice`/`Exam`); `GeneratedForStudentID` FK (nullable); `TestCode` UNIQUE when not null |
-| `TestQuestion` | Test-question mapping; FK to `Test` and `Question`; ordered by `QuestionNo` |
+- Correct all five existing entity/configuration mappings against the SQL script.
+- Add `Account`, `Expert`, `TagTopic`, and `TagDifficulty` read models needed for display/validation, configured with `ExcludeFromMigrations()`.
+- Keep Question/QuestionTopic read models for the later generation checkpoint.
+- Register MediatR and TestGen services in `TestGenModuleExtensions`.
+- Create TestGen test project with EF model metadata tests for every owned table.
 
-**Note**: Tables `Test` and `TestQuestion` are system-generated artifacts created during test generation and read by Testing module (003). Experts do not get direct CRUD over `Test` in MVP.
+### Checkpoint 1: Create and Read Blueprint
 
-`BlueprintSection` does not change Recommender scoring. Recommender still returns topic + difficulty advice; TestGen applies section constraints (`QuestionType`, ordering, part metadata) when choosing and ordering questions.
+- Define request/response contracts for the full aggregate.
+- Add shared validation for field lengths, section order, question type, composite metadata, detail quantity, active taxonomy, and topic grade.
+- Create Blueprint + Sections + Details in one transaction with `Status = Draft` and authenticated owner.
+- Implement paged list, pending list, and aggregate detail queries.
+- Deactivated records are excluded by default.
 
-### Service & API Gateway — REST Endpoints
+### Checkpoint 2: Update and Submit
 
-**Expert (ExpertOnly policy)**
-```
-GET    /api/v1/blueprints                     # UC-42: list all (own + others, paged + filter)
-GET    /api/v1/blueprints/pending             # UC-40: pending review (exclude own, BR-Blueprint-01)
-GET    /api/v1/blueprints/{id}               # Single blueprint + sections + detail slots
-POST   /api/v1/blueprints                     # UC-43: create DRAFT blueprint
-POST   /api/v1/blueprints/{id}/submit         # Submit DRAFT → PENDING_REVIEW
-POST   /api/v1/blueprints/{id}/review         # UC-41: Approve or Reject (with note)
-POST   /api/v1/blueprints/{id}/clone          # UC-44: deep-copy
-PUT    /api/v1/blueprints/{id}               # UC-45: update (DRAFT/REJECTED only)
-DELETE /api/v1/blueprints/{id}               # UC-46: hard/soft delete
-```
+- Replace the entire owned aggregate only for `Draft` or `Rejected`.
+- Use one transaction; delete/recreate child rows after request validation succeeds.
+- Submit reloads and validates totals from persisted data.
+- Successful submit sets `PendingReview` and clears old review audit fields.
 
-**Student (StudentOnly policy)**
-```
-POST   /api/v1/tests/generate                 # Generate test from approved blueprint for student
-POST   /api/v1/tests/generate-practice         # Generate 10-question WeakTag practice session (BR-54)
-```
+### Checkpoint 3: Peer Review
 
-### Integration & Domain Events
+- Review only `PendingReview` blueprints created by another Expert.
+- Approve sets `Approved`, clears note, and writes review actor/time.
+- Reject sets `Rejected`, requires a 1-2000 character note, and writes review actor/time.
+- No notification event is required for MVP.
 
-| Event | Publisher | Consumer | Purpose |
-|-------|-----------|----------|---------|
-| `BlueprintRejectedEvent` | TestGen | Notification (008) | Notify Expert creator of rejection + review_note |
-| `BlueprintApprovedEvent` | TestGen | Notification (008) | Notify Expert creator of approval |
+### Checkpoint 4: Clone and Delete
 
-### Test Generation Engine
+- Clone any visible blueprint to a new owned `Draft` with all new aggregate IDs.
+- Hard-delete unused `Draft`, `Rejected`, or `Approved` aggregates.
+- Reject delete of `PendingReview` with 409.
+- Change `Active` or Test-linked blueprints to `Deactivated`, preserving Test history.
 
-```csharp
-// Path A: GenerateTestFromBlueprintAsync(blueprintId, studentId): (Exam Mode)
-// 1. Load Blueprint + BlueprintSection + BlueprintDetail slots
-// 2. Call IRecommenderService.GetStudentWeakTagsAsync(studentId) to fetch diagnosed weak tags
-// 3. For each BlueprintSection ordered by section_order:
-// 4. For each BlueprintDetail slot inside that section (tag_id, difficulty_id, quantity):
-//    a. Check if this slot's tag_id is in student's WeakTags (official_point < 5.00):
-//       - YES (WeakTag):
-//         * Cap: WeakTag-biased questions ≤ 20% of total_questions (BR-WeakTag-Cap)
-//         * Bias probability: 40% → prefer WeakTag questions (reduce from 70%)
-//         * Difficulty downscale (F2 resolution):
-//           - if slot difficulty is Hard (level 3) or Very Hard (level 4) → query Medium (level 2) instead
-//           - if slot difficulty is Medium (level 2) AND student's official_point < 3.00 (Level 1) → query Easy (level 1) instead
-//           - if slot difficulty is Easy (level 1) (remedial: official_point < 5.00) → bias = 10%, no downscale
-//         * Rollback downscale (F3 resolution): Scale back to original slot difficulty only when official_point >= 5.00
-//       - NO or MASTERED: standard selection (or Challenge Mode upscale if official_point >= 8.00)
-//    b. Query Question WHERE:
-//       - question_id NOT IN (previous test sessions for this student, last 7 days) — dedup
-//       - tag_id = slot.tag_id (or adjusted difficulty)
-//       - difficulty_id = slot.difficulty_id (adjusted if WeakTag)
-//       - question_type = section.question_type
-//       - status = APPROVED AND is_active = true
-//    c. Random sample `quantity` questions from candidate pool
-// 5. Create Test record with generated_by = System, test_format = Exam, generated_for_student_id = studentId
-// 6. Create TestQuestion records (ordered by section_order, then slot order)
-// 7. Return Test entity with session-start URL
+### Checkpoint 5: Expert Frontend
 
-// Path B: GeneratePracticeSeriesAsync(tagId, studentId): (Practice Mode - BR-54)
-// 1. Call IRecommenderService.GetStudentWeakTagAdviceAsync(studentId)
-// 2. Validate tagId is indeed a WeakTag for the student (official_point < 5.00)
-// 3. Determine target difficulty level = WeakTagAdviceDto.RecommendedDifficultyLevel (1 or 2)
-// 4. Resolve difficulty_id: lookup TagDifficulty WHERE LevelValue == RecommendedDifficultyLevel
-//    → use TagDifficulty.DifficultyID for the Question query.
-//    NOTE: RecommendedDifficultyLevel is a level integer 1..4, NOT a DifficultyID (PK).
-//          Direct comparison between these two values is semantically incorrect.
-// 5. Query candidate Questions WHERE:
-//       - tag_id = tagId
-//       - difficulty_id = resolved TagDifficulty.DifficultyID
-//       - status = APPROVED AND is_active = true
-// 6. Random sample 10 questions
-// 7. Create Test record with generated_by = System, test_format = Practice, total_questions = 10, generated_for_student_id = studentId
-// 8. Create TestQuestion records
-// 9. Return Test entity with session-start URL
+- Blueprint list with own/all/pending views and status/grade/search filters.
+- Full-page editor for sections and topic/difficulty slots; do not use a large nested modal.
+- Detail view with clone, owner edit/submit/delete, and non-owner review actions according to state.
+- Frontend maps stable error codes to Vietnamese.
+
+### Checkpoint 6: Test Generation (Later)
+
+- Complete QuestionBank and Testing read models.
+- Implement BlueprintExam and practice generation against SQL `TestMode` values.
+- Integrate `IRecommenderService`, resolve difficulty levels, deduplicate recent questions, and populate TestQuestion audit fields.
+
+## API Design
+
+`BlueprintsController` uses `[Authorize(Roles = "Expert")]` and route `api/test-generator/blueprints`.
+
+```text
+GET    /api/test-generator/blueprints
+GET    /api/test-generator/blueprints/pending
+GET    /api/test-generator/blueprints/{blueprintId}
+POST   /api/test-generator/blueprints
+PUT    /api/test-generator/blueprints/{blueprintId}
+POST   /api/test-generator/blueprints/{blueprintId}/submit
+POST   /api/test-generator/blueprints/{blueprintId}/review
+POST   /api/test-generator/blueprints/{blueprintId}/clone
+DELETE /api/test-generator/blueprints/{blueprintId}
 ```
 
-### Blueprint Validation (BR-07)
+Controllers obtain the Expert ID from `account_id`, falling back to `ClaimTypes.NameIdentifier`, consistent with QuestionBank. Controllers only map HTTP outcomes; workflow logic stays in handlers.
 
-```csharp
-// ValidateBlueprintSum(blueprintId):
-// var totalSectionQty = blueprint_sections.Sum(s => s.total_questions);
-// if (totalSectionQty != blueprint.total_questions)
-//     throw ValidationException("Section totals must sum to blueprint.total_questions (BR-07)");
-//
-// foreach (var section in blueprint_sections)
-// {
-//     var totalSlotQty = section.details.Sum(d => d.quantity);
-//     if (totalSlotQty != section.total_questions)
-//         throw ValidationException("Slot quantities must sum to section.total_questions (BR-07)");
-// }
-```
+## Aggregate Write Strategy
 
-### Self-Approval Guard (BR-Blueprint-01)
+- Validate the complete request before mutating tracked entities.
+- Validate taxonomy in bulk, not one query per detail.
+- Generate IDs with `Guid.NewGuid().ToString()`.
+- Use an explicit transaction for aggregate create/update/clone/delete.
+- Submit/review/delete should use a SQL transaction and reload current state before transition to avoid stale workflow decisions.
+- Supply a persisted post-condition verifier to the SQL execution strategy so an ambiguous commit is not blindly replayed.
+- Do not expose `ApprovedBy` in write requests.
 
-```csharp
-// In ReviewBlueprintHandler:
-// if (blueprint.expert_id == currentUserId)
-//     throw ForbiddenException("Cannot review your own blueprint (BR-Blueprint-01)");
-```
+## Cross-Module Boundaries
 
-## Verification Plan
+- TestGen does not reference QuestionBank persistence classes.
+- Read-only external tables are represented by TestGen-owned read models and excluded from migrations.
+- Recommender remains an in-process service used only by generation; Blueprint CRUD has no Recommender dependency.
+- Testing consumes Test/TestQuestion rows but does not own Blueprint workflow.
 
-1. `dotnet build` — zero compile errors.
-2. EF mappings point to current DB script tables. Do not add EF migration unless the team switches source-of-truth from SQL script to EF migrations.
-3. Integration tests (xUnit):
-   - UC-43: Create blueprint with 3 slots summing to 40 questions → DRAFT.
-   - Submit for review → PENDING_REVIEW; slots summing to 39 → 422 (BR-07).
-   - UC-41: Expert A approves Expert B's blueprint → APPROVED.
-   - UC-41: Expert A approves own blueprint → 403 (BR-Blueprint-01).
-   - UC-41: Reject without note → 400 (BR-Blueprint-03).
-   - UC-44: Clone APPROVED blueprint → new UUID, all details copied, status = DRAFT.
-   - UC-45: Update APPROVED blueprint → 422 (BR-47).
-   - UC-46: Delete ACTIVE blueprint → soft-delete only.
-   - Test generation from APPROVED blueprint → 40 `TestQuestion` records created.
-   - Personal adaptive/recommendation test → `generated_by = System`, `test_code = NULL`.
-   - WeakTag bias: student with WeakTag in Algebra-Medium → generation biases toward Medium questions (40% probability).
+## Verification
+
+1. `dotnet build MathInsight.sln --no-restore` passes.
+2. EF metadata tests assert exact table/column names, SQL types, nullability, keys, indexes, relationships, and status values.
+3. Handler tests cover ownership, state transitions, sum validation, taxonomy validation, deep cloning, and delete/deactivate behavior.
+4. Controller tests cover 400/403/404/409/422 mapping and authenticated claim extraction.
+5. The opt-in disposable SQL Server smoke test verifies the current schema, composite BlueprintDetail FK, and concurrent submit/review transitions. Set `TESTGEN_SQLSERVER_CONNECTION` to a disposable SQL Server `master` connection to run it.
+6. Frontend checkpoint runs `npm run build` and performs desktop workflow smoke tests.
+
+## Commit Boundaries
+
+- `fix(testgen): align persistence with current SQL schema`
+- `feat(testgen): add blueprint create and query workflow`
+- `feat(testgen): add blueprint submit and review workflow`
+- `feat(testgen): add blueprint clone and delete workflow`
+- `feat(testgen-ui): add expert blueprint management`
