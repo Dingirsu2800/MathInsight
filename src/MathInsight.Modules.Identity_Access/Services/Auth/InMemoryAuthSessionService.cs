@@ -6,7 +6,6 @@ public class InMemoryAuthSessionService : IAuthSessionService
 {
     private readonly ConcurrentDictionary<string, FailedLoginState> _failedLogins = new();
     private readonly ConcurrentDictionary<string, DateTime> _lockedAccounts = new();
-    private readonly ConcurrentDictionary<string, SessionState> _activeSessions = new();
     private readonly ConcurrentDictionary<string, DateTime> _blacklistedTokens = new();
 
     // refreshToken -> its session record; and accountId -> set of its refresh tokens.
@@ -59,37 +58,6 @@ public class InMemoryAuthSessionService : IAuthSessionService
         _failedLogins.TryRemove(accountId, out _);
         _lockedAccounts.TryRemove(accountId, out _);
         return Task.CompletedTask;
-    }
-
-    public Task StoreActiveSessionAsync(string accountId, string tokenId, TimeSpan ttl)
-    {
-        var expiresAtUtc = DateTime.UtcNow.Add(ttl);
-
-        if (_activeSessions.TryGetValue(accountId, out var oldSession) &&
-            oldSession.TokenId != tokenId &&
-            oldSession.ExpiresAtUtc > DateTime.UtcNow)
-        {
-            _blacklistedTokens[oldSession.TokenId] = oldSession.ExpiresAtUtc;
-        }
-
-        _activeSessions[accountId] = new SessionState(tokenId, expiresAtUtc);
-        return Task.CompletedTask;
-    }
-
-    public Task<bool> IsActiveSessionAsync(string accountId, string tokenId)
-    {
-        if (!_activeSessions.TryGetValue(accountId, out var session))
-        {
-            return Task.FromResult(false);
-        }
-
-        if (session.ExpiresAtUtc <= DateTime.UtcNow)
-        {
-            _activeSessions.TryRemove(accountId, out _);
-            return Task.FromResult(false);
-        }
-
-        return Task.FromResult(session.TokenId == tokenId);
     }
 
     public Task BlacklistTokenAsync(string tokenId, TimeSpan ttl)
@@ -190,8 +158,6 @@ public class InMemoryAuthSessionService : IAuthSessionService
     }
 
     private sealed record FailedLoginState(int Count, DateTime ExpiresAtUtc);
-
-    private sealed record SessionState(string TokenId, DateTime ExpiresAtUtc);
 
     private sealed record RefreshSessionState(
         string AccountId,

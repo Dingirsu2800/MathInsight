@@ -6,12 +6,6 @@ public interface IAuthSessionService
     Task RecordFailedLoginAsync(string accountId);
     Task ResetFailedLoginAsync(string accountId);
 
-    // Legacy single-session helper (tracks a single access-token jti per account). Retained so
-    // the existing LoginCommandHandler keeps compiling; the Phase 3 login rework switches to the
-    // refresh-token session model below (BR-02 is then enforced via RevokeAllSessionsAsync).
-    Task StoreActiveSessionAsync(string accountId, string tokenId, TimeSpan ttl);
-    Task<bool> IsActiveSessionAsync(string accountId, string tokenId);
-
     Task BlacklistTokenAsync(string tokenId, TimeSpan ttl);
     Task<bool> IsTokenBlacklistedAsync(string tokenId);
 

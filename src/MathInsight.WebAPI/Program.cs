@@ -232,9 +232,6 @@ builder.Services
                     return;
                 }
 
-                var role = principal.FindFirst(ClaimTypes.Role)?.Value
-                    ?? principal.FindFirst("role")?.Value;
-
                 var tokenId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
                     ?? principal.FindFirst("jti")?.Value;
 
@@ -274,20 +271,12 @@ builder.Services
                 if (!isActive)
                 {
                     context.Fail("Account is deactivated.");
-                    return;
                 }
 
-                // BR-02 applies to Student accounts.
-                if (!string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                var isActiveSession = await authSessionService.IsActiveSessionAsync(accountId, tokenId);
-                if (!isActiveSession)
-                {
-                    context.Fail("Session is no longer active.");
-                }
+                // BR-02 (Student single session) is enforced at login time: LoginCommandHandler
+                // calls RevokeAllSessionsAsync, which deletes the previous refresh token and
+                // blacklists its access-token jti — already checked above. There is no separate
+                // per-request "active session" marker to re-verify here.
             }
         };
     });
