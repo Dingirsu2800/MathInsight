@@ -1,6 +1,13 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import client from "../services/questionBankApiClient";
+import { login } from "../services/authApi";
+
+/** Route map keyed by backend RoleName */
+const ROLE_ROUTES = {
+  Student: "/student/dashboard",
+  Expert: "/expert/questions",
+  Teacher: "/teacher/dashboard", // fallback — no dedicated Teacher UI yet
+};
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -18,8 +25,6 @@ export default function LoginPage() {
 
     setLoading(true);
     setError("");
-    localStorage.removeItem("token");
-    localStorage.removeItem("access_token");
 
     try {
       const response = await client.post("/api/v1/auth/login", {
@@ -57,7 +62,10 @@ export default function LoginPage() {
       }
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.message || err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại.";
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Đăng nhập thất bại. Vui lòng kiểm tra lại.";
       setError(errMsg);
     } finally {
       setLoading(false);
@@ -69,9 +77,9 @@ export default function LoginPage() {
       <section className="card auth-card max-w-md w-full bg-pure-surface border border-whisper-border p-8 rounded-2xl diffused-shadow space-y-6">
         <div className="text-center space-y-2">
           <p className="text-primary text-[11px] font-black tracking-widest uppercase">MathInsight Portal</p>
-          <h1 className="text-2xl font-bold text-on-surface">Đăng nhập MathInsight</h1>
+          <h1 className="text-2xl font-bold text-on-surface">Đăng nhập</h1>
           <p className="text-xs text-on-surface-variant leading-relaxed">
-            Nhập tài khoản và mật khẩu của bạn để truy cập hệ thống.
+            Nhập tài khoản và mật khẩu của bạn để truy cập hệ thống MathInsight.
           </p>
         </div>
 
@@ -92,7 +100,7 @@ export default function LoginPage() {
                 value={usernameOrEmail}
                 onChange={(e) => setUsernameOrEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 text-sm bg-transparent border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
-                placeholder="expert@mathinsight.vn"
+                placeholder="user@mathinsight.vn"
                 disabled={loading}
               />
             </div>
