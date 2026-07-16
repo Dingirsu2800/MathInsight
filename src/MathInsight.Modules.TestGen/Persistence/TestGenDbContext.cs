@@ -20,6 +20,9 @@ public class TestGenDbContext : DbContext
     public DbSet<ExpertReadModel> Experts => Set<ExpertReadModel>();
     public DbSet<TagTopicReadModel> TagTopics => Set<TagTopicReadModel>();
     public DbSet<TagDifficultyReadModel> TagDifficulties => Set<TagDifficultyReadModel>();
+    public DbSet<StudentReadModel> Students => Set<StudentReadModel>();
+    public DbSet<QuestionReadModel> Questions => Set<QuestionReadModel>();
+    public DbSet<QuestionTopicReadModel> QuestionTopics => Set<QuestionTopicReadModel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

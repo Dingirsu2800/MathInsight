@@ -1,3 +1,5 @@
+using MathInsight.Modules.TestGen.Persistence.ReadModels;
+
 namespace MathInsight.Modules.TestGen.Persistence.Entities;
 
 /// <summary>
@@ -19,5 +21,6 @@ public class Test
     public DateTime CreatedTime { get; set; } = DateTime.UtcNow;
 
     public Blueprint? Blueprint { get; set; }
+    public StudentReadModel? GeneratedForStudent { get; set; }
     public ICollection<TestQuestion> Questions { get; set; } = new List<TestQuestion>();
 }
