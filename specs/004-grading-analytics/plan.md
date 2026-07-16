@@ -1,6 +1,6 @@
 # Implementation Plan: Grading & Analytics Module
 
-**Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
+**Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-07-14
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -50,10 +50,62 @@ All writes are executed within a **single transaction** (DC-05).
 ### Service & API Gateway — REST Endpoints
 
 ```
-POST   /api/v1/chatbot/assist            # UC-51: send question + student answer to AI
+POST   /api/v1/chatbot/assist                  # UC-51: send question + student answer to AI
+GET    /api/v1/grading/sessions/{sessionId}    # UC-55: view graded session result
+GET    /api/v1/grading/student/history         # UC-56: paginated session history
+GET    /api/v1/grading/student/stats           # UC-56: aggregate stats (totalSessions, avgScore, accuracy)
 ```
 
 > Grading itself is **not a REST endpoint** — it is called by Testing during submit/force-submit.
+
+---
+
+## UC-55: GET /api/v1/grading/sessions/{sessionId}
+
+### Files
+
+```
+src/MathInsight.Modules.Grading_Analytics/
+├── Queries/
+│   ├── GetSessionResult/
+│   │   ├── GetSessionResultQuery.cs
+│   │   ├── GetSessionResultQueryHandler.cs
+│   │   └── SessionResultDto.cs          # SessionResultDto, GradedAnswerDetailDto, AnswerPartDetailDto
+```
+
+### Logic
+- Load `TestSession` + `TestAnswers` (with `Question`, `SelectedOptions`, `AnswerParts`, `QuestionPart`) for the given `sessionId`.
+- Guard: `StudentId == authenticatedStudentId` → 403. Not found → 404.
+- Map to `SessionResultDto`. When `Status != Graded`, `isCorrect` fields will be `null`.
+- Ordered by `TestAnswer.QuestionNo ASC`.
+
+---
+
+## UC-56: GET /api/v1/grading/student/history & /stats
+
+### Files
+
+```
+src/MathInsight.Modules.Grading_Analytics/
+├── Queries/
+│   ├── GetSessionHistory/
+│   │   ├── GetSessionHistoryQuery.cs
+│   │   ├── GetSessionHistoryQueryHandler.cs
+│   │   └── SessionHistoryDto.cs         # SessionHistoryDto, StudentHistoryStatsDto, PagedResult<T>
+```
+
+### Logic (history)
+- Filter `TestSessions` by `StudentId == authenticatedStudentId` AND `Status == "Graded"`.
+- Apply optional `testFormat`, `fromDate`, `toDate` filters.
+- Order by `EndTime DESC`. Paginate with `Skip`/`Take`.
+- Return `PagedResult<SessionHistoryDto>` with `totalCount`, `totalPages`.
+
+### Logic (stats)
+- Same filter scope (same student, `Status == "Graded"`).
+- `totalSessions`: `COUNT(*)`
+- `sessionsLast30Days`: `COUNT(*) WHERE EndTime >= DateTime.UtcNow.AddDays(-30)`
+- `averageScore`: `AVG(Score)` (0 if no sessions)
+- `accuracyPercent`: `SUM(NumCorrect) * 100.0 / SUM(TotalQuestion)` (0 if no sessions)
 
 ### Integration & Domain Events
 

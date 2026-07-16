@@ -95,3 +95,44 @@
   - [x] UC-51: Chatbot returns explanation JSON within 10s (happy path)
   - [x] UC-51: Chatbot API times out after 10s → endpoint returns structured error (e.g. 503); student session is NOT affected (U1)
   - [x] UC-51: Second chatbot call same session → rate limited (429)
+
+---
+
+## Phase 5: Query Endpoints (UC-55, UC-56) — 2026-07-14
+
+### 5.1 DTOs
+
+- [x] `SessionResultDto.cs` — `SessionResultDto`, `GradedAnswerDetailDto`, `AnswerPartDetailDto`
+- [x] `SessionHistoryDto.cs` — `SessionHistoryDto`, `StudentHistoryStatsDto`, `PagedResult<T>`
+
+### 5.2 Queries — UC-55 (View Session Result)
+
+- [x] `GetSessionResultQuery.cs` — MediatR query record `GetSessionResultQuery(Guid SessionId, Guid AuthenticatedStudentId)`
+- [x] `GetSessionResultQueryHandler.cs`:
+  - [x] Load `TestSession` + `TestAnswers` + nav props via EF
+  - [x] Guard: `StudentId != authenticatedStudentId` → throw `UnauthorizedAccessException` → controller maps to 403
+  - [x] Guard: session not found → return `null` → controller maps to 404
+  - [x] Map to `SessionResultDto` (answers ordered by `QuestionNo ASC`)
+
+### 5.3 Queries — UC-56 (View Test History + Stats)
+
+- [x] `GetSessionHistoryQuery.cs` — `GetSessionHistoryQuery(Guid StudentId, int Page, int PageSize, string? TestFormat, DateTime? FromDate, DateTime? ToDate)`
+- [x] `GetSessionHistoryQueryHandler.cs`:
+  - [x] Filter `Status == "Graded"`, `StudentId`, optional format/date filters
+  - [x] Order by `EndTime DESC`
+  - [x] Return `PagedResult<SessionHistoryDto>`
+- [x] `GetStudentHistoryStatsQuery.cs` — `GetStudentHistoryStatsQuery(Guid StudentId)`
+- [x] `GetStudentHistoryStatsQueryHandler.cs`:
+  - [x] Compute `totalSessions`, `sessionsLast30Days`, `averageScore`, `accuracyPercent`
+  - [x] Return `StudentHistoryStatsDto`
+
+### 5.4 Controller — `StudentGradingController`
+
+- [x] New controller `StudentGradingController` at route `api/v1/grading`
+- [x] `GET /api/v1/grading/sessions/{sessionId}` — UC-55
+- [x] `GET /api/v1/grading/student/history` — UC-56
+- [x] `GET /api/v1/grading/student/stats` — UC-56
+
+### 5.5 Verification
+
+- [x] `dotnet build` — zero compile errors

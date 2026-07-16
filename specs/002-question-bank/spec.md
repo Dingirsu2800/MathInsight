@@ -19,7 +19,7 @@
 | UC-20 | Input Single Question | Expert |
 | UC-21 | Manual Input | Expert |
 | UC-22 | Upload/Attach Question Image | Expert |
-| UC-23 | Input by Excel/Word File | Expert |
+| UC-23 | Input by Excel File | Expert |
 | UC-24 | View Question Version Control | Expert |
 | UC-25 | Update Question | Expert |
 | UC-26 | Activate/Deactivate Question | Expert |
@@ -70,7 +70,7 @@
 - **BR-68**: Resolving or dismissing the final pending Expert report restores a `REPORTED` Question to `APPROVED`. Pending Student reports do not prevent restoration. An Admin workflow is resolved only by its original Admin reporter.
 - **BR-69**: A Question with an active report (`PENDING`, `PENDING_FIX`, or `PENDING_REVIEW`), or a Question in `REPORTED` or `REJECTED` status with an active Admin workflow, cannot be hard-deleted. The API returns HTTP 409 (`QUESTION_HAS_PENDING_REPORTS`) and preserves the report audit trail.
 - **BR-71**: Only one active Admin report workflow (`PENDING_FIX` or `PENDING_REVIEW`) may exist for a Question. The owning Expert may submit only a `PENDING_FIX` Admin report for review. Only the Admin account that created that report may approve or reject it. Reject requires a non-empty review note of at most 2000 characters.
-- **BR-53**: File import (Excel/Word) must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows.
+- **BR-53**: Excel import must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows. Word import is post-MVP.
 - **BR-63**: `TagDifficulty.LevelValue` is the stable cross-module difficulty contract. Values should be unique and normally map to Recommender v2 `RecommendedDifficultyLevel` values `1..4`. Question Bank owns `Question.DifficultyID`; Recommender v2 owns only student-topic mastery and does not store Ptag per difficulty.
 - **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.
 - **BR-65**: Tag list APIs return only active records by default. Expert tag management may request inactive records with `includeInactive=true`; each response retains its `IsActive` state.
@@ -142,8 +142,12 @@ Question.IsActive = 1
 | Format | Accepted | Max Size | Notes |
 |--------|----------|----------|-------|
 | Excel (.xlsx) | Yes | 20 MB | Template with predefined columns |
-| Word (.docx) | Yes | 20 MB | Structured format per spec |
+| Word (.docx) | Post-MVP | N/A | Deferred; no parser or endpoint in the MVP |
 | PDF | No | — | Not supported |
+
+For the MVP, Excel import is an Expert-only synchronous `Preview -> Confirm` flow. Preview never writes to the database. Confirm revalidates every selected normalized draft and creates all questions in one transaction; if any selected item is invalid, no question is created. The workbook supports at most 100 questions, must use template version `1`, and is rejected before parsing when the archive entry count, uncompressed size, or an input sheet row count exceeds the import safety limits. RabbitMQ, Redis, MassTransit, background queues, Word parsing, embedded images, and OCR batch import are outside UC-23 MVP scope.
+
+The system exposes `GET /api/question-bank/questions/import-template`, `POST /api/question-bank/questions/import-preview` (`multipart/form-data`, field `file`), and `POST /api/question-bank/questions/import-confirm`. The template contains `_Meta`, `Instructions`, `Questions`, `Answers`, `Parts`, `Topics`, and `Catalogs` sheets. Topic and difficulty references must resolve to active taxonomy records. Formula cells in import input sheets are rejected. `PictureUrl` is optional and must be an HTTPS URL; embedded workbook images are not supported.
 
 ## Success Criteria *(mandatory)*
 

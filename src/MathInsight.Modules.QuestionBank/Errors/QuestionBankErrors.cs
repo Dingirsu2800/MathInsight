@@ -323,4 +323,32 @@ public static class QuestionBankErrors
     public static readonly Error QuestionNotReportable = new(
         "QUESTION_NOT_REPORTABLE",
         "Question cannot be reported in its current state.");
+
+    public static readonly Error QuestionImportFileRequired = new(
+        "QUESTION_IMPORT_FILE_REQUIRED",
+        "An Excel import file is required.");
+
+    public static readonly Error QuestionImportFileTooLarge = new(
+        "QUESTION_IMPORT_FILE_TOO_LARGE",
+        "Excel import file size must not exceed 20 MB.");
+
+    public static readonly Error QuestionImportFileTypeNotSupported = new(
+        "QUESTION_IMPORT_FILE_TYPE_NOT_SUPPORTED",
+        "Only .xlsx Excel files are supported for question import.");
+
+    public static readonly Error QuestionImportTemplateInvalid = new(
+        "QUESTION_IMPORT_TEMPLATE_INVALID",
+        "Excel file does not match the MathInsight import template.");
+
+    public static readonly Error QuestionImportTemplateVersionUnsupported = new(
+        "QUESTION_IMPORT_TEMPLATE_VERSION_UNSUPPORTED",
+        "Excel import template version is not supported.");
+
+    public static readonly Error QuestionImportLimitExceeded = new(
+        "QUESTION_IMPORT_LIMIT_EXCEEDED",
+        "Excel import exceeds the supported batch limit.");
+
+    public static readonly Error QuestionImportValidationFailed = new(
+        "QUESTION_IMPORT_VALIDATION_FAILED",
+        "One or more imported questions are invalid.");
 }

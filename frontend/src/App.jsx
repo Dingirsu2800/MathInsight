@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import StudentDashboard from './pages/student/Dashboard.jsx';
 import TestSession from './pages/student/TestSession.jsx';
+import TestHistoryPage from './pages/student/TestHistoryPage.jsx';
+import CompetencyPage from './pages/student/CompetencyPage.jsx';
+import TestResultPage from './pages/student/TestResultPage.jsx';
 import QuestionBankListPage from './pages/expert/QuestionBankListPage.jsx';
 import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
 import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
@@ -44,7 +47,12 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/google/success" element={<GoogleSuccessPage />} />
+      {/* Student Routes */}
       <Route path="/student/dashboard" element={<StudentDashboard />} />
+      <Route path="/student/history" element={<TestHistoryPage />} />
+      <Route path="/student/competency" element={<CompetencyPage />} />
+      <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
+      <Route path="/student/test-result" element={<TestResultPage />} />
       <Route
         path="/student/test"
         element={

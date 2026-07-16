@@ -3,7 +3,7 @@
 export function resolveHomePath(roleName) {
   switch (String(roleName || "").toLowerCase()) {
     case "student":
-      return "/student";
+      return "/student/dashboard";
     case "teacher":
       return "/teacher";
     case "expert":
