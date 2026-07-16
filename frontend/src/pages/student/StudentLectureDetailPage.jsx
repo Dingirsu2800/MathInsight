@@ -47,8 +47,8 @@ export default function StudentLectureDetailPage() {
       const mappedDiscussions = (res.data || []).map(d => ({
         id: d.discussionQuestionId,
         authorId: d.studentId,
-        author: d.studentId || "Học sinh ẩn danh",
-        authorInitials: d.studentId ? d.studentId.substring(0, 2).toUpperCase() : "HS",
+        author: d.authorName || "Học sinh ẩn danh",
+        authorInitials: d.authorName ? d.authorName.substring(0, 2).toUpperCase() : "HS",
         timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
         title: d.title,
         content: d.content,
@@ -56,7 +56,7 @@ export default function StudentLectureDetailPage() {
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
           authorId: a.accountId,
-          author: a.accountId || "Giáo viên",
+          author: a.authorName || "Giáo viên",
           role: "Giáo viên",
           timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
           content: a.content,

@@ -8,6 +8,7 @@ public class DiscussionQuestionDto
     public string DiscussionQuestionId { get; set; } = default!;
     public string LectureId { get; set; } = default!;
     public string StudentId { get; set; } = default!;
+    public string AuthorName { get; set; } = default!;
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Status { get; set; } = default!;
@@ -20,6 +21,7 @@ public class DiscussionAnswerDto
 {
     public string DiscussionAnswerId { get; set; } = default!;
     public string AccountId { get; set; } = default!;
+    public string AuthorName { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }
@@ -37,8 +39,10 @@ public class DiscussionReportDto
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }
     public string TargetType { get; set; } = default!;
+    public string TargetAuthorName { get; set; } = default!;
     public string TargetPreview { get; set; } = default!;
     public string LectureTitle { get; set; } = default!;
+    public string LectureId { get; set; } = default!;
     public string? ResolvedBy { get; set; }
     public DateTime? ResolvedAt { get; set; }
 }
