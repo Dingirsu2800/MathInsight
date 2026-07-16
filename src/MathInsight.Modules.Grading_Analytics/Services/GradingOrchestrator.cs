@@ -253,14 +253,18 @@ public class GradingOrchestrator : IGradingOrchestrator
     /// </summary>
     private static bool IsAbandoned(TestAnswer answer, string questionType)
     {
-        return questionType switch
+        var typeNormalized = questionType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+        return typeNormalized switch
         {
-            "SINGLE_CHOICE" => answer.AnswerId is null,
-            "TRUE_FALSE" => answer.AnswerId is null,
-            "MULTIPLE_SELECT" => answer.SelectedOptions.Count == 0,
-            "SHORT_ANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
-            "COMPOSITE" => answer.AnswerParts.All(p =>
-                string.IsNullOrWhiteSpace(p.StudentAnswer)),
+            "SINGLECHOICE" => answer.AnswerId is null,
+            "TRUEFALSE" => answer.AnswerId is null,
+            "MULTIPLESELECT" => answer.SelectedOptions.Count == 0,
+            "MULTIPLECHOICE" => answer.SelectedOptions.Count == 0,
+            "SHORTANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
+            "COMPOSITE" => answer.AnswerParts.Count == 0 || answer.AnswerParts.All(p =>
+                p.BooleanAnswer == null &&
+                string.IsNullOrWhiteSpace(p.TextAnswer) &&
+                p.NumericAnswer == null),
             _ => true
         };
     }
