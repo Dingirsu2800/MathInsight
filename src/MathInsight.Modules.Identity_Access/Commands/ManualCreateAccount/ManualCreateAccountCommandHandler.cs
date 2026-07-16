@@ -86,7 +86,15 @@ public class ManualCreateAccountCommandHandler
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _mediator.Publish(
-            new AccountCreatedEvent(accountId, account.Email, $"{account.FirstName} {account.LastName}", role.RoleName),
+            new AccountCreatedEvent
+            {
+                AccountId = accountId,
+                Email = account.Email,
+                Username = account.Username,
+                RoleName = role.RoleName,
+                FirstName = account.FirstName,
+                LastName = account.LastName,
+            },
             cancellationToken);
 
         return Result<AccountListItemResponse>.Success(new AccountListItemResponse(

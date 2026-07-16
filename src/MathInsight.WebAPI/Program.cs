@@ -1,6 +1,9 @@
 using MassTransit;
+using System.Reflection;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MathInsight.Modules.Identity_Access;
@@ -111,6 +114,42 @@ builder.Services.AddNotificationModule(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+// Swashbuckle renders [FromForm] IFormFile parameters (e.g. teacher registration) as a
+// multipart/form-data file upload automatically.
+builder.Services.AddSwaggerGen(options =>
+{
+    // Swashbuckle 7.x throws a SwaggerGeneratorException when an action binds a *top-level*
+    // [FromForm] IFormFile parameter (QuestionBank's QuestionsController.UploadQuestionImage and
+    // ExtractQuestionOcrDraft). That failure aborts generation of the entire document, so no
+    // endpoint shows up in Swagger. The exception is raised while reading the action's parameters,
+    // which happens *before* any IOperationFilter/IDocumentFilter runs — so a filter cannot repair
+    // it. DocInclusionPredicate is evaluated before an operation is generated, so we use it to skip
+    // just those broken operations and let the rest of the document (auth endpoints included)
+    // generate. This lives in the WebAPI composition root and does not touch the QuestionBank
+    // module. Auth's register/teacher binds a [FromForm] form-model (not a bare IFormFile), so it
+    // is unaffected and still renders as a multipart file upload.
+    options.DocInclusionPredicate((docName, apiDescription) =>
+    {
+        // Preserve Swashbuckle's default document/group matching for everything else.
+        if (apiDescription.GroupName != null && apiDescription.GroupName != docName)
+            return false;
+
+        if (apiDescription.ActionDescriptor is ControllerActionDescriptor descriptor)
+        {
+            var bindsTopLevelFormFile = descriptor.MethodInfo
+                .GetParameters()
+                .Any(parameter =>
+                    parameter.GetCustomAttribute<FromFormAttribute>() != null &&
+                    (typeof(IFormFile).IsAssignableFrom(parameter.ParameterType) ||
+                     typeof(IFormFileCollection).IsAssignableFrom(parameter.ParameterType)));
+
+            if (bindsTopLevelFormFile)
+                return false;
+        }
+
+        return true;
+    });
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.OnRejected = async (context, cancellationToken) =>
@@ -252,6 +291,13 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
 
