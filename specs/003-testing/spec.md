@@ -48,27 +48,27 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 - **BR-11**: Student progress is auto-saved in the background every **5 minutes** or upon any answer selection change.
 - **BR-12**: Timer countdown is synchronized with the server — client-side timer is display only; server enforces the actual deadline.
 - **BR-13**: When timer reaches 00:00, system automatically locks the interface, saves all selected answers at that point, and triggers force-submit workflow.
-- **BR-14**: `TestSession.test_format` must be set at session start: `Practice` or `Exam`. This cannot be changed after session creation.
-- **BR-15**: A Student may have at most one `InProgress` session for the same `test_id` at any given time.
-- **BR-16**: `TestAnswer.points_earned` is populated during grading (module 004). Submit returns only after grading succeeds and `status = Graded`.
-- **BR-16a**: `TestSession.submission_type` stores how the session was submitted: `StudentSubmit`, `TimeoutSubmit`, or `SystemSubmit`. It is required when `status = Graded` and must be null while `status = InProgress` or `Abandoned`.
-- **BR-16b**: An answer is considered "unanswered/abandoned" (which determines `TestSession.num_abandoned` and `GradeCalculatedEvent.Answers.IsAbandoned`) based on its `QuestionType`:
-  - `SINGLE_CHOICE`: `answer_id IS NULL`
-  - `TRUE_FALSE`: `answer_id IS NULL`
-  - `MULTIPLE_SELECT`: No options selected (i.e., no entries in `TestAnswerOption`)
-  - `SHORT_ANSWER`: `short_answer_text` is null or consists only of whitespace
-  - `COMPOSITE`: All child parts are unanswered/abandoned (i.e., all child parts have null or whitespace-only `student_answer` values in `TestAnswerPart`)
+- **BR-14**: `TestSession.TestFormat` must be set at session start: `Practice` or `Exam`. This cannot be changed after session creation.
+- **BR-15**: A Student may have at most one `InProgress` session for the same `TestID` at any given time.
+- **BR-16**: `TestAnswer.PointsEarned` is populated during grading (module 004). Submit returns only after grading succeeds and `Status = Graded`.
+- **BR-16a**: `TestSession.SubmissionType` stores how the session was submitted: `StudentSubmit`, `TimeoutSubmit`, or `SystemSubmit`. It is required when `Status = Graded` and must be null while `Status = InProgress` or `Abandoned`.
+- **BR-16b**: An answer is considered "unanswered/abandoned" (which determines `TestSession.NumAbandoned` and `GradeCalculatedEvent.Answers.IsAbandoned`) based on its `QuestionType`:
+  - `SINGLE_CHOICE` / `SingleChoice`: `AnswerID IS NULL`
+  - `TRUE_FALSE` / `TrueFalse`: `AnswerID IS NULL`
+  - `MULTIPLE_SELECT` / `MultipleSelect`: No options selected (i.e., no entries in `TestAnswerOption`)
+  - `SHORT_ANSWER` / `ShortAnswer`: `ShortAnswerText` is null or consists only of whitespace
+  - `COMPOSITE` / `Composite`: All child parts are unanswered/abandoned (i.e., all child parts have null `BooleanAnswer`, null or whitespace-only `TextAnswer`, and null `NumericAnswer` in `TestAnswerPart`)
 
 
 ### Key Entities *(include if feature involves data)*
 
-- **Test**: `test_id`, `blueprint_id` (FK → blueprints, nullable), `test_format` (**Practice** | **Exam**), `generated_for_student_id` (FK → students, nullable), `generated_by` (default 'System'), `test_status` (**ACTIVE** | **ARCHIVED**), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`, `created_time`
-- **TestQuestion**: `test_id` (FK), `question_id` (FK), `question_order` — composite PK
-- **TestSession**: `session_id`, `test_id` (FK), `student_id` (FK), `test_format` (**Practice** | **Exam**), `status` (**InProgress** | **Graded** | **Abandoned**), `submission_type` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `duration`, `start_time`, `end_time`, `total_question`, `num_correct`, `num_incorrect`, `num_abandoned`, `score`
-- **TestAnswer**: `test_answer_id`, `session_id` (FK), `question_id` (FK), `answer_id` (FK, nullable for MultipleSelect/ShortAnswer), `question_no`, `time_spent`, `first_choice_time`, `update_choice_time`, `short_answer_text`, `is_correct` (nullable until graded), `points_earned` (0.00 until graded)
-- **TestAnswerOption**: `test_answer_id` (FK, PK), `answer_id` (FK, PK) — for MultipleSelect
-- **TestAnswerPart**: `test_answer_part_id` (PK), `test_answer_id` (FK), `question_part_id` (FK), `student_answer` (nullable string), `is_correct` (nullable until graded), `points_earned` (0.00 until graded) — for Composite parts
-- **TestIncident**: `incident_id`, `session_id` (FK), `type` (TAB_SWITCH | FOCUS_LOSS), `time`
+- **Test**: `TestID` (PK), `BlueprintID` (FK → blueprints, nullable), `TestFormat` (**Practice** | **Exam**), `GeneratedForStudentID` (FK → students, nullable), `GeneratedBy` (default 'System'), `TestStatus` (**ACTIVE** | **ARCHIVED**), `TestName`, `TestCode` (nullable; unique when not null), `DurationMinutes`, `TotalQuestions`, `CreatedTime`
+- **TestQuestion**: `TestID` (FK, PK), `QuestionID` (FK, PK), `QuestionOrder` — composite PK
+- **TestSession**: `SessionID` (PK), `TestID` (FK), `StudentID` (FK), `TestFormat` (**Practice** | **Exam**), `Status` (**InProgress** | **Graded** | **Abandoned**), `SubmissionType` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `Duration`, `StartTime`, `EndTime`, `TotalQuestion`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
+- **TestAnswer**: `TestAnswerID` (PK), `SessionID` (FK), `QuestionID` (FK), `AnswerID` (FK, nullable for MultipleSelect/ShortAnswer), `QuestionNo`, `TimeSpent`, `FirstChoiceTime`, `UpdateChoiceTime`, `ShortAnswerText`, `IsCorrect` (nullable until graded), `PointsEarned` (0.00 until graded)
+- **TestAnswerOption**: `TestAnswerID` (FK, PK), `AnswerID` (FK, PK) — for MultipleSelect
+- **TestAnswerPart**: `TestAnswerID` (FK, PK), `PartID` (FK, PK), `BooleanAnswer` (nullable bool), `TextAnswer` (nullable string), `NumericAnswer` (nullable decimal), `IsCorrect` (nullable until graded), `PointsEarned` (0.00 until graded) — for Composite parts
+- **TestIncident**: `IncidentID` (PK), `SessionID` (FK), `Type` (TAB_SWITCH | FOCUS_LOSS), `Time`
 
 
 ### Session State Machine

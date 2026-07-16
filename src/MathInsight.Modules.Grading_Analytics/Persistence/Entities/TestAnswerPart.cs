@@ -6,10 +6,13 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class TestAnswerPart
 {
-    public Guid TestAnswerPartId { get; set; }
     public Guid TestAnswerId { get; set; }
-    public Guid QuestionPartId { get; set; }
-    public string? StudentAnswer { get; set; }
+    public Guid PartId { get; set; }
+    
+    public bool? BooleanAnswer { get; set; }
+    public string? TextAnswer { get; set; }
+    public decimal? NumericAnswer { get; set; }
+
     public bool? IsCorrect { get; set; }
     public decimal PointsEarned { get; set; }
 

@@ -8,13 +8,13 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
 {
     public void Configure(EntityTypeBuilder<Question> builder)
     {
-        builder.ToTable("Questions");
+        builder.ToTable("Question");
         builder.HasKey(x => x.QuestionId);
 
-        builder.Property(x => x.QuestionId).HasColumnName("question_id");
-        builder.Property(x => x.QuestionType).HasColumnName("question_type").HasMaxLength(30).IsRequired();
-        builder.Property(x => x.DefaultPoint).HasColumnName("default_point").HasPrecision(5, 2);
-        builder.Property(x => x.DifficultyLevel).HasColumnName("difficulty_level");
+        builder.Property(x => x.QuestionId).HasColumnName("QuestionID");
+        builder.Property(x => x.QuestionType).HasColumnName("QuestionType").HasMaxLength(30).IsRequired();
+        builder.Property(x => x.DefaultPoint).HasColumnName("DefaultPoint").HasPrecision(4, 2);
+        builder.Property(x => x.DifficultyLevel).HasColumnName("DifficultyLevel");
         builder.Property(x => x.QuestionContent).HasColumnName("QuestionContent").IsRequired();
 
         builder.HasMany(x => x.Answers)
