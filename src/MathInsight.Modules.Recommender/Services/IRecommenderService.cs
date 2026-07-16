@@ -13,10 +13,4 @@ public interface IRecommenderService
     /// Topics with no <c>TagsMastery</c> row are NOT returned as weak (spec edge case: No-row behavior).
     /// </summary>
     Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(string studentId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Returns detailed weak-tag advice including recommended difficulty level,
-    /// remedial flag, and reason. Used by TestGen to select questions.
-    /// </summary>
-    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(string studentId, CancellationToken cancellationToken = default);
 }

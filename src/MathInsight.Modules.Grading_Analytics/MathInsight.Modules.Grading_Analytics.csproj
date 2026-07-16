@@ -15,4 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MathInsight.Shared\MathInsight.Shared.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MathInsight.Modules.Grading_Analytics.Tests" />
+  </ItemGroup>
 </Project>

@@ -10,8 +10,7 @@ namespace MathInsight.Modules.Recommender.Services;
 /// for that student where the Tag belongs to the student's grade (10, 11, or 12).
 /// Upsert by unique key (student_id, grade). Clamp to [0.00, 10.00].
 ///
-/// NOTE: Grade-to-tag mapping is derived from the Tag.Grade field read from the shared
-/// QuestionBank tables. For MVP, grade is passed in from the event/caller context.
+/// Grade-to-tag mapping is derived from TagTopic.Grade and the student's current grade.
 /// </summary>
 public sealed class CompetencyEngine : ICompetencyEngine
 {
@@ -23,32 +22,41 @@ public sealed class CompetencyEngine : ICompetencyEngine
     }
 
     /// <inheritdoc />
-    public async Task RecalculateAsync(string studentId, int grade, CancellationToken cancellationToken = default)
+    public async Task RecalculateAsync(string studentId, CancellationToken cancellationToken = default)
     {
-        // Query average official_point across all TagsMastery rows for this student.
-        // For MVP: we average all tags for the student without filtering by grade,
-        // because Tag.Grade cross-schema read is deferred to a later phase.
-        // This is safe — each student is enrolled in one grade at a time.
-        var averagePoint = await _db.TagsMasteries
-            .Where(tm => tm.StudentId == studentId)
-            .AverageAsync(tm => (double?)tm.OfficialPoint, cancellationToken);
+        // Student is a cross-module read model; Recommender never writes to it.
+        var grade = await _db.Students
+            .AsNoTracking()
+            .Where(student => student.StudentId == studentId)
+            .Select(student => student.CurrentGrade)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (grade is null)
+            return;
+
+        var averagePoint = await (
+            from mastery in _db.TagsMasteries.AsNoTracking()
+            join tag in _db.TagTopics.AsNoTracking() on mastery.TagId equals tag.TagId
+            where mastery.StudentId == studentId && tag.Grade == grade.Value
+            select (decimal?)mastery.OfficialPoint
+        ).AverageAsync(cancellationToken);
 
         if (averagePoint is null)
-            return; // No TagsMastery rows yet; nothing to recalculate.
+            return;
 
-        var point = Math.Clamp((decimal)averagePoint.Value, 0.00m, 10.00m);
+        var point = Math.Clamp(averagePoint.Value, 0.00m, 10.00m);
 
         // Upsert CompetencyPoint by (student_id, grade)
         var existing = await _db.CompetencyPoints
-            .FirstOrDefaultAsync(cp => cp.StudentId == studentId && cp.Grade == grade, cancellationToken);
+            .FirstOrDefaultAsync(cp => cp.StudentId == studentId && cp.Grade == grade.Value, cancellationToken);
 
         if (existing is null)
         {
             _db.CompetencyPoints.Add(new Persistence.Entities.CompetencyPoint
             {
-                CompetencyId = Guid.NewGuid().ToString(),
+                CompetencyId = Guid.NewGuid().ToString("D"),
                 StudentId = studentId,
-                Grade = grade,
+                Grade = grade.Value,
                 Point = point
             });
         }

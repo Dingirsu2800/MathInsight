@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Recommender.Contracts;
 using MathInsight.Modules.Recommender.Persistence;
+using MathInsight.Shared.Recommendation;
 
 namespace MathInsight.Modules.Recommender.Services;
 
@@ -9,7 +10,7 @@ namespace MathInsight.Modules.Recommender.Services;
 /// Reads TagsMastery and joins to TagTopic (read-only) to resolve tag names.
 /// Redis cache is optional for future optimization.
 /// </summary>
-public sealed class RecommenderService : IRecommenderService
+public sealed class RecommenderService : IRecommenderService, IStudentRecommendationProvider
 {
     private const decimal WeakThreshold = 5.00m;
 
@@ -31,7 +32,7 @@ public sealed class RecommenderService : IRecommenderService
         var weakTags = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
-            where tm.StudentId == studentId && tm.OfficialPoint < WeakThreshold
+            where tm.StudentId == studentId && tm.OfficialPoint < WeakThreshold && tt.IsActive
             orderby tm.OfficialPoint ascending
             select new WeakTagDto(
                 tm.TagId,
@@ -43,13 +44,13 @@ public sealed class RecommenderService : IRecommenderService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(
+    public async Task<IReadOnlyList<WeakTagAdvice>> GetWeakTagAdviceAsync(
         string studentId, CancellationToken cancellationToken = default)
     {
         var masteryRows = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
-            where tm.StudentId == studentId && tm.OfficialPoint < WeakThreshold
+            where tm.StudentId == studentId && tm.OfficialPoint < WeakThreshold && tt.IsActive
             orderby tm.OfficialPoint ascending
             select new
             {
@@ -71,7 +72,7 @@ public sealed class RecommenderService : IRecommenderService
                     ? "OfficialPointBelow5"
                     : "NormalPractice";
 
-            return new WeakTagAdviceDto(
+            return new WeakTagAdvice(
                 row.TagId,
                 row.TagName,
                 row.OfficialPoint,

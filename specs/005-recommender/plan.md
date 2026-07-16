@@ -1,6 +1,6 @@
 # Implementation Plan: Recommender Module
 
-**Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-07-04
+**Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-07-16
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -13,7 +13,7 @@ Builds `MathInsight.Modules.Recommender` for Rule-Based/Ptag v2. The module trac
 |----------|-------|
 | Language | C# / .NET 10.0 |
 | Primary Dependencies | MediatR, EF Core |
-| Storage | SQL Server; map to current DB script tables |
+| Storage | SQL Server; map exactly to `Database/database/001_Create_MathInsight_Azure.sql` |
 | Cache | None required for MVP |
 | External ML | None required for MVP |
 | Testing | xUnit / Integration tests |
@@ -47,6 +47,13 @@ src/MathInsight.Modules.Recommender/
 └── RecommenderModuleExtensions.cs
 ```
 
+Cross-module components introduced by hardening:
+
+- `MathInsight.Shared/Recommendation/IStudentRecommendationProvider.cs`
+- `MathInsight.Shared/Events/GradeCalculatedEvent.cs`
+- `Persistence/Entities/StudentReadOnly.cs` and its excluded-from-migrations configuration
+- Read-only canonical mappings for `TagTopic`, `Lecture`, `Material`, and `LectureMaterial`
+
 ## Proposed Changes
 
 ### Database Layer
@@ -55,21 +62,22 @@ src/MathInsight.Modules.Recommender/
 |-------|-----------------|
 | `CompetencyPoint` | Unique `(StudentID, Grade)`; `Point` range `0.00..10.00` |
 | `TagsMastery` | Unique `(StudentID, TagID)`; stores `OfficialPoint`, `PracticePoint`, `ExamAnchor` |
-| `StudentTopicSessionResult` | Unique `(SessionID, TagID)`; stores per-session topic snapshot |
+| `StudentTopicSessionResult` | Unique `(SessionID, TagID)`; stores `TotalItems`, `CorrectItems`, `EarnedPoints`, `MaxPoints`, `TopicScore` |
 
 `TagsMastery.DifficultyID` is intentionally removed. Difficulty is an output of recommendation through `RecommendedDifficultyLevel`, not part of the mastery key.
 
 ### Internal API
 
 ```csharp
-public interface IRecommenderService
+public interface IStudentRecommendationProvider
 {
-    Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(Guid studentId);
-    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(Guid studentId);
+    Task<IReadOnlyList<WeakTagAdvice>> GetWeakTagAdviceAsync(
+        string studentId,
+        CancellationToken cancellationToken = default);
 }
 ```
 
-TestGen uses `WeakTagAdviceDto.RecommendedDifficultyLevel` to select questions. It does not need `BlueprintSectionID`.
+The interface and DTO live in `MathInsight.Shared`. `RecommenderService` implements this provider; TestGen depends only on Shared. TestGen uses `WeakTagAdvice.RecommendedDifficultyLevel` to select questions. It does not need `BlueprintSectionID`.
 
 > **Resolution required**: `RecommendedDifficultyLevel` is a level integer `1..4`, **not** a `difficulty_id` PK.
 > TestGen must resolve it via: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`
@@ -85,7 +93,7 @@ TestSession becomes Graded
        - If Exam format: update exam_anchor using Exponential Decay (RCM-05)
        - If Practice format: update practice_point sequentially using Elo formula (RCM-06)
   -> Recommender recalculates OfficialPoint
-  -> Recommender queries Student.current_grade (F5 resolution) and updates CompetencyPoint
+  -> Recommender queries Student.CurrentGrade (F5 resolution) and updates CompetencyPoint
   -> Recommender maps RecommendedDifficultyLevel
   -> TestGen reads WeakTag advice for future tests
 ```
@@ -117,3 +125,14 @@ officialPoint < 5.00m
    - WeakTag query returns only `OfficialPoint < 5.00`.
    - `RecommendedDifficultyLevel` mapping returns levels `1..4`.
    - SQL-only recommender works without Redis/SAR.
+
+## SQL Contract Hardening
+
+- Use `string` for every Recommender/API/event identifier and map it as non-Unicode `VARCHAR(36)`.
+- Map owned entities to the canonical PascalCase columns, precision, key, index, and constraint names.
+- Map `Student`, `TagTopic`, `Lecture`, `Material`, and `LectureMaterial` as cross-module read models excluded from migrations.
+- Ingest each `GradeCalculatedEvent` under the SQL execution strategy and a `Serializable` transaction.
+- Persist weighted topic snapshots and compute `TopicScore = EarnedPoints / MaxPoints * 10` in Grading.
+- Read `Student.CurrentGrade` before recalculating competency; never create grade `0` when it is null.
+- Keep REST routes unchanged. Missing/empty account claims return stable `AUTH_INVALID_TOKEN` with HTTP 401.
+- Add an opt-in disposable SQL Server smoke test controlled by `RECOMMENDER_SQLSERVER_CONNECTION`; never run it against Azure/shared databases.

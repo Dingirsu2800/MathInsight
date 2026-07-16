@@ -185,27 +185,36 @@ Returns aggregate statistics computed from the student's graded sessions.
 
   | Field | Type | Description |
   |-------|------|-------------|
-  | `SessionId` | `Guid` | Graded session |
-  | `StudentId` | `Guid` | Owner student |
-  | `TestId` | `Guid` | Parent test |
+  | `SessionId` | `string` | Graded session; canonical SQL `VARCHAR(36)` identifier |
+  | `StudentId` | `string` | Owner student; semantic IDs are supported |
+  | `TestId` | `string` | Parent test |
   | `TestFormat` | `string` | Test format (`Practice` or `Exam`) |
   | `Score` | `decimal` | 0.00–10.00 normalized score (BR-20) |
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
-  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per primary TagId: `(TagId, TopicScore, CorrectCount, TotalCount)`. **MVP rule**: group by `QuestionTopic.TagID WHERE IsPrimary = true` only. Multi-tag analytics deferred post-MVP. |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per primary TagId: `(TagId, TotalItems, CorrectItems, EarnedPoints, MaxPoints, TopicScore)`, where `TopicScore = EarnedPoints / MaxPoints * 10`. **MVP rule**: group by `QuestionTopic.TagID WHERE IsPrimary = true` only. Multi-tag analytics deferred post-MVP. |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradedAt` | `DateTime` | UTC timestamp |
 
   `GradedAnswerDto` contains:
-  - `QuestionId` (`Guid`)
-  - `TagId` (`Guid`) — **primary topic tag** of the question (`QuestionTopic.TagID WHERE IsPrimary = true`). MVP uses one tag per question for grading/recommender; multi-tag support is post-MVP.
+  - `QuestionId` (`string`)
+  - `TagId` (`string`) — **primary topic tag** of the question (`QuestionTopic.TagID WHERE IsPrimary = true`). MVP uses one tag per question for grading/recommender; multi-tag support is post-MVP.
   - `IsCorrect` (`bool`)
   - `PointsEarned` (`decimal`)
+  - `MaxPoints` (`decimal`) — required to preserve partial credit in per-topic aggregation.
   - `TimeSpent` (`int`)
   - `DifficultyLevel` (`byte` - value 1..4)
   - `QuestionNo` (`int`)
   - `IsAbandoned` (`bool`) — true if the question is abandoned/unanswered (per BR-16b)
+
+  `TopicGradeResult` contains:
+  - `TagId` (`string`)
+  - `TotalItems` (`decimal`)
+  - `CorrectItems` (`decimal`)
+  - `EarnedPoints` (`decimal`)
+  - `MaxPoints` (`decimal`)
+  - `TopicScore` (`decimal`) — `EarnedPoints / MaxPoints * 10`, rounded to two decimals.
 
   Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
 - **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):

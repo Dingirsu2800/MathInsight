@@ -9,7 +9,7 @@ public class LectureReadOnly
 {
     public string LectureId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
-    public string? Description { get; set; }
+    public string? Content { get; set; }
     public string TagId { get; set; } = string.Empty;
-    public string Status { get; set; } = "Draft";
+    public string Status { get; set; } = string.Empty;
 }

@@ -2,11 +2,11 @@
 
 **Feature Branch**: `005-recommender`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-04
+**Created**: 2026-06-23 | **Updated**: 2026-07-16
 
 **Status**: Approved
 
-**Source Documents**: PRD §4 (FT-06), UCS UC-52-UC-54, algorithm report v2, schema migration 002
+**Source Documents**: PRD §4 (FT-06), UCS UC-52-UC-54, algorithm report v2, canonical schema `Database/database/001_Create_MathInsight_Azure.sql`
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -18,7 +18,7 @@
 | UC-53 | View Recommended Lectures | Student | Based on WeakTags; returns matching lectures |
 | UC-54 | View Recommended Materials | Student | Based on WeakTags; returns matching PDFs/materials |
 | - | Update Topic Mastery | System | After a session is graded |
-| - | Provide WeakTag Advice | TestGen module | `IRecommenderService.GetStudentWeakTagAdviceAsync()` |
+| - | Provide WeakTag Advice | TestGen module | `IStudentRecommendationProvider.GetWeakTagAdviceAsync()` from `MathInsight.Shared` |
 
 ### Edge Cases
 
@@ -90,9 +90,9 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 | `5.00 <= p < 7.50` | `3` |
 | `7.50 <= p <= 10.00` | `4` |
 
-- **RCM-08**: `StudentTopicSessionResult` stores the per-session per-topic snapshot used to update `TagsMastery`. This is required for audit and idempotency.
+- **RCM-08**: `StudentTopicSessionResult` stores `TotalItems`, `CorrectItems`, `EarnedPoints`, `MaxPoints`, and `TopicScore` for each `(SessionID, TagID)`. `TopicScore = EarnedPoints / MaxPoints * 10`, preserving partial credit. The unique `(SessionID, TagID)` key is the ingestion idempotency guard.
 - **RCM-09**: TestGen reads Recommender advice in-process. No external recommender service is required for MVP.
-- **RCM-10**: Lecture/material recommendations are simple rule-based matches from weak `tag_id` to `Lecture.TagID` and `LectureMaterial`.
+- **RCM-10**: Lecture/material recommendations are simple rule-based matches from weak `TagID` to `Lecture.TagID` and `LectureMaterial`. Only `Lecture.Status = Published`, `Material.Status = Active`, and active topics are returned.
 - **RCM-11**: `mastery_status` remains a coarse learning label only: `NotLearned`, `Learning`, `Mastered`. Do not add `WeakTag` to this enum.
 - **RCM-12 (CompetencyPoint update)**: After each `TagsMastery` update for a student, recalculate `CompetencyPoint` for that student's grade level:
 
@@ -102,8 +102,8 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
                           where the Tag belongs to the student's grade (10, 11, or 12)
   ```
 
-  To determine the student's grade, the Recommender queries the cross-schema `Student` table from the Identity module (`Student.current_grade`) (F5 resolution).
-  Upsert `CompetencyPoint` using `(student_id, grade)`. Clamp result to `0.00..10.00`.
+  To determine the student's grade, the Recommender queries the cross-module `Student.CurrentGrade` field (F5 resolution).
+  Upsert `CompetencyPoint` using `(StudentID, Grade)`. Clamp result to `0.00..10.00`. If `CurrentGrade` is null, mastery and session snapshots are still persisted, but no competency row is written.
 
 - **RCM-13 (mastery_status thresholds)**: Set `mastery_status` based on the following rules applied after each `TagsMastery` update:
 
@@ -113,11 +113,20 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   | `number_done > 0` AND `official_point < 7.50` | `Learning` |
   | `official_point >= 7.50` | `Mastered` |
 
+- **RCM-14 (accuracy contract)**: `TagsMastery.AccuracyRate` is a percentage in range `0..100`, rounded to two decimals:
+
+  ```text
+  AccuracyRate = NumCorrect / NumberDone * 100
+  ```
+
+- **RCM-15 (identifier contract)**: All Recommender, shared recommendation, and `GradeCalculatedEvent` identifiers use C# `string` mapped to SQL `VARCHAR(36)`. Semantic IDs such as `student_01` and `TOPIC-G12-DERIVAPP` are valid and must never be parsed as `Guid`.
+- **RCM-16 (REST compatibility)**: Keep `GET /api/v1/recommender/weak-tags`, `GET /api/v1/recommender/lectures`, and `GET /api/v1/recommender/materials` unchanged. Read `ClaimTypes.NameIdentifier` as a raw string. A missing or whitespace account ID returns HTTP 401 with `AUTH_INVALID_TOKEN` and message `Invalid or missing account id.`.
+
 ### Key Entities *(include if feature involves data)*
 
-- **CompetencyPoint**: `competency_id`, `student_id`, `grade`, `point` (`0.00..10.00`), unique `(student_id, grade)`.
-- **TagsMastery**: `tags_mastery_id`, `student_id`, `tag_id`, `mastery_status`, `number_done`, `num_correct`, `accuracy_rate`, `official_point`, `practice_point`, `exam_anchor`, `exam_history`, `series_answer_count`, `recommended_difficulty_level`, `last_calculated_at`, unique `(student_id, tag_id)`.
-- **StudentTopicSessionResult**: `student_topic_session_result_id`, `student_id`, `session_id`, `tag_id`, `total_questions`, `correct_count`, `wrong_count`, `topic_score`, `point_before`, `point_after`, `created_time`, unique `(session_id, tag_id)`.
+- **CompetencyPoint**: `CompetencyID`, `StudentID`, `Grade`, `Point` (`0.00..10.00`), unique `(StudentID, Grade)`.
+- **TagsMastery**: `TagsMasteryID`, `StudentID`, `TagID`, `MasteryStatus`, `NumberDone`, `NumCorrect`, `AccuracyRate`, `OfficialPoint`, `PracticePoint`, `ExamAnchor`, `ExamHistory`, `SeriesAnswerCount`, `RecommendedDifficultyLevel`, `LastCalculatedAt`, `LastPracticedTime`, unique `(StudentID, TagID)`.
+- **StudentTopicSessionResult**: `StudentTopicSessionResultID`, `StudentID`, `SessionID`, `TagID`, `TotalItems`, `CorrectItems`, `EarnedPoints`, `MaxPoints`, `TopicScore`, `CreatedTime`, unique `(SessionID, TagID)`.
 
 ### Enums
 
@@ -130,16 +139,17 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 ### Internal API Contract
 
 ```csharp
-public interface IRecommenderService
+public interface IStudentRecommendationProvider
 {
-    Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(Guid studentId);
-    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(Guid studentId);
+    Task<IReadOnlyList<WeakTagAdvice>> GetWeakTagAdviceAsync(
+        string studentId,
+        CancellationToken cancellationToken = default);
 }
 ```
 
 ```csharp
-public sealed record WeakTagAdviceDto(
-    Guid TagId,
+public sealed record WeakTagAdvice(
+    string TagId,
     string TagName,
     decimal OfficialPoint,
     bool IsWeak,
@@ -151,7 +161,9 @@ public sealed record WeakTagAdviceDto(
 
 `Reason` is for audit/debugging, for example `OfficialPointBelow5`, `RemedialLevel1`, or `NormalPractice`.
 
-> **Cross-module resolution contract**: `WeakTagAdviceDto.RecommendedDifficultyLevel` is a **level integer** (`1..4`, see RCM-07). It is **not** a `difficulty_id` (the PK of `TagDifficulty` table in QuestionBank module). Consumers such as TestGen **must** resolve this level to an actual `DifficultyID` by querying:
+`IStudentRecommendationProvider` and `WeakTagAdvice` are owned by `MathInsight.Shared`. `RecommenderService` implements the shared provider, so TestGen does not reference the Recommender module directly.
+
+> **Cross-module resolution contract**: `WeakTagAdvice.RecommendedDifficultyLevel` is a **level integer** (`1..4`, see RCM-07). It is **not** a `DifficultyID` (the PK of `TagDifficulty` table in QuestionBank module). Consumers such as TestGen **must** resolve this level to an actual `DifficultyID` by querying:
 > ```sql
 > SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = @RecommendedDifficultyLevel
 > ```

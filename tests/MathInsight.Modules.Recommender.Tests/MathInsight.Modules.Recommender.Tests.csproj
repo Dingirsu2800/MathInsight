@@ -13,9 +13,15 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
     <PackageReference Include="Moq" Version="4.20.72" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MathInsight.Modules.Recommender\MathInsight.Modules.Recommender.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\Database\database\001_Create_MathInsight_Azure.sql"
+          Link="Database\001_Create_MathInsight_Azure.sql"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

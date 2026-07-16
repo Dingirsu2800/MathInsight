@@ -2,7 +2,7 @@
 
 **Branch**: `005-recommender` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
-> **Updated**: 2026-07-04 - aligned with Rule-Based/Ptag v2 and migration 002
+> **Updated**: 2026-07-16 - added canonical SQL contract hardening
 
 ---
 
@@ -60,7 +60,7 @@
     - `series_answer_count = 0`
 
 - [x] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
-  - [x] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level. Query `Student.current_grade` from the Identity module cross-schema (F5 resolution).
+  - [x] After each `TagsMastery` upsert, query all `TagsMastery.OfficialPoint` rows for `(StudentID)` where `TagTopic.Grade` matches `Student.CurrentGrade` (F5 resolution).
   - [x] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
   - [x] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
 
@@ -68,7 +68,7 @@
   - [x] `MapFromOfficialPoint(officialPoint)` returns level `1..4` (RCM-07).
   - [x] `IsWeak(officialPoint)` returns true when `< 5.00`.
   - [x] `IsRemedial(recommendedDifficultyLevel)` returns true when level `1` and weak.
-  - [x] Cross-module contract: `WeakTagAdviceDto.RecommendedDifficultyLevel` is a level integer `1..4`.
+  - [x] Cross-module contract: `WeakTagAdvice.RecommendedDifficultyLevel` is a level integer `1..4`.
     - Consumers (TestGen) **must not** use this value directly as a `difficulty_id` (PK of `TagDifficulty`).
     - Resolution: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`.
     - This mapping is stable because `TagDifficulty.LevelValue` has a UNIQUE constraint (BR-63).
@@ -77,7 +77,7 @@
   - [x] `GetStudentWeakTagsAsync(studentId)` reads `TagsMastery` where `official_point < 5.00`.
     - **WeakTag tag type**: `TagsMastery.TagId` refers to `TagTopic` (topic tags). WeakTag evaluation is always per-topic, not per-difficulty.
     - **No-row behavior (MVP)**: Topics with no `TagsMastery` row are **not** returned as weak. They stay neutral until the first graded data point triggers lazy-create (see Phase 2 → CompetencyEngine → Lazy-create task). A newly created row starts at `official_point = 5.00` (above the `< 5.00` weak threshold), so it will not appear in WeakTags until real grading data lowers the score.
-  - [x] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
+  - [x] `GetWeakTagAdviceAsync(studentId)` returns shared `WeakTagAdvice` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
   - [x] Keep SQL-only implementation for MVP; Redis cache is optional later.
 
 - [x] **Recommendation Queries**:
@@ -128,3 +128,31 @@
   - [x] SQL-only recommender works without Redis/SAR configured.
   - [ ] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
   - [x] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
+
+---
+
+## Phase 5: SQL Contract Hardening
+
+- [x] Convert Recommender API, query, DTO, entity, and event boundary IDs to `string`/`VARCHAR(36)`.
+- [x] Map owned tables to canonical PascalCase columns, precision, key, index, and constraint names.
+- [x] Map `Student`, `TagTopic`, `Lecture`, `Material`, and `LectureMaterial` as read-only models excluded from migrations.
+- [x] Replace the old session snapshot fields with `TotalItems`, `CorrectItems`, `EarnedPoints`, `MaxPoints`, and `TopicScore`.
+- [x] Process each graded event with SQL execution strategy and a `Serializable` transaction.
+- [x] Store `AccuracyRate` as a `0..100` percentage and update `LastPracticedTime` only for Practice.
+- [x] Recalculate competency using `Student.CurrentGrade`; skip competency creation when grade is null.
+- [x] Publish `IStudentRecommendationProvider` and `WeakTagAdvice` from `MathInsight.Shared` for Adaptive TestGen.
+- [x] Keep REST routes stable and accept semantic account IDs from `ClaimTypes.NameIdentifier`.
+- [x] Update the Grading producer to emit weighted per-topic fields and string IDs.
+- [x] Add EF metadata, ingestion, recommendation query, controller, and Grading event contract tests.
+- [x] Add an opt-in disposable SQL Server smoke test using `RECOMMENDER_SQLSERVER_CONNECTION`.
+- [ ] Execute the SQL Server smoke test against a disposable local SQL Server database (optional environment gate; never Azure/shared DB).
+
+### Quality Gates
+
+- [x] Recommender tests pass (`54 passed`, `1` opt-in SQL smoke skipped).
+- [x] Grading tests pass (`36 passed`).
+- [x] Full solution tests pass (`307 passed`, `2` opt-in SQL smoke tests skipped).
+- [x] `dotnet build MathInsight.sln --no-restore` passes (`0` errors; existing package vulnerability warnings remain).
+- [ ] `dotnet format MathInsight.sln --no-restore --verify-no-changes` passes. Blocked by pre-existing whitespace findings in unrelated modules and legacy Recommender test files.
+- [x] Scoped `dotnet format --verify-no-changes` passes for every C# file changed or added by this checkpoint.
+- [x] `git diff --check` passes.

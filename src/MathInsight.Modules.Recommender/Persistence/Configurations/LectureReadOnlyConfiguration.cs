@@ -13,13 +13,29 @@ public class LectureReadOnlyConfiguration : IEntityTypeConfiguration<LectureRead
 {
     public void Configure(EntityTypeBuilder<LectureReadOnly> builder)
     {
-        builder.ToTable("Lecture");
-        builder.HasKey(x => x.LectureId);
+        builder.ToTable("Lecture", table => table.ExcludeFromMigrations());
+        builder.HasKey(x => x.LectureId).HasName("PK_Lecture");
 
-        builder.Property(x => x.LectureId).HasColumnName("LectureID").HasMaxLength(36);
-        builder.Property(x => x.Title).HasColumnName("Title").HasMaxLength(100);
-        builder.Property(x => x.Description).HasColumnName("Content");
-        builder.Property(x => x.TagId).HasColumnName("TagID").HasMaxLength(36);
-        builder.Property(x => x.Status).HasColumnName("Status").HasMaxLength(20);
+        builder.Property(x => x.LectureId)
+            .HasColumnName("LectureID")
+            .HasMaxLength(36)
+            .IsUnicode(false)
+            .ValueGeneratedNever();
+        builder.Property(x => x.Title)
+            .HasColumnName("Title")
+            .HasMaxLength(100)
+            .IsRequired();
+        builder.Property(x => x.Content)
+            .HasColumnName("Content");
+        builder.Property(x => x.TagId)
+            .HasColumnName("TagID")
+            .HasMaxLength(36)
+            .IsUnicode(false)
+            .IsRequired();
+        builder.Property(x => x.Status)
+            .HasColumnName("Status")
+            .HasMaxLength(20)
+            .IsUnicode(false)
+            .IsRequired();
     }
 }

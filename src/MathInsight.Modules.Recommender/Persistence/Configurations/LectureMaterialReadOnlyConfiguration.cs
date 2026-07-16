@@ -13,10 +13,17 @@ public class LectureMaterialReadOnlyConfiguration : IEntityTypeConfiguration<Lec
 {
     public void Configure(EntityTypeBuilder<LectureMaterialReadOnly> builder)
     {
-        builder.ToTable("LectureMaterial");
-        builder.HasKey(x => new { x.LectureId, x.MaterialId });
+        builder.ToTable("LectureMaterial", table => table.ExcludeFromMigrations());
+        builder.HasKey(x => new { x.LectureId, x.MaterialId })
+            .HasName("PK_LectureMaterial");
 
-        builder.Property(x => x.LectureId).HasColumnName("LectureID").HasMaxLength(36);
-        builder.Property(x => x.MaterialId).HasColumnName("MaterialID").HasMaxLength(36);
+        builder.Property(x => x.LectureId)
+            .HasColumnName("LectureID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+        builder.Property(x => x.MaterialId)
+            .HasColumnName("MaterialID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
     }
 }

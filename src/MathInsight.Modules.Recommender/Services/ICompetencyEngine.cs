@@ -11,5 +11,5 @@ public interface ICompetencyEngine
     /// Formula: AVERAGE(TagsMastery.official_point) for all tags belonging to that grade.
     /// Result is clamped to [0.00, 10.00].
     /// </summary>
-    Task RecalculateAsync(string studentId, int grade, CancellationToken cancellationToken = default);
+    Task RecalculateAsync(string studentId, CancellationToken cancellationToken = default);
 }

@@ -1,122 +1,117 @@
-using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Recommender.Persistence;
 using MathInsight.Modules.Recommender.Persistence.Entities;
 using MathInsight.Modules.Recommender.Services;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace MathInsight.Modules.Recommender.Tests.Unit;
 
-/// <summary>
-/// Unit tests for RecommenderService.GetStudentWeakTagsAsync (UC-52).
-/// Uses InMemory EF provider to avoid SQL Server dependency.
-///
-/// Rule: WeakTag ↔ official_point &lt; 5.00.
-/// No-row behavior: topics without a TagsMastery row are NOT returned as weak.
-/// </summary>
-public class WeakTagQueryTests : IDisposable
+public sealed class WeakTagQueryTests : IDisposable
 {
     private readonly RecommenderDbContext _db;
-    private readonly RecommenderService _sut;
+    private readonly RecommenderService _service;
 
     public WeakTagQueryTests()
     {
         var options = new DbContextOptionsBuilder<RecommenderDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("D"))
             .Options;
-        _db  = new RecommenderDbContext(options);
-        _sut = new RecommenderService(_db, new DifficultyMappingService());
+        _db = new RecommenderDbContext(options);
+        _service = new RecommenderService(_db, new DifficultyMappingService());
     }
 
     public void Dispose() => _db.Dispose();
 
-    private static TagTopicReadOnly MakeTagTopic(Guid tagId, string name) =>
-        new() { TagId = tagId.ToString(), TagName = name };
+    [Fact]
+    public async Task GetStudentWeakTagsAsync_ReturnsOnlyActiveTopicsBelowThreshold()
+    {
+        const string studentId = "student_01";
+        AddTag("TOPIC-WEAK", "Algebra", isActive: true);
+        AddTag("TOPIC-STRONG", "Geometry", isActive: true);
+        AddTag("TOPIC-INACTIVE", "Legacy", isActive: false);
+        AddMastery(studentId, "TOPIC-WEAK", 4.99m);
+        AddMastery(studentId, "TOPIC-STRONG", 5.00m);
+        AddMastery(studentId, "TOPIC-INACTIVE", 1.00m);
+        await _db.SaveChangesAsync();
 
-    private static TagsMastery MakeMastery(Guid studentId, Guid tagId, decimal officialPoint) =>
-        new()
+        var result = await _service.GetStudentWeakTagsAsync(studentId);
+
+        var weakTag = Assert.Single(result);
+        Assert.Equal("TOPIC-WEAK", weakTag.TagId);
+    }
+
+    [Fact]
+    public async Task GetStudentWeakTagsAsync_NoMasteryRows_ReturnsEmpty()
+    {
+        AddTag("TOPIC-NEW", "Statistics", isActive: true);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetStudentWeakTagsAsync("student_01");
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetStudentWeakTagsAsync_OrdersLowestPointFirst()
+    {
+        const string studentId = "student_01";
+        AddTag("TOPIC-1", "T1", true);
+        AddTag("TOPIC-2", "T2", true);
+        AddTag("TOPIC-3", "T3", true);
+        AddMastery(studentId, "TOPIC-1", 3.00m);
+        AddMastery(studentId, "TOPIC-2", 1.00m);
+        AddMastery(studentId, "TOPIC-3", 4.50m);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetStudentWeakTagsAsync(studentId);
+
+        Assert.Equal([1.00m, 3.00m, 4.50m], result.Select(item => item.OfficialPoint));
+    }
+
+    [Fact]
+    public async Task GetWeakTagAdviceAsync_ReturnsSharedAdaptiveContract()
+    {
+        AddTag("TOPIC-G12-DERIVAPP", "Derivative applications", isActive: true);
+        AddMastery(
+            "student_01",
+            "TOPIC-G12-DERIVAPP",
+            2.50m,
+            recommendedDifficultyLevel: 1);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetWeakTagAdviceAsync("student_01");
+
+        var advice = Assert.Single(result);
+        Assert.Equal("TOPIC-G12-DERIVAPP", advice.TagId);
+        Assert.True(advice.IsWeak);
+        Assert.True(advice.IsRemedial);
+        Assert.Equal((byte)1, advice.RecommendedDifficultyLevel);
+        Assert.Equal("RemedialLevel1", advice.Reason);
+    }
+
+    private void AddTag(string tagId, string name, bool isActive)
+        => _db.TagTopics.Add(new TagTopicReadOnly
         {
-            TagsMasteryId  = Guid.NewGuid().ToString(),
-            StudentId      = studentId.ToString(),
-            TagId          = tagId.ToString(),
-            OfficialPoint  = officialPoint,
-            PracticePoint  = officialPoint,
-            ExamAnchor     = officialPoint,
-            MasteryStatus  = officialPoint < 5m ? "Learning" : "Mastered",
-        };
+            TagId = tagId,
+            TagName = name,
+            Grade = 12,
+            IsActive = isActive
+        });
 
-    [Fact]
-    public async Task GetStudentWeakTagsAsync_ReturnsOnlyBelowThreshold()
-    {
-        var studentId = Guid.NewGuid();
-        var weakTagId = Guid.NewGuid();
-        var strongTagId = Guid.NewGuid();
-
-        _db.TagTopics.AddRange(
-            MakeTagTopic(weakTagId,   "Algebra"),
-            MakeTagTopic(strongTagId, "Geometry"));
-        _db.TagsMasteries.AddRange(
-            MakeMastery(studentId, weakTagId,   4.99m),  // weak
-            MakeMastery(studentId, strongTagId, 5.00m)); // not weak
-        await _db.SaveChangesAsync();
-
-        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
-
-        Assert.Single(result);
-        Assert.Equal(weakTagId.ToString(), result[0].TagId);
-    }
-
-    [Fact]
-    public async Task GetStudentWeakTagsAsync_ExactlyAt5_IsNotWeak()
-    {
-        var studentId = Guid.NewGuid();
-        var tagId = Guid.NewGuid();
-
-        _db.TagTopics.Add(MakeTagTopic(tagId, "Calculus"));
-        _db.TagsMasteries.Add(MakeMastery(studentId, tagId, 5.00m));
-        await _db.SaveChangesAsync();
-
-        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public async Task GetStudentWeakTagsAsync_NoRows_ReturnsEmpty()
-    {
-        // No TagsMastery row → not returned as weak (no-row behavior)
-        var studentId = Guid.NewGuid();
-        var tagId = Guid.NewGuid();
-
-        _db.TagTopics.Add(MakeTagTopic(tagId, "Statistics"));
-        // Intentionally no TagsMastery row added
-        await _db.SaveChangesAsync();
-
-        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public async Task GetStudentWeakTagsAsync_OrderedByOfficialPointAscending()
-    {
-        var studentId = Guid.NewGuid();
-        var tag1 = Guid.NewGuid();
-        var tag2 = Guid.NewGuid();
-        var tag3 = Guid.NewGuid();
-
-        _db.TagTopics.AddRange(
-            MakeTagTopic(tag1, "T1"),
-            MakeTagTopic(tag2, "T2"),
-            MakeTagTopic(tag3, "T3"));
-        _db.TagsMasteries.AddRange(
-            MakeMastery(studentId, tag1, 3.00m),
-            MakeMastery(studentId, tag2, 1.00m),
-            MakeMastery(studentId, tag3, 4.50m));
-        await _db.SaveChangesAsync();
-
-        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
-
-        Assert.Equal(3, result.Count);
-        Assert.Equal(1.00m, result[0].OfficialPoint);
-        Assert.Equal(3.00m, result[1].OfficialPoint);
-        Assert.Equal(4.50m, result[2].OfficialPoint);
-    }
+    private void AddMastery(
+        string studentId,
+        string tagId,
+        decimal officialPoint,
+        byte recommendedDifficultyLevel = 2)
+        => _db.TagsMasteries.Add(new TagsMastery
+        {
+            TagsMasteryId = Guid.NewGuid().ToString("D"),
+            StudentId = studentId,
+            TagId = tagId,
+            OfficialPoint = officialPoint,
+            PracticePoint = officialPoint,
+            ExamAnchor = officialPoint,
+            MasteryStatus = officialPoint < 5m ? "Learning" : "Mastered",
+            RecommendedDifficultyLevel = recommendedDifficultyLevel
+        });
 }

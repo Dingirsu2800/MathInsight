@@ -11,9 +11,9 @@ namespace MathInsight.Shared.Events;
 /// </summary>
 public sealed record GradeCalculatedEvent : MediatR.INotification
 {
-    public Guid SessionId { get; init; }
-    public Guid StudentId { get; init; }
-    public Guid TestId { get; init; }
+    public string SessionId { get; init; } = string.Empty;
+    public string StudentId { get; init; } = string.Empty;
+    public string TestId { get; init; } = string.Empty;
     public string TestFormat { get; init; } = string.Empty;
 
     /// <summary>
@@ -53,8 +53,8 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
 /// </summary>
 public sealed record GradedAnswerDto
 {
-    public Guid QuestionId { get; init; }
-    public Guid TagId { get; init; }
+    public string QuestionId { get; init; } = string.Empty;
+    public string TagId { get; init; } = string.Empty;
     public bool IsCorrect { get; init; }
     public decimal PointsEarned { get; init; }
     public decimal MaxPoints { get; init; }
@@ -73,13 +73,16 @@ public sealed record GradedAnswerDto
 /// </summary>
 public sealed record TopicGradeResult
 {
-    public Guid TagId { get; init; }
+    public string TagId { get; init; } = string.Empty;
 
     /// <summary>
-    /// Normalized topic score 0.00–10.00: correct_count / total_count × 10.0.
+    /// Normalized topic score 0.00..10.00: EarnedPoints / MaxPoints * 10.0.
+    /// This preserves partial credit for composite questions.
     /// </summary>
     public decimal TopicScore { get; init; }
 
-    public int CorrectCount { get; init; }
-    public int TotalCount { get; init; }
+    public decimal TotalItems { get; init; }
+    public decimal CorrectItems { get; init; }
+    public decimal EarnedPoints { get; init; }
+    public decimal MaxPoints { get; init; }
 }

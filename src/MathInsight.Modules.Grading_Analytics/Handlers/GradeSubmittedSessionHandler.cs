@@ -177,7 +177,7 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
     /// Builds the GradeCalculatedEvent contract (G3) from grading results.
     /// Uses MathInsight.Shared.Events.GradeCalculatedEvent — no local copy.
     /// </summary>
-    private static GradeCalculatedEvent BuildGradeCalculatedEvent(
+    internal static GradeCalculatedEvent BuildGradeCalculatedEvent(
         TestSession session,
         GradingResult gradingResult,
         TestSubmittedEvent notification)
@@ -187,7 +187,11 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
 
         // ── Build per-tag results ────────────────────────────────────────────
         // Track per-tag correctness for PerTagResults
-        var tagStats = new Dictionary<Guid, (int Correct, int Total)>();
+        var tagStats = new Dictionary<string, (
+            decimal CorrectItems,
+            decimal TotalItems,
+            decimal EarnedPoints,
+            decimal MaxPoints)>();
 
         foreach (var answer in session.TestAnswers)
         {
@@ -195,14 +199,14 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             var primaryTopic = answer.Question.QuestionTopics
                 .FirstOrDefault(qt => qt.IsPrimary);
 
-            var tagId = primaryTopic?.TagId ?? Guid.Empty;
+            var tagId = primaryTopic?.TagId.ToString("D") ?? string.Empty;
 
             // Determine abandoned status using same logic as GradingEngine
             bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
 
             gradedAnswers.Add(new GradedAnswerDto
             {
-                QuestionId = answer.QuestionId,
+                QuestionId = answer.QuestionId.ToString("D"),
                 TagId = tagId,
                 IsCorrect = answer.IsCorrect == true,
                 PointsEarned = answer.PointsEarned,
@@ -214,14 +218,16 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             });
 
             // Accumulate per-tag stats (skip questions without a primary tag)
-            if (tagId != Guid.Empty)
+            if (!string.IsNullOrWhiteSpace(tagId))
             {
                 if (!tagStats.TryGetValue(tagId, out var stats))
-                    stats = (0, 0);
+                    stats = (0m, 0m, 0m, 0m);
 
-                stats.Total++;
+                stats.TotalItems++;
                 if (answer.IsCorrect == true)
-                    stats.Correct++;
+                    stats.CorrectItems++;
+                stats.EarnedPoints += answer.PointsEarned;
+                stats.MaxPoints += answer.Question.DefaultPoint;
 
                 tagStats[tagId] = stats;
             }
@@ -232,19 +238,21 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             .Select(kv => new TopicGradeResult
             {
                 TagId = kv.Key,
-                TopicScore = kv.Value.Total > 0
-                    ? Math.Round((decimal)kv.Value.Correct / kv.Value.Total * 10.0m, 2)
+                TopicScore = kv.Value.MaxPoints > 0
+                    ? Math.Round(kv.Value.EarnedPoints / kv.Value.MaxPoints * 10.0m, 2)
                     : 0m,
-                CorrectCount = kv.Value.Correct,
-                TotalCount = kv.Value.Total
+                TotalItems = kv.Value.TotalItems,
+                CorrectItems = kv.Value.CorrectItems,
+                EarnedPoints = kv.Value.EarnedPoints,
+                MaxPoints = kv.Value.MaxPoints
             })
             .ToList();
 
         return new GradeCalculatedEvent
         {
-            SessionId = session.SessionId,
-            StudentId = session.StudentId,
-            TestId = session.TestId,
+            SessionId = session.SessionId.ToString("D"),
+            StudentId = session.StudentId.ToString("D"),
+            TestId = session.TestId.ToString("D"),
             TestFormat = session.TestFormat,
             Score = gradingResult.Score,
             NumCorrect = gradingResult.NumCorrect,

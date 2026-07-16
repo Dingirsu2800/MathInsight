@@ -6,6 +6,7 @@ using MediatR;
 using MathInsight.Modules.Recommender.Queries.GetWeakTags;
 using MathInsight.Modules.Recommender.Queries.GetRecommendedLectures;
 using MathInsight.Modules.Recommender.Queries.GetRecommendedMaterials;
+using MathInsight.Shared.Results;
 
 namespace MathInsight.Modules.Recommender.Controllers;
 
@@ -36,8 +37,8 @@ public class RecommenderController : ControllerBase
     public async Task<IActionResult> GetWeakTags(CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
-        if (string.IsNullOrWhiteSpace(studentId))
-            return Unauthorized(new { error = "Invalid or missing student identity." });
+        if (studentId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
             new GetWeakTagsQuery(studentId), cancellationToken);
@@ -55,8 +56,8 @@ public class RecommenderController : ControllerBase
     public async Task<IActionResult> GetRecommendedLectures(CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
-        if (string.IsNullOrWhiteSpace(studentId))
-            return Unauthorized(new { error = "Invalid or missing student identity." });
+        if (studentId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
             new GetRecommendedLecturesQuery(studentId), cancellationToken);
@@ -74,8 +75,8 @@ public class RecommenderController : ControllerBase
     public async Task<IActionResult> GetRecommendedMaterials(CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
-        if (string.IsNullOrWhiteSpace(studentId))
-            return Unauthorized(new { error = "Invalid or missing student identity." });
+        if (studentId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
             new GetRecommendedMaterialsQuery(studentId), cancellationToken);
@@ -85,10 +86,11 @@ public class RecommenderController : ControllerBase
 
     /// <summary>
     /// Extracts the authenticated student's ID from JWT claims.
-    /// Returns null if the claim is missing.
+    /// Returns null if the claim is missing or empty; semantic string IDs are valid.
     /// </summary>
     private string? GetAuthenticatedStudentId()
     {
-        return User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return string.IsNullOrWhiteSpace(claim) ? null : claim;
     }
 }

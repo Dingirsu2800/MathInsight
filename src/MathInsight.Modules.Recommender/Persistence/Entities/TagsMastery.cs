@@ -17,7 +17,7 @@ public class TagsMastery
     public int NumberDone { get; set; }
     public int NumCorrect { get; set; }
 
-    /// <summary>Accuracy rate derived from NumCorrect / NumberDone.</summary>
+    /// <summary>Accuracy percentage (0..100) derived from NumCorrect / NumberDone * 100.</summary>
     public decimal AccuracyRate { get; set; }
 
     /// <summary>
@@ -44,4 +44,5 @@ public class TagsMastery
     public byte RecommendedDifficultyLevel { get; set; }
 
     public DateTime? LastCalculatedAt { get; set; }
+    public DateTime? LastPracticedTime { get; set; }
 }

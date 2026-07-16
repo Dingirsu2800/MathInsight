@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MathInsight.Modules.Recommender.Persistence;
 using MathInsight.Modules.Recommender.Services;
+using MathInsight.Shared.Recommendation;
 
 namespace MathInsight.Modules.Recommender;
 
@@ -29,7 +30,11 @@ public static class RecommenderModuleExtensions
         // Domain services
         services.AddScoped<ICompetencyEngine, CompetencyEngine>();
         services.AddSingleton<IDifficultyMappingService, DifficultyMappingService>();
-        services.AddScoped<IRecommenderService, RecommenderService>();
+        services.AddScoped<RecommenderService>();
+        services.AddScoped<IRecommenderService>(provider =>
+            provider.GetRequiredService<RecommenderService>());
+        services.AddScoped<IStudentRecommendationProvider>(provider =>
+            provider.GetRequiredService<RecommenderService>());
 
         // RecommenderController is auto-discovered by AddControllers() in WebAPI.
 

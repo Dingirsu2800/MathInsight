@@ -49,12 +49,12 @@ public sealed class GetRecommendedLecturesQueryHandler
         var lectures = await (
             from l in _db.Lectures.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on l.TagId equals tt.TagId
-            where weakTagIds.Contains(l.TagId) && l.Status == "Published"
+            where weakTagIds.Contains(l.TagId) && l.Status == "Published" && tt.IsActive
             select new
             {
                 l.LectureId,
                 l.Title,
-                l.Description,
+                Description = l.Content,
                 l.TagId,
                 tt.TagName
             }

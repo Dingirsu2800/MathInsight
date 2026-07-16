@@ -12,13 +12,32 @@ public class MaterialReadOnlyConfiguration : IEntityTypeConfiguration<MaterialRe
 {
     public void Configure(EntityTypeBuilder<MaterialReadOnly> builder)
     {
-        builder.ToTable("Material");
-        builder.HasKey(x => x.MaterialId);
+        builder.ToTable("Material", table => table.ExcludeFromMigrations());
+        builder.HasKey(x => x.MaterialId).HasName("PK_Material");
 
-        builder.Property(x => x.MaterialId).HasColumnName("MaterialID").HasMaxLength(36);
-        builder.Property(x => x.MaterialName).HasColumnName("MaterialName").HasMaxLength(100);
-        builder.Property(x => x.FileUrl).HasColumnName("FileUrl").HasMaxLength(255);
-        builder.Property(x => x.FileType).HasColumnName("FileType").HasMaxLength(10);
-        builder.Property(x => x.Status).HasColumnName("Status").HasMaxLength(20);
+        builder.Property(x => x.MaterialId)
+            .HasColumnName("MaterialID")
+            .HasMaxLength(36)
+            .IsUnicode(false)
+            .ValueGeneratedNever();
+        builder.Property(x => x.MaterialName)
+            .HasColumnName("MaterialName")
+            .HasMaxLength(100)
+            .IsRequired();
+        builder.Property(x => x.FileUrl)
+            .HasColumnName("FileUrl")
+            .HasMaxLength(255)
+            .IsUnicode(false)
+            .IsRequired();
+        builder.Property(x => x.FileType)
+            .HasColumnName("FileType")
+            .HasMaxLength(10)
+            .IsUnicode(false)
+            .IsRequired();
+        builder.Property(x => x.Status)
+            .HasColumnName("Status")
+            .HasMaxLength(20)
+            .IsUnicode(false)
+            .IsRequired();
     }
 }

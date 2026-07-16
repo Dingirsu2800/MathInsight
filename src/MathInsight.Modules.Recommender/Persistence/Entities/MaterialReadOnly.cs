@@ -9,7 +9,7 @@ public class MaterialReadOnly
 {
     public string MaterialId { get; set; } = string.Empty;
     public string MaterialName { get; set; } = string.Empty;
-    public string? FileUrl { get; set; }
-    public string? FileType { get; set; }
-    public string Status { get; set; } = "Active";
+    public string FileUrl { get; set; } = string.Empty;
+    public string FileType { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
 }
