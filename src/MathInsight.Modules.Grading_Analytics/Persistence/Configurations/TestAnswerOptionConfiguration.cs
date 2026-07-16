@@ -13,8 +13,8 @@ public class TestAnswerOptionConfiguration : IEntityTypeConfiguration<TestAnswer
         // Composite PK: (test_answer_id, answer_id)
         builder.HasKey(x => new { x.TestAnswerId, x.AnswerId });
 
-        builder.Property(x => x.TestAnswerId).HasColumnName("test_answer_id");
-        builder.Property(x => x.AnswerId).HasColumnName("answer_id");
+        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID");
+        builder.Property(x => x.AnswerId).HasColumnName("AnswerID");
 
         builder.HasOne(x => x.TestAnswer)
                .WithMany(a => a.SelectedOptions)
