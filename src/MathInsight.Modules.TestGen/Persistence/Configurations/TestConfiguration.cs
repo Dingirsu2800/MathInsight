@@ -74,6 +74,11 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
             .HasForeignKey(x => x.BlueprintId)
             .OnDelete(DeleteBehavior.NoAction)
             .HasConstraintName("FK_Test_Blueprint_BlueprintID");
+        builder.HasOne(x => x.GeneratedForStudent)
+            .WithMany(x => x.GeneratedTests)
+            .HasForeignKey(x => x.GeneratedForStudentId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_Test_Student_GeneratedForStudentID");
 
         builder.HasIndex(x => x.TestCode)
             .IsUnique()

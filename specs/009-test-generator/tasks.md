@@ -1,7 +1,7 @@
 # Tasks Checklist: Test Generator Module
 
-**Branch**: `testgen-blueprint` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
-**Current delivery slice**: Expert Blueprint MVP
+**Branch**: `testgen-test-generation` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
+**Current delivery slice**: Checkpoint 6A - baseline BlueprintExam
 
 ## Phase 0: Specification Alignment
 
@@ -122,14 +122,44 @@
 - [x] `dotnet test` and `dotnet build MathInsight.sln --no-restore` pass.
 - [x] Disposable SQL Server smoke: current schema, composite FK, and concurrent submit/review transitions.
 
-## Phase 8: Test Generation Backlog
+## Phase 8A: Baseline BlueprintExam
 
-- [ ] Add Question, QuestionTopic, TestSession, and taxonomy read models required by generation.
-- [ ] Implement `GenerateBlueprintExamCommand` using SQL `TestMode = BlueprintExam`.
-- [ ] Implement adaptive/topic practice generation with Recommender advice.
+- [x] Align spec, plan, and tasks with the canonical TestMode/TestSession boundary and Checkpoint 6A scope.
+- [x] Add Student, Question, and QuestionTopic read models with exact SQL mappings and `ExcludeFromMigrations()`.
+- [x] Map the Test -> Student and TestQuestion -> Question read-only foreign keys.
+- [x] Add EF metadata tests for all new read models and relationships.
+- [x] Implement Student blueprint-option query:
+  - [x] Student ID comes from authenticated claims.
+  - [x] Require a usable Student current grade.
+  - [x] Return only `Approved`/`Active` blueprints for that grade.
+- [x] Implement capacity-aware candidate assignment:
+  - [x] Filter Approved, active Questions by grade, topic, difficulty, and section QuestionType.
+  - [x] Enforce global Question uniqueness across overlapping detail slots.
+  - [x] Fulfill every detail Quantity exactly or return an insufficient-pool result.
+  - [x] Inject candidate tie randomization so unit tests are deterministic.
+- [x] Implement `GenerateBlueprintExamCommand`:
+  - [x] Accept only `blueprintId`; derive Student ID from claims.
+  - [x] Require Blueprint status `Approved` or `Active` and matching Student grade.
+  - [x] Persist Test with `TestMode = BlueprintExam`, `GeneratedBy = System`, personal Student ID, and null TestCode.
+  - [x] Persist ordered TestQuestion rows with SourceBlueprintDetail and baseline audit fields.
+  - [x] Transition first-used Approved Blueprint to `Active`.
+  - [x] Save Test, TestQuestion, and Blueprint status atomically with stable TestID retry verification.
+- [x] Add Student-only blueprint-options and blueprint-exams endpoints.
+- [x] Add stable 400/404/409/422 generation errors and controller mappings.
+- [x] Add handler tests for exact filtering, overlapping tags, insufficient pools, no partial writes, grade/status validation, activation, and audit fields.
+- [x] Add controller tests for authenticated claim extraction and error mappings.
+- [x] Run TestGen tests and `dotnet build MathInsight.sln --no-restore`.
+
+## Phase 8B: Adaptive BlueprintExam Backlog
+
+- [ ] Repair Recommender string-ID/PascalCase SQL mappings and verify them against SQL Server before TestGen integration.
+- [ ] Introduce a stable in-process Recommender advice contract.
 - [ ] Resolve `RecommendedDifficultyLevel` through `TagDifficulty.LevelValue`.
-- [ ] Filter candidates by topic, difficulty, section QuestionType, Approved status, and active flag.
-- [ ] Deduplicate recent questions and enforce WeakTag rules after their final product review.
-- [ ] Create TestQuestion ordering, source-detail, and recommendation audit fields.
-- [ ] Transition first-used Approved Blueprint to `Active`.
-- [ ] Add Student generation endpoints only in this later phase.
+- [ ] Apply final WeakTag cap, bias, downscale/upscale, and fallback rules.
+- [ ] Populate adaptive recommendation audit fields.
+- [ ] Deduplicate recent questions after the product window/fallback rule is approved.
+
+## Phase 8C: TopicPractice Backlog
+
+- [ ] Implement `TopicPractice` generation for exactly 10 questions on one selected WeakTag.
+- [ ] Keep BlueprintID null and hand the generated Test to Testing for Practice TestSession creation.

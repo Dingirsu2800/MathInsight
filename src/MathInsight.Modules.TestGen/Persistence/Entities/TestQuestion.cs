@@ -1,3 +1,5 @@
+using MathInsight.Modules.TestGen.Persistence.ReadModels;
+
 namespace MathInsight.Modules.TestGen.Persistence.Entities;
 
 /// <summary>
@@ -19,4 +21,5 @@ public class TestQuestion
 
     public Test? Test { get; set; }
     public BlueprintDetail? SourceBlueprintDetail { get; set; }
+    public QuestionReadModel? Question { get; set; }
 }

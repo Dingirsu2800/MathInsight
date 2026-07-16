@@ -72,6 +72,11 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
             .HasForeignKey(x => x.SourceBlueprintDetailId)
             .OnDelete(DeleteBehavior.NoAction)
             .HasConstraintName("FK_TestQuestion_BlueprintDetail_SourceBlueprintDetailID");
+        builder.HasOne(x => x.Question)
+            .WithMany(x => x.TestQuestions)
+            .HasForeignKey(x => x.QuestionId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_TestQuestion_Question_QuestionID");
         builder.HasOne<TagTopicReadModel>()
             .WithMany()
             .HasForeignKey(x => x.RecommendedForTagId)

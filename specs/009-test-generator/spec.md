@@ -1,18 +1,20 @@
 # Feature Specification: Test Generator Module
 
-**Feature Branch**: `testgen-blueprint`
-**Created**: 2026-06-23 | **Clarified**: 2026-07-14
-**Status**: Expert Blueprint MVP complete
+**Feature Branch**: `testgen-test-generation`
+**Created**: 2026-06-23 | **Clarified**: 2026-07-16
+**Status**: Checkpoint 6A - baseline BlueprintExam generation
 **Database Contract**: `Implementation/Database/database/001_Create_MathInsight_Azure.sql`
 
 ## Scope and Delivery Order
 
-The module is delivered in two explicit slices:
+The module is delivered in explicit slices:
 
-1. **Expert Blueprint MVP (current scope)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
-2. **Test generation (later checkpoint)**: create `Test` and `TestQuestion` records, integrate Recommender advice, and expose Student generation endpoints.
+1. **Expert Blueprint MVP (complete)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
+2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
+3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
+4. **Checkpoint 6C (later)**: generate a 10-question `TopicPractice` test for one selected WeakTag.
 
-The Expert Blueprint MVP does not create or edit `Test` records. No database migration is part of this feature.
+TestGen creates `Test` and `TestQuestion` records only. Testing owns `TestSession` creation and the answer-taking workflow. No database migration is part of this feature.
 
 ## Use Cases
 
@@ -165,13 +167,52 @@ Frontend localizes these codes; backend messages remain developer-facing English
   - **Difficulty Downscaling**: a `Hard` or `Very Hard` slot for a WeakTag topic (`official_point < 5.00`) is selected at `Medium`; a `Medium` slot for a topic with `official_point < 3.00` is selected at `Easy`.
   - **Difficulty Upscaling**: when `official_point >= 8.00` and `mastery_status = Mastered`, the engine may select one difficulty level higher.
   - **Easy-Level Protection**: when `official_point < 5.00` at `Easy`, bias probability is reduced to 10%, no further downscaling is applied, and foundational learning content is prioritized.
-- **Student Practice and Exam Flow**: later student endpoints expose two initial formats:
+- **Student Practice and Exam Flow**: student endpoints expose two initial formats across separate checkpoints:
   - **Exam Mode**: a full-length session generated from an approved blueprint.
   - **Practice Mode**: exactly 10 questions targeting one diagnosed WeakTag topic, using that topic's `RecommendedDifficultyLevel`.
 - **BR-54 Student Practice and Exam Flow**: after an Exam session is completed and the student's WeakTags are updated, the student may choose:
-  - **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: generate a new `Exam` session from the original blueprint structure, retaining its sections and slot quantities while applying adaptive adjustments such as WeakTag Cap, Adaptive Bias, and Difficulty Downscaling based on the student's latest results and current level.
-  - **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: generate a `Practice` session of exactly 10 questions for a selected WeakTag topic. Answers update the topic's practice point using the Elo-inspired formula; the practice series then applies the defined blend/reset behavior.
-- Generation and Student endpoints are intentionally outside the current Expert Blueprint checkpoint.
+  - **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: generate a new `Test` from the original blueprint structure. Testing subsequently creates an `Exam` TestSession for that Test. Checkpoint 6A preserves exact section/detail slots; Checkpoint 6B adds adaptive adjustments based on the student's latest results.
+  - **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: generate a `TopicPractice` Test of exactly 10 questions for a selected WeakTag topic. Testing subsequently creates a `Practice` TestSession. Answers update the topic's practice point through the Recommender grading pipeline.
+
+## Checkpoint 6A: Baseline BlueprintExam
+
+### Student API
+
+Base route: `/api/test-generator/tests`
+
+| Method | Route | Behavior |
+|---|---|---|
+| `GET` | `/blueprint-options` | Return `Approved` or `Active` blueprints matching the authenticated Student's current grade |
+| `POST` | `/blueprint-exams` | Generate one personal BlueprintExam from the requested blueprint |
+
+The POST body contains only `blueprintId`. `GeneratedForStudentID` always comes from the authenticated claim. A personal generated Test has `TestCode = NULL`.
+
+### Candidate and Assignment Rules
+
+- **TG-01 Student profile**: the authenticated Student must have a persisted Student row and a current grade in `10`, `11`, or `12`.
+- **TG-02 Blueprint availability**: only `Approved` or `Active` blueprints matching the Student's current grade can generate a Test.
+- **TG-03 Candidate shape**: a candidate Question must be `Approved`, active, in the blueprint grade, match the section `QuestionType`, match the detail `DifficultyID`, and have a `QuestionTopic` row for the detail `TagID`.
+- **TG-04 Global uniqueness**: one Question may occur at most once in a generated Test even when it is tagged for multiple blueprint details.
+- **TG-05 Exact fulfillment**: every BlueprintDetail receives exactly its configured `Quantity`; otherwise generation fails without writing Test data.
+- **TG-06 Capacity-aware assignment**: selection uses an exact bipartite capacity assignment between Questions and BlueprintDetails. It must not report an insufficient pool when a valid global assignment exists.
+- **TG-07 Ordering**: TestQuestion order follows section order, then a stable detail order, then the randomized assignment order within the detail.
+- **TG-08 Baseline audit**: each selected row stores `SourceBlueprintDetailID`, `SelectionReason = BlueprintNormal`, `IsAdaptiveSelected = false`, and null recommendation fields.
+- **TG-09 Aggregate transaction**: Test, TestQuestion rows, and the first `Approved -> Active` blueprint transition commit atomically.
+- **TG-10 Retry identity**: one command execution uses a stable generated TestID so SQL transient retry cannot duplicate a Test after an ambiguous commit.
+- **TG-11 Testing boundary**: successful generation returns a Test summary. It does not create TestSession or TestAnswer rows.
+
+### Checkpoint 6A Stable Errors
+
+| Code | HTTP | Meaning |
+|---|---:|---|
+| `TEST_GENERATION_REQUEST_INVALID` | 400 | Missing or malformed generation request |
+| `TEST_GENERATION_STUDENT_NOT_FOUND` | 404 | Authenticated account has no usable Student profile |
+| `TEST_GENERATION_BLUEPRINT_NOT_FOUND` | 404 | Requested blueprint does not exist or is deactivated |
+| `TEST_GENERATION_BLUEPRINT_UNAVAILABLE` | 422 | Blueprint status cannot generate a Test |
+| `TEST_GENERATION_GRADE_MISMATCH` | 422 | Blueprint grade differs from the Student's current grade |
+| `TEST_GENERATION_INSUFFICIENT_QUESTIONS` | 409 | Approved active question pool cannot fulfill every blueprint detail |
+
+Frontend localizes these codes; backend messages remain developer-facing English.
 
 ## Acceptance Criteria
 
@@ -183,11 +224,18 @@ Frontend localizes these codes; backend messages remain developer-facing English
 - Pending list excludes the current Expert's own records.
 - Blueprint validation completes within 500 ms for an aggregate of up to 10 sections and 100 details.
 - Paged list responds within 1.5 seconds under normal MVP data volume.
+- Blueprint options expose only `Approved` or `Active` blueprints for the authenticated Student's current grade.
+- Checkpoint 6A generates exactly `Blueprint.TotalQuestions` globally unique TestQuestion rows or writes nothing.
+- Every generated TestQuestion can be traced to one SourceBlueprintDetail and uses baseline non-adaptive audit values.
+- Overlapping multi-topic candidates are assigned without false insufficient-pool failures when a complete assignment exists.
+- Test generation does not create TestSession or TestAnswer data.
 
-## Out of Scope for Current Checkpoint
+## Out of Scope for Checkpoint 6A
 
-- Student test generation endpoints and adaptive selection.
-- Expert CRUD over `Test` or `TestQuestion`.
-- Redis, RabbitMQ, background queues, or EF migrations.
-- Notification events; review responses are synchronous for MVP.
-- Adding `CreatedTime` or renaming legacy SQL columns.
+- Adaptive WeakTag selection and Recommender integration.
+- TopicPractice and the 10-question practice series.
+- Recent-session question deduplication until the product window/fallback rule is approved.
+- TestSession, TestAnswer, submission, grading, and solution APIs owned by Testing/Grading.
+- Student generation frontend.
+- Expert CRUD over Test or TestQuestion.
+- Redis, RabbitMQ, background queues, EF migrations, or schema changes.
