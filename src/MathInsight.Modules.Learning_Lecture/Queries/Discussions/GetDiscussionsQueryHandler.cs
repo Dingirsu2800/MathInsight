@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,6 +41,7 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
                 DiscussionQuestionId = x.DiscussionQuestionId,
                 LectureId = x.LectureId,
                 StudentId = x.StudentId,
+                AuthorName = _dbContext.AccountProfileViews.Where(a => a.AccountId == x.StudentId).Select(a => a.AuthorName).FirstOrDefault() ?? "Học sinh ẩn danh",
                 Title = x.Title,
                 Content = x.Content,
                 Status = x.Status,
@@ -53,6 +54,7 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
                     {
                         DiscussionAnswerId = a.DiscussionAnswerId,
                         AccountId = a.AccountId,
+                        AuthorName = _dbContext.AccountProfileViews.Where(acc => acc.AccountId == a.AccountId).Select(acc => acc.AuthorName).FirstOrDefault() ?? "Giáo viên",
                         Content = a.Content,
                         Status = a.Status,
                         CreatedTime = a.CreatedTime,

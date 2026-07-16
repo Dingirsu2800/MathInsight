@@ -68,6 +68,7 @@ public class GetLectureListQueryHandler : IRequestHandler<GetLectureListQuery, P
                 ThumbnailUrl = x.ThumbnailUrl,
                 Likes = x.Likes,
                 TeacherId = x.TeacherId,
+                TeacherName = _dbContext.AccountProfileViews.Where(a => a.AccountId == x.TeacherId).Select(a => a.AuthorName).FirstOrDefault(),
                 TagId = x.TagId,
                 TagName = _dbContext.TagTopics.Where(t => t.TagId == x.TagId).Select(t => t.TagName).FirstOrDefault(),
                 Status = x.Status,
