@@ -9,7 +9,7 @@ export function resolveHomePath(roleName) {
     case "expert":
       return "/expert/questions";
     case "admin":
-      return "/admin";
+      return "/admin/accounts";
     default:
       return "/";
   }
