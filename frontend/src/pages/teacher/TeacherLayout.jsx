@@ -1,10 +1,10 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { expertNavItems } from "../../config/dashboardNav";
+import { teacherNavItems } from "../../config/dashboardNav";
 import client from "../../services/questionBankApiClient";
 
-export default function ExpertLayout({ children }) {
+export default function TeacherLayout({ children }) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -23,29 +23,28 @@ export default function ExpertLayout({ children }) {
   };
 
   const topNavItems = [
-    { label: "Tổng quan", to: "/expert/questions" },
-    { label: "Phê duyệt", to: "/expert/reviews", disabled: true },
-    { label: "Báo cáo", to: "/expert/reports", disabled: true }
+    { label: "Tổng quan", to: "/teacher/lectures" },
+    { label: "Thống kê", to: "/teacher/stats", disabled: true }
   ];
 
-  const userName = localStorage.getItem("UserName") || "Chuyên gia nội dung";
-  const userInitials = userName.substring(0, 2).toUpperCase() || "CG";
+  const userName = localStorage.getItem("UserName") || "Giáo viên";
+  const userInitials = userName.substring(0, 2).toUpperCase() || "GV";
 
   return (
     <DashboardLayout
       brandName="MathInsight"
-      roleLabel="Chuyên gia nội dung"
+      roleLabel="Giáo viên"
       appTitle="Hệ thống Quản lý Toán học"
-      navItems={expertNavItems}
+      navItems={teacherNavItems}
       topNavItems={topNavItems}
       userName={userName}
-      userRoleLabel="Expert"
+      userRoleLabel="Teacher"
       userInitials={userInitials}
-      profilePath="/expert/profile"
+      profilePath="/teacher/profile"
       primaryAction={{
-        label: "Tạo câu hỏi mới",
+        label: "Tạo bài giảng mới",
         icon: "add",
-        to: "/expert/questions/new"
+        to: "/teacher/lectures/new"
       }}
       onLogout={handleLogout}
     >
