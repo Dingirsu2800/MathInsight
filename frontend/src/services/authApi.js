@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
   token: 'token',
   accountId: 'AccountId',
   roleName: 'RoleName',
-  username: 'Username',
+  username: 'UserName',
   email: 'Email',
 };
 
@@ -32,8 +32,8 @@ export async function login(usernameOrEmail, password) {
 
   const roleName = data.roleName || data.RoleName || '';
   const accountId = data.accountId || data.AccountId || '';
-  const username = data.username || data.Username || '';
   const email = data.email || data.Email || '';
+  const username = data.username || data.Username || email || roleName;
 
   // Persist to localStorage
   localStorage.setItem(STORAGE_KEYS.token, token);

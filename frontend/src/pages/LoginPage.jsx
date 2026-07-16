@@ -27,35 +27,17 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const response = await client.post("/api/v1/auth/login", {
-        usernameOrEmail,
-        password,
-      });
+      const result = await login(usernameOrEmail, password);
 
-      const data = response.data || {};
-      const token = data.accessToken || data.AccessToken;
-      const roleName = data.roleName || data.RoleName || "";
-      const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
-      const userName = data.username || data.Username || data.email || data.Email || roleName;
-
-      if (!token) {
-        throw new Error("Không nhận được mã xác thực (Token) từ hệ thống.");
-      }
-
-      if (!["Expert", "Teacher", "Student"].includes(roleName)) {
+      if (!["Expert", "Teacher", "Student"].includes(result.roleName)) {
         setError("Tài khoản này không có quyền truy cập cổng thông tin này.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("AccountId", accountId);
-      localStorage.setItem("RoleName", roleName);
-      localStorage.setItem("UserName", userName);
-      
-      if (roleName === "Teacher") {
+      if (result.roleName === "Teacher") {
         navigate("/teacher/lectures");
-      } else if (roleName === "Student") {
+      } else if (result.roleName === "Student") {
         navigate("/student/dashboard");
       } else {
         navigate("/expert/questions");
