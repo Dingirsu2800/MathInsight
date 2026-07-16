@@ -5,6 +5,13 @@ import StudentLayout from "./StudentLayout";
 import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+};
+
 export default function StudentLectureDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -214,7 +221,11 @@ export default function StudentLectureDetailPage() {
         <article className="bg-pure-surface border border-whisper-border rounded-2xl overflow-hidden shadow-sm mb-8">
           <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
             {lecture.videoUrl ? (
-              <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+              getYouTubeEmbedUrl(lecture.videoUrl) ? (
+                <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+              ) : (
+                <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+              )
             ) : lecture.thumbnailUrl ? (
               <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
             ) : (

@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using MathInsight.Modules.Learning_Lecture.Contracts;
 
 namespace MathInsight.Modules.Learning_Lecture.Commands.Lectures;
@@ -10,5 +10,6 @@ public record UpdateLectureCommand(
     string? VideoUrl,
     string? ThumbnailUrl,
     string TagId,
-    string TeacherId
+    string TeacherId,
+    System.Collections.Generic.List<string>? MaterialIds
 ) : IRequest<LectureDto>;

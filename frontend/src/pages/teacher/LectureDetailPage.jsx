@@ -5,6 +5,13 @@ import TeacherLayout from "./TeacherLayout";
 import { getLecture, getDiscussions, answerQuestion, hideComment, reportDiscussion, updateComment, deleteComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+};
+
 export default function LectureDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -146,9 +153,13 @@ export default function LectureDetailPage() {
         {/* Lecture Card */}
         <article className="bg-pure-surface rounded-xl border border-whisper-border shadow-sm overflow-hidden mb-10">
           {/* Video Player */}
-          <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
+          <div className="relative aspect-video bg-black rounded-xl overflow-hidden mb-8 shadow-sm">
             {lecture.videoUrl ? (
-              <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+              getYouTubeEmbedUrl(lecture.videoUrl) ? (
+                <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+              ) : (
+                <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+              )
             ) : lecture.thumbnailUrl ? (
               <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
             ) : (
@@ -225,10 +236,10 @@ export default function LectureDetailPage() {
                         <p className="text-[13px] text-on-surface-variant">{mat.size || "1.0 MB"}</p>
                       </div>
                     </div>
-                    <button className="mt-auto w-full py-2 bg-pure-surface text-primary border border-whisper-border rounded hover:bg-surface-container-low transition-colors font-medium text-[16px] flex items-center justify-center gap-2">
+                    <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-auto w-full py-2 bg-pure-surface text-primary border border-whisper-border rounded hover:bg-surface-container-low transition-colors font-medium text-[16px] flex items-center justify-center gap-2">
                       <span className="material-symbols-outlined text-sm">{fmt.includes("MP4") ? "visibility" : "download"}</span> 
                       {fmt.includes("MP4") ? "Xem" : "Tải xuống"}
-                    </button>
+                    </a>
                   </div>
                 );
               })}

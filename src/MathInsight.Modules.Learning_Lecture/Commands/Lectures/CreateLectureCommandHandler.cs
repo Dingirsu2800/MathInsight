@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -35,6 +35,14 @@ public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand,
             UpdatedTime = DateTime.UtcNow,
             Likes = 0
         };
+
+        if (request.MaterialIds != null)
+        {
+            foreach (var mid in request.MaterialIds)
+            {
+                lecture.LectureMaterials.Add(new LectureMaterial { LectureId = lecture.LectureId, MaterialId = mid });
+            }
+        }
 
         _dbContext.Lectures.Add(lecture);
         await _dbContext.SaveChangesAsync(cancellationToken);
