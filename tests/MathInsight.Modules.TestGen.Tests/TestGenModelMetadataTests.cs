@@ -102,6 +102,10 @@ public sealed class TestGenModelMetadataTests
         Assert.Equal("[TestCode] IS NOT NULL", testCodeIndex.GetFilter());
         Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_Test_Mode");
         Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_Test_Blueprint_Required");
+        Assert.Contains(
+            entity.GetForeignKeys(),
+            foreignKey => foreignKey.GetConstraintName() == "FK_Test_Student_GeneratedForStudentID" &&
+                PropertyNames(foreignKey.Properties).SequenceEqual([nameof(TestEntity.GeneratedForStudentId)]));
     }
 
     [Fact]
@@ -123,6 +127,10 @@ public sealed class TestGenModelMetadataTests
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "UQ_TestQuestion_Test_Order" && x.IsUnique);
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "IX_TestQuestion_RecommendedTag_Difficulty");
         Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_TestQuestion_SelectionReason");
+        Assert.Contains(
+            entity.GetForeignKeys(),
+            foreignKey => foreignKey.GetConstraintName() == "FK_TestQuestion_Question_QuestionID" &&
+                PropertyNames(foreignKey.Properties).SequenceEqual([nameof(TestQuestion.QuestionId)]));
     }
 
     [Theory]
@@ -130,12 +138,35 @@ public sealed class TestGenModelMetadataTests
     [InlineData(typeof(ExpertReadModel), "Expert")]
     [InlineData(typeof(TagTopicReadModel), "TagTopic")]
     [InlineData(typeof(TagDifficultyReadModel), "TagDifficulty")]
+    [InlineData(typeof(StudentReadModel), "Student")]
+    [InlineData(typeof(QuestionReadModel), "Question")]
+    [InlineData(typeof(QuestionTopicReadModel), "QuestionTopic")]
     public void ExternalReadModels_AreExcludedFromMigrations(Type clrType, string tableName)
     {
         var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(clrType));
 
         Assert.Equal(tableName, entity.GetTableName());
         Assert.True(entity.IsTableExcludedFromMigrations());
+    }
+
+    [Fact]
+    public void GenerationReadModels_MatchSqlKeysAndColumns()
+    {
+        var student = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(StudentReadModel)));
+        AssertStringColumn(student, nameof(StudentReadModel.StudentId), "StudentID", 36, nullable: false);
+        Assert.Equal("CurrentGrade", Column(student, nameof(StudentReadModel.CurrentGrade)).GetColumnName());
+
+        var question = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(QuestionReadModel)));
+        AssertStringColumn(question, nameof(QuestionReadModel.QuestionId), "QuestionID", 36, nullable: false);
+        AssertStringColumn(question, nameof(QuestionReadModel.DifficultyId), "DifficultyID", 36, nullable: false);
+        AssertStringColumn(question, nameof(QuestionReadModel.Status), "Status", 20, nullable: false);
+        AssertStringColumn(question, nameof(QuestionReadModel.QuestionType), "QuestionType", 30, nullable: false);
+
+        var topic = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(QuestionTopicReadModel)));
+        AssertStringColumn(topic, nameof(QuestionTopicReadModel.QuestionTopicId), "QuestionTopicID", 36, nullable: false);
+        AssertStringColumn(topic, nameof(QuestionTopicReadModel.QuestionId), "QuestionID", 36, nullable: false);
+        AssertStringColumn(topic, nameof(QuestionTopicReadModel.TagId), "TagID", 36, nullable: false);
+        Assert.Contains(topic.GetIndexes(), x => x.GetDatabaseName() == "UQ_QuestionTopic_Question_Tag" && x.IsUnique);
     }
 
     private IEntityType Entity<TEntity>(string tableName)
