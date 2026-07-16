@@ -6,18 +6,18 @@
 
 ## Phase 1: Persistence Setup
 
-- [ ] Create EF `IEntityTypeConfiguration` for all 7 entities mapped to current DB script tables:
-  - [ ] `TestConfiguration` — nullable `test_code` with filtered UNIQUE index when not null; FK to `blueprints`
-  - [ ] `TestQuestionConfiguration` — composite PK `(test_id, question_id)`, `question_order`
-  - [ ] `TestSessionConfiguration` — composite index `(student_id, status)`; status enum constraint
-  - [ ] `TestAnswerConfiguration` — composite UNIQUE `(session_id, question_id)`; `points_earned` default 0.00
-  - [ ] `TestAnswerOptionConfiguration` — composite PK `(test_answer_id, answer_id)` (DC-07)
-  - [ ] `TestAnswerPartConfiguration` — FK to `test_answers`, FK to `question_parts`, `student_answer` (max length 1000)
-  - [ ] `TestIncidentConfiguration` — FK to `test_sessions`, `type` enum constraint
-- [ ] Create `TestingDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
-- [ ] Coordinate with TestGen (009) on shared current DB script tables — same DbContext or separate registrations.
-- [ ] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
-- [ ] Seed: 2 tests (1 ACTIVE, 1 ARCHIVED), 3 test sessions per TDS §3.6
+- [x] Create EF `IEntityTypeConfiguration` for all 7 entities mapped to current DB script tables:
+  - [x] `TestConfiguration` — nullable `test_code` with filtered UNIQUE index when not null; FK to `blueprints`
+  - [x] `TestQuestionConfiguration` — composite PK `(test_id, question_id)`, `question_order`
+  - [x] `TestSessionConfiguration` — composite index `(student_id, status)`; status enum constraint
+  - [x] `TestAnswerConfiguration` — composite UNIQUE `(session_id, question_id)`; `points_earned` default 0.00
+  - [x] `TestAnswerOptionConfiguration` — composite PK `(test_answer_id, answer_id)` (DC-07)
+  - [x] `TestAnswerPartConfiguration` — FK to `test_answers`, FK to `question_parts`, `student_answer` (max length 1000)
+  - [x] `TestIncidentConfiguration` — FK to `test_sessions`, `type` enum constraint
+- [x] Create `TestingDbContext.cs` with shared connection and explicit `ToTable(...)` mappings.
+- [x] Coordinate with TestGen (009) on shared current DB script tables — same DbContext or separate registrations.
+- [x] Do not add EF migration unless the team explicitly switches from SQL script source-of-truth to EF migration source-of-truth.
+- [x] Seed: 2 tests (1 ACTIVE, 1 ARCHIVED), 3 test sessions per TDS §3.6
 
 ---
 
@@ -46,14 +46,16 @@
   - [ ] Set `end_time = NOW`, `submission_type = StudentSubmit`
   - [ ] Calculate `duration = (end_time - start_time).TotalSeconds`
   - [ ] Count `num_abandoned` (unanswered/abandoned questions per BR-16b)
-  - [ ] Invoke Grading module in-process; commit only after grading updates `status = Graded`
-  - [ ] Publish `GradeCalculatedEvent` after successful grading
+  - [ ] **Practice mode (BR-16)**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`; return `200 OK`
+  - [ ] **Exam mode (BR-17)**: Publish `TestSubmittedEvent` to MassTransit queue; return `202 Accepted` immediately
+  - [ ] Publish `GradeCalculatedEvent` after successful grading (handled by Grading module)
 
 - [ ] **ForceSubmitSession Command**:
   - [ ] Validate `status = InProgress`
   - [ ] Set `end_time = NOW`, `submission_type = TimeoutSubmit` for timer expiry or `SystemSubmit` for system/proctor submit
   - [ ] Save current auto-save state
-  - [ ] Invoke Grading module in-process; commit only after grading updates `status = Graded`
+  - [ ] **Practice mode**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`
+  - [ ] **Exam mode**: Publish `TestSubmittedEvent` to MassTransit queue; grading proceeds asynchronously
 
 - [ ] **ReportSessionQuestion Command** (UC-48):
   - [ ] Delegates to QuestionBank module's `ReportQuestionCommand`

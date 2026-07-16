@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using MathInsight.Modules.Testing.Persistence;
 
 namespace MathInsight.Modules.Testing;
 
@@ -7,7 +9,13 @@ public static class TestingModuleExtensions
 {
     public static IServiceCollection AddTestingModule(this IServiceCollection services, IConfiguration configuration)
     {
-        // Register DbContext with Schema "tst"
+        services.AddDbContext<TestingDbContext>(options =>
+            options.UseSqlServer(
+                configuration.GetConnectionString("DefaultConnection"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null)));
         
         // Register services, repositories, handlers
         return services;

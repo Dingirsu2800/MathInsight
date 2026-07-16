@@ -41,9 +41,9 @@ builder.Services.AddMediatR(cfg =>
 var rabbitMqEnabled = builder.Configuration.GetValue<bool>("RabbitMQ:Enabled");
 builder.Services.AddMassTransit(x =>
 {
-    // Register asynchronous consumers
-    // x.AddConsumer<TestSubmittedConsumer>();
-    // x.AddConsumer<GradeCalculatedConsumer>();
+    // Register asynchronous consumers for Exam mode grading
+    x.AddConsumer<MathInsight.Modules.Grading_Analytics.Consumers.TestSubmittedConsumer>();
+    // x.AddConsumer<GradeCalculatedConsumer>(); // Uses MediatR in-process — not a MassTransit consumer
 
     if (rabbitMqEnabled)
     {
