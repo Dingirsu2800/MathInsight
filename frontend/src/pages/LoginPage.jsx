@@ -67,7 +67,7 @@ export default function LoginPage() {
       const accessToken = data.accessToken || data.AccessToken;
       const refreshToken = data.refreshToken || data.RefreshToken;
       const roleName = data.roleName || data.RoleName || "";
-      const accountId = data.accountId || data.AccountId || "";
+      const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
 
       if (!accessToken) {
         throw new Error("missing-token");

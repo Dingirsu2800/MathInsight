@@ -5,7 +5,7 @@ export function resolveHomePath(roleName) {
     case "student":
       return "/student/dashboard";
     case "teacher":
-      return "/teacher";
+      return "/teacher/lectures";
     case "expert":
       return "/expert/questions";
     case "admin":

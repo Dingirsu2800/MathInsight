@@ -112,7 +112,14 @@ builder.Services.AddLearningModule(builder.Configuration);
 builder.Services.AddGamificationModule(builder.Configuration);
 builder.Services.AddNotificationModule(builder.Configuration);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = _ =>
+            new BadRequestObjectResult(
+                new ApiErrorResponse(ApplicationErrors.RequestInvalid));
+    });
 builder.Services.AddEndpointsApiExplorer();
 // Swashbuckle renders [FromForm] IFormFile parameters (e.g. teacher registration) as a
 // multipart/form-data file upload automatically.
