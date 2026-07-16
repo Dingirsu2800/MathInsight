@@ -1,10 +1,10 @@
 import MaterialIcon from '../../../components/ui/MaterialIcon';
+import { getStoredUser } from '../../../services/authApi';
 
 // TODO: Replace with real API data.
 // Needs endpoint: GET /api/v1/reports/competency-summary (not yet implemented in backend)
 // Expected DTO: { userName, grade, competencyPoint, weeklyProgressPercent, trendDelta }
 const MOCK_DATA = {
-  userName: 'Nguyễn Văn A',
   grade: 'Khối 12 — Học kỳ 2',
   competencyPoint: 6.8,
   weeklyProgress: 75,
@@ -12,7 +12,9 @@ const MOCK_DATA = {
 };
 
 export default function WelcomeBanner() {
-  const { userName, grade, competencyPoint, weeklyProgress, trendDelta } = MOCK_DATA;
+  const user = getStoredUser();
+  const userName = user?.username || 'Bạn';
+  const { grade, competencyPoint, weeklyProgress, trendDelta } = MOCK_DATA;
 
   return (
     <section className="relative overflow-hidden rounded-2xl bg-primary text-white p-8 shadow-md">
