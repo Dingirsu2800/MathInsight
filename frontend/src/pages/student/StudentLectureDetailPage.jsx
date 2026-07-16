@@ -311,8 +311,8 @@ export default function StudentLectureDetailPage() {
                         <p className="text-[12px] text-on-surface-variant uppercase tracking-wider">{mat.format || mat.fileType}</p>
                       </div>
                     </div>
-                    <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center shrink-0" title="Tải xuống">
-                      <span className="material-symbols-outlined text-[20px]">download</span> 
+                    <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center shrink-0" title={fmt.includes("MP4") ? "Xem" : "Tải xuống"}>
+                      <span className="material-symbols-outlined text-[20px]">{fmt.includes("MP4") ? "visibility" : "download"}</span> 
                     </a>
                   </div>
                 );

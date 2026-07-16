@@ -30,6 +30,12 @@ using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 524_288_000; // 500 MB
+});
+
 const string CorsPolicyName = "MathInsightCors";
 
 // 1. Add MediatR (In-process Event Bus)
@@ -99,7 +105,7 @@ var cloudinaryOptions = new CloudinaryOptions
 builder.Services.AddSingleton(cloudinaryOptions);
 builder.Services.AddHttpClient<IImageStorage, CloudinaryImageStorage>(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromMinutes(30);
 });
 
 builder.Services.AddIdentityModule(builder.Configuration);
@@ -111,6 +117,11 @@ builder.Services.AddRecommenderModule(builder.Configuration);
 builder.Services.AddLearningModule(builder.Configuration);
 builder.Services.AddGamificationModule(builder.Configuration);
 builder.Services.AddNotificationModule(builder.Configuration);
+
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 524_288_000; // 500 MB
+});
 
 builder.Services
     .AddControllers()
