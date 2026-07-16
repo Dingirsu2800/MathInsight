@@ -14,10 +14,9 @@ public class LectureMaterialReadOnlyConfiguration : IEntityTypeConfiguration<Lec
     public void Configure(EntityTypeBuilder<LectureMaterialReadOnly> builder)
     {
         builder.ToTable("LectureMaterial");
-        builder.HasKey(x => x.LectureMaterialId);
+        builder.HasKey(x => new { x.LectureId, x.MaterialId });
 
-        builder.Property(x => x.LectureMaterialId).HasColumnName("lecture_material_id");
-        builder.Property(x => x.LectureId).HasColumnName("lecture_id");
-        builder.Property(x => x.MaterialId).HasColumnName("material_id");
+        builder.Property(x => x.LectureId).HasColumnName("LectureID").HasMaxLength(36);
+        builder.Property(x => x.MaterialId).HasColumnName("MaterialID").HasMaxLength(36);
     }
 }

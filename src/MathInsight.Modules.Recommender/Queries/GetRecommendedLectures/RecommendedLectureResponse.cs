@@ -4,10 +4,10 @@ namespace MathInsight.Modules.Recommender.Queries.GetRecommendedLectures;
 /// Response DTO for recommended lectures.
 /// </summary>
 public sealed record RecommendedLectureResponse(
-    Guid LectureId,
+    string LectureId,
     string Title,
     string? Description,
-    Guid TagId,
+    string TagId,
     string TagName,
     decimal OfficialPoint,
     bool IsRemedial);

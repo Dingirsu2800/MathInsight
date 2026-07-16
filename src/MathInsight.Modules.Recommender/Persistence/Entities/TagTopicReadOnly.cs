@@ -7,7 +7,7 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class TagTopicReadOnly
 {
-    public Guid TagId { get; set; }
+    public string TagId { get; set; } = string.Empty;
     public string TagName { get; set; } = string.Empty;
     public int Grade { get; set; }
     public bool IsActive { get; set; }

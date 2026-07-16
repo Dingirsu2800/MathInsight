@@ -7,10 +7,9 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class MaterialReadOnly
 {
-    public Guid MaterialId { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string? Description { get; set; }
+    public string MaterialId { get; set; } = string.Empty;
+    public string MaterialName { get; set; } = string.Empty;
     public string? FileUrl { get; set; }
-    public string? MaterialType { get; set; }
-    public bool IsActive { get; set; }
+    public string? FileType { get; set; }
+    public string Status { get; set; } = "Active";
 }
