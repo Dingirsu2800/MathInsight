@@ -9,6 +9,7 @@ import ReportedQuestionsPage from './pages/expert/ReportedQuestionsPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterStudentPage from './pages/RegisterStudentPage.jsx';
+import RegisterTeacherPage from './pages/RegisterTeacherPage.jsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/" element={<HomeRoute />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterStudentPage />} />
+      <Route path="/register/teacher" element={<RegisterTeacherPage />} />
       <Route path="/confirm-email" element={<ConfirmEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
