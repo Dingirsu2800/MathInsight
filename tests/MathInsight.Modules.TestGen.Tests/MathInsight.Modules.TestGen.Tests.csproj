@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\..\Database\database\001_Create_MathInsight_Azure.sql"
+    <None Include="..\..\database\001_Create_MathInsight_Azure.sql"
           Link="Database\001_Create_MathInsight_Azure.sql"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

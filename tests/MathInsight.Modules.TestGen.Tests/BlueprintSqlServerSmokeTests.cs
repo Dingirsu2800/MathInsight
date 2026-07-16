@@ -2,8 +2,10 @@ using System.Text.RegularExpressions;
 using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
 using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
+using MathInsight.Modules.TestGen.Commands.GenerateBlueprintExam;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Errors;
+using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Validation;
@@ -17,7 +19,7 @@ public sealed class BlueprintSqlServerSmokeTests
     private const string ConnectionVariable = "TESTGEN_SQLSERVER_CONNECTION";
 
     [SqlServerSmokeFact(ConnectionVariable)]
-    public async Task CurrentSchema_EnforcesCompositeFkAndSerializesSubmitReview()
+    public async Task CurrentSchema_EnforcesBlueprintWorkflowAndGenerationContracts()
     {
         var baseConnectionString = Environment.GetEnvironmentVariable(ConnectionVariable)!;
         var databaseName = $"MathInsightTestGenSmoke_{Guid.NewGuid():N}";
@@ -31,6 +33,7 @@ public sealed class BlueprintSqlServerSmokeTests
             await SeedBlueprintScenarioAsync(databaseConnectionString);
             await VerifyCompositeForeignKeyAsync(databaseConnectionString);
             await VerifyConcurrentSubmitReviewAsync(databaseConnectionString);
+            await VerifyBlueprintExamGenerationAsync(databaseConnectionString);
         }
         finally
         {
@@ -102,18 +105,24 @@ public sealed class BlueprintSqlServerSmokeTests
     {
         const string seedSql = """
             INSERT INTO [Role] ([RoleID], [RoleName])
-            VALUES ('role-expert', N'Expert');
+            VALUES
+                ('role-expert', N'Expert'),
+                ('role-student', N'Student');
 
             INSERT INTO [Account]
                 ([AccountID], [Username], [PasswordHash], [Email], [FirstName], [LastName], [RoleID], [isActive])
             VALUES
                 ('smoke-owner', N'smoke-owner', 'hash', 'owner@smoke.local', N'Owner', N'Expert', 'role-expert', 1),
-                ('smoke-reviewer', N'smoke-reviewer', 'hash', 'reviewer@smoke.local', N'Reviewer', N'Expert', 'role-expert', 1);
+                ('smoke-reviewer', N'smoke-reviewer', 'hash', 'reviewer@smoke.local', N'Reviewer', N'Expert', 'role-expert', 1),
+                ('smoke-student', N'smoke-student', 'hash', 'student@smoke.local', N'Smoke', N'Student', 'role-student', 1);
 
             INSERT INTO [Expert] ([ExpertID], [Specialty])
             VALUES
                 ('smoke-owner', 'Mathematics'),
                 ('smoke-reviewer', 'Mathematics');
+
+            INSERT INTO [Student] ([StudentID], [CurrentGrade])
+            VALUES ('smoke-student', 12);
 
             INSERT INTO [TagTopic]
                 ([TagID], [TagName], [Grade], [IsActive], [DisplayOrder])
@@ -127,19 +136,33 @@ public sealed class BlueprintSqlServerSmokeTests
                 ([BlueprintID], [BlueprintName], [Grade], [TotalQuestions], [DurationMinutes], [ExpertID], [Status])
             VALUES
                 ('smoke-blueprint', N'Smoke Blueprint', 12, 1, 15, 'smoke-owner', 'Draft'),
-                ('other-blueprint', N'Other Blueprint', 12, 1, 15, 'smoke-owner', 'Draft');
+                ('other-blueprint', N'Other Blueprint', 12, 1, 15, 'smoke-owner', 'Draft'),
+                ('generation-blueprint', N'Generation Blueprint', 12, 1, 15, 'smoke-owner', 'Approved');
 
             INSERT INTO [BlueprintSection]
                 ([BlueprintSectionID], [BlueprintID], [SectionOrder], [SectionName], [QuestionType],
                  [TotalQuestions], [DefaultPointPerQuestion])
             VALUES
                 ('smoke-section', 'smoke-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00),
-                ('other-section', 'other-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00);
+                ('other-section', 'other-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00),
+                ('generation-section', 'generation-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00);
 
             INSERT INTO [BlueprintDetail]
                 ([BlueprintDetailID], [BlueprintID], [BlueprintSectionID], [TagID], [DifficultyID], [Quantity])
             VALUES
-                ('smoke-detail', 'smoke-blueprint', 'smoke-section', 'smoke-topic', 'smoke-difficulty', 1);
+                ('smoke-detail', 'smoke-blueprint', 'smoke-section', 'smoke-topic', 'smoke-difficulty', 1),
+                ('generation-detail', 'generation-blueprint', 'generation-section', 'smoke-topic', 'smoke-difficulty', 1);
+
+            INSERT INTO [Question]
+                ([QuestionID], [QuestionContent], [SolutionContent], [DifficultyID], [Grade], [Status],
+                 [QuestionType], [ExpertID], [DefaultPoint], [IsActive])
+            VALUES
+                ('generation-question', N'Question', N'Solution', 'smoke-difficulty', 12, 'Approved',
+                 'SingleChoice', 'smoke-owner', 1.00, 1);
+
+            INSERT INTO [QuestionTopic]
+                ([QuestionTopicID], [QuestionID], [TagID], [IsPrimary])
+            VALUES ('generation-question-topic', 'generation-question', 'smoke-topic', 1);
             """;
 
         await using var connection = new SqlConnection(connectionString);
@@ -204,6 +227,44 @@ public sealed class BlueprintSqlServerSmokeTests
             Assert.Equal("smoke-reviewer", persisted.ApprovedBy);
     }
 
+    private static async Task VerifyBlueprintExamGenerationAsync(string connectionString)
+    {
+        await using var context = CreateContext(connectionString);
+        var handler = new GenerateBlueprintExamCommandHandler(
+            context,
+            new BlueprintExamCandidateProvider(context),
+            new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer()));
+
+        var result = await handler.Handle(
+            new GenerateBlueprintExamCommand("generation-blueprint", "smoke-student"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        context.ChangeTracker.Clear();
+        var persisted = await context.Tests
+            .AsNoTracking()
+            .Include(test => test.Questions)
+            .SingleAsync(test => test.TestId == result.Value!.TestId);
+        var question = Assert.Single(persisted.Questions);
+        Assert.Equal("generation-question", question.QuestionId);
+        Assert.Equal("generation-detail", question.SourceBlueprintDetailId);
+        Assert.Equal("BlueprintNormal", question.SelectionReason);
+        Assert.False(question.IsAdaptiveSelected);
+        Assert.Null(persisted.TestCode);
+        Assert.Equal("smoke-student", persisted.GeneratedForStudentId);
+        Assert.Equal(
+            BlueprintStatuses.Active,
+            await context.Blueprints
+                .Where(blueprint => blueprint.BlueprintId == "generation-blueprint")
+                .Select(blueprint => blueprint.Status)
+                .SingleAsync());
+
+        var sessionCount = await context.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM [TestSession]")
+            .SingleAsync();
+        Assert.Equal(0, sessionCount);
+    }
+
     private static TestGenDbContext CreateContext(string connectionString)
     {
         var options = new DbContextOptionsBuilder<TestGenDbContext>()
@@ -215,6 +276,13 @@ public sealed class BlueprintSqlServerSmokeTests
                     errorNumbersToAdd: null))
             .Options;
         return new TestGenDbContext(options);
+    }
+
+    private sealed class NoOpGenerationRandomizer : IGenerationRandomizer
+    {
+        public void Shuffle<T>(IList<T> values)
+        {
+        }
     }
 }
 

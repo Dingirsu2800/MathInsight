@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
-using MassTransit;
 using MathInsight.Shared.Events;
 
 namespace MathInsight.Modules.Testing.Controllers;
@@ -10,18 +9,15 @@ namespace MathInsight.Modules.Testing.Controllers;
 public class TestingController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly IPublishEndpoint _publishEndpoint;
 
-    public TestingController(IMediator mediator, IPublishEndpoint publishEndpoint)
+    public TestingController(IMediator mediator)
     {
         _mediator = mediator;
-        _publishEndpoint = publishEndpoint;
     }
 
     [HttpPost("submit")]
     public async Task<IActionResult> SubmitTest([FromBody] SubmitTestRequest request)
     {
-        // 1. Save Test Session to "tst.TestSessions" schema
         var sessionId = Guid.NewGuid();
         
         var submissionEvent = new TestSubmittedEvent
@@ -34,18 +30,9 @@ public class TestingController : ControllerBase
             SubmittedTime = DateTime.UtcNow
         };
 
-        if (request.TestFormat == "Practice")
-        {
-            // For Practice mode, grade synchronously in-memory using MediatR
-            await _mediator.Publish(submissionEvent);
-            return Ok(new { SessionId = sessionId, Status = "GradedSynchronously" });
-        }
-        else
-        {
-            // For Exam mode, publish to RabbitMQ using MassTransit for background queue grading
-            await _publishEndpoint.Publish(submissionEvent);
-            return Accepted(new { SessionId = sessionId, Status = "QueuedForBackgroundGrading" });
-        }
+        // Grade synchronously in-memory using MediatR for all modes in MVP
+        await _mediator.Publish(submissionEvent);
+        return Ok(new { SessionId = sessionId, Status = "GradedSynchronously" });
     }
 }
 

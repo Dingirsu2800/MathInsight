@@ -240,8 +240,8 @@ internal static class TestDataBuilder
                 QuestionId = questionId,
                 PartOrder = i + 1,
                 Content = $"Part {i + 1}",
-                AnswerKey = parts[i].answerKey,
-                PointValue = 0, // Not used for all-TF scoring
+                CorrectBoolean = bool.TryParse(parts[i].answerKey, out var bVal) ? bVal : (bool?)null,
+                DefaultPoint = 0, // Not used for all-TF scoring
                 PartType = "TRUE_FALSE"
             });
         }
@@ -269,10 +269,9 @@ internal static class TestDataBuilder
         {
             answerParts.Add(new TestAnswerPart
             {
-                TestAnswerPartId = Guid.NewGuid(),
                 TestAnswerId = testAnswerId,
-                QuestionPartId = questionParts[i].QuestionPartId,
-                StudentAnswer = parts[i].studentAnswer,
+                PartId = questionParts[i].QuestionPartId,
+                BooleanAnswer = bool.TryParse(parts[i].studentAnswer, out var saVal) ? saVal : (bool?)null,
                 QuestionPart = questionParts[i]
             });
         }
@@ -313,15 +312,21 @@ internal static class TestDataBuilder
 
         for (int i = 0; i < parts.Count; i++)
         {
+            var pType = parts[i].partType;
+            var pTypeNorm = pType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+
             questionParts.Add(new QuestionPart
             {
                 QuestionPartId = Guid.NewGuid(),
                 QuestionId = questionId,
                 PartOrder = i + 1,
                 Content = $"Part {i + 1}",
-                AnswerKey = parts[i].answerKey,
-                PointValue = parts[i].pointValue,
-                PartType = parts[i].partType
+                CorrectBoolean = pTypeNorm == "TRUEFALSE" && bool.TryParse(parts[i].answerKey, out var b) ? b : (bool?)null,
+                CorrectText = pTypeNorm == "SHORTANSWER" ? parts[i].answerKey : null,
+                CorrectNumeric = pTypeNorm == "NUMERICANSWER" && decimal.TryParse(parts[i].answerKey, out var d) ? d : (decimal?)null,
+                NumericTolerance = pTypeNorm == "NUMERICANSWER" ? 0.01m : (decimal?)null,
+                DefaultPoint = parts[i].pointValue,
+                PartType = pType
             });
         }
 
@@ -346,12 +351,16 @@ internal static class TestDataBuilder
         var testAnswerId = Guid.NewGuid();
         for (int i = 0; i < questionParts.Count; i++)
         {
+            var pType = questionParts[i].PartType;
+            var pTypeNorm = pType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+
             answerParts.Add(new TestAnswerPart
             {
-                TestAnswerPartId = Guid.NewGuid(),
                 TestAnswerId = testAnswerId,
-                QuestionPartId = questionParts[i].QuestionPartId,
-                StudentAnswer = parts[i].studentAnswer,
+                PartId = questionParts[i].QuestionPartId,
+                BooleanAnswer = pTypeNorm == "TRUEFALSE" && bool.TryParse(parts[i].studentAnswer, out var sb) ? sb : (bool?)null,
+                TextAnswer = pTypeNorm == "SHORTANSWER" ? parts[i].studentAnswer : null,
+                NumericAnswer = pTypeNorm == "NUMERICANSWER" && decimal.TryParse(parts[i].studentAnswer, out var sd) ? sd : (decimal?)null,
                 QuestionPart = questionParts[i]
             });
         }

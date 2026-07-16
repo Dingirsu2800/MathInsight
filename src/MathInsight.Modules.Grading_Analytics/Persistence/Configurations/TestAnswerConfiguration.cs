@@ -11,17 +11,17 @@ public class TestAnswerConfiguration : IEntityTypeConfiguration<TestAnswer>
         builder.ToTable("TestAnswer");
         builder.HasKey(x => x.TestAnswerId);
 
-        builder.Property(x => x.TestAnswerId).HasColumnName("test_answer_id");
-        builder.Property(x => x.SessionId).HasColumnName("session_id");
-        builder.Property(x => x.QuestionId).HasColumnName("question_id");
-        builder.Property(x => x.AnswerId).HasColumnName("answer_id");
-        builder.Property(x => x.QuestionNo).HasColumnName("question_no");
-        builder.Property(x => x.TimeSpent).HasColumnName("time_spent");
-        builder.Property(x => x.FirstChoiceTime).HasColumnName("first_choice_time");
-        builder.Property(x => x.UpdateChoiceTime).HasColumnName("update_choice_time");
-        builder.Property(x => x.ShortAnswerText).HasColumnName("short_answer_text").HasMaxLength(500);
-        builder.Property(x => x.IsCorrect).HasColumnName("is_correct");
-        builder.Property(x => x.PointsEarned).HasColumnName("points_earned").HasPrecision(5, 2);
+        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID");
+        builder.Property(x => x.SessionId).HasColumnName("SessionID");
+        builder.Property(x => x.QuestionId).HasColumnName("QuestionID");
+        builder.Property(x => x.AnswerId).HasColumnName("AnswerID");
+        builder.Property(x => x.QuestionNo).HasColumnName("QuestionNo");
+        builder.Property(x => x.TimeSpent).HasColumnName("TimeSpent");
+        builder.Property(x => x.FirstChoiceTime).HasColumnName("FirstChoiceTime");
+        builder.Property(x => x.UpdateChoiceTime).HasColumnName("UpdateChoiceTime");
+        builder.Property(x => x.ShortAnswerText).HasColumnName("ShortAnswerText");
+        builder.Property(x => x.IsCorrect).HasColumnName("IsCorrect");
+        builder.Property(x => x.PointsEarned).HasColumnName("PointsEarned").HasPrecision(4, 2);
 
         builder.HasOne(x => x.Session)
                .WithMany(s => s.TestAnswers)
