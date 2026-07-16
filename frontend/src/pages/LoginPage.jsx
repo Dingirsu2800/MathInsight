@@ -1,6 +1,13 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import client from "../services/questionBankApiClient";
+import { login } from "../services/authApi";
+
+/** Route map keyed by backend RoleName */
+const ROLE_ROUTES = {
+  Student: "/student/dashboard",
+  Expert: "/expert/questions",
+  Teacher: "/student/dashboard", // fallback — no dedicated Teacher UI yet
+};
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -18,37 +25,24 @@ export default function LoginPage() {
 
     setLoading(true);
     setError("");
-    localStorage.removeItem("token");
-    localStorage.removeItem("access_token");
 
     try {
-      const response = await client.post("/api/v1/auth/login", {
-        usernameOrEmail,
-        password,
-      });
+      const result = await login(usernameOrEmail, password);
 
-      const data = response.data || {};
-      const token = data.accessToken || data.AccessToken;
-      const roleName = data.roleName || data.RoleName || "";
-      const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
-
-      if (!token) {
-        throw new Error("Không nhận được mã xác thực (Token) từ hệ thống.");
-      }
-
-      if (roleName !== "Expert") {
-        setError("Tài khoản này không có quyền Chuyên gia (Expert).");
+      const destination = ROLE_ROUTES[result.roleName];
+      if (!destination) {
+        setError(`Vai trò "${result.roleName}" chưa được hỗ trợ trên hệ thống.`);
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("AccountId", accountId);
-      localStorage.setItem("RoleName", roleName);
-      navigate("/expert/questions");
+      navigate(destination);
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.message || err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại.";
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Đăng nhập thất bại. Vui lòng kiểm tra lại.";
       setError(errMsg);
     } finally {
       setLoading(false);
@@ -60,9 +54,9 @@ export default function LoginPage() {
       <section className="card auth-card max-w-md w-full bg-pure-surface border border-whisper-border p-8 rounded-2xl diffused-shadow space-y-6">
         <div className="text-center space-y-2">
           <p className="text-primary text-[11px] font-black tracking-widest uppercase">MathInsight Portal</p>
-          <h1 className="text-2xl font-bold text-on-surface">Đăng nhập Chuyên gia</h1>
+          <h1 className="text-2xl font-bold text-on-surface">Đăng nhập</h1>
           <p className="text-xs text-on-surface-variant leading-relaxed">
-            Nhập tài khoản và mật khẩu của bạn để truy cập hệ thống Quản lý và Soạn thảo Ngân hàng câu hỏi.
+            Nhập tài khoản và mật khẩu của bạn để truy cập hệ thống MathInsight.
           </p>
         </div>
 
@@ -83,7 +77,7 @@ export default function LoginPage() {
                 value={usernameOrEmail}
                 onChange={(e) => setUsernameOrEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 text-sm bg-transparent border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
-                placeholder="expert@mathinsight.vn"
+                placeholder="user@mathinsight.vn"
                 disabled={loading}
               />
             </div>

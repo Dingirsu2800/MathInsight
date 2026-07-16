@@ -20,20 +20,22 @@ export default function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       {/* Student Routes */}
-      <Route path="/student/dashboard" element={<StudentDashboard />} />
-      <Route path="/student/history" element={<TestHistoryPage />} />
-      <Route path="/student/competency" element={<CompetencyPage />} />
-      <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
-      <Route path="/student/test-result" element={<TestResultPage />} />
-      <Route
-        path="/student/test"
-        element={
-          <TestSession
-            sessionId="local-session"
-            testId="3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          />
-        }
-      />
+      <Route element={<ProtectedRoute />}>
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
+        <Route path="/student/history" element={<TestHistoryPage />} />
+        <Route path="/student/competency" element={<CompetencyPage />} />
+        <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
+        <Route path="/student/test-result" element={<TestResultPage />} />
+        <Route
+          path="/student/test"
+          element={
+            <TestSession
+              sessionId="local-session"
+              testId="3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            />
+          }
+        />
+      </Route>
       {/* Expert Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/expert/questions" element={<QuestionBankListPage />} />
