@@ -18,65 +18,68 @@ public class TagsMasteryConfiguration : IEntityTypeConfiguration<TagsMastery>
         builder.HasKey(x => x.TagsMasteryId);
 
         builder.Property(x => x.TagsMasteryId)
-            .HasColumnName("tags_mastery_id");
+            .HasColumnName("TagsMasteryID")
+            .HasMaxLength(36);
 
         builder.Property(x => x.StudentId)
-            .HasColumnName("student_id")
+            .HasColumnName("StudentID")
+            .HasMaxLength(36)
             .IsRequired();
 
         builder.Property(x => x.TagId)
-            .HasColumnName("tag_id")
+            .HasColumnName("TagID")
+            .HasMaxLength(36)
             .IsRequired();
 
         builder.Property(x => x.MasteryStatus)
-            .HasColumnName("mastery_status")
+            .HasColumnName("MasteryStatus")
             .HasMaxLength(20)
             .IsRequired();
 
         builder.Property(x => x.NumberDone)
-            .HasColumnName("number_done")
+            .HasColumnName("NumberDone")
             .IsRequired();
 
         builder.Property(x => x.NumCorrect)
-            .HasColumnName("num_correct")
+            .HasColumnName("NumCorrect")
             .IsRequired();
 
         builder.Property(x => x.AccuracyRate)
-            .HasColumnName("accuracy_rate")
+            .HasColumnName("AccuracyRate")
             .HasPrecision(5, 2)
             .IsRequired();
 
         builder.Property(x => x.OfficialPoint)
-            .HasColumnName("official_point")
-            .HasPrecision(4, 2)
+            .HasColumnName("OfficialPoint")
+            .HasPrecision(5, 2)
             .IsRequired();
 
         builder.Property(x => x.PracticePoint)
-            .HasColumnName("practice_point")
-            .HasPrecision(4, 2)
+            .HasColumnName("PracticePoint")
+            .HasPrecision(5, 2)
             .IsRequired();
 
         builder.Property(x => x.ExamAnchor)
-            .HasColumnName("exam_anchor")
-            .HasPrecision(4, 2)
+            .HasColumnName("ExamAnchor")
+            .HasPrecision(5, 2)
             .IsRequired();
 
         builder.Property(x => x.ExamHistory)
-            .HasColumnName("exam_history")
+            .HasColumnName("ExamHistory")
             .HasMaxLength(2000);
 
         builder.Property(x => x.SeriesAnswerCount)
-            .HasColumnName("series_answer_count")
+            .HasColumnName("SeriesAnswerCount")
             .IsRequired();
 
         builder.Property(x => x.RecommendedDifficultyLevel)
-            .HasColumnName("recommended_difficulty_level")
+            .HasColumnName("RecommendedDifficultyLevel")
             .IsRequired();
 
         builder.Property(x => x.LastCalculatedAt)
-            .HasColumnName("last_calculated_at");
+            .HasColumnName("LastCalculatedAt");
 
-        // Unique (student_id, tag_id) — RCM-01
+        // Unique (StudentID, TagID) — RCM-01
         builder.HasIndex(x => new { x.StudentId, x.TagId })
             .IsUnique()
             .HasDatabaseName("UQ_TagsMastery_Student_Tag");
@@ -86,16 +89,16 @@ public class TagsMasteryConfiguration : IEntityTypeConfiguration<TagsMastery>
         {
             t.HasCheckConstraint(
                 "CK_TagsMastery_OfficialPoint_Range",
-                "[official_point] >= 0.00 AND [official_point] <= 10.00");
+                "[OfficialPoint] >= 0.00 AND [OfficialPoint] <= 10.00");
             t.HasCheckConstraint(
                 "CK_TagsMastery_PracticePoint_Range",
-                "[practice_point] >= 0.00 AND [practice_point] <= 10.00");
+                "[PracticePoint] >= 0.00 AND [PracticePoint] <= 10.00");
             t.HasCheckConstraint(
                 "CK_TagsMastery_ExamAnchor_Range",
-                "[exam_anchor] >= 0.00 AND [exam_anchor] <= 10.00");
+                "[ExamAnchor] >= 0.00 AND [ExamAnchor] <= 10.00");
             t.HasCheckConstraint(
                 "CK_TagsMastery_DifficultyLevel_Range",
-                "[recommended_difficulty_level] >= 1 AND [recommended_difficulty_level] <= 4");
+                "[RecommendedDifficultyLevel] >= 1 AND [RecommendedDifficultyLevel] <= 4");
         });
     }
 }

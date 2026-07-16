@@ -5,12 +5,12 @@ namespace MathInsight.Modules.Recommender.Queries.GetRecommendedMaterials;
 /// Materials are linked to lectures through the LectureMaterial join table (many-to-many).
 /// </summary>
 public sealed record RecommendedMaterialResponse(
-    Guid MaterialId,
+    string MaterialId,
     string Title,
     string? Description,
     string? FileUrl,
     string? MaterialType,
-    Guid TagId,
+    string TagId,
     string TagName,
     decimal OfficialPoint,
     bool IsRemedial);

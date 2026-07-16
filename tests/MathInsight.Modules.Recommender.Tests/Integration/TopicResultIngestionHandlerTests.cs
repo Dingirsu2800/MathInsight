@@ -106,19 +106,19 @@ public class TopicResultIngestionHandlerTests : IDisposable
         // First handle
         await _handler.Handle(evt, default);
         var masteryAfterFirst = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
         var pointAfterFirst = masteryAfterFirst.OfficialPoint;
 
         // Second handle — same session, same tag — must be idempotent
         await _handler.Handle(evt, default);
         var masteryAfterSecond = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.Equal(pointAfterFirst, masteryAfterSecond.OfficialPoint);
 
         // Also verify only 1 StudentTopicSessionResult row
         var sessionResultCount = await _db.StudentTopicSessionResults
-            .CountAsync(r => r.SessionId == sessionId && r.TagId == tagId);
+            .CountAsync(r => r.SessionId == sessionId.ToString() && r.TagId == tagId.ToString());
         Assert.Equal(1, sessionResultCount);
     }
 
@@ -136,13 +136,13 @@ public class TopicResultIngestionHandlerTests : IDisposable
 
         // StudentTopicSessionResult should be inserted
         var sessionResult = await _db.StudentTopicSessionResults
-            .FirstOrDefaultAsync(r => r.SessionId == sessionId && r.TagId == tagId);
+            .FirstOrDefaultAsync(r => r.SessionId == sessionId.ToString() && r.TagId == tagId.ToString());
         Assert.NotNull(sessionResult);
         Assert.Equal(9.00m, sessionResult.TopicScore);
 
         // TagsMastery should be lazy-created and updated
         var mastery = await _db.TagsMasteries
-            .FirstOrDefaultAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstOrDefaultAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
         Assert.NotNull(mastery);
         // ExamAnchor after one exam result = T1 = 9.00
         Assert.Equal(9.00m, mastery.ExamAnchor);
@@ -165,7 +165,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 9.00m), default);
 
         var masteryCount = await _db.TagsMasteries
-            .CountAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .CountAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         // Unique key: only 1 row must exist
         Assert.Equal(1, masteryCount);
@@ -184,7 +184,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 0.00m), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.True(mastery.OfficialPoint < 5.00m, $"Expected weak but got {mastery.OfficialPoint}");
     }
@@ -200,7 +200,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 10.00m), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.False(mastery.OfficialPoint < 5.00m, $"Expected not weak but got {mastery.OfficialPoint}");
     }
@@ -213,12 +213,16 @@ public class TopicResultIngestionHandlerTests : IDisposable
         var studentId = Guid.NewGuid();
         var tagId = Guid.NewGuid();
 
+        // Seed student with grade 11 to test grade resolution
+        _db.Students.Add(new StudentReadOnly { StudentId = studentId.ToString(), CurrentGrade = 11 });
+        await _db.SaveChangesAsync();
+
         await _handler.Handle(
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 8.00m), default);
 
-        // CompetencyPoint should exist for grade=0 (MVP default)
+        // CompetencyPoint should exist for grade=11 (resolved from student)
         var cp = await _db.CompetencyPoints
-            .FirstOrDefaultAsync(c => c.StudentId == studentId);
+            .FirstOrDefaultAsync(c => c.StudentId == studentId.ToString() && c.Grade == 11);
         Assert.NotNull(cp);
         Assert.True(cp.Point >= 0m && cp.Point <= 10m);
     }
@@ -241,7 +245,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Assert.Null(exception);
 
         var mastery = await _db.TagsMasteries
-            .FirstOrDefaultAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstOrDefaultAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
         Assert.NotNull(mastery);
     }
 
@@ -259,7 +263,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakePracticeEvent(studentId, sessionId, tagId, isCorrect: true, difficultyLevel: 2), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         // PracticePoint started at 5.00 (lazy-create), Δ=+0.05 → 5.05
         Assert.Equal(5.05m, mastery.PracticePoint);
@@ -278,7 +282,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 0.00m), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.Equal(1, mastery.RecommendedDifficultyLevel);
         Assert.True(mastery.OfficialPoint < 5.00m);
