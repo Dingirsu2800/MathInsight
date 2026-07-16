@@ -6,7 +6,7 @@ import { login } from "../services/authApi";
 const ROLE_ROUTES = {
   Student: "/student/dashboard",
   Expert: "/expert/questions",
-  Teacher: "/student/dashboard", // fallback — no dedicated Teacher UI yet
+  Teacher: "/teacher/dashboard", // fallback — no dedicated Teacher UI yet
 };
 
 export default function LoginPage() {
@@ -27,16 +27,39 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const result = await login(usernameOrEmail, password);
+      const response = await client.post("/api/v1/auth/login", {
+        usernameOrEmail,
+        password,
+      });
 
-      const destination = ROLE_ROUTES[result.roleName];
-      if (!destination) {
-        setError(`Vai trò "${result.roleName}" chưa được hỗ trợ trên hệ thống.`);
+      const data = response.data || {};
+      const token = data.accessToken || data.AccessToken;
+      const roleName = data.roleName || data.RoleName || "";
+      const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
+      const userName = data.username || data.Username || data.email || data.Email || roleName;
+
+      if (!token) {
+        throw new Error("Không nhận được mã xác thực (Token) từ hệ thống.");
+      }
+
+      if (!["Expert", "Teacher", "Student"].includes(roleName)) {
+        setError("Tài khoản này không có quyền truy cập cổng thông tin này.");
         setLoading(false);
         return;
       }
 
-      navigate(destination);
+      localStorage.setItem("token", token);
+      localStorage.setItem("AccountId", accountId);
+      localStorage.setItem("RoleName", roleName);
+      localStorage.setItem("UserName", userName);
+      
+      if (roleName === "Teacher") {
+        navigate("/teacher/lectures");
+      } else if (roleName === "Student") {
+        navigate("/student/dashboard");
+      } else {
+        navigate("/expert/questions");
+      }
     } catch (err) {
       console.error(err);
       const errMsg =

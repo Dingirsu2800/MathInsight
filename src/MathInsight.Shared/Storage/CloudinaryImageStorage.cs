@@ -51,7 +51,7 @@ public sealed class CloudinaryImageStorage : IImageStorage
         {
             using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(_options.CloudName)}/image/upload")
+                $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(_options.CloudName)}/auto/upload")
             {
                 Content = multipart
             };

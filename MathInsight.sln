@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.7.11919.86
@@ -34,6 +34,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.Recommender.Tests", "tests\MathInsight.Modules.Recommender.Tests\MathInsight.Modules.Recommender.Tests.csproj", "{8B70841D-5B4D-4344-A95C-5E56DEC78F17}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.Grading_Analytics.Tests", "tests\MathInsight.Modules.Grading_Analytics.Tests\MathInsight.Modules.Grading_Analytics.Tests.csproj", "{8C24EB66-2E34-4EBD-BFAE-B0238A8F80D9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.Learning_Lecture.Tests", "tests\MathInsight.Modules.Learning_Lecture.Tests\MathInsight.Modules.Learning_Lecture.Tests.csproj", "{921FEF2C-252D-4261-8C45-3E8B253ED0F5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MathInsight.Modules.TestGen.Tests", "tests\MathInsight.Modules.TestGen.Tests\MathInsight.Modules.TestGen.Tests.csproj", "{15E06A6A-C2F4-40F0-BA77-072AC372C356}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -213,6 +217,30 @@ Global
 		{8C24EB66-2E34-4EBD-BFAE-B0238A8F80D9}.Release|x64.Build.0 = Release|Any CPU
 		{8C24EB66-2E34-4EBD-BFAE-B0238A8F80D9}.Release|x86.ActiveCfg = Release|Any CPU
 		{8C24EB66-2E34-4EBD-BFAE-B0238A8F80D9}.Release|x86.Build.0 = Release|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Debug|x64.Build.0 = Debug|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Debug|x86.Build.0 = Debug|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Release|x64.ActiveCfg = Release|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Release|x64.Build.0 = Release|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Release|x86.ActiveCfg = Release|Any CPU
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5}.Release|x86.Build.0 = Release|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Debug|x64.Build.0 = Debug|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Debug|x86.Build.0 = Debug|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Release|Any CPU.Build.0 = Release|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Release|x64.ActiveCfg = Release|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Release|x64.Build.0 = Release|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Release|x86.ActiveCfg = Release|Any CPU
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -232,6 +260,8 @@ Global
 		{A14F3D8D-B476-4285-AC47-C3B0F2A662A0} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{8B70841D-5B4D-4344-A95C-5E56DEC78F17} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{8C24EB66-2E34-4EBD-BFAE-B0238A8F80D9} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{921FEF2C-252D-4261-8C45-3E8B253ED0F5} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{15E06A6A-C2F4-40F0-BA77-072AC372C356} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0358B299-2C11-4409-8F08-1300A2DD5F86}
