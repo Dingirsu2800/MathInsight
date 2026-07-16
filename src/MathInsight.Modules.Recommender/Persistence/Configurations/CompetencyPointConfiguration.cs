@@ -17,22 +17,24 @@ public class CompetencyPointConfiguration : IEntityTypeConfiguration<CompetencyP
         builder.HasKey(x => x.CompetencyId);
 
         builder.Property(x => x.CompetencyId)
-            .HasColumnName("competency_id");
+            .HasColumnName("CompetencyID")
+            .HasMaxLength(36);
 
         builder.Property(x => x.StudentId)
-            .HasColumnName("student_id")
+            .HasColumnName("StudentID")
+            .HasMaxLength(36)
             .IsRequired();
 
         builder.Property(x => x.Grade)
-            .HasColumnName("grade")
+            .HasColumnName("Grade")
             .IsRequired();
 
         builder.Property(x => x.Point)
-            .HasColumnName("point")
-            .HasPrecision(4, 2)
+            .HasColumnName("Point")
+            .HasPrecision(5, 2)
             .IsRequired();
 
-        // Unique (student_id, grade)
+        // Unique (StudentID, Grade)
         builder.HasIndex(x => new { x.StudentId, x.Grade })
             .IsUnique()
             .HasDatabaseName("UQ_CompetencyPoint_Student_Grade");
@@ -40,6 +42,6 @@ public class CompetencyPointConfiguration : IEntityTypeConfiguration<CompetencyP
         // Enforce range via check constraint
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_CompetencyPoint_Point_Range",
-            "[point] >= 0.00 AND [point] <= 10.00"));
+            "[Point] >= 0.00 AND [Point] <= 10.00"));
     }
 }

@@ -24,7 +24,7 @@ public sealed class RecommenderService : IRecommenderService
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(
-        Guid studentId, CancellationToken cancellationToken = default)
+        string studentId, CancellationToken cancellationToken = default)
     {
         // RCM-03: WeakTag = official_point < 5.00.
         // No-row behavior (MVP): Topics without a TagsMastery row are NOT returned as weak.
@@ -44,7 +44,7 @@ public sealed class RecommenderService : IRecommenderService
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(
-        Guid studentId, CancellationToken cancellationToken = default)
+        string studentId, CancellationToken cancellationToken = default)
     {
         var masteryRows = await (
             from tm in _db.TagsMasteries.AsNoTracking()

@@ -206,6 +206,7 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
                 TagId = tagId,
                 IsCorrect = answer.IsCorrect == true,
                 PointsEarned = answer.PointsEarned,
+                MaxPoints = answer.Question.DefaultPoint,
                 TimeSpent = answer.TimeSpent ?? 0,
                 DifficultyLevel = answer.Question.DifficultyLevel,
                 QuestionNo = answer.QuestionNo,

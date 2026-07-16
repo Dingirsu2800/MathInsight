@@ -869,5 +869,34 @@ SELECT
 FROM dbo.QuestionPart AS part
 WHERE part.QuestionID = 'Q-SEED-005'
 ORDER BY part.PartOrder;
+GO
+
+/* ===== Lecture demo seed (teacher_01) =====
+   Runs after the TagTopic seed above, since Lecture.TagID is a FK into TagTopic.
+   Ties every row to teacher_01 (cccccccc-cccc-cccc-cccc-cccccccccccc) so the
+   Teacher and Student lecture screens have something to render out of the box.
+*/
+BEGIN TRANSACTION;
+
+MERGE [Lecture] AS target
+USING (VALUES
+    ('11111111-1111-1111-1111-111111111101', N'Mệnh đề và tập hợp', N'Bài giảng giới thiệu mệnh đề, tập hợp và các phép toán trên tập hợp.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G10-SET', N'Published'),
+    ('11111111-1111-1111-1111-111111111102', N'Dãy số và cấp số', N'Bài giảng về dãy số, cấp số cộng và cấp số nhân.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G11-SEQ', N'Published'),
+    ('11111111-1111-1111-1111-111111111103', N'Ứng dụng đạo hàm khảo sát hàm số', N'Bài giảng đang soạn về khảo sát hàm số bằng đạo hàm.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G12-DERIVAPP', N'Draft')
+) AS source ([LectureID], [Title], [Content], [TeacherID], [TagID], [Status])
+ON target.[LectureID] = source.[LectureID]
+WHEN MATCHED THEN
+    UPDATE SET
+        target.[Title] = source.[Title],
+        target.[Content] = source.[Content],
+        target.[TeacherID] = source.[TeacherID],
+        target.[TagID] = source.[TagID],
+        target.[Status] = source.[Status]
+WHEN NOT MATCHED THEN
+    INSERT ([LectureID], [Title], [Content], [TeacherID], [TagID], [Status])
+    VALUES (source.[LectureID], source.[Title], source.[Content], source.[TeacherID], source.[TagID], source.[Status]);
+
+COMMIT TRANSACTION;
+GO
 
 GO
