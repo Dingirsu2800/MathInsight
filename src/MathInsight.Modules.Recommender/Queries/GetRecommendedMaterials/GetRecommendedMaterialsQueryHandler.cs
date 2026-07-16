@@ -53,14 +53,14 @@ public sealed class GetRecommendedMaterialsQueryHandler
             join lm in _db.LectureMaterials.AsNoTracking() on m.MaterialId equals lm.MaterialId
             join l in _db.Lectures.AsNoTracking() on lm.LectureId equals l.LectureId
             join tt in _db.TagTopics.AsNoTracking() on l.TagId equals tt.TagId
-            where weakTagIds.Contains(l.TagId) && l.IsActive && m.IsActive
+            where weakTagIds.Contains(l.TagId) && l.Status == "Published" && m.Status == "Active"
             select new
             {
                 m.MaterialId,
-                m.Title,
-                m.Description,
+                Title = m.MaterialName,
+                Description = (string?)null,
                 m.FileUrl,
-                m.MaterialType,
+                MaterialType = m.FileType,
                 l.TagId,
                 tt.TagName
             }

@@ -10,15 +10,18 @@ public class QuestionPart
     public Guid QuestionPartId { get; set; }
     public Guid QuestionId { get; set; }
     public int PartOrder { get; set; }
+    public string? PartLabel { get; set; }
     public string Content { get; set; } = string.Empty;
 
-    /// <summary>The correct answer for this part (used for case-insensitive comparison)</summary>
-    public string AnswerKey { get; set; } = string.Empty;
+    public bool? CorrectBoolean { get; set; }
+    public string? CorrectText { get; set; }
+    public decimal? CorrectNumeric { get; set; }
+    public decimal? NumericTolerance { get; set; }
 
-    public decimal PointValue { get; set; }
+    public decimal DefaultPoint { get; set; }
     public string? Explanation { get; set; }
 
-    /// <summary>TRUE_FALSE | SHORT_ANSWER | NUMERIC_ANSWER</summary>
+    /// <summary>TrueFalse | ShortAnswer | NumericAnswer</summary>
     public string PartType { get; set; } = string.Empty;
 
     // Navigation

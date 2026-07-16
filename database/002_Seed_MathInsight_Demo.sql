@@ -871,115 +871,32 @@ WHERE part.QuestionID = 'Q-SEED-005'
 ORDER BY part.PartOrder;
 GO
 
-/* ===== SOURCE: 003_TestingModule_Seed.sql ===== */
--- Seed data for Testing module.
--- Safe to run more than once.
+/* ===== Lecture demo seed (teacher_01) =====
+   Runs after the TagTopic seed above, since Lecture.TagID is a FK into TagTopic.
+   Ties every row to teacher_01 (cccccccc-cccc-cccc-cccc-cccccccccccc) so the
+   Teacher and Student lecture screens have something to render out of the box.
+*/
+BEGIN TRANSACTION;
 
-SET XACT_ABORT ON;
-SET NOCOUNT ON;
+MERGE [Lecture] AS target
+USING (VALUES
+    ('11111111-1111-1111-1111-111111111101', N'Mệnh đề và tập hợp', N'Bài giảng giới thiệu mệnh đề, tập hợp và các phép toán trên tập hợp.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G10-SET', N'Published'),
+    ('11111111-1111-1111-1111-111111111102', N'Dãy số và cấp số', N'Bài giảng về dãy số, cấp số cộng và cấp số nhân.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G11-SEQ', N'Published'),
+    ('11111111-1111-1111-1111-111111111103', N'Ứng dụng đạo hàm khảo sát hàm số', N'Bài giảng đang soạn về khảo sát hàm số bằng đạo hàm.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G12-DERIVAPP', N'Draft')
+) AS source ([LectureID], [Title], [Content], [TeacherID], [TagID], [Status])
+ON target.[LectureID] = source.[LectureID]
+WHEN MATCHED THEN
+    UPDATE SET
+        target.[Title] = source.[Title],
+        target.[Content] = source.[Content],
+        target.[TeacherID] = source.[TeacherID],
+        target.[TagID] = source.[TagID],
+        target.[Status] = source.[Status]
+WHEN NOT MATCHED THEN
+    INSERT ([LectureID], [Title], [Content], [TeacherID], [TagID], [Status])
+    VALUES (source.[LectureID], source.[Title], source.[Content], source.[TeacherID], source.[TagID], source.[Status]);
 
-IF OBJECT_ID(N'dbo.Test', N'U') IS NULL
-BEGIN
-    THROW 51200, N'Table dbo.Test does not exist. Run the schema script before this seed script.', 1;
-END;
-
-BEGIN TRY
-    BEGIN TRANSACTION;
-
-    -- Clean up existing seed data to ensure idempotency
-    DELETE FROM dbo.TestIncidents WHERE SessionID IN ('S-SEED-001', 'S-SEED-002', 'S-SEED-003');
-    DELETE FROM dbo.TestAnswerOption WHERE TestAnswerID LIKE 'TA-SEED-%';
-    DELETE FROM dbo.TestAnswerPart WHERE TestAnswerID LIKE 'TA-SEED-%';
-    DELETE FROM dbo.TestAnswer WHERE SessionID IN ('S-SEED-001', 'S-SEED-002', 'S-SEED-003');
-    DELETE FROM dbo.TestSession WHERE SessionID IN ('S-SEED-001', 'S-SEED-002', 'S-SEED-003');
-    DELETE FROM dbo.TestQuestion WHERE TestID IN ('T-SEED-001', 'T-SEED-002');
-    DELETE FROM dbo.Test WHERE TestID IN ('T-SEED-001', 'T-SEED-002');
-    DELETE FROM dbo.Blueprint WHERE BlueprintID = 'B-SEED-001';
-
-    -- 1. Seed Blueprint
-    INSERT INTO dbo.Blueprint 
-        (BlueprintID, BlueprintName, Grade, TotalQuestions, DurationMinutes, ExpertID, Status)
-    VALUES 
-        ('B-SEED-001', N'Đại số lớp 12 cơ bản', 12, 5, 60, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Approved');
-
-    -- 2. Seed Tests (1 ACTIVE, 1 ARCHIVED)
-    INSERT INTO dbo.Test 
-        (TestID, BlueprintID, TestStatus, TestMode, GeneratedForStudentID, GeneratedBy, TestName, TestCode, DurationMinutes, TotalQuestions)
-    VALUES 
-        ('T-SEED-001', 'B-SEED-001', 'Active', 'BlueprintExam', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Expert', N'Đề kiểm tra Đại số Chương 1', 'T-SEED-CODE-001', 60, 5),
-        ('T-SEED-002', 'B-SEED-001', 'Archived', 'BlueprintExam', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Expert', N'Đề luyện tập Hình học Oxyz', 'T-SEED-CODE-002', 45, 5);
-
-    -- 3. Seed Test Questions
-    INSERT INTO dbo.TestQuestion 
-        (TestID, QuestionID, QuestionOrder, SelectionReason)
-    VALUES 
-        ('T-SEED-001', 'Q-SEED-001', 1, 'BlueprintNormal'),
-        ('T-SEED-001', 'Q-SEED-002', 2, 'BlueprintNormal'),
-        ('T-SEED-001', 'Q-SEED-003', 3, 'BlueprintNormal'),
-        ('T-SEED-001', 'Q-SEED-004', 4, 'BlueprintNormal'),
-        ('T-SEED-001', 'Q-SEED-005', 5, 'BlueprintNormal'),
-        ('T-SEED-002', 'Q-SEED-001', 1, 'BlueprintNormal'),
-        ('T-SEED-002', 'Q-SEED-002', 2, 'BlueprintNormal'),
-        ('T-SEED-002', 'Q-SEED-003', 3, 'BlueprintNormal'),
-        ('T-SEED-002', 'Q-SEED-004', 4, 'BlueprintNormal'),
-        ('T-SEED-002', 'Q-SEED-005', 5, 'BlueprintNormal');
-
-    -- 4. Seed Test Sessions (3 Sessions)
-    INSERT INTO dbo.TestSession 
-        (SessionID, TestID, StudentID, TestFormat, Status, SubmissionType, Duration, StartTime, EndTime, TotalQuestion, NumCorrect, NumIncorrect, NumAbandoned, Score)
-    VALUES 
-        ('S-SEED-001', 'T-SEED-001', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Exam', 'Graded', 'StudentSubmit', 1800, DATEADD(hour, -2, SYSUTCDATETIME()), DATEADD(hour, -1, SYSUTCDATETIME()), 5, 3, 2, 0, 6.25),
-        ('S-SEED-002', 'T-SEED-001', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'Exam', 'InProgress', NULL, 0, DATEADD(minute, -15, SYSUTCDATETIME()), NULL, 5, 0, 0, 0, 0.00),
-        ('S-SEED-003', 'T-SEED-002', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'Practice', 'Abandoned', NULL, 600, DATEADD(day, -1, SYSUTCDATETIME()), DATEADD(minute, 10, DATEADD(day, -1, SYSUTCDATETIME())), 5, 1, 1, 3, 2.00);
-
-    -- 5. Seed Test Answers (Session 1 Graded & Session 3 Abandoned)
-    INSERT INTO dbo.TestAnswer 
-        (TestAnswerID, SessionID, QuestionID, AnswerID, QuestionNo, TimeSpent, FirstChoiceTime, UpdateChoiceTime, ShortAnswerText, IsCorrect, PointsEarned)
-    VALUES 
-        ('TA-SEED-001-1', 'S-SEED-001', 'Q-SEED-001', 'A-SEED-001-A', 1, 120, DATEADD(minute, -118, SYSUTCDATETIME()), DATEADD(minute, -118, SYSUTCDATETIME()), NULL, 1, 2.00),
-        ('TA-SEED-001-2', 'S-SEED-001', 'Q-SEED-002', NULL, 2, 180, DATEADD(minute, -115, SYSUTCDATETIME()), DATEADD(minute, -114, SYSUTCDATETIME()), NULL, 1, 2.00),
-        ('TA-SEED-001-3', 'S-SEED-001', 'Q-SEED-003', 'A-SEED-003-B', 3, 60, DATEADD(minute, -110, SYSUTCDATETIME()), DATEADD(minute, -110, SYSUTCDATETIME()), NULL, 0, 0.00),
-        ('TA-SEED-001-4', 'S-SEED-001', 'Q-SEED-004', 'A-SEED-004-A', 4, 300, DATEADD(minute, -105, SYSUTCDATETIME()), DATEADD(minute, -100, SYSUTCDATETIME()), N'3', 1, 2.00),
-        ('TA-SEED-001-5', 'S-SEED-001', 'Q-SEED-005', NULL, 5, 450, DATEADD(minute, -95, SYSUTCDATETIME()), DATEADD(minute, -90, SYSUTCDATETIME()), NULL, 0, 0.25),
-        
-        ('TA-SEED-003-1', 'S-SEED-003', 'Q-SEED-001', 'A-SEED-001-A', 1, 150, DATEADD(day, -1, SYSUTCDATETIME()), DATEADD(day, -1, SYSUTCDATETIME()), NULL, 1, 2.00),
-        ('TA-SEED-003-2', 'S-SEED-003', 'Q-SEED-002', 'A-SEED-002-D', 2, 200, DATEADD(day, -1, SYSUTCDATETIME()), DATEADD(day, -1, SYSUTCDATETIME()), NULL, 0, 0.00),
-        ('TA-SEED-003-3', 'S-SEED-003', 'Q-SEED-003', NULL, 3, 0, NULL, NULL, NULL, NULL, 0.00),
-        ('TA-SEED-003-4', 'S-SEED-003', 'Q-SEED-004', NULL, 4, 0, NULL, NULL, NULL, NULL, 0.00),
-        ('TA-SEED-003-5', 'S-SEED-003', 'Q-SEED-005', NULL, 5, 0, NULL, NULL, NULL, NULL, 0.00);
-
-    -- 6. Seed Test Answer Options for MultipleChoice (TA-SEED-001-2)
-    INSERT INTO dbo.TestAnswerOption 
-        (TestAnswerID, AnswerID)
-    VALUES 
-        ('TA-SEED-001-2', 'A-SEED-002-A'),
-        ('TA-SEED-001-2', 'A-SEED-002-B'),
-        ('TA-SEED-001-2', 'A-SEED-002-C');
-
-    -- 7. Seed Test Answer Parts for Composite (TA-SEED-001-5)
-    INSERT INTO dbo.TestAnswerPart 
-        (TestAnswerID, PartID, BooleanAnswer, TextAnswer, NumericAnswer, IsCorrect, PointsEarned)
-    VALUES 
-        ('TA-SEED-001-5', 'QP-SEED-005-A', 1, NULL, NULL, 1, 0.25),
-        ('TA-SEED-001-5', 'QP-SEED-005-B', 0, NULL, NULL, 0, 0.00),
-        ('TA-SEED-001-5', 'QP-SEED-005-C', 1, NULL, NULL, 0, 0.00),
-        ('TA-SEED-001-5', 'QP-SEED-005-D', NULL, NULL, 15.00, 0, 0.00);
-
-    -- 8. Seed Incidents for InProgress session (S-SEED-002)
-    INSERT INTO dbo.TestIncidents 
-        (IncidentID, SessionID, Type, Time)
-    VALUES 
-        ('I-SEED-001', 'S-SEED-002', 'TAB_SWITCH', DATEADD(minute, -10, SYSUTCDATETIME())),
-        ('I-SEED-002', 'S-SEED-002', 'FOCUS_LOSS', DATEADD(minute, -5, SYSUTCDATETIME()));
-
-    COMMIT TRANSACTION;
-END TRY
-BEGIN CATCH
-    IF @@TRANCOUNT > 0
-    BEGIN
-        ROLLBACK TRANSACTION;
-    END;
-    THROW;
-END CATCH;
+COMMIT TRANSACTION;
 GO
 
+GO

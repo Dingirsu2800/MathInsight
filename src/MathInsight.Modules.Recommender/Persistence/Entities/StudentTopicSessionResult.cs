@@ -8,23 +8,18 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class StudentTopicSessionResult
 {
-    public Guid StudentTopicSessionResultId { get; set; }
-    public Guid StudentId { get; set; }
-    public Guid SessionId { get; set; }
-    public Guid TagId { get; set; }
+    public string StudentTopicSessionResultId { get; set; } = string.Empty;
+    public string StudentId { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string TagId { get; set; } = string.Empty;
 
-    public int TotalQuestions { get; set; }
-    public int CorrectCount { get; set; }
-    public int WrongCount { get; set; }
+    public decimal TotalItems { get; set; }
+    public decimal CorrectItems { get; set; }
+    public decimal EarnedPoints { get; set; }
+    public decimal MaxPoints { get; set; }
 
     /// <summary>Per-topic score in range 0.00..10.00.</summary>
     public decimal TopicScore { get; set; }
-
-    /// <summary>TagsMastery.OfficialPoint before this session was applied.</summary>
-    public decimal PointBefore { get; set; }
-
-    /// <summary>TagsMastery.OfficialPoint after this session was applied.</summary>
-    public decimal PointAfter { get; set; }
 
     public DateTime CreatedTime { get; set; }
 }

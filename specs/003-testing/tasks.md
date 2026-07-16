@@ -24,24 +24,24 @@
 ## Phase 2: Core Domain Logic
 
 - [ ] **StartSession Command**:
-  - [ ] Validate test `test_status = ACTIVE`
-  - [ ] Check no existing `InProgress` session for same `(student_id, test_id)` (BR-15)
-  - [ ] Create `TestSession` with `status = InProgress`, `submission_type = NULL`, `start_time = NOW`
+  - [ ] Validate test `TestStatus = ACTIVE`
+  - [ ] Check no existing `InProgress` session for same `(StudentID, TestID)` (BR-15)
+  - [ ] Create `TestSession` with `Status = InProgress`, `SubmissionType = NULL`, `StartTime = NOW`
   - [ ] Create `TestAnswer` stub records for each `TestQuestion` in the test
   - [ ] Return session with question list (randomized per blueprint)
 
 - [ ] **AutoSave Command**:
-  - [ ] Validate session `status = InProgress` (reject if `Graded` or `Abandoned`)
-  - [ ] Batch update `TestAnswer`: `answer_id`, `selected_options`, `short_answer_text`, `time_spent` (received from Client payload for guessing penalty)
-  - [ ] Update `update_choice_time`; set `first_choice_time` if null
-  - [ ] Return `{ savedAt, remainingSeconds }` — remaining time from `start_time + duration_minutes`
+  - [ ] Validate session `Status = InProgress` (reject if `Graded` or `Abandoned`)
+  - [ ] Batch update `TestAnswer` (`AnswerID`, `ShortAnswerText`, `TimeSpent`) and `TestAnswerPart` (`BooleanAnswer`, `TextAnswer`, `NumericAnswer` based on part type)
+  - [ ] Update `UpdateChoiceTime`; set `FirstChoiceTime` if null
+  - [ ] Return `{ savedAt, remainingSeconds }` — remaining time from `StartTime + DurationMinutes`
 
 - [ ] **RecordIncident Command**:
-  - [ ] Insert `TestIncident` record with `type = TAB_SWITCH | FOCUS_LOSS`
+  - [ ] Insert `TestIncident` record with `Type = TAB_SWITCH | FOCUS_LOSS`
   - [ ] Count incidents for session → if `>= 5`, call `ForceSubmitSessionCommand` (BR-10)
 
 - [ ] **SubmitSession Command** (UC-49):
-  - [ ] Validate `status = InProgress`
+  - [ ] Validate `Status = InProgress`
   - [ ] Lock answer writes inside the submit transaction
   - [ ] Set `end_time = NOW`, `submission_type = StudentSubmit`
   - [ ] Calculate `duration = (end_time - start_time).TotalSeconds`
@@ -51,20 +51,20 @@
   - [ ] Publish `GradeCalculatedEvent` after successful grading (handled by Grading module)
 
 - [ ] **ForceSubmitSession Command**:
-  - [ ] Validate `status = InProgress`
-  - [ ] Set `end_time = NOW`, `submission_type = TimeoutSubmit` for timer expiry or `SystemSubmit` for system/proctor submit
+  - [ ] Validate `Status = InProgress`
+  - [ ] Set `EndTime = NOW`, `SubmissionType = TimeoutSubmit` for timer expiry or `SystemSubmit` for system/proctor submit
   - [ ] Save current auto-save state
   - [ ] **Practice mode**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`
   - [ ] **Exam mode**: Publish `TestSubmittedEvent` to MassTransit queue; grading proceeds asynchronously
 
 - [ ] **ReportSessionQuestion Command** (UC-48):
   - [ ] Delegates to QuestionBank module's `ReportQuestionCommand`
-  - [ ] Pass `session_id` context for audit
+  - [ ] Pass `SessionID` context for audit
 
 - [ ] **GetDetailedSolution Query** (UC-50):
-  - [ ] Validate session `status = Graded` (reject with 403 if not)
-  - [ ] Return: questions with `question_content`, `answers`, `is_correct` per answer, `points_earned`, and rich-text/plain-text explanation
-  - [ ] Include `TestAnswer.short_answer_text` for SHORT_ANSWER type
+  - [ ] Validate session `Status = Graded` (reject with 403 if not)
+  - [ ] Return: questions with `QuestionContent`, `answers`, `IsCorrect` per answer, `PointsEarned`, and rich-text/plain-text explanation
+  - [ ] Include `TestAnswer.ShortAnswerText` for SHORT_ANSWER type
 
 ---
 
@@ -78,14 +78,14 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` — zero compile errors
+- [x] `dotnet build` — zero compile errors
 - [ ] Integration tests (xUnit):
   - [ ] UC-47: Start session → `InProgress`, correct question count
   - [ ] UC-47: Start duplicate `InProgress` session → 409 (BR-15)
   - [ ] UC-47: Auto-save 5 answers → persisted, `update_choice_time` set
-  - [ ] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `submission_type = SystemSubmit`
-  - [ ] UC-49: Normal submit → `Graded`, `submission_type = StudentSubmit`, grading fields populated
+  - [ ] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `SubmissionType = SystemSubmit`
+  - [ ] UC-49: Normal submit → `Graded`, `SubmissionType = StudentSubmit`, grading fields populated
   - [ ] UC-49: Submit `Graded` session → 409 (DC-03)
-  - [ ] UC-49: Submit with unanswered questions → `num_abandoned` = unanswered count
+  - [ ] UC-49: Submit with unanswered questions → `NumAbandoned` = unanswered count
   - [ ] UC-50: View solution before `Graded` → 403
   - [ ] UC-50: View solution after `Graded` → full question/answer data returned

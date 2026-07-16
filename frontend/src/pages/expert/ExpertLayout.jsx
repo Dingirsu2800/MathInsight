@@ -1,31 +1,17 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { expertNavItems } from "../../config/dashboardNav";
-import client from "../../services/questionBankApiClient";
+import { logout } from "../../services/auth";
 
 export default function ExpertLayout({ children }) {
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    try {
-      await client.post("/api/v1/auth/logout");
-    } catch (err) {
-      console.error("Lỗi đăng xuất hệ thống:", err);
-    } finally {
-      localStorage.removeItem("token");
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("AccountId");
-      localStorage.removeItem("RoleName");
-      navigate("/login");
-    }
-  };
-
   const topNavItems = [
     { label: "Tổng quan", to: "/expert/questions" },
     { label: "Phê duyệt", to: "/expert/reviews", disabled: true },
     { label: "Báo cáo", to: "/expert/reports", disabled: true }
   ];
+
+  const userName = localStorage.getItem("UserName") || "Chuyên gia nội dung";
+  const userInitials = userName.substring(0, 2).toUpperCase() || "CG";
 
   return (
     <DashboardLayout
@@ -34,16 +20,16 @@ export default function ExpertLayout({ children }) {
       appTitle="Hệ thống Quản lý Toán học"
       navItems={expertNavItems}
       topNavItems={topNavItems}
-      userName="Chuyên gia nội dung"
+      userName={userName}
       userRoleLabel="Expert"
-      userInitials="CG"
+      userInitials={userInitials}
       profilePath="/expert/profile"
       primaryAction={{
         label: "Tạo câu hỏi mới",
         icon: "add",
         to: "/expert/questions/new"
       }}
-      onLogout={handleLogout}
+      onLogout={logout}
     >
       {children}
     </DashboardLayout>

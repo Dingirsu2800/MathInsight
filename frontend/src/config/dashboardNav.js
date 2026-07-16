@@ -31,3 +31,70 @@ export const expertNavItems = [
     disabled: true
   }
 ];
+
+export const adminNavItems = [
+  {
+    label: "Quản lý tài khoản",
+    path: "/admin/accounts",
+    icon: "group"
+  },
+  {
+    label: "Đơn đăng ký giáo viên",
+    path: "/admin/applications",
+    icon: "fact_check"
+  },
+  {
+    label: "Vai trò & Quyền",
+    path: "/admin/roles",
+    icon: "admin_panel_settings"
+  }
+];
+
+export const teacherNavItems = [
+  {
+    label: "Bài giảng",
+    path: "/teacher/lectures",
+    icon: "auto_stories"
+  },
+  {
+    label: "Tài liệu",
+    path: "/teacher/materials",
+    icon: "folder"
+  },
+  {
+    label: "Kiểm duyệt",
+    path: "/teacher/moderation",
+    icon: "verified_user"
+  },
+  {
+    label: "Cài đặt",
+    path: "/teacher/settings",
+    icon: "settings",
+    disabled: true
+  }
+];
+
+export const studentNavItems = [
+  {
+    label: "Bảng điều khiển",
+    path: "/student/dashboard",
+    icon: "dashboard"
+  },
+  {
+    label: "Học bài",
+    path: "/student/lectures",
+    icon: "menu_book"
+  },
+  {
+    label: "Kiểm tra",
+    path: "/student/test",
+    icon: "quiz",
+    disabled: true
+  },
+  {
+    label: "Hồ sơ của tôi",
+    path: "/student/profile",
+    icon: "person",
+    disabled: true
+  }
+];

@@ -7,5 +7,5 @@ namespace MathInsight.Modules.Recommender.Queries.GetRecommendedMaterials;
 /// Matches materials through LectureMaterial → Lecture.TagID to weak TagIDs;
 /// remedial topics sorted first.
 /// </summary>
-public sealed record GetRecommendedMaterialsQuery(Guid StudentId)
+public sealed record GetRecommendedMaterialsQuery(string StudentId)
     : IRequest<IReadOnlyList<RecommendedMaterialResponse>>;

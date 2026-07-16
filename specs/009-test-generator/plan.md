@@ -1,11 +1,11 @@
 # Implementation Plan: Test Generator Module
 
-**Branch**: `testgen-blueprint` | **Updated**: 2026-07-14
+**Branch**: `testgen-test-generation` | **Updated**: 2026-07-16
 **Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Implement the Expert Blueprint lifecycle first. Test generation remains a later slice after Blueprint APIs and frontend are stable. The current SQL creation script is the persistence contract; no migration or table rename is permitted in this work.
+The Expert Blueprint lifecycle is complete. Implement Checkpoint 6A as a Student-facing, baseline non-adaptive BlueprintExam generation slice that creates Test and TestQuestion rows from an approved blueprint without Recommender or Testing-session concerns. The current SQL creation script is the persistence contract; no migration or table rename is permitted.
 
 ## Technical Context
 
@@ -46,9 +46,15 @@ MathInsight.Modules.TestGen/
 |-- Queries/
 |   |-- GetBlueprintList/
 |   |-- GetPendingBlueprints/
-|   `-- GetBlueprintDetail/
+|   |-- GetBlueprintDetail/
+|   `-- GetBlueprintExamOptions/
+|-- Generation/
+|   |-- BlueprintExamCandidateProvider.cs
+|   `-- CapacityAwareQuestionSelector.cs
+|-- Commands/GenerateBlueprintExam/
+|-- Contracts/Tests/
 |-- Contracts/Blueprints/
-|-- Errors/TestGenErrors.cs
+|-- Errors/
 |-- Persistence/
 |   |-- Entities/
 |   |-- Configurations/
@@ -104,11 +110,26 @@ MathInsight.Modules.TestGen/
 - Detail view with clone, owner edit/submit/delete, and non-owner review actions according to state.
 - Frontend maps stable error codes to Vietnamese.
 
-### Checkpoint 6: Test Generation (Later)
+### Checkpoint 6A: Baseline BlueprintExam
 
-- Complete QuestionBank and Testing read models.
-- Implement BlueprintExam and practice generation against SQL `TestMode` values.
-- Integrate `IRecommenderService`, resolve difficulty levels, deduplicate recent questions, and populate TestQuestion audit fields.
+- Add TestGen-owned read models for Student, Question, and QuestionTopic, all excluded from migrations.
+- Add Student blueprint-option query filtered by current grade and `Approved`/`Active` status.
+- Implement exact capacity-aware assignment from Questions to BlueprintDetails.
+- Create personal `BlueprintExam` Test and baseline-audit TestQuestion rows atomically.
+- Transition first-used `Approved` blueprint to `Active` in the same transaction.
+- Add stable generation errors, Student-only controller endpoints, metadata tests, handler tests, and controller tests.
+
+### Checkpoint 6B: Adaptive BlueprintExam
+
+- Repair and verify the Recommender SQL contract before integration.
+- Introduce a stable cross-module advice contract.
+- Resolve recommended difficulty levels and apply the approved WeakTag cap/bias/downscale rules.
+- Populate adaptive TestQuestion audit fields and add recent-question deduplication after its product rule is finalized.
+
+### Checkpoint 6C: TopicPractice
+
+- Generate exactly 10 questions for one selected WeakTag using `TestMode = TopicPractice`.
+- Keep BlueprintID null and hand the generated Test to Testing for a Practice TestSession.
 
 ## API Design
 
@@ -128,6 +149,24 @@ DELETE /api/test-generator/blueprints/{blueprintId}
 
 Controllers obtain the Expert ID from `account_id`, falling back to `ClaimTypes.NameIdentifier`, consistent with QuestionBank. Controllers only map HTTP outcomes; workflow logic stays in handlers.
 
+Checkpoint 6A adds a separate Student-only controller because blueprint visibility and generation rules materially differ from Expert management:
+
+```text
+GET  /api/test-generator/tests/blueprint-options
+POST /api/test-generator/tests/blueprint-exams
+```
+
+The Student ID comes from `account_id`, falling back to `ClaimTypes.NameIdentifier`. The POST request contains only `blueprintId`.
+
+## Checkpoint 6A Selection Design
+
+- Load eligible Question and QuestionTopic data through TestGen-owned read models.
+- Build a bipartite graph with Question nodes of capacity 1 and BlueprintDetail nodes with capacity `Quantity`.
+- An edge exists only when the Question satisfies grade, status, active flag, section QuestionType, detail DifficultyID, and detail TagID.
+- Compute a complete capacity assignment. Randomize candidate tie order through an injected randomizer so tests can remain deterministic.
+- If maximum flow is below Blueprint.TotalQuestions, return `TEST_GENERATION_INSUFFICIENT_QUESTIONS` before any write.
+- Persist Test, TestQuestion, and blueprint activation through the SQL execution strategy with a stable TestID and post-commit verification.
+
 ## Aggregate Write Strategy
 
 - Validate the complete request before mutating tracked entities.
@@ -144,6 +183,8 @@ Controllers obtain the Expert ID from `account_id`, falling back to `ClaimTypes.
 - Read-only external tables are represented by TestGen-owned read models and excluded from migrations.
 - Recommender remains an in-process service used only by generation; Blueprint CRUD has no Recommender dependency.
 - Testing consumes Test/TestQuestion rows but does not own Blueprint workflow.
+- Checkpoint 6A does not reference Recommender and does not create TestSession/TestAnswer rows.
+- Student, Question, and QuestionTopic are TestGen read models marked `ExcludeFromMigrations()`.
 
 ## Verification
 

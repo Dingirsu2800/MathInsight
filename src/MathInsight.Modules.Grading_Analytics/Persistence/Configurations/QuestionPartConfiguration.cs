@@ -8,17 +8,23 @@ public class QuestionPartConfiguration : IEntityTypeConfiguration<QuestionPart>
 {
     public void Configure(EntityTypeBuilder<QuestionPart> builder)
     {
-        builder.ToTable("QuestionParts");
+        builder.ToTable("QuestionPart");
         builder.HasKey(x => x.QuestionPartId);
 
-        builder.Property(x => x.QuestionPartId).HasColumnName("question_part_id");
-        builder.Property(x => x.QuestionId).HasColumnName("question_id");
-        builder.Property(x => x.PartOrder).HasColumnName("part_order");
-        builder.Property(x => x.Content).HasColumnName("content").HasMaxLength(2000).IsRequired();
-        builder.Property(x => x.AnswerKey).HasColumnName("answer_key").HasMaxLength(500).IsRequired();
-        builder.Property(x => x.PointValue).HasColumnName("point_value").HasPrecision(5, 2);
-        builder.Property(x => x.Explanation).HasColumnName("explanation").HasMaxLength(2000);
-        builder.Property(x => x.PartType).HasColumnName("part_type").HasMaxLength(50).IsRequired();
+        builder.Property(x => x.QuestionPartId).HasColumnName("PartID");
+        builder.Property(x => x.QuestionId).HasColumnName("QuestionID");
+        builder.Property(x => x.PartOrder).HasColumnName("PartOrder");
+        builder.Property(x => x.PartLabel).HasColumnName("PartLabel").HasMaxLength(10);
+        builder.Property(x => x.Content).HasColumnName("PartContent").IsRequired();
+        builder.Property(x => x.PartType).HasColumnName("PartType").HasMaxLength(30).IsRequired();
+        
+        builder.Property(x => x.CorrectBoolean).HasColumnName("CorrectBoolean");
+        builder.Property(x => x.CorrectText).HasColumnName("CorrectText").HasMaxLength(255);
+        builder.Property(x => x.CorrectNumeric).HasColumnName("CorrectNumeric").HasPrecision(18, 6);
+        builder.Property(x => x.NumericTolerance).HasColumnName("NumericTolerance").HasPrecision(18, 6);
+        
+        builder.Property(x => x.DefaultPoint).HasColumnName("DefaultPoint").HasPrecision(4, 2);
+        builder.Property(x => x.Explanation).HasColumnName("Explanation");
 
         builder.HasOne(x => x.Question)
                .WithMany(q => q.Parts)

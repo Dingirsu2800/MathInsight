@@ -63,9 +63,11 @@ public sealed class GetSessionResultQueryHandler
                 AnswerParts = a.AnswerParts
                     .Select(ap => new AnswerPartDetailDto
                     {
-                        QuestionPartId = ap.QuestionPartId,
+                        QuestionPartId = ap.PartId,
                         PartType = ap.QuestionPart.PartType,
-                        StudentAnswer = ap.StudentAnswer,
+                        StudentAnswer = ap.BooleanAnswer?.ToString() 
+                                        ?? ap.TextAnswer 
+                                        ?? ap.NumericAnswer?.ToString(),
                         IsCorrect = ap.IsCorrect,
                         PointsEarned = ap.PointsEarned,
                     })

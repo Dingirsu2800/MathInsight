@@ -66,13 +66,13 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 
 ### Key Entities *(include if feature involves data)*
 
-- **Test**: `test_id`, `blueprint_id` (FK → blueprints, nullable), `test_format` (**Practice** | **Exam**), `generated_for_student_id` (FK → students, nullable), `generated_by` (default 'System'), `test_status` (**ACTIVE** | **ARCHIVED**), `test_name`, `test_code` (nullable; unique when not null), `duration_minutes`, `total_questions`, `created_time`
-- **TestQuestion**: `test_id` (FK), `question_id` (FK), `question_order` — composite PK
-- **TestSession**: `session_id`, `test_id` (FK), `student_id` (FK), `test_format` (**Practice** | **Exam**), `status` (**InProgress** | **Graded** | **Abandoned**), `submission_type` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `duration`, `start_time`, `end_time`, `total_question`, `num_correct`, `num_incorrect`, `num_abandoned`, `score`
-- **TestAnswer**: `test_answer_id`, `session_id` (FK), `question_id` (FK), `answer_id` (FK, nullable for MultipleSelect/ShortAnswer), `question_no`, `time_spent`, `first_choice_time`, `update_choice_time`, `short_answer_text`, `is_correct` (nullable until graded), `points_earned` (0.00 until graded)
-- **TestAnswerOption**: `test_answer_id` (FK, PK), `answer_id` (FK, PK) — for MultipleSelect
-- **TestAnswerPart**: `test_answer_part_id` (PK), `test_answer_id` (FK), `question_part_id` (FK), `student_answer` (nullable string), `is_correct` (nullable until graded), `points_earned` (0.00 until graded) — for Composite parts
-- **TestIncident**: `incident_id`, `session_id` (FK), `type` (TAB_SWITCH | FOCUS_LOSS), `time`
+- **Test**: `TestID` (PK), `BlueprintID` (FK → blueprints, nullable), `TestFormat` (**Practice** | **Exam**), `GeneratedForStudentID` (FK → students, nullable), `GeneratedBy` (default 'System'), `TestStatus` (**ACTIVE** | **ARCHIVED**), `TestName`, `TestCode` (nullable; unique when not null), `DurationMinutes`, `TotalQuestions`, `CreatedTime`
+- **TestQuestion**: `TestID` (FK, PK), `QuestionID` (FK, PK), `QuestionOrder` — composite PK
+- **TestSession**: `SessionID` (PK), `TestID` (FK), `StudentID` (FK), `TestFormat` (**Practice** | **Exam**), `Status` (**InProgress** | **Graded** | **Abandoned**), `SubmissionType` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `Duration`, `StartTime`, `EndTime`, `TotalQuestion`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
+- **TestAnswer**: `TestAnswerID` (PK), `SessionID` (FK), `QuestionID` (FK), `AnswerID` (FK, nullable for MultipleSelect/ShortAnswer), `QuestionNo`, `TimeSpent`, `FirstChoiceTime`, `UpdateChoiceTime`, `ShortAnswerText`, `IsCorrect` (nullable until graded), `PointsEarned` (0.00 until graded)
+- **TestAnswerOption**: `TestAnswerID` (FK, PK), `AnswerID` (FK, PK) — for MultipleSelect
+- **TestAnswerPart**: `TestAnswerID` (FK, PK), `PartID` (FK, PK), `BooleanAnswer` (nullable bool), `TextAnswer` (nullable string), `NumericAnswer` (nullable decimal), `IsCorrect` (nullable until graded), `PointsEarned` (0.00 until graded) — for Composite parts
+- **TestIncident**: `IncidentID` (PK), `SessionID` (FK), `Type` (TAB_SWITCH | FOCUS_LOSS), `Time`
 
 
 ### Session State Machine
