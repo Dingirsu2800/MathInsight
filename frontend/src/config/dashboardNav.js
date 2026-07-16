@@ -32,6 +32,24 @@ export const expertNavItems = [
   }
 ];
 
+export const adminNavItems = [
+  {
+    label: "Quản lý tài khoản",
+    path: "/admin/accounts",
+    icon: "group"
+  },
+  {
+    label: "Đơn đăng ký giáo viên",
+    path: "/admin/applications",
+    icon: "fact_check"
+  },
+  {
+    label: "Vai trò & Quyền",
+    path: "/admin/roles",
+    icon: "admin_panel_settings"
+  }
+];
+
 export const teacherNavItems = [
   {
     label: "Bài giảng",
