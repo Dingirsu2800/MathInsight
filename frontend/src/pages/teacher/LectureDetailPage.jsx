@@ -258,16 +258,18 @@ export default function LectureDetailPage() {
           
           <div className="space-y-6">
             {discussions.map((disc) => (
-              <div key={disc.id} className="bg-pure-surface rounded-xl border border-whisper-border p-6 relative group">
+              <div key={disc.id} className={`bg-pure-surface rounded-xl border border-whisper-border p-6 relative group ${disc.status === 'Hidden' ? 'opacity-60 bg-surface-container-lowest' : ''}`}>
                 {/* Actions Question */}
                 <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
-                  <button 
-                    onClick={() => handleHideComment(disc.id, true)}
+                  {disc.status !== 'Hidden' && (
+                    <button 
+                      onClick={() => handleHideComment(disc.id, true)}
                     className="text-on-surface-variant hover:text-error p-1"
                     title="Ẩn câu hỏi"
                   >
                     <span className="material-symbols-outlined text-sm">visibility_off</span>
                   </button>
+                  )}
                 </div>
 
                 {/* Question */}
@@ -278,7 +280,10 @@ export default function LectureDetailPage() {
                   <div className="flex-1 pr-6">
                     <div className="flex justify-between items-start mb-1">
                       <div>
-                        <h4 className="text-[16px] font-medium text-on-surface truncate max-w-[200px] sm:max-w-[400px]">{disc.author}</h4>
+                        <h4 className="text-[16px] font-medium text-on-surface flex items-center gap-2 truncate max-w-[200px] sm:max-w-[400px]">
+                          {disc.author}
+                          {disc.status === 'Hidden' && <span className="bg-error/10 text-error text-[10px] px-2 py-0.5 rounded uppercase font-semibold">Đã ẩn</span>}
+                        </h4>
                         <p className="text-[13px] text-on-surface-variant">{disc.timeAgo}</p>
                       </div>
                     </div>
@@ -299,7 +304,7 @@ export default function LectureDetailPage() {
                     
                 {/* Answers */}
                 {disc.answers?.map((ans) => (
-                  <div key={ans.id} className="mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans">
+                  <div key={ans.id} className={`mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans ${ans.status === 'Hidden' ? 'opacity-60' : ''}`}>
                     {/* Actions Answer */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
                       {ans.authorId === currentAccountId && (
@@ -313,7 +318,7 @@ export default function LectureDetailPage() {
                           <div className="w-[1px] h-4 bg-outline-variant mx-1"></div>
                         </>
                       )}
-                      {ans.authorId !== currentAccountId && (
+                      {ans.authorId !== currentAccountId && ans.status !== 'Hidden' && (
                         <button 
                           onClick={() => handleHideComment(ans.id, false)}
                           className="text-on-surface-variant hover:text-error p-1"
@@ -330,10 +335,13 @@ export default function LectureDetailPage() {
                     <div className="flex-1 bg-surface-container-low rounded-lg p-4 pr-8">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h4 className="text-[16px] font-medium text-on-surface truncate max-w-[150px] sm:max-w-[300px]">
+                          <h4 className="text-[16px] font-medium text-on-surface flex items-center gap-2 truncate max-w-[150px] sm:max-w-[300px]">
                             {ans.author}
                             {ans.role === "Giáo viên" && (
-                              <span className="bg-primary-container/20 text-primary text-[10px] px-2 py-0.5 rounded ml-2 uppercase font-semibold">Giáo viên</span>
+                              <span className="bg-primary-container/20 text-primary text-[10px] px-2 py-0.5 rounded uppercase font-semibold">Giáo viên</span>
+                            )}
+                            {ans.status === 'Hidden' && (
+                              <span className="bg-error/10 text-error text-[10px] px-2 py-0.5 rounded uppercase font-semibold">Đã ẩn</span>
                             )}
                           </h4>
                           <p className="text-[13px] text-on-surface-variant">{ans.timeAgo}</p>
