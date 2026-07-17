@@ -146,6 +146,189 @@ public sealed class QuestionExcelImportTests
     }
 
     [Fact]
+    public void Parser_ZipThatIsNotAnExcelWorkbook_ThrowsTemplateInvalidError()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("not-a-workbook.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("invalid");
+        }
+
+        stream.Position = 0;
+        var exception = Assert.Throws<QuestionImportException>(() => new QuestionImportWorkbookParser().Parse(stream));
+
+        Assert.Equal("QUESTION_IMPORT_TEMPLATE_INVALID", exception.Error.Code);
+    }
+
+    [Fact]
+    public async Task Preview_VietnameseDecimalComma_UsesCommaAsDecimalSeparator()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        using var workbook = BuildValidWorkbook();
+        workbook.Worksheet("Questions").Cell(2, 7).Value = "1,5";
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.True(item.IsValid);
+        Assert.Equal(1.5m, item.Draft!.DefaultPoint);
+    }
+
+    [Fact]
+    public async Task Preview_NumericPartWithVietnameseDecimalComma_ParsesCorrectValue()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        using var workbook = BuildValidWorkbook("COMPOSITE");
+        var parts = workbook.Worksheet("Parts");
+        parts.Cell(2, 5).Value = "NUMERIC_ANSWER";
+        parts.Cell(2, 6).Clear(XLClearOptions.Contents);
+        parts.Cell(2, 8).Value = "1,5";
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.True(item.IsValid);
+        Assert.Equal(1.5m, Assert.Single(item.Draft!.Parts).CorrectNumeric);
+    }
+
+    [Fact]
+    public async Task Preview_SameTopicNameInDifferentGrades_ResolvesByQuestionGrade()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        database.Context.TagTopics.Add(new TagTopic
+        {
+            TagId = "topic-grade-11",
+            TagName = "Functions",
+            Grade = 11,
+            DisplayOrder = 2,
+            IsActive = true
+        });
+        await database.Context.SaveChangesAsync();
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(BuildValidWorkbook())),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.True(item.IsValid);
+        Assert.Equal("topic-1", Assert.Single(item.Draft!.Topics).TagId);
+    }
+
+    [Fact]
+    public async Task Preview_DuplicateTopicNameInSameGrade_ReturnsAmbiguousTopicError()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        database.Context.TagTopics.Add(new TagTopic
+        {
+            TagId = "topic-duplicate",
+            TagName = "Functions",
+            Grade = 10,
+            DisplayOrder = 2,
+            IsActive = true
+        });
+        await database.Context.SaveChangesAsync();
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(BuildValidWorkbook())),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.False(item.IsValid);
+        Assert.Contains(item.Errors, error => error.Code == "QUESTION_IMPORT_TOPIC_AMBIGUOUS");
+    }
+
+    [Fact]
+    public async Task Preview_WorkbookWithoutQuestionRows_ReturnsFileError()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        using var workbook = BuildValidWorkbook();
+        workbook.Worksheet("Questions").RowsUsed().Where(row => row.RowNumber() > 1).ToList().ForEach(row => row.Clear());
+        workbook.Worksheet("Answers").RowsUsed().Where(row => row.RowNumber() > 1).ToList().ForEach(row => row.Clear());
+        workbook.Worksheet("Topics").RowsUsed().Where(row => row.RowNumber() > 1).ToList().ForEach(row => row.Clear());
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!.Items);
+        Assert.Contains(result.Value.FileErrors, error => error.Code == "QUESTION_IMPORT_NO_QUESTIONS");
+    }
+
+    [Fact]
+    public async Task Preview_CompositePartLabelLongerThanDatabaseLimit_ReturnsValidationError()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        using var workbook = BuildValidWorkbook("COMPOSITE");
+        workbook.Worksheet("Parts").Cell(2, 3).Value = "abcdefghijk";
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.False(item.IsValid);
+        Assert.Contains(item.Errors, error => error.Code == "QUESTION_PART_LABEL_INVALID");
+    }
+
+    [Fact]
+    public async Task Preview_CompositeDuplicatePartLabels_ReturnsValidationError()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        using var workbook = BuildValidWorkbook("COMPOSITE");
+        var parts = workbook.Worksheet("Parts");
+        parts.Cell(3, 1).Value = "Q001";
+        parts.Cell(3, 2).Value = 2;
+        parts.Cell(3, 3).Value = "A";
+        parts.Cell(3, 4).Value = "Second statement";
+        parts.Cell(3, 5).Value = "TRUE_FALSE";
+        parts.Cell(3, 6).Value = false;
+        parts.Cell(3, 12).Value = 1;
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.False(item.IsValid);
+        Assert.Contains(item.Errors, error => error.Code == "QUESTION_PART_LABEL_DUPLICATE");
+    }
+
+    [Fact]
     public async Task Confirm_ValidBatch_CreatesQuestionGraph()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
@@ -172,6 +355,93 @@ public sealed class QuestionExcelImportTests
             .SingleAsync();
         Assert.Equal(2, question.Answers.Count);
         Assert.Single(question.QuestionTopics);
+    }
+
+    [Fact]
+    public async Task Confirm_MissingImportId_ReturnsValidationErrorsWithoutWrites()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        var handler = new ConfirmQuestionImportCommandHandler(
+            database.Context,
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(new ConfirmQuestionImportCommand(
+            new ConfirmQuestionImportRequest
+            {
+                ImportId = string.Empty,
+                Items = [new ConfirmQuestionImportItemRequest { QuestionKey = "Q001", Draft = CreateSingleChoiceDraft() }]
+            },
+            "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value!.IsValid);
+        Assert.Contains(result.Value.Errors, error => error.Code == "QUESTION_IMPORT_ID_INVALID");
+        Assert.Equal(0, await database.Context.Questions.CountAsync());
+    }
+
+    [Fact]
+    public async Task Confirm_PointWithUnsupportedScale_ReturnsValidationErrorsWithoutWrites()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        var draft = CreateSingleChoiceDraft();
+        draft.DefaultPoint = 1.234m;
+        var handler = new ConfirmQuestionImportCommandHandler(
+            database.Context,
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(new ConfirmQuestionImportCommand(
+            new ConfirmQuestionImportRequest
+            {
+                ImportId = "import-invalid-scale",
+                Items = [new ConfirmQuestionImportItemRequest { QuestionKey = "Q001", Draft = draft }]
+            },
+            "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value!.IsValid);
+        Assert.Contains(result.Value.Errors, error => error.Code == "QUESTION_DEFAULT_POINT_INVALID");
+        Assert.Equal(0, await database.Context.Questions.CountAsync());
+    }
+
+    [Fact]
+    public async Task Confirm_NumericPartWithUnsupportedScale_ReturnsValidationErrorsWithoutWrites()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        var draft = CreateSingleChoiceDraft();
+        draft.QuestionType = "COMPOSITE";
+        draft.Answers = [];
+        draft.Parts =
+        [
+            new CreateQuestionPartRequest
+            {
+                PartOrder = 1,
+                PartLabel = "a",
+                PartContent = "Enter the result.",
+                PartType = "NUMERIC_ANSWER",
+                CorrectNumeric = 1.1234567m,
+                NumericTolerance = 0.001m,
+                DefaultPoint = 1m
+            }
+        ];
+        var handler = new ConfirmQuestionImportCommandHandler(
+            database.Context,
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(new ConfirmQuestionImportCommand(
+            new ConfirmQuestionImportRequest
+            {
+                ImportId = "import-invalid-numeric-scale",
+                Items = [new ConfirmQuestionImportItemRequest { QuestionKey = "Q001", Draft = draft }]
+            },
+            "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value!.IsValid);
+        Assert.Contains(result.Value.Errors, error => error.Code == "QUESTION_PART_NUMERIC_VALUE_INVALID");
+        Assert.Equal(0, await database.Context.Questions.CountAsync());
     }
 
     [Fact]

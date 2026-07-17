@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
@@ -65,15 +66,28 @@ public sealed class QuestionImportValidationService
                 continue;
 
             fileErrors.Add(Issue(
-                QuestionBankErrors.QuestionImportValidationFailed.Code,
-                "A child row references a QuestionKey that does not exist in Questions.",
+                QuestionBankErrors.QuestionImportOrphanRow.Code,
+                QuestionBankErrors.QuestionImportOrphanRow.Message,
                 "Questions",
                 null,
                 "QuestionKey",
                 key));
         }
 
-        var topicByName = activeTopics.ToDictionary(topic => topic.TagName.Trim(), StringComparer.OrdinalIgnoreCase);
+        if (workbook.Questions.Count == 0)
+        {
+            fileErrors.Add(Issue(
+                QuestionBankErrors.QuestionImportNoQuestions.Code,
+                QuestionBankErrors.QuestionImportNoQuestions.Message,
+                "Questions",
+                null,
+                null,
+                null));
+        }
+
+        var topicsByGradeAndName = activeTopics
+            .GroupBy(topic => TopicLookupKey(topic.Grade, topic.TagName))
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
         var difficultyByLevel = activeDifficulties.ToDictionary(difficulty => difficulty.LevelValue);
         var items = new List<QuestionImportPreviewItemResponse>();
 
@@ -85,18 +99,18 @@ public sealed class QuestionImportValidationService
                 : [];
 
             if (string.IsNullOrWhiteSpace(rawQuestion.QuestionKey))
-                errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "QuestionKey is required.", "Questions", rawQuestion.SourceRow, "QuestionKey", null));
+                errors.Add(Issue(QuestionBankErrors.QuestionImportQuestionKeyInvalid.Code, QuestionBankErrors.QuestionImportQuestionKeyInvalid.Message, "Questions", rawQuestion.SourceRow, "QuestionKey", null));
             else if (rawQuestion.QuestionKey.Length > 50)
-                errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "QuestionKey must not exceed 50 characters.", "Questions", rawQuestion.SourceRow, "QuestionKey", rawQuestion.QuestionKey));
+                errors.Add(Issue(QuestionBankErrors.QuestionImportQuestionKeyInvalid.Code, QuestionBankErrors.QuestionImportQuestionKeyInvalid.Message, "Questions", rawQuestion.SourceRow, "QuestionKey", rawQuestion.QuestionKey));
             else if (questionRowsByKey[normalizedKey].Count > 1)
-                errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "QuestionKey must be unique in the workbook.", "Questions", rawQuestion.SourceRow, "QuestionKey", rawQuestion.QuestionKey));
+                errors.Add(Issue(QuestionBankErrors.QuestionImportQuestionKeyDuplicate.Code, QuestionBankErrors.QuestionImportQuestionKeyDuplicate.Message, "Questions", rawQuestion.SourceRow, "QuestionKey", rawQuestion.QuestionKey));
 
             var request = BuildRequest(
                 rawQuestion,
                 answerRowsByKey.GetValueOrDefault(normalizedKey, []),
                 partRowsByKey.GetValueOrDefault(normalizedKey, []),
                 topicRowsByKey.GetValueOrDefault(normalizedKey, []),
-                topicByName,
+                topicsByGradeAndName,
                 difficultyByLevel,
                 errors);
 
@@ -181,7 +195,7 @@ public sealed class QuestionImportValidationService
         IReadOnlyList<RawAnswerRow> answerRows,
         IReadOnlyList<RawPartRow> partRows,
         IReadOnlyList<RawTopicRow> topicRows,
-        IReadOnlyDictionary<string, Entities.TagTopic> topicByName,
+        IReadOnlyDictionary<string, List<Entities.TagTopic>> topicsByGradeAndName,
         IReadOnlyDictionary<int, Entities.TagDifficulty> difficultyByLevel,
         List<QuestionImportIssueResponse> errors)
     {
@@ -208,15 +222,26 @@ public sealed class QuestionImportValidationService
         foreach (var topicRow in topicRows)
         {
             var isPrimary = ParseBoolean(topicRow.IsPrimary, "Topics", topicRow.SourceRow, "IsPrimary", question.QuestionKey, errors) ?? false;
-            if (!topicByName.TryGetValue(topicRow.TopicName, out var topic))
+            var topicLookupKey = TopicLookupKey(grade, topicRow.TopicName);
+            if (!topicsByGradeAndName.TryGetValue(topicLookupKey, out var matchedTopics))
             {
                 errors.Add(Issue(QuestionBankErrors.QuestionTopicNotFound.Code, "Topic is missing or inactive.", "Topics", topicRow.SourceRow, "TopicName", question.QuestionKey));
                 continue;
             }
 
-            if (topic.Grade != grade)
-                errors.Add(Issue(QuestionBankErrors.QuestionTopicNotFound.Code, "Topic grade must match question grade.", "Topics", topicRow.SourceRow, "TopicName", question.QuestionKey));
+            if (matchedTopics.Count != 1)
+            {
+                errors.Add(Issue(
+                    QuestionBankErrors.QuestionImportTopicAmbiguous.Code,
+                    QuestionBankErrors.QuestionImportTopicAmbiguous.Message,
+                    "Topics",
+                    topicRow.SourceRow,
+                    "TopicName",
+                    question.QuestionKey));
+                continue;
+            }
 
+            var topic = matchedTopics[0];
             topics.Add(new CreateQuestionTopicRequest(topic.TagId, isPrimary));
         }
 
@@ -266,14 +291,14 @@ public sealed class QuestionImportValidationService
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "A numeric value is required.", sheet, row, column, questionKey));
+            errors.Add(Issue(QuestionBankErrors.QuestionImportNumericInvalid.Code, "A numeric value is required.", sheet, row, column, questionKey));
             return null;
         }
 
         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
             return parsed;
 
-        errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "Value must be an integer.", sheet, row, column, questionKey));
+        errors.Add(Issue(QuestionBankErrors.QuestionImportNumericInvalid.Code, "Value must be an integer.", sheet, row, column, questionKey));
         return null;
     }
 
@@ -282,13 +307,19 @@ public sealed class QuestionImportValidationService
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) ||
-            decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("vi-VN"), out parsed))
+        var normalized = value.Trim();
+        if (normalized.Contains(',') && normalized.Contains('.'))
         {
-            return parsed;
+            errors.Add(Issue(QuestionBankErrors.QuestionImportNumericInvalid.Code, QuestionBankErrors.QuestionImportNumericInvalid.Message, sheet, row, column, questionKey));
+            return null;
         }
 
-        errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "Value must be numeric.", sheet, row, column, questionKey));
+        normalized = normalized.Replace(',', '.');
+        const NumberStyles styles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
+        if (decimal.TryParse(normalized, styles, CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+
+        errors.Add(Issue(QuestionBankErrors.QuestionImportNumericInvalid.Code, QuestionBankErrors.QuestionImportNumericInvalid.Message, sheet, row, column, questionKey));
         return null;
     }
 
@@ -303,11 +334,21 @@ public sealed class QuestionImportValidationService
         if (normalized is "FALSE" or "0" or "NO" or "N" or "SAI")
             return false;
 
-        errors.Add(Issue(QuestionBankErrors.QuestionImportValidationFailed.Code, "Value must be true or false.", sheet, row, column, questionKey));
+        errors.Add(Issue(QuestionBankErrors.QuestionImportBooleanInvalid.Code, QuestionBankErrors.QuestionImportBooleanInvalid.Message, sheet, row, column, questionKey));
         return null;
     }
 
     private static string NormalizeKey(string key) => key.Trim();
+
+    private static string TopicLookupKey(int grade, string topicName) =>
+        $"{grade}|{NormalizeLookupText(topicName)}";
+
+    private static string NormalizeLookupText(string value)
+    {
+        var normalized = value.Normalize(NormalizationForm.FormC).Trim();
+        return string.Join(' ', normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .ToUpperInvariant();
+    }
 
     private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

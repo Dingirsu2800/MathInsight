@@ -43,7 +43,7 @@ internal static class QuestionImportQuestionFactory
                     PartId = Guid.NewGuid().ToString(),
                     QuestionId = question.QuestionId,
                     PartOrder = part.PartOrder,
-                    PartLabel = part.PartLabel,
+                    PartLabel = string.IsNullOrWhiteSpace(part.PartLabel) ? null : part.PartLabel.Trim(),
                     PartContent = part.PartContent,
                     PartType = QuestionRequestValidator.MapPartType(part.PartType)!,
                     CorrectBoolean = part.CorrectBoolean,
