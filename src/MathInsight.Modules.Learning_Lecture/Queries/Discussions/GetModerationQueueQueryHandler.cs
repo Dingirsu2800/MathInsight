@@ -42,14 +42,16 @@ public class GetModerationQueueQueryHandler : IRequestHandler<GetModerationQueue
                 DiscussionQuestionId = x.DiscussionQuestionId,
                 DiscussionAnswerId = x.DiscussionAnswerId,
                 ReporterAccountId = x.ReporterAccountId,
-                ReporterName = x.ReporterAccountId,
+                ReporterName = _dbContext.AccountProfileViews.Where(a => a.AccountId == x.ReporterAccountId).Select(a => a.AuthorName).FirstOrDefault() ?? x.ReporterAccountId,
                 ReportReason = x.ReportReason,
                 Status = x.Status,
                 CreatedTime = x.CreatedTime,
                 TargetType = x.DiscussionQuestionId != null ? "Question" : "Answer",
+                TargetAuthorName = _dbContext.AccountProfileViews.Where(a => a.AccountId == (x.DiscussionQuestionId != null ? x.Question!.StudentId : x.Answer!.AccountId)).Select(a => a.AuthorName).FirstOrDefault() ?? "Người dùng ẩn danh",
                 TargetPreview = x.DiscussionQuestionId != null ? x.Question!.Content : x.Answer!.Content,
                 LectureTitle = x.DiscussionQuestionId != null ? x.Question!.Lecture.Title : x.Answer!.Question.Lecture.Title,
-                ResolvedBy = x.ResolverAccountId,
+                LectureId = x.DiscussionQuestionId != null ? x.Question!.LectureId : x.Answer!.Question.LectureId,
+                ResolvedBy = x.ResolverAccountId != null ? _dbContext.AccountProfileViews.Where(a => a.AccountId == x.ResolverAccountId).Select(a => a.AuthorName).FirstOrDefault() ?? x.ResolverAccountId : null,
                 ResolvedAt = x.ResolvedTime
             }).ToListAsync(cancellationToken);
 
