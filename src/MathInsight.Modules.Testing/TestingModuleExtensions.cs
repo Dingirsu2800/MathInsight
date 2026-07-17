@@ -17,7 +17,11 @@ public static class TestingModuleExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null)));
         
-        // Register services, repositories, handlers
+        services.AddMediatR(config =>
+        {
+            config.RegisterServicesFromAssembly(typeof(TestingModuleExtensions).Assembly);
+        });
+
         return services;
     }
 }

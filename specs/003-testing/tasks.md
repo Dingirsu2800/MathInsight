@@ -23,48 +23,48 @@
 
 ## Phase 2: Core Domain Logic
 
-- [ ] **StartSession Command**:
-  - [ ] Validate test `TestStatus = ACTIVE`
-  - [ ] Check no existing `InProgress` session for same `(StudentID, TestID)` (BR-15)
-  - [ ] Create `TestSession` with `Status = InProgress`, `SubmissionType = NULL`, `StartTime = NOW`
-  - [ ] Create `TestAnswer` stub records for each `TestQuestion` in the test
-  - [ ] Return session with question list (randomized per blueprint)
+- [x] **StartSession Command**:
+  - [x] Validate test `TestStatus = ACTIVE`
+  - [x] Check no existing `InProgress` session for same `(StudentID, TestID)` (BR-15)
+  - [x] Create `TestSession` with `Status = InProgress`, `SubmissionType = NULL`, `StartTime = NOW`
+  - [x] Create `TestAnswer` stub records for each `TestQuestion` in the test
+  - [x] Return session with question list (randomized per blueprint)
 
-- [ ] **AutoSave Command**:
-  - [ ] Validate session `Status = InProgress` (reject if `Graded` or `Abandoned`)
-  - [ ] Batch update `TestAnswer` (`AnswerID`, `ShortAnswerText`, `TimeSpent`) and `TestAnswerPart` (`BooleanAnswer`, `TextAnswer`, `NumericAnswer` based on part type)
-  - [ ] Update `UpdateChoiceTime`; set `FirstChoiceTime` if null
-  - [ ] Return `{ savedAt, remainingSeconds }` — remaining time from `StartTime + DurationMinutes`
+- [x] **AutoSave Command**:
+  - [x] Validate session `Status = InProgress` (reject if `Graded` or `Abandoned`)
+  - [x] Batch update `TestAnswer` (`AnswerID`, `ShortAnswerText`, `TimeSpent`) and `TestAnswerPart` (`BooleanAnswer`, `TextAnswer`, `NumericAnswer` based on part type)
+  - [x] Update `UpdateChoiceTime`; set `FirstChoiceTime` if null
+  - [x] Return `{ savedAt, remainingSeconds }` — remaining time from `StartTime + DurationMinutes`
 
-- [ ] **RecordIncident Command**:
-  - [ ] Insert `TestIncident` record with `Type = TAB_SWITCH | FOCUS_LOSS`
-  - [ ] Count incidents for session → if `>= 5`, call `ForceSubmitSessionCommand` (BR-10)
+- [x] **RecordIncident Command**:
+  - [x] Insert `TestIncident` record with `Type = TAB_SWITCH | FOCUS_LOSS`
+  - [x] Count incidents for session → if `>= 5`, call `ForceSubmitSessionCommand` (BR-10)
 
-- [ ] **SubmitSession Command** (UC-49):
-  - [ ] Validate `Status = InProgress`
-  - [ ] Lock answer writes inside the submit transaction
-  - [ ] Set `end_time = NOW`, `submission_type = StudentSubmit`
-  - [ ] Calculate `duration = (end_time - start_time).TotalSeconds`
-  - [ ] Count `num_abandoned` (unanswered/abandoned questions per BR-16b)
-  - [ ] **Practice mode (BR-16)**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`; return `200 OK`
-  - [ ] **Exam mode (BR-17)**: Publish `TestSubmittedEvent` to MassTransit queue; return `202 Accepted` immediately
-  - [ ] Publish `GradeCalculatedEvent` after successful grading (handled by Grading module)
+- [x] **SubmitSession Command** (UC-49):
+  - [x] Validate `Status = InProgress`
+  - [x] Lock answer writes inside the submit transaction
+  - [x] Set `end_time = NOW`, `submission_type = StudentSubmit`
+  - [x] Calculate `duration = (end_time - start_time).TotalSeconds`
+  - [x] Count `num_abandoned` (unanswered/abandoned questions per BR-16b)
+  - [x] **Practice mode (BR-16)**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`; return `200 OK`
+  - [x] **Exam mode (BR-17)**: Publish `TestSubmittedEvent` to MassTransit queue; return `202 Accepted` immediately
+  - [x] Publish `GradeCalculatedEvent` after successful grading (handled by Grading module)
 
-- [ ] **ForceSubmitSession Command**:
-  - [ ] Validate `Status = InProgress`
-  - [ ] Set `EndTime = NOW`, `SubmissionType = TimeoutSubmit` for timer expiry or `SystemSubmit` for system/proctor submit
-  - [ ] Save current auto-save state
-  - [ ] **Practice mode**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`
-  - [ ] **Exam mode**: Publish `TestSubmittedEvent` to MassTransit queue; grading proceeds asynchronously
+- [x] **ForceSubmitSession Command**:
+  - [x] Validate `Status = InProgress`
+  - [x] Set `EndTime = NOW`, `SubmissionType = TimeoutSubmit` for timer expiry or `SystemSubmit` for system/proctor submit
+  - [x] Save current auto-save state
+  - [x] **Practice mode**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`
+  - [x] **Exam mode**: Publish `TestSubmittedEvent` to MassTransit queue; grading proceeds asynchronously
 
-- [ ] **ReportSessionQuestion Command** (UC-48):
-  - [ ] Delegates to QuestionBank module's `ReportQuestionCommand`
-  - [ ] Pass `SessionID` context for audit
+- [x] **ReportSessionQuestion Command** (UC-48):
+  - [x] Delegates to QuestionBank module's `ReportQuestionCommand`
+  - [x] Pass `SessionID` context for audit
 
-- [ ] **GetDetailedSolution Query** (UC-50):
-  - [ ] Validate session `Status = Graded` (reject with 403 if not)
-  - [ ] Return: questions with `QuestionContent`, `answers`, `IsCorrect` per answer, `PointsEarned`, and rich-text/plain-text explanation
-  - [ ] Include `TestAnswer.ShortAnswerText` for SHORT_ANSWER type
+- [x] **GetDetailedSolution Query** (UC-50):
+  - [x] Validate session `Status = Graded` (reject with 403 if not)
+  - [x] Return: questions with `QuestionContent`, `answers`, `IsCorrect` per answer, `PointsEarned`, and rich-text/plain-text explanation
+  - [x] Include `TestAnswer.ShortAnswerText` for SHORT_ANSWER type
 
 ---
 
