@@ -59,7 +59,12 @@ export default function DashboardTopbar({
   const resolvedInitials = getInitials();
 
   return (
-    <header className="h-header-height border-b border-whisper-border bg-surface flex justify-between items-center w-full px-gutter z-10 sticky top-0 shrink-0 select-none">
+    // z-50: the sticky header creates its own stacking context, so the account dropdown can
+    // never paint above a sibling with a HIGHER z-index no matter what z the dropdown itself
+    // uses. Page content sets `relative z-10` (e.g. the dashboard score card) and, sitting
+    // later in the DOM, used to tie and win — which is what clipped the menu. Keep this above
+    // any z-index used inside <main>.
+    <header className="h-header-height border-b border-whisper-border bg-surface flex justify-between items-center w-full px-gutter z-50 sticky top-0 shrink-0 select-none">
       <div className="flex items-center gap-8 h-full">
         <h2 className="text-[20px] font-bold text-primary">{appTitle}</h2>
         {topNavItems.length > 0 && (
@@ -153,7 +158,7 @@ export default function DashboardTopbar({
 
             {/* Account Dropdown Menu */}
             {isAccountMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-pure-surface border border-whisper-border diffused-shadow p-2 z-50 flex flex-col gap-1 text-[13px] animate-in fade-in-0 slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-pure-surface border border-whisper-border diffused-shadow p-2 z-[60] flex flex-col gap-1 text-[13px] animate-in fade-in-0 slide-in-from-top-2 duration-150">
                 <div className="px-3 py-2 border-b border-whisper-border">
                   <p className="font-bold text-on-surface truncate">{userName || "Người dùng"}</p>
                   <p className="text-[11px] text-on-surface-variant truncate font-semibold uppercase tracking-wider">{userRoleLabel || "Tài khoản"}</p>

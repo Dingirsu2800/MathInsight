@@ -17,11 +17,13 @@ import BlueprintEditorPage from './pages/expert/BlueprintEditorPage.jsx';
 import BlueprintDetailPage from './pages/expert/BlueprintDetailPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterStudentPage from './pages/RegisterStudentPage.jsx';
+import RegisterTeacherPage from './pages/RegisterTeacherPage.jsx';
 import ConfirmEmailPage from './pages/ConfirmEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import GoogleSuccessPage from './pages/GoogleSuccessPage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AccountManagementPage from './pages/admin/AccountManagementPage.jsx';
 import TeacherApplicationsPage from './pages/admin/TeacherApplicationsPage.jsx';
@@ -55,29 +57,34 @@ export default function App() {
       <Route path="/" element={<HomeRoute />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterStudentPage />} />
+      <Route path="/register/teacher" element={<RegisterTeacherPage />} />
       <Route path="/confirm-email" element={<ConfirmEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/google/success" element={<GoogleSuccessPage />} />
-      {/* Student Routes */}
-      <Route path="/student/dashboard" element={<StudentDashboard />} />
-      <Route path="/student/history" element={<TestHistoryPage />} />
-      <Route path="/student/competency" element={<CompetencyPage />} />
-      <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
-      <Route path="/student/test-result" element={<TestResultPage />} />
-      <Route
-        path="/student/test"
-        element={
-          <TestSession
-            sessionId="local-session"
-            testId="3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          />
-        }
-      />
-      <Route path="/student/lectures" element={<StudentLectureListPage />} />
-      <Route path="/student/lectures/:id" element={<StudentLectureDetailPage />} />
+      {/* Student Routes — authenticated only, same wrapper as expert/teacher/admin below. */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
+        <Route path="/student/history" element={<TestHistoryPage />} />
+        <Route path="/student/competency" element={<CompetencyPage />} />
+        <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
+        <Route path="/student/test-result" element={<TestResultPage />} />
+        <Route
+          path="/student/test"
+          element={
+            <TestSession
+              sessionId="local-session"
+              testId="3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            />
+          }
+        />
+        <Route path="/student/lectures" element={<StudentLectureListPage />} />
+        <Route path="/student/lectures/:id" element={<StudentLectureDetailPage />} />
+      </Route>
       {/* Role landing pages (placeholders until their dashboards are built) */}
       <Route element={<ProtectedRoute />}>
+        {/* UC-04 / UC-05 — role-agnostic, any authenticated user. */}
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/student" element={<PlaceholderPage showLogout title="Không gian học tập" description="Trang tổng quan học sinh đang được phát triển." />} />
         <Route path="/teacher" element={<PlaceholderPage showLogout title="Không gian giáo viên" description="Trang tổng quan giáo viên đang được phát triển." />} />
         <Route path="/admin" element={<PlaceholderPage showLogout title="Quản trị hệ thống" description="Trang quản trị đang được phát triển." />} />
@@ -110,7 +117,20 @@ export default function App() {
         <Route path="/admin/applications" element={<TeacherApplicationsPage />} />
         <Route path="/admin/roles" element={<RolesPermissionsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Unknown URL — NOT an auth failure. This used to redirect to /login, which made every
+          nav link pointing at an unregistered path look exactly like a logged-out session
+          (tokens still in localStorage, nothing cleared). Show a not-found page instead so a
+          routing gap is visible as a routing gap. */}
+      <Route
+        path="*"
+        element={
+          <PlaceholderPage
+            showLogout
+            title="Không tìm thấy trang"
+            description="Đường dẫn này không tồn tại. Vui lòng kiểm tra lại hoặc quay về trang chủ."
+          />
+        }
+      />
     </Routes>
   );
 }

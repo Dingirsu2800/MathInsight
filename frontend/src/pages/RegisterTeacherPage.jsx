@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
 import client from "../services/questionBankApiClient";
-import { mapAuthError } from "../services/authErrors";
+import { mapAuthError, getAuthErrorCode } from "../services/authErrors";
 
 // BR-08: 8–128 chars incl. uppercase, lowercase, number, special char. Mirrors
 // AuthValidation.PasswordPattern on the backend so most 400s are caught client-side.
@@ -11,6 +11,13 @@ const PASSWORD_HINT =
   "Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.";
 
 const REGISTER_FALLBACK_ERROR = "Đăng ký thất bại. Vui lòng thử lại sau.";
+
+// Certificate constraints (BR-05): JPG/PNG only, ≤ 10 MB.
+const CERT_ACCEPT = "image/jpeg,image/png";
+const CERT_ALLOWED_TYPES = ["image/jpeg", "image/png"];
+const CERT_MAX_BYTES = 10 * 1024 * 1024;
+const CERT_TYPE_ERROR = "Chứng chỉ phải là ảnh JPG hoặc PNG.";
+const CERT_SIZE_ERROR = "Chứng chỉ không được vượt quá 10MB.";
 
 // ASP.NET ValidationProblemDetails keys the errors dict by PascalCase property
 // name; our field state uses camelCase. Lowercasing the first char lines them up.
@@ -39,7 +46,7 @@ function LabeledInput({ id, label, icon, error, children }) {
 const inputClass =
   "w-full pl-11 pr-4 py-3 text-sm text-[#1e2a4a] bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2f5fa8]/20 focus:border-[#2f5fa8] outline-none transition-all placeholder:text-slate-400";
 
-export default function RegisterStudentPage() {
+export default function RegisterTeacherPage() {
   const [form, setForm] = React.useState({
     lastName: "",
     firstName: "",
@@ -47,10 +54,10 @@ export default function RegisterStudentPage() {
     email: "",
     password: "",
     confirmPassword: "",
-    gender: "",
-    school: "",
-    currentGrade: "",
+    biography: "",
   });
+  const [certificate, setCertificate] = React.useState(null);
+  const [certPreview, setCertPreview] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [errors, setErrors] = React.useState({});
@@ -58,11 +65,48 @@ export default function RegisterStudentPage() {
   const [loading, setLoading] = React.useState(false);
   const [submittedEmail, setSubmittedEmail] = React.useState("");
 
+  // Release the object URL used for the certificate preview when it changes or unmounts.
+  React.useEffect(() => {
+    return () => {
+      if (certPreview) URL.revokeObjectURL(certPreview);
+    };
+  }, [certPreview]);
+
   const setField = (name) => (e) => {
     const value = e.target.value;
     setForm((prev) => ({ ...prev, [name]: value }));
     // Clear the field's error as soon as the user edits it.
     setErrors((prev) => (prev[name] ? { ...prev, [name]: undefined } : prev));
+  };
+
+  const handleCertChange = (e) => {
+    const file = e.target.files?.[0];
+    // Reset any previous preview/URL and cert error.
+    setCertPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
+    setErrors((prev) => (prev.certificate ? { ...prev, certificate: undefined } : prev));
+
+    if (!file) {
+      setCertificate(null);
+      return;
+    }
+
+    // Client-side rejection before submit (BR-05).
+    if (!CERT_ALLOWED_TYPES.includes(file.type)) {
+      setCertificate(null);
+      setErrors((prev) => ({ ...prev, certificate: CERT_TYPE_ERROR }));
+      return;
+    }
+    if (file.size > CERT_MAX_BYTES) {
+      setCertificate(null);
+      setErrors((prev) => ({ ...prev, certificate: CERT_SIZE_ERROR }));
+      return;
+    }
+
+    setCertificate(file);
+    setCertPreview(URL.createObjectURL(file));
   };
 
   function validate() {
@@ -90,11 +134,8 @@ export default function RegisterStudentPage() {
       next.confirmPassword = "Mật khẩu xác nhận không khớp.";
     }
 
-    if (form.currentGrade !== "") {
-      const grade = Number(form.currentGrade);
-      if (!Number.isInteger(grade) || grade < 10 || grade > 12) {
-        next.currentGrade = "Lớp phải nằm trong khoảng 10–12.";
-      }
+    if (!certificate) {
+      next.certificate = "Vui lòng tải lên chứng chỉ giảng dạy (JPG hoặc PNG).";
     }
 
     return next;
@@ -112,27 +153,40 @@ export default function RegisterStudentPage() {
     setErrors({});
     setLoading(true);
 
-    // confirmPassword is client-side only and never sent to the API.
-    const payload = {
-      username: form.username.trim(),
-      email: form.email.trim(),
-      password: form.password,
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      gender: form.gender || null,
-      school: form.school.trim() || null,
-      currentGrade: form.currentGrade === "" ? null : Number(form.currentGrade),
-    };
+    // Multipart body — confirmPassword is client-side only and never sent.
+    // Field names match TeacherRegisterRequest (PascalCase [FromForm] binding is
+    // case-insensitive, but we match the DTO casing to be explicit). The backend
+    // reads the file size from IFormFile.Length, so no separate size field is sent.
+    const formData = new FormData();
+    formData.append("Username", form.username.trim());
+    formData.append("Email", form.email.trim());
+    formData.append("Password", form.password);
+    formData.append("FirstName", form.firstName.trim());
+    formData.append("LastName", form.lastName.trim());
+    if (form.biography.trim()) {
+      formData.append("Biography", form.biography.trim());
+    }
+    formData.append("Certificate", certificate);
 
     try {
-      await client.post("/api/v1/auth/register/student", payload);
-      // 202 Accepted (DD-01): no account exists yet — do not log in / redirect.
-      setSubmittedEmail(payload.email);
+      // Override the client's default application/json content-type: with FormData,
+      // axios would otherwise JSON-stringify the body and drop the file. Setting
+      // multipart/form-data lets the browser XHR add the boundary automatically.
+      await client.post("/api/v1/auth/register/teacher", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      // 202 Accepted: no account exists yet — do not log in / redirect.
+      setSubmittedEmail(form.email.trim());
     } catch (err) {
       console.error(err);
       const status = err?.response?.status;
+      const code = getAuthErrorCode(err);
 
-      if (status === 400 && err.response?.data?.errors) {
+      if (status === 400 && code === "AUTH_CERTIFICATE_INVALID") {
+        // Certificate-specific rejection from the backend — surface under the file input.
+        setErrors({ certificate: "Chứng chỉ không hợp lệ. Vui lòng tải lên ảnh JPG/PNG rõ ràng." });
+        setFormError("Vui lòng kiểm tra lại chứng chỉ đã tải lên.");
+      } else if (status === 400 && err.response?.data?.errors) {
         // Surface backend field errors under the matching inputs.
         const backendErrors = err.response.data.errors;
         const mapped = {};
@@ -152,7 +206,7 @@ export default function RegisterStudentPage() {
     }
   };
 
-  // Success state (post-202): confirmation email sent, account not yet created.
+  // Success state (post-202): confirmation email sent, then admin approval pending.
   if (submittedEmail) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#eef2f7] p-4 py-8">
@@ -163,7 +217,7 @@ export default function RegisterStudentPage() {
           <h1 className="text-2xl font-bold text-[#1e2a4a]">Đăng ký thành công!</h1>
           <p className="text-sm text-slate-500 leading-relaxed">
             Chúng tôi đã gửi email xác nhận tới <span className="font-semibold text-[#1e2a4a]">{submittedEmail}</span>.
-            Vui lòng kiểm tra hộp thư (cả mục Spam) và bấm vào liên kết để kích hoạt tài khoản.
+            Sau khi xác nhận email, hồ sơ của bạn sẽ chờ quản trị viên duyệt trước khi bạn có thể đăng nhập.
           </p>
           <Link
             to="/login"
@@ -184,9 +238,9 @@ export default function RegisterStudentPage() {
             <span className="material-symbols-outlined text-white text-[26px]">functions</span>
           </div>
           <div className="space-y-1.5">
-            <h1 className="text-2xl font-bold text-[#1e2a4a]">Tạo tài khoản học sinh</h1>
+            <h1 className="text-2xl font-bold text-[#1e2a4a]">Đăng ký tài khoản giáo viên</h1>
             <p className="text-sm text-slate-500 leading-relaxed max-w-xs">
-              Điền thông tin để bắt đầu học tập cùng MathInsight.
+              Điền thông tin và tải lên chứng chỉ giảng dạy. Hồ sơ sẽ được quản trị viên duyệt trước khi kích hoạt.
             </p>
           </div>
         </div>
@@ -249,7 +303,7 @@ export default function RegisterStudentPage() {
               value={form.email}
               onChange={setField("email")}
               className={inputClass}
-              placeholder="email@fpt.edu.vn"
+              placeholder="email@gmail.com"
               autoComplete="email"
               disabled={loading}
             />
@@ -325,65 +379,59 @@ export default function RegisterStudentPage() {
             )}
           </div>
 
-          {/* Giới tính */}
+          {/* Giới thiệu bản thân */}
           <div className="space-y-1.5">
-            <label htmlFor="gender" className="block text-sm font-semibold text-[#1e2a4a]">
-              Giới tính
+            <label htmlFor="biography" className="block text-sm font-semibold text-[#1e2a4a]">
+              Giới thiệu bản thân
             </label>
-            <div className="relative flex items-center">
-              <span className="material-symbols-outlined absolute left-3.5 text-slate-400 text-[20px] z-10">wc</span>
-              <select
-                id="gender"
-                value={form.gender}
-                onChange={setField("gender")}
-                className="w-full appearance-none pl-11 pr-10 py-3 text-sm text-[#1e2a4a] bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2f5fa8]/20 focus:border-[#2f5fa8] outline-none transition-all cursor-pointer"
-                disabled={loading}
-              >
-                <option value="">-- Chọn giới tính --</option>
-                <option value="Male">Nam</option>
-                <option value="Female">Nữ</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 text-slate-400 text-[20px] pointer-events-none">expand_more</span>
-            </div>
-            {errors.gender && <p className="text-xs text-deep-rose font-medium">{errors.gender}</p>}
-          </div>
-
-          {/* Trường */}
-          <LabeledInput id="school" label="Trường" icon="school" error={errors.school}>
-            <input
-              id="school"
-              type="text"
-              value={form.school}
-              onChange={setField("school")}
-              className={inputClass}
-              placeholder="THPT Chuyên..."
+            <textarea
+              id="biography"
+              value={form.biography}
+              onChange={setField("biography")}
+              rows={3}
+              className="w-full px-4 py-3 text-sm text-[#1e2a4a] bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#2f5fa8]/20 focus:border-[#2f5fa8] outline-none transition-all placeholder:text-slate-400 resize-y"
+              placeholder="Kinh nghiệm giảng dạy, trường công tác, chuyên môn..."
               disabled={loading}
             />
-          </LabeledInput>
+            {errors.biography && <p className="text-xs text-deep-rose font-medium">{errors.biography}</p>}
+          </div>
 
-          {/* Lớp */}
+          {/* Chứng chỉ giảng dạy */}
           <div className="space-y-1.5">
-            <label htmlFor="currentGrade" className="block text-sm font-semibold text-[#1e2a4a]">
-              Lớp
+            <label htmlFor="certificate" className="block text-sm font-semibold text-[#1e2a4a]">
+              Chứng chỉ giảng dạy
             </label>
-            <div className="relative flex items-center">
-              <span className="material-symbols-outlined absolute left-3.5 text-slate-400 text-[20px]">grade</span>
+            <label
+              htmlFor="certificate"
+              className="flex items-center gap-3 px-4 py-3 bg-white border border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-[#2f5fa8] hover:bg-[#2f5fa8]/[0.03] transition-all"
+            >
+              <span className="material-symbols-outlined text-slate-400 text-[22px]">upload_file</span>
+              <span className="text-sm text-slate-500 truncate">
+                {certificate ? certificate.name : "Chọn ảnh JPG hoặc PNG (tối đa 10MB)"}
+              </span>
               <input
-                id="currentGrade"
-                type="number"
-                min={10}
-                max={12}
-                value={form.currentGrade}
-                onChange={setField("currentGrade")}
-                className={inputClass}
-                placeholder="10"
+                id="certificate"
+                type="file"
+                accept={CERT_ACCEPT}
+                onChange={handleCertChange}
+                className="hidden"
                 disabled={loading}
               />
-            </div>
-            {errors.currentGrade ? (
-              <p className="text-xs text-deep-rose font-medium">{errors.currentGrade}</p>
+            </label>
+            {certPreview && (
+              <div className="mt-2 flex items-center gap-3">
+                <img
+                  src={certPreview}
+                  alt="Xem trước chứng chỉ"
+                  className="w-16 h-16 object-cover rounded-lg border border-slate-200"
+                />
+                <span className="text-xs text-slate-500 truncate">{certificate?.name}</span>
+              </div>
+            )}
+            {errors.certificate ? (
+              <p className="text-xs text-deep-rose font-medium">{errors.certificate}</p>
             ) : (
-              <p className="text-xs text-slate-400">Chỉ hỗ trợ học sinh lớp 10 đến 12.</p>
+              <p className="text-xs text-slate-400">Chỉ chấp nhận ảnh JPG/PNG, dung lượng tối đa 10MB.</p>
             )}
           </div>
 
@@ -411,9 +459,9 @@ export default function RegisterStudentPage() {
             </Link>
           </p>
           <p className="text-xs text-slate-400">
-            Bạn là giáo viên?{" "}
-            <Link to="/register/teacher" className="font-semibold text-[#2f5fa8] hover:underline">
-              Đăng ký với tư cách giáo viên
+            Bạn là học sinh?{" "}
+            <Link to="/register" className="font-semibold text-[#2f5fa8] hover:underline">
+              Đăng ký học sinh
             </Link>
           </p>
         </div>
