@@ -70,9 +70,9 @@
 
 ## Phase 3: Controller and Routing
 
-- [ ] `TestSessionsController` — StudentOnly: start, auto-save, incident, submit
-- [ ] `SolutionController` — StudentOnly: GET solution (validates `Graded` status)
-- [ ] Register all services inside `TestingModuleExtensions.cs`
+- [x] `TestSessionsController` — StudentOnly: start, auto-save, incident, submit
+- [x] `SolutionController` — StudentOnly: GET solution (validates `Graded` status)
+- [x] Register all services inside `TestingModuleExtensions.cs`
 
 ---
 
