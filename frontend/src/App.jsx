@@ -15,6 +15,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import GoogleSuccessPage from './pages/GoogleSuccessPage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import { getAccessToken, getRoleName } from './services/authStorage.js';
 import { resolveHomePath } from './utils/roleRoutes.js';
@@ -55,6 +56,8 @@ export default function App() {
       />
       {/* Role landing pages (placeholders until their dashboards are built) */}
       <Route element={<ProtectedRoute />}>
+        {/* UC-04 / UC-05 — role-agnostic, any authenticated user. */}
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/student" element={<PlaceholderPage showLogout title="Không gian học tập" description="Trang tổng quan học sinh đang được phát triển." />} />
         <Route path="/teacher" element={<PlaceholderPage showLogout title="Không gian giáo viên" description="Trang tổng quan giáo viên đang được phát triển." />} />
         <Route path="/admin" element={<PlaceholderPage showLogout title="Quản trị hệ thống" description="Trang quản trị đang được phát triển." />} />

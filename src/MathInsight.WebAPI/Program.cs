@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using MathInsight.Modules.Identity_Access;
 using MathInsight.Modules.QuestionBank;
 using MathInsight.Modules.Testing;
@@ -148,6 +149,43 @@ builder.Services.AddSwaggerGen(options =>
 
         return true;
     });
+
+    // JWT Bearer auth for Swagger UI: renders the Authorize button so a token issued by
+    // /api/v1/auth/login can be pasted and sent on [Authorize]-protected endpoints
+    // (e.g. /api/v1/accounts/profile). Documentation only — this does not affect how tokens
+    // are validated at runtime; that is the AddJwtBearer configuration below.
+    const string bearerSchemeId = "Bearer";
+
+    options.AddSecurityDefinition(bearerSchemeId, new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+
+        // Type=Http with Scheme="bearer" makes Swagger UI send "Authorization: Bearer {token}"
+        // on its own, so only the raw token is pasted into the Authorize dialog.
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Paste the access token returned by /api/v1/auth/login. Do not include the \"Bearer \" prefix."
+    });
+
+    // Applied document-wide: every operation offers the token. Anonymous endpoints (login,
+    // register, confirm-email, logout) simply ignore the header, so this costs nothing and
+    // avoids an operation filter that would have to re-derive each action's [Authorize] state.
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = bearerSchemeId
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 builder.Services.AddRateLimiter(options =>
 {
@@ -215,6 +253,38 @@ builder.Services
         };
         options.Events = new JwtBearerEvents
         {
+            // Diagnostics only — neither handler below changes whether a token is accepted.
+            // Fires when token validation throws: bad signature, expired, wrong issuer/audience.
+            OnAuthenticationFailed = context =>
+            {
+                context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JWTAuth")
+                    .LogError(context.Exception, "JWT auth failed");
+
+                return Task.CompletedTask;
+            },
+
+            // OnAuthenticationFailed does NOT cover a context.Fail() raised inside
+            // OnTokenValidated (the blacklist / session checks below) — that path sets a failed
+            // AuthenticateResult without throwing, so it reaches the client as a bare 401
+            // invalid_token with nothing logged. OnChallenge runs for every 401 and carries the
+            // failure, so it is the only place those reasons become visible.
+            OnChallenge = context =>
+            {
+                context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JWTAuth")
+                    .LogError(
+                        context.AuthenticateFailure,
+                        "JWT challenge → 401. error={Error}; description={Description}; failure={Failure}",
+                        context.Error,
+                        context.ErrorDescription,
+                        context.AuthenticateFailure?.Message ?? "(none — no token, or rejected by OnTokenValidated)");
+
+                return Task.CompletedTask;
+            },
+
             OnTokenValidated = async context =>
             {
                 var principal = context.Principal;
@@ -223,9 +293,6 @@ builder.Services
                     context.Fail("Missing principal.");
                     return;
                 }
-
-                var role = principal.FindFirst(ClaimTypes.Role)?.Value
-                    ?? principal.FindFirst("role")?.Value;
 
                 var tokenId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
                     ?? principal.FindFirst("jti")?.Value;
@@ -239,30 +306,15 @@ builder.Services
                 var authSessionService = context.HttpContext.RequestServices
                     .GetRequiredService<IAuthSessionService>();
 
+                // Revocation (BR-10, BR-15): logout, password change/reset, deactivation, and
+                // permission changes all blacklist the outstanding jti. This is the only
+                // per-request session check — BR-02 (Student single-session) is enforced at login
+                // by RevokeAllSessionsAsync, which deletes the previous refresh token; the
+                // superseded access token then dies on its own within 15 minutes (DD-02).
                 var isBlacklisted = await authSessionService.IsTokenBlacklistedAsync(tokenId);
                 if (isBlacklisted)
                 {
                     context.Fail("Token has been revoked.");
-                    return;
-                }
-
-                // BR-02 applies to Student accounts.
-                if (!string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                var accountId = principal.FindFirst("account_id")?.Value;
-                if (string.IsNullOrWhiteSpace(accountId))
-                {
-                    context.Fail("Missing account_id claim.");
-                    return;
-                }
-
-                var isActiveSession = await authSessionService.IsActiveSessionAsync(accountId, tokenId);
-                if (!isActiveSession)
-                {
-                    context.Fail("Session is no longer active.");
                 }
             }
         };
