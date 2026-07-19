@@ -52,7 +52,14 @@ public sealed class StartSessionCommandHandler
             SessionId = sessionId,
             TestId = request.TestId,
             StudentId = request.StudentId,
-            TestFormat = test.TestMode, // Copy test format from Test entity
+            TestFormat = test.TestMode switch
+            {
+                "BlueprintExam" => "Exam",
+                "Diagnostic" => "Exam",
+                "AdaptivePractice" => "Practice",
+                "TopicPractice" => "Practice",
+                _ => "Practice"
+            },
             Status = "InProgress",
             SubmissionType = null,
             Duration = 0,
