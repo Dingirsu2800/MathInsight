@@ -19,12 +19,14 @@ import {
   getQuestionStatusVariant
 } from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
+import QuestionExcelImportDialog from "../../components/expert/QuestionExcelImportDialog";
 
 export default function QuestionBankListPage() {
   const navigate = useNavigate();
 
   // Dialog / Drawer states
   const [selectedQuestion, setSelectedQuestion] = React.useState(null);
+  const [isImportExcelOpen, setIsImportExcelOpen] = React.useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
 
@@ -368,10 +370,20 @@ export default function QuestionBankListPage() {
           title="Ngân hàng câu hỏi"
           subtitle="Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học."
         >
-          <Button onClick={() => navigate("/expert/questions/new")}>
-            <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
-            Tạo câu hỏi mới
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsImportExcelOpen(true)}
+              className="normal-case text-xs font-bold"
+            >
+              <span className="material-symbols-outlined text-[18px] mr-1.5">upload_file</span>
+              Nhập Excel
+            </Button>
+            <Button onClick={() => navigate("/expert/questions/new")}>
+              <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
+              Tạo câu hỏi mới
+            </Button>
+          </div>
         </DashboardPageHeader>
 
         {/* Error / Alert banner */}
@@ -961,6 +973,13 @@ export default function QuestionBankListPage() {
           </DialogFooter>
         </form>
       </Dialog>
+
+      {/* Excel Import Dialog */}
+      <QuestionExcelImportDialog
+        isOpen={isImportExcelOpen}
+        onClose={() => setIsImportExcelOpen(false)}
+        onImportSuccess={() => fetchQuestions()}
+      />
     </ExpertLayout>
   );
 }

@@ -57,6 +57,7 @@ public sealed record GradedAnswerDto
     public Guid TagId { get; init; }
     public bool IsCorrect { get; init; }
     public decimal PointsEarned { get; init; }
+    public decimal MaxPoints { get; init; }
     public int TimeSpent { get; init; }
     public byte DifficultyLevel { get; init; }
     public int QuestionNo { get; init; }

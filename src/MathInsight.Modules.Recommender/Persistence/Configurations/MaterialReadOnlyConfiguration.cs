@@ -15,11 +15,10 @@ public class MaterialReadOnlyConfiguration : IEntityTypeConfiguration<MaterialRe
         builder.ToTable("Material");
         builder.HasKey(x => x.MaterialId);
 
-        builder.Property(x => x.MaterialId).HasColumnName("material_id");
-        builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(200);
-        builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(2000);
-        builder.Property(x => x.FileUrl).HasColumnName("file_url").HasMaxLength(500);
-        builder.Property(x => x.MaterialType).HasColumnName("material_type").HasMaxLength(50);
-        builder.Property(x => x.IsActive).HasColumnName("is_active");
+        builder.Property(x => x.MaterialId).HasColumnName("MaterialID").HasMaxLength(36);
+        builder.Property(x => x.MaterialName).HasColumnName("MaterialName").HasMaxLength(100);
+        builder.Property(x => x.FileUrl).HasColumnName("FileUrl").HasMaxLength(255);
+        builder.Property(x => x.FileType).HasColumnName("FileType").HasMaxLength(10);
+        builder.Property(x => x.Status).HasColumnName("Status").HasMaxLength(20);
     }
 }

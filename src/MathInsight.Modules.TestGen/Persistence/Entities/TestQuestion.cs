@@ -1,4 +1,4 @@
-using System;
+using MathInsight.Modules.TestGen.Persistence.ReadModels;
 
 namespace MathInsight.Modules.TestGen.Persistence.Entities;
 
@@ -8,7 +8,18 @@ namespace MathInsight.Modules.TestGen.Persistence.Entities;
 /// </summary>
 public class TestQuestion
 {
-    public Guid TestId { get; set; }
-    public Guid QuestionId { get; set; }
+    public string TestId { get; set; } = string.Empty;
+    public string QuestionId { get; set; } = string.Empty;
     public int QuestionOrder { get; set; }
+    public string? SourceBlueprintDetailId { get; set; }
+    public string SelectionReason { get; set; } = "BlueprintNormal";
+    public bool IsAdaptiveSelected { get; set; }
+    public string? RecommendedForTagId { get; set; }
+    public string? RecommendedDifficultyId { get; set; }
+    public decimal? PtagAtSelection { get; set; }
+    public string? RuleVersion { get; set; }
+
+    public Test? Test { get; set; }
+    public BlueprintDetail? SourceBlueprintDetail { get; set; }
+    public QuestionReadModel? Question { get; set; }
 }

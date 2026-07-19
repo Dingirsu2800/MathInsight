@@ -48,18 +48,21 @@ public class GradingEngine : IGradingEngine
                 continue;
             }
 
-            switch (question.QuestionType)
+            var typeNormalized = question.QuestionType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+
+            switch (typeNormalized)
             {
-                case "SINGLE_CHOICE":
-                case "TRUE_FALSE":
+                case "SINGLECHOICE":
+                case "TRUEFALSE":
                     GradeSingleChoice(answer, question);
                     break;
 
-                case "MULTIPLE_SELECT":
+                case "MULTIPLESELECT":
+                case "MULTIPLECHOICE":
                     GradeMultipleSelect(answer, question);
                     break;
 
-                case "SHORT_ANSWER":
+                case "SHORTANSWER":
                     GradeShortAnswer(answer, question);
                     break;
 
@@ -105,14 +108,18 @@ public class GradingEngine : IGradingEngine
     /// </summary>
     private static bool IsAbandoned(TestAnswer answer, string questionType)
     {
-        return questionType switch
+        var typeNormalized = questionType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+        return typeNormalized switch
         {
-            "SINGLE_CHOICE" => answer.AnswerId is null,
-            "TRUE_FALSE" => answer.AnswerId is null,
-            "MULTIPLE_SELECT" => answer.SelectedOptions.Count == 0,
-            "SHORT_ANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
-            "COMPOSITE" => answer.AnswerParts.All(p =>
-                string.IsNullOrWhiteSpace(p.StudentAnswer)),
+            "SINGLECHOICE" => answer.AnswerId is null,
+            "TRUEFALSE" => answer.AnswerId is null,
+            "MULTIPLESELECT" => answer.SelectedOptions.Count == 0,
+            "MULTIPLECHOICE" => answer.SelectedOptions.Count == 0,
+            "SHORTANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
+            "COMPOSITE" => answer.AnswerParts.Count == 0 || answer.AnswerParts.All(p =>
+                p.BooleanAnswer == null && 
+                string.IsNullOrWhiteSpace(p.TextAnswer) && 
+                p.NumericAnswer == null),
             _ => true
         };
     }
@@ -182,7 +189,7 @@ public class GradingEngine : IGradingEngine
     {
         var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
         bool allTrueFalse = parts.Count > 0 &&
-            parts.All(p => string.Equals(p.PartType, "TRUE_FALSE", StringComparison.OrdinalIgnoreCase));
+            parts.All(p => string.Equals(p.PartType.Replace("_", ""), "TrueFalse", StringComparison.OrdinalIgnoreCase));
 
         if (allTrueFalse)
         {
@@ -209,15 +216,12 @@ public class GradingEngine : IGradingEngine
         foreach (var part in parts)
         {
             var answerPart = answer.AnswerParts
-                .FirstOrDefault(ap => ap.QuestionPartId == part.QuestionPartId);
+                .FirstOrDefault(ap => ap.PartId == part.QuestionPartId);
 
             if (answerPart is null) continue;
 
-            // TRUE_FALSE: compare student answer to answer key (case-insensitive)
-            bool partCorrect = string.Equals(
-                answerPart.StudentAnswer?.Trim(),
-                part.AnswerKey.Trim(),
-                StringComparison.OrdinalIgnoreCase);
+            // TrueFalse: compare BooleanAnswer with CorrectBoolean
+            bool partCorrect = answerPart.BooleanAnswer != null && answerPart.BooleanAnswer == part.CorrectBoolean;
 
             answerPart.IsCorrect = partCorrect;
             // Child part points_earned = 0 for all-TRUE_FALSE mode (spec rule)
@@ -245,10 +249,6 @@ public class GradingEngine : IGradingEngine
         }
         else
         {
-            // For > 3 correct but not all: interpolate linearly between 0.50 and 1.00
-            // This handles cases with more than 4 parts where BR-23 table only defines up to 3.
-            // Spec says 0→0, 1→0.10, 2→0.25, 3→0.50, N(all)→1.00.
-            // For 4..N-1 correct parts, use 0.50 (same as 3 correct — conservative approach).
             fraction = 0.50m;
         }
 
@@ -268,28 +268,40 @@ public class GradingEngine : IGradingEngine
         foreach (var part in parts)
         {
             var answerPart = answer.AnswerParts
-                .FirstOrDefault(ap => ap.QuestionPartId == part.QuestionPartId);
+                .FirstOrDefault(ap => ap.PartId == part.QuestionPartId);
 
             if (answerPart is null) continue;
 
-            bool partCorrect;
+            bool partCorrect = false;
 
-            if (string.IsNullOrWhiteSpace(answerPart.StudentAnswer))
+            var partTypeNormalized = part.PartType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+
+            if (partTypeNormalized == "TRUEFALSE")
             {
-                // No answer for this part — incorrect
-                partCorrect = false;
+                partCorrect = answerPart.BooleanAnswer != null && answerPart.BooleanAnswer == part.CorrectBoolean;
             }
-            else
+            else if (partTypeNormalized == "SHORTANSWER")
             {
-                // Case-insensitive string match for all part types
-                partCorrect = string.Equals(
-                    answerPart.StudentAnswer.Trim(),
-                    part.AnswerKey.Trim(),
-                    StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
+                {
+                    partCorrect = string.Equals(
+                        answerPart.TextAnswer.Trim(),
+                        part.CorrectText.Trim(),
+                        StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            else if (partTypeNormalized == "NUMERICANSWER")
+            {
+                if (answerPart.NumericAnswer != null && part.CorrectNumeric != null)
+                {
+                    decimal diff = Math.Abs(answerPart.NumericAnswer.Value - part.CorrectNumeric.Value);
+                    decimal tolerance = part.NumericTolerance ?? 0m;
+                    partCorrect = diff <= tolerance;
+                }
             }
 
             answerPart.IsCorrect = partCorrect;
-            answerPart.PointsEarned = partCorrect ? part.PointValue : 0m;
+            answerPart.PointsEarned = partCorrect ? part.DefaultPoint : 0m;
 
             totalPartPoints += answerPart.PointsEarned;
             if (partCorrect) correctPartCount++;

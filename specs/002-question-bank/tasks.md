@@ -53,11 +53,12 @@
   - [ ] For `Composite` questions, provide `QuestionPart` rows to Testing/Grading, but hide `correct_*` answer-key fields from student-facing test payloads before grading.
   - [ ] Ensure `TagDifficulty.LevelValue` can resolve Recommender v2 `RecommendedDifficultyLevel` to a concrete `DifficultyID`.
   - [ ] Do not couple QuestionBank to `TagsMastery`; QuestionBank only exposes question/topic/difficulty data.
-- [ ] **File Parsers**:
-  - [ ] `ExcelQuestionParser` — parse .xlsx using EPPlus; return list of `QuestionCreationDTO`
-  - [ ] `WordQuestionParser` — parse .docx using OpenXml SDK; return list of `QuestionCreationDTO`
-  - [ ] Validate each parsed question against BR-05, BR-50, BR-61, BR-62, BR-64
-- [ ] **MassTransit Consumer**: `BulkImportConsumer` — reads from `excel_import_queue`, calls `CreateQuestionCommand` per item, publishes `BulkImportCompletedEvent`
+- [x] **Excel Import MVP (UC-23)**:
+  - [x] ClosedXML template download, `.xlsx` parser, file/type/size/version/formula validation
+  - [x] Expert-only Preview -> Confirm API; Preview has no database write and Confirm revalidates then saves atomically
+  - [x] Resolve active topic/difficulty taxonomy and validate BR-05, BR-50, BR-61, BR-62, BR-64
+  - [x] Frontend API handoff document with stable errors and JSON contract
+- [ ] **Post-MVP import backlog**: Word/OpenXml parser, persistent import batches, queue/notification events, idempotency across process restarts
 - [ ] **Domain Events**: `QuestionReportedEvent`, `QuestionApprovedEvent`
 
 ---
@@ -73,8 +74,8 @@
 - [ ] Admin frontend report dashboard and approve/reject UI
 - [x] Image upload helper endpoint -> authenticated Cloudinary REST client using server-side HTTP Basic authentication, return `picture_url`; validate JPEG/PNG/WebP magic bytes and 5 MB limit; OCR/Pix2Text remains a separate backlog checkpoint
 - [x] OCR draft endpoint -> Expert-only Mistral OCR client, one JPEG/PNG/WebP question image, 5 MB magic-byte validation, 10 requests/minute per Expert, no database write or automatic answer confirmation (BR-72)
-- [ ] Register all inside `QuestionBankModuleExtensions.cs`:
-  - DbContext, MediatR handlers, Parsers, MassTransit consumer
+- [x] Register QuestionBank import services inside `QuestionBankModuleExtensions.cs`:
+  - ClosedXML parser, template service, validation service, MediatR handlers
 
 ---
 
@@ -96,7 +97,9 @@
   - [x] UC-29/30/33: Expert/Admin report, owner-only report queries, resolve/dismiss state transitions, and HTTP error mapping
   - [ ] Manual SQL Server smoke: verify `QuestionReportSqlServerLock` serializes report mutations for the same QuestionID in a disposable test database
   - [x] UC-31/32: Admin workflow submit, approve/reject, ownership, active-workflow and question-status transitions correct
-  - [ ] UC-23: Import 10 questions from Excel -> all created, invalid rows rejected
+  - [x] UC-23: Excel template, preview without writes, invalid formula/template/taxonomy rejection, supported question types, and confirm draft revalidation are covered by automated tests
+  - [x] UC-23: Abnormal import hardening covers malformed/empty workbooks, locale-safe decimals, grade-scoped topic resolution, duplicate/oversized part labels, and database precision boundaries
+  - [ ] UC-23: SQL Server relational transaction rollback smoke test for confirm import in a disposable database
   - [ ] UC-38: Delete tag with linked questions -> soft-delete (`is_active = false`) (DC-02)
   - [x] UC-38: Disable/delete topic with active descendant -> `TAG_TOPIC_HAS_ACTIVE_DESCENDANTS` / 409 with no data mutation (BR-66)
   - [x] UC-34: Tag queries exclude inactive records by default and return them with `includeInactive=true` (BR-65)

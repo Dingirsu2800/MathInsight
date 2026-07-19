@@ -7,9 +7,9 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class TagsMastery
 {
-    public Guid TagsMasteryId { get; set; }
-    public Guid StudentId { get; set; }
-    public Guid TagId { get; set; }
+    public string TagsMasteryId { get; set; } = string.Empty;
+    public string StudentId { get; set; } = string.Empty;
+    public string TagId { get; set; } = string.Empty;
 
     /// <summary>NotLearned | Learning | Mastered</summary>
     public string MasteryStatus { get; set; } = "NotLearned";

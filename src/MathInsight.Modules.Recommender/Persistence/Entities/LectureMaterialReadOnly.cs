@@ -8,7 +8,6 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class LectureMaterialReadOnly
 {
-    public Guid LectureMaterialId { get; set; }
-    public Guid LectureId { get; set; }
-    public Guid MaterialId { get; set; }
+    public string LectureId { get; set; } = string.Empty;
+    public string MaterialId { get; set; } = string.Empty;
 }

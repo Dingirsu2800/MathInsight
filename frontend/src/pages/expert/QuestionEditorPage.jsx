@@ -9,6 +9,7 @@ import { questionBankApi } from "../../services/questionBankApi";
 import { mapQuestionDetailToEditorState, mapEditorStateToCreateUpdateRequest, flattenTopicTree, normalizeTrueFalseOptions, mapOcrDraftToEditorStatePatch } from "./questionMappers";
 import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/questionLabels";
 import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
+import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 function getRoleLabel(role) {
@@ -197,7 +198,6 @@ export default function QuestionEditorPage() {
 
   // Cloudinary Upload States and Handler
   const fileInputRef = React.useRef(null);
-  const ocrFileInputRef = React.useRef(null);
   const questionTextareaRef = React.useRef(null);
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState(null);
@@ -205,18 +205,18 @@ export default function QuestionEditorPage() {
   // Local UI states for helper panels
   const [isMathHelperOpen, setIsMathHelperOpen] = React.useState(false);
   const [isOcrPanelOpen, setIsOcrPanelOpen] = React.useState(false);
+  const [isImageUploadExpanded, setIsImageUploadExpanded] = React.useState(false);
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
+  const [isIllustrationDragging, setIsIllustrationDragging] = React.useState(false);
+
+  const uploadIllustrationFile = async (file) => {
     if (!file) return;
-
     setUploadError(null);
 
     // Validate size (max 5MB)
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       setUploadError("Kích thước ảnh vượt quá giới hạn 5MB.");
-      if (e.target) e.target.value = "";
       return;
     }
 
@@ -224,7 +224,6 @@ export default function QuestionEditorPage() {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       setUploadError("Định dạng tệp không được hỗ trợ. Vui lòng tải ảnh dạng JPEG, PNG hoặc WEBP.");
-      if (e.target) e.target.value = "";
       return;
     }
 
@@ -234,6 +233,7 @@ export default function QuestionEditorPage() {
       const pictureUrl = res.data?.pictureUrl;
       if (pictureUrl) {
         handleFieldChange("pictureUrl", pictureUrl);
+        setIsImageUploadExpanded(true);
       } else {
         throw new Error("Không lấy được đường dẫn ảnh trả về từ máy chủ.");
       }
@@ -258,7 +258,35 @@ export default function QuestionEditorPage() {
       setUploadError(message);
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadIllustrationFile(file);
+    if (e.target) e.target.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleIllustrationDragOver = (e) => {
+    e.preventDefault();
+    if (!uploading) {
+      setIsIllustrationDragging(true);
+    }
+  };
+
+  const handleIllustrationDragLeave = () => {
+    setIsIllustrationDragging(false);
+  };
+
+  const handleIllustrationDrop = async (e) => {
+    e.preventDefault();
+    setIsIllustrationDragging(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await uploadIllustrationFile(file);
     }
   };
 
@@ -597,39 +625,31 @@ export default function QuestionEditorPage() {
   };
 
 
-  // OCR file handler
-  const handleOcrImageUpload = (e) => {
-    const file = e.target.files?.[0];
+  // OCR file handlers
+  const handleOcrFileSelect = (file) => {
     if (!file) return;
 
-    // Reset error state
     setOcrScanError("");
 
     // Validate type: JPEG, PNG, WebP only
     const validTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!validTypes.includes(file.type)) {
-        setOcrScanError("Định dạng ảnh không được hỗ trợ. Vui lòng chọn ảnh JPEG, PNG, hoặc WebP.");
-        // Clear file inputs and preview state
-        setOcrFile(null);
-        setManualCropSelection(null);
+      setOcrScanError("Định dạng ảnh không được hỗ trợ. Vui lòng chọn ảnh JPEG, PNG, hoặc WebP.");
+      setOcrFile(null);
+      setManualCropSelection(null);
       if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
       setOcrPreviewUrl("");
-      if (e.target) e.target.value = "";
-      if (ocrFileInputRef.current) ocrFileInputRef.current.value = "";
       return;
     }
 
     // Validate size: 5 MB limit
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
-        setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
-        // Clear file inputs and preview state
-        setOcrFile(null);
-        setManualCropSelection(null);
+      setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
+      setOcrFile(null);
+      setManualCropSelection(null);
       if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
       setOcrPreviewUrl("");
-      if (e.target) e.target.value = "";
-      if (ocrFileInputRef.current) ocrFileInputRef.current.value = "";
       return;
     }
 
@@ -637,6 +657,14 @@ export default function QuestionEditorPage() {
     setManualCropSelection(null);
     if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
     setOcrPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleOcrFileClear = () => {
+    setOcrFile(null);
+    setManualCropSelection(null);
+    if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+    setOcrPreviewUrl("");
+    setOcrScanError("");
   };
 
   const handleOcrScan = async () => {
@@ -662,6 +690,7 @@ export default function QuestionEditorPage() {
       setSelectedExtractedImageId(null);
       setManualCropSelection(null);
       setOcrImageUploadError("");
+      setIsOcrPanelOpen(false);
       setIsOcrReviewOpen(true);
     } catch (err) {
       console.error("OCR Scan error:", err);
@@ -780,9 +809,6 @@ export default function QuestionEditorPage() {
     setOcrFile(null);
     setSelectedExtractedImageId(null);
     setManualCropSelection(null);
-    if (ocrFileInputRef.current) {
-      ocrFileInputRef.current.value = "";
-    }
     if (ocrPreviewUrl) {
       URL.revokeObjectURL(ocrPreviewUrl);
       setOcrPreviewUrl("");
@@ -1168,12 +1194,8 @@ export default function QuestionEditorPage() {
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">NỘI DUNG CÂU HỎI (Hỗ trợ LaTeX)</label>
                 <div className="border border-outline-variant rounded-xl overflow-hidden focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                   <div className="bg-surface-container-low border-b border-outline-variant p-2 flex gap-1.5 flex-wrap items-center">
-                    <button type="button" onClick={() => handleInsertLatex("**đậm**")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Bold"><span className="material-symbols-outlined text-[18px]">format_bold</span></button>
-                    <button type="button" onClick={() => handleInsertLatex("*nghiêng*")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Italic"><span className="material-symbols-outlined text-[18px]">format_italic</span></button>
-                    <button type="button" onClick={() => handleInsertLatex("$\\int_{a}^{b} f(x) dx$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Tích phân"><span className="material-symbols-outlined text-[18px]">functions</span></button>
-                    <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
-                    <button type="button" onClick={() => handleInsertLatex("$\\sqrt{x^2 + y^2}$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Căn thức"><span className="material-symbols-outlined text-[18px]">image</span></button>
-                    <button type="button" onClick={() => handleInsertLatex("$\\frac{a}{b}$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Phân số"><span className="material-symbols-outlined text-[18px]">table_chart</span></button>
+                    <button type="button" onClick={() => handleInsertLatex("**đậm**")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Chữ đậm" aria-label="Chữ đậm"><span className="material-symbols-outlined text-[18px]">format_bold</span></button>
+                    <button type="button" onClick={() => handleInsertLatex("*nghiêng*")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Chữ nghiêng" aria-label="Chữ nghiêng"><span className="material-symbols-outlined text-[18px]">format_italic</span></button>
 
                     <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
 
@@ -1188,6 +1210,8 @@ export default function QuestionEditorPage() {
                           ? "bg-primary text-white shadow-sm scale-[1.01]"
                           : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
                       }`}
+                      title="Mở công cụ chèn công thức LaTeX"
+                      aria-label="Mở công cụ chèn công thức LaTeX"
                     >
                       <span className="material-symbols-outlined text-[16px]">calculate</span>
                       Mã toán
@@ -1204,8 +1228,10 @@ export default function QuestionEditorPage() {
                           ? "bg-primary text-white shadow-sm scale-[1.01]"
                           : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
                       }`}
+                      title="Quét ảnh đề bằng OCR để tạo bản nháp"
+                      aria-label="Quét ảnh đề bằng OCR để tạo bản nháp"
                     >
-                      <span className="material-symbols-outlined text-[16px]">photo_camera</span>
+                      <span className="material-symbols-outlined text-[16px]">document_scanner</span>
                       Tạo bản nháp từ ảnh đề
                     </button>
                   </div>
@@ -1264,114 +1290,6 @@ export default function QuestionEditorPage() {
                     </div>
                   )}
 
-                  {/* OCR Scanner Panel */}
-                  {isOcrPanelOpen && (
-                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 mi-panel-down">
-                      <div className="p-3.5 bg-primary/5 border border-primary/10 rounded-lg space-y-1.5">
-                        <h4 className="text-[11px] font-bold text-primary flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[16px]">photo_camera</span>
-                          Tạo bản nháp từ ảnh đề
-                        </h4>
-                        <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                          Tải lên hình ảnh chứa <strong>một câu hỏi hoàn chỉnh</strong> (bao gồm đề bài, các phương án lựa chọn hoặc các mệnh đề nếu có) để quét và tạo bản nháp câu hỏi tự động. Không tải ảnh chứa công thức toán riêng lẻ hoặc toàn bộ trang đề thi.
-                        </p>
-                      </div>
-
-                      {/* Before request checklist */}
-                      <div className="p-3 bg-surface-container rounded-lg text-[10px] text-on-surface-variant space-y-1 border border-whisper-border">
-                        <span className="font-bold text-on-surface">Lưu ý trước khi quét:</span>
-                        <ul className="list-disc pl-4 space-y-0.5">
-                          <li>Chỉ chứa duy nhất một câu hỏi hoàn chỉnh.</li>
-                          <li>Cắt bỏ các câu hỏi, ghi chú hoặc nội dung không liên quan xung quanh.</li>
-                          <li>Vui lòng kiểm tra và sửa lại tất cả kết quả nhận diện trước khi lưu câu hỏi.</li>
-                        </ul>
-                      </div>
-
-                      <div className="flex flex-col gap-3">
-                        <label className="border border-dashed border-outline-variant rounded-xl p-4 text-center hover:border-primary transition-colors flex flex-col items-center gap-1 cursor-pointer bg-pure-surface">
-                          <span className="material-symbols-outlined text-[24px] text-on-surface-variant">photo_camera</span>
-                          <span className="text-[11px] font-bold text-on-surface">
-                            {ocrFile ? "Chọn ảnh khác" : "Chọn ảnh câu hỏi (JPEG, PNG, WebP)"}
-                          </span>
-                          <span className="text-[9px] text-on-surface-variant">Tối đa 5MB</span>
-                          <input
-                            ref={ocrFileInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            onChange={handleOcrImageUpload}
-                            className="hidden"
-                            disabled={isOcrBusy}
-                          />
-                        </label>
-
-                        {/* Error Alert */}
-                        {ocrScanError && (
-                          <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg flex items-start gap-1.5" role="alert">
-                            <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
-                            <span>{ocrScanError}</span>
-                          </div>
-                        )}
-
-                        {/* Preview and Scan button */}
-                        {ocrPreviewUrl && (
-                          <div className="border border-whisper-border rounded-xl p-3 bg-pure-surface space-y-3 max-w-md">
-                            <div className="space-y-1">
-                              <p className="text-[10px] font-bold text-on-surface-variant">Ảnh đã chọn:</p>
-                              {ocrFile && (
-                                <p className="text-[9px] text-on-surface-variant">
-                                  {ocrFile.name} ({(ocrFile.size / 1024 / 1024).toFixed(2)} MB)
-                                </p>
-                              )}
-                            </div>
-                            <img src={ocrPreviewUrl} alt="OCR Preview" className="max-h-32 mx-auto object-contain rounded border border-whisper-border" />
-
-                            <div className="flex gap-2 justify-end pt-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setOcrFile(null);
-                                  setManualCropSelection(null);
-                                  if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
-                                  setOcrPreviewUrl("");
-                                  setOcrScanError("");
-                                  if (ocrFileInputRef.current) {
-                                    ocrFileInputRef.current.value = "";
-                                  }
-                                }}
-                                disabled={isOcrBusy}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer"
-                              >
-                                Xóa ảnh
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="primary"
-                                size="sm"
-                                onClick={handleOcrScan}
-                                disabled={isOcrBusy || !ocrFile}
-                                className="normal-case h-7 text-[10px] px-3 font-bold cursor-pointer flex items-center gap-1"
-                              >
-                                {ocrScanning ? (
-                                  <>
-                                    <span className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full mr-1"></span>
-                                    Đang đọc ảnh đề…
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="material-symbols-outlined text-[14px]">scanner</span>
-                                    Quét tạo bản nháp
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   <textarea
                     ref={questionTextareaRef}
                     value={form.questionContent}
@@ -1380,6 +1298,180 @@ export default function QuestionEditorPage() {
                     placeholder="Nhập nội dung câu hỏi hoặc mã LaTeX... Ví dụ: \\int_{0}^{1} x^2 dx"
                   />
                 </div>
+              </div>
+
+              {/* 3. Hình ảnh minh họa */}
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Hình ảnh minh họa</label>
+
+                {!form.pictureUrl && !isImageUploadExpanded ? (
+                  /* Compact State */
+                  <div className="flex items-center justify-between p-3.5 border border-outline-variant bg-surface-container-lowest rounded-xl shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[24px] text-on-surface-variant">image</span>
+                      <div className="text-left">
+                        <p className="text-xs font-bold text-on-surface">Đính kèm hình ảnh minh họa cho câu hỏi</p>
+                        <p className="text-[10px] text-on-surface-variant font-medium">JPEG, PNG, WebP (Tối đa 5MB) • Ảnh sẽ hiển thị cùng đề bài.</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsImageUploadExpanded(true)}
+                      className="normal-case h-8 text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">add</span>
+                      Thêm ảnh
+                    </Button>
+                  </div>
+                ) : (
+                  /* Expanded/Active State */
+                  <div className="space-y-3 p-4 border border-outline-variant bg-surface-container-lowest rounded-xl shadow-sm animate-fade-in">
+                    <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-on-surface">Hình ảnh minh họa câu hỏi</h4>
+                        <p className="text-[10px] text-on-surface-variant font-medium mt-0.5">Ảnh sẽ hiển thị kèm theo đề bài.</p>
+                      </div>
+                      {!form.pictureUrl && !uploading && (
+                        <button
+                          type="button"
+                          onClick={() => setIsImageUploadExpanded(false)}
+                          className="text-[10px] font-bold text-on-surface-variant hover:text-on-surface hover:underline cursor-pointer"
+                        >
+                          Thu gọn
+                        </button>
+                      )}
+                    </div>
+
+                    {form.pictureUrl ? (
+                      <div className="relative group max-w-xs border border-whisper-border rounded-lg overflow-hidden bg-surface-container-low">
+                        <img
+                          src={form.pictureUrl}
+                          alt="Ảnh minh họa"
+                          className="max-h-40 w-full object-contain mx-auto"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleFieldChange("pictureUrl", "");
+                              setIsImageUploadExpanded(false);
+                            }}
+                            className="bg-deep-rose text-white p-1.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                            title="Xóa ảnh"
+                            aria-label="Xóa ảnh minh họa"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onDragOver={handleIllustrationDragOver}
+                        onDragLeave={handleIllustrationDragLeave}
+                        onDrop={handleIllustrationDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            fileInputRef.current?.click();
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label="Kéo thả ảnh minh họa câu hỏi tại đây hoặc nhấp chuột để tải lên"
+                        className={cn(
+                          "border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          isIllustrationDragging
+                            ? "border-primary bg-primary/5 scale-[1.01]"
+                            : "border-outline-variant hover:border-primary/50 bg-pure-surface"
+                        )}
+                      >
+                        <span className="material-symbols-outlined text-[28px] text-on-surface-variant mb-1">image</span>
+                        <p className="text-[11px] font-bold text-on-surface">Kéo thả ảnh minh họa vào đây</p>
+                        <p className="text-[9px] text-on-surface-variant mt-0.5">hoặc nhấp chuột để duyệt tìm tệp tin (JPEG, PNG, WebP tối đa 5MB)</p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="gap-1.5 cursor-pointer h-8 text-[11px] font-bold active:scale-[0.98] transition-all duration-150 flex items-center"
+                      >
+                        {uploading ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Đang tải lên...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[16px]">upload</span>
+                            {form.pictureUrl ? "Thay ảnh" : "Tải ảnh lên"}
+                          </>
+                        )}
+                      </Button>
+
+                      {form.pictureUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            handleFieldChange("pictureUrl", "");
+                            setIsImageUploadExpanded(false);
+                          }}
+                          className="text-deep-rose border-deep-rose hover:bg-deep-rose/5 h-8 text-[11px] font-bold cursor-pointer active:scale-[0.98] transition-all duration-150"
+                        >
+                          Xóa ảnh
+                        </Button>
+                      )}
+
+                      <span className="text-[10px] text-on-surface-variant font-medium">
+                        Hỗ trợ: JPEG, PNG, WEBP (Tối đa 5MB)
+                      </span>
+                    </div>
+
+                    {uploadError && (
+                      <p className="text-[11px] text-deep-rose font-semibold bg-deep-rose/5 p-2 rounded border border-deep-rose/15 leading-relaxed">
+                        {uploadError}
+                      </p>
+                    )}
+
+                    {/* Manual Entry */}
+                    <details className="mt-1">
+                      <summary className="text-[10px] text-on-surface-variant hover:text-primary cursor-pointer transition-colors select-none">
+                        Nhập URL ảnh thủ công
+                      </summary>
+                      <div className="mt-2">
+                        <input
+                          value={form.pictureUrl || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleFieldChange("pictureUrl", val);
+                            if (val) {
+                              setIsImageUploadExpanded(true);
+                            }
+                          }}
+                          className="w-full p-2.5 text-[12px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono outline-none"
+                          placeholder="https://example.com/image.png"
+                          type="url"
+                        />
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
 
               {/* 3. Cấu hình đáp án */}
@@ -1673,109 +1765,7 @@ export default function QuestionEditorPage() {
                 </div>
               </div>
 
-              {/* 5. Hình ảnh minh họa */}
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Hình ảnh minh họa</label>
-                <div className="flex flex-col gap-3 p-4 border border-outline-variant bg-surface-container-lowest rounded-xl">
 
-                  {/* Image Preview */}
-                  {form.pictureUrl ? (
-                    <div className="relative group max-w-xs border border-whisper-border rounded-lg overflow-hidden bg-surface-container-low">
-                      <img
-                        src={form.pictureUrl}
-                        alt="Ảnh minh họa"
-                        className="max-h-40 w-full object-contain mx-auto"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleFieldChange("pictureUrl", "")}
-                          className="bg-deep-rose text-white p-1.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                          title="Xóa ảnh"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border border-dashed border-outline-variant rounded-lg p-5 flex flex-col items-center justify-center bg-pure-surface text-center">
-                      <span className="material-symbols-outlined text-[28px] text-on-surface-variant mb-1">image</span>
-                      <p className="text-[11px] text-on-surface-variant">Chưa có ảnh minh họa câu hỏi</p>
-                    </div>
-                  )}
-
-                  {/* Controls */}
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      disabled={uploading}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="gap-1.5 cursor-pointer h-8 text-[11px] font-bold active:scale-[0.98] transition-all duration-150"
-                    >
-                      {uploading ? (
-                        <>
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Đang tải lên...
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[16px]">upload</span>
-                          Tải ảnh lên
-                        </>
-                      )}
-                    </Button>
-
-                    {form.pictureUrl && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleFieldChange("pictureUrl", "")}
-                        className="text-deep-rose border-deep-rose hover:bg-deep-rose/5 h-8 text-[11px] font-bold cursor-pointer active:scale-[0.98] transition-all duration-150"
-                      >
-                        Xóa ảnh
-                      </Button>
-                    )}
-
-                    <span className="text-[10px] text-on-surface-variant font-medium">
-                      Hỗ trợ: JPEG, PNG, WEBP (Tối đa 5MB)
-                    </span>
-                  </div>
-
-                  {/* Error Message */}
-                  {uploadError && (
-                    <p className="text-[11px] text-deep-rose font-semibold bg-deep-rose/5 p-2 rounded border border-deep-rose/15 leading-relaxed">
-                      {uploadError}
-                    </p>
-                  )}
-
-                  {/* Manual Entry */}
-                  <details className="mt-1">
-                    <summary className="text-[10px] text-on-surface-variant hover:text-primary cursor-pointer transition-colors select-none">
-                      Nhập URL ảnh thủ công
-                    </summary>
-                    <div className="mt-2">
-                      <input
-                        value={form.pictureUrl}
-                        onChange={(e) => handleFieldChange("pictureUrl", e.target.value)}
-                        className="w-full p-2.5 text-[12px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono outline-none"
-                        placeholder="https://example.com/image.png"
-                        type="url"
-                      />
-                    </div>
-                  </details>
-
-                </div>
-              </div>
             </div>
           </div>
 
@@ -2118,6 +2108,20 @@ export default function QuestionEditorPage() {
         </div>
 
       </div>
+
+      {/* OCR Upload Drawer */}
+      <QuestionOcrUploadDrawer
+        isOpen={isOcrPanelOpen}
+        onClose={() => setIsOcrPanelOpen(false)}
+        ocrFile={ocrFile}
+        ocrPreviewUrl={ocrPreviewUrl}
+        ocrScanning={ocrScanning}
+        ocrScanError={ocrScanError}
+        onFileSelect={handleOcrFileSelect}
+        onFileClear={handleOcrFileClear}
+        onScan={handleOcrScan}
+        isOcrBusy={isOcrBusy}
+      />
 
       {/* OCR Draft Review Dialog */}
       <QuestionOcrDraftReviewDialog

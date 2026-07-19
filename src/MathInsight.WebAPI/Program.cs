@@ -20,6 +20,7 @@ using MathInsight.Modules.Notification_Report;
 // using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
 using System.IdentityModel.Tokens.Jwt;
+using MathInsight.Modules.Identity_Access.Persistence;
 using MathInsight.Modules.Identity_Access.Services.Auth;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Ocr;
@@ -27,8 +28,15 @@ using MathInsight.Shared.Results;
 using MathInsight.Shared.Storage;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 524_288_000; // 500 MB
+});
+
 const string CorsPolicyName = "MathInsightCors";
 
 // 1. Add MediatR (In-process Event Bus)
@@ -88,7 +96,6 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
-
 // 4. Register Domain Modules (Composition Root)
 var cloudinaryOptions = new CloudinaryOptions
 {
@@ -99,7 +106,7 @@ var cloudinaryOptions = new CloudinaryOptions
 builder.Services.AddSingleton(cloudinaryOptions);
 builder.Services.AddHttpClient<IImageStorage, CloudinaryImageStorage>(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromMinutes(30);
 });
 
 builder.Services.AddIdentityModule(builder.Configuration);
@@ -112,7 +119,19 @@ builder.Services.AddLearningModule(builder.Configuration);
 builder.Services.AddGamificationModule(builder.Configuration);
 builder.Services.AddNotificationModule(builder.Configuration);
 
-builder.Services.AddControllers();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 524_288_000; // 500 MB
+});
+
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = _ =>
+            new BadRequestObjectResult(
+                new ApiErrorResponse(ApplicationErrors.RequestInvalid));
+    });
 builder.Services.AddEndpointsApiExplorer();
 // Swashbuckle renders [FromForm] IFormFile parameters (e.g. teacher registration) as a
 // multipart/form-data file upload automatically.
@@ -316,9 +335,19 @@ builder.Services
                 {
                     context.Fail("Token has been revoked.");
                 }
+
+                // BR-02 (Student single session) is enforced at login time: LoginCommandHandler
+                // calls RevokeAllSessionsAsync, which deletes the previous refresh token and
+                // blacklists its access-token jti — already checked above. There is no separate
+                // per-request "active session" marker to re-verify here.
             }
         };
     });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+});
 
 var app = builder.Build();
 

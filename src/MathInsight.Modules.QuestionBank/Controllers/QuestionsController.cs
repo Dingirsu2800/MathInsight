@@ -3,11 +3,15 @@ using MathInsight.Modules.QuestionBank.Commands.CreateQuestion;
 using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 using MathInsight.Modules.QuestionBank.Commands.UploadQuestionImage;
 using MathInsight.Modules.QuestionBank.Commands.ExtractQuestionOcrDraft;
+using MathInsight.Modules.QuestionBank.Commands.PreviewQuestionImport;
+using MathInsight.Modules.QuestionBank.Commands.ConfirmQuestionImport;
+using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionList;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionVersions;
+using MathInsight.Modules.QuestionBank.Queries.DownloadQuestionImportTemplate;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -60,6 +64,54 @@ public class QuestionsController : ControllerBase
             return BadRequest(new ApiErrorResponse(result.Error!));
 
         return Ok(result.Value);
+    }
+
+    [HttpGet("import-template")]
+    public async Task<IActionResult> DownloadQuestionImportTemplate(CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new DownloadQuestionImportTemplateQuery(), cancellationToken);
+        if (result.IsFailure)
+            return BadRequest(new ApiErrorResponse(result.Error!));
+
+        return File(result.Value!.Content, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [HttpPost("import-preview")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(21 * 1024 * 1024)]
+    public async Task<IActionResult> PreviewQuestionImport(
+        [FromForm] IFormFile? file,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new PreviewQuestionImportCommand(file), cancellationToken);
+        if (result.IsFailure)
+            return ToQuestionImportErrorResult(result.Error!);
+
+        return Ok(result.Value);
+    }
+
+    [HttpPost("import-confirm")]
+    public async Task<IActionResult> ConfirmQuestionImport(
+        [FromBody] ConfirmQuestionImportRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(QuestionBankErrors.QuestionRequestInvalid));
+
+        var expertId = User.FindFirst("account_id")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(new ConfirmQuestionImportCommand(request, expertId), cancellationToken);
+        if (result.IsFailure)
+            return ToQuestionImportErrorResult(result.Error!);
+
+        if (!result.Value!.IsValid)
+            return BadRequest(result.Value);
+
+        return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
     [HttpGet("{questionId}")]
@@ -283,6 +335,17 @@ public class QuestionsController : ControllerBase
 
         if (error == QuestionBankErrors.OcrDraftUnavailable)
             return UnprocessableEntity(new ApiErrorResponse(error));
+
+        return BadRequest(new ApiErrorResponse(error));
+    }
+
+    private IActionResult ToQuestionImportErrorResult(Error error)
+    {
+        if (error == QuestionBankErrors.QuestionImportFileTooLarge)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new ApiErrorResponse(error));
+
+        if (error == QuestionBankErrors.QuestionImportFileTypeNotSupported)
+            return StatusCode(StatusCodes.Status415UnsupportedMediaType, new ApiErrorResponse(error));
 
         return BadRequest(new ApiErrorResponse(error));
     }

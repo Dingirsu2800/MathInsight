@@ -36,11 +36,11 @@ public class RecommenderController : ControllerBase
     public async Task<IActionResult> GetWeakTags(CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
-        if (studentId is null)
+        if (string.IsNullOrWhiteSpace(studentId))
             return Unauthorized(new { error = "Invalid or missing student identity." });
 
         var result = await _mediator.Send(
-            new GetWeakTagsQuery(studentId.Value), cancellationToken);
+            new GetWeakTagsQuery(studentId), cancellationToken);
 
         return Ok(result);
     }
@@ -55,11 +55,11 @@ public class RecommenderController : ControllerBase
     public async Task<IActionResult> GetRecommendedLectures(CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
-        if (studentId is null)
+        if (string.IsNullOrWhiteSpace(studentId))
             return Unauthorized(new { error = "Invalid or missing student identity." });
 
         var result = await _mediator.Send(
-            new GetRecommendedLecturesQuery(studentId.Value), cancellationToken);
+            new GetRecommendedLecturesQuery(studentId), cancellationToken);
 
         return Ok(result);
     }
@@ -74,25 +74,21 @@ public class RecommenderController : ControllerBase
     public async Task<IActionResult> GetRecommendedMaterials(CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
-        if (studentId is null)
+        if (string.IsNullOrWhiteSpace(studentId))
             return Unauthorized(new { error = "Invalid or missing student identity." });
 
         var result = await _mediator.Send(
-            new GetRecommendedMaterialsQuery(studentId.Value), cancellationToken);
+            new GetRecommendedMaterialsQuery(studentId), cancellationToken);
 
         return Ok(result);
     }
 
     /// <summary>
     /// Extracts the authenticated student's ID from JWT claims.
-    /// Returns null if the claim is missing or not a valid GUID.
+    /// Returns null if the claim is missing.
     /// </summary>
-    private Guid? GetAuthenticatedStudentId()
+    private string? GetAuthenticatedStudentId()
     {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrWhiteSpace(claim) || !Guid.TryParse(claim, out var studentId))
-            return null;
-
-        return studentId;
+        return User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     }
 }

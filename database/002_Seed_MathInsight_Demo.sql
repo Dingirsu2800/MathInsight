@@ -6,6 +6,9 @@ Run after: 001_Create_MathInsight_Azure.sql
 WARNING: Creates predictable development accounts whose password is "password".
 Do not run this file against a production database.
 The script is idempotent and may be run again on the same development database.
+
+When using sqlcmd, disable variable substitution and force UTF-8 input:
+    sqlcmd ... -x -f 65001 -i database/002_Seed_MathInsight_Demo.sql
 ==========================================================
 */
 
@@ -64,6 +67,7 @@ MERGE [Account] AS target
 USING (VALUES
     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', N'admin',      @PasswordHash, 'admin@mathinsight.local',      N'Admin',   N'User',    @AdminRoleId,   CAST(1 AS BIT)),
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', N'expert_01',  @PasswordHash, 'expert01@mathinsight.local',   N'Expert',  N'One',     @ExpertRoleId,  CAST(1 AS BIT)),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', N'expert_02',  @PasswordHash, 'expert02@mathinsight.local',   N'Expert',  N'Two',     @ExpertRoleId,  CAST(1 AS BIT)),
     ('cccccccc-cccc-cccc-cccc-cccccccccccc', N'teacher_01', @PasswordHash, 'teacher01@mathinsight.local',  N'Teacher', N'One',     @TeacherRoleId, CAST(1 AS BIT)),
     ('dddddddd-dddd-dddd-dddd-dddddddddddd', N'student_01', @PasswordHash, 'student01@mathinsight.local',  N'Student', N'One',     @StudentRoleId, CAST(1 AS BIT)),
     ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', N'student_02', @PasswordHash, 'student02@mathinsight.local',  N'Student', N'Two',     @StudentRoleId, CAST(1 AS BIT))
@@ -83,7 +87,8 @@ WHEN NOT MATCHED THEN
 
 MERGE [Expert] AS target
 USING (VALUES
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Mathematics')
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Mathematics'),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'Mathematics')
 ) AS source ([ExpertID], [Specialty])
 ON target.[ExpertID] = source.[ExpertID]
 WHEN MATCHED THEN
@@ -129,7 +134,7 @@ SELECT
     [isActive],
     [RoleID]
 FROM [Account]
-WHERE [Username] IN (N'admin', N'expert_01', N'teacher_01', N'student_01', N'student_02')
+WHERE [Username] IN (N'admin', N'expert_01', N'expert_02', N'teacher_01', N'student_01', N'student_02')
 ORDER BY [Username];
 
 GO
@@ -864,5 +869,34 @@ SELECT
 FROM dbo.QuestionPart AS part
 WHERE part.QuestionID = 'Q-SEED-005'
 ORDER BY part.PartOrder;
+GO
+
+/* ===== Lecture demo seed (teacher_01) =====
+   Runs after the TagTopic seed above, since Lecture.TagID is a FK into TagTopic.
+   Ties every row to teacher_01 (cccccccc-cccc-cccc-cccc-cccccccccccc) so the
+   Teacher and Student lecture screens have something to render out of the box.
+*/
+BEGIN TRANSACTION;
+
+MERGE [Lecture] AS target
+USING (VALUES
+    ('11111111-1111-1111-1111-111111111101', N'Mệnh đề và tập hợp', N'Bài giảng giới thiệu mệnh đề, tập hợp và các phép toán trên tập hợp.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G10-SET', N'Published'),
+    ('11111111-1111-1111-1111-111111111102', N'Dãy số và cấp số', N'Bài giảng về dãy số, cấp số cộng và cấp số nhân.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G11-SEQ', N'Published'),
+    ('11111111-1111-1111-1111-111111111103', N'Ứng dụng đạo hàm khảo sát hàm số', N'Bài giảng đang soạn về khảo sát hàm số bằng đạo hàm.', N'cccccccc-cccc-cccc-cccc-cccccccccccc', N'TOPIC-G12-DERIVAPP', N'Draft')
+) AS source ([LectureID], [Title], [Content], [TeacherID], [TagID], [Status])
+ON target.[LectureID] = source.[LectureID]
+WHEN MATCHED THEN
+    UPDATE SET
+        target.[Title] = source.[Title],
+        target.[Content] = source.[Content],
+        target.[TeacherID] = source.[TeacherID],
+        target.[TagID] = source.[TagID],
+        target.[Status] = source.[Status]
+WHEN NOT MATCHED THEN
+    INSERT ([LectureID], [Title], [Content], [TeacherID], [TagID], [Status])
+    VALUES (source.[LectureID], source.[Title], source.[Content], source.[TeacherID], source.[TagID], source.[Status]);
+
+COMMIT TRANSACTION;
+GO
 
 GO
