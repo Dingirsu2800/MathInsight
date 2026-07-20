@@ -5,7 +5,7 @@
 
 ## Summary
 
-Builds `MathInsight.Modules.Recommender` for Rule-Based/Ptag v2. The module tracks topic mastery at `(StudentID, TagID)`, diagnoses WeakTags from `OfficialPoint`, maps the recommended difficulty level, and exposes an in-process API for TestGen.
+Builds `MathInsight.Modules.Recommender` for Rule-Based/Ptag v4.1 (Unified Multi-Tag). The module tracks topic mastery at `(StudentID, TagID)`, supports multi-tag Elo delta distribution, diagnoses WeakTags and Bottleneck Weak Tags, maps the recommended difficulty level, and exposes an in-process API for TestGen.
 
 ## Technical Context
 
@@ -75,19 +75,28 @@ TestGen uses `WeakTagAdviceDto.RecommendedDifficultyLevel` to select questions. 
 > TestGen must resolve it via: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`
 > before filtering `Question.DifficultyID`. This is documented as a task for `DifficultyMappingService` (module 005).
 
-### Ptag Update Pipeline
+### Ptag Update Pipeline (Unified Multi-Tag v4.1)
 
 ```text
 TestSession becomes Graded
-  -> Grading emits GradeCalculatedEvent containing detailed answers list (F1 resolution)
-  -> Recommender upserts StudentTopicSessionResult
-  -> Recommender updates TagsMastery:
+  -> Grading emits GradeCalculatedEvent containing:
+       - Answers with TagWeights (all tags + weights per answer)
+       - PerTagResults with weighted TopicScore (Tầng 1-2)
+  -> Recommender upserts StudentTopicSessionResult per tag
+  -> Recommender updates TagsMastery for EACH tag:
        - If Exam format: update exam_anchor using Exponential Decay (RCM-05)
-       - If Practice format: update practice_point sequentially using Elo formula (RCM-06)
-  -> Recommender recalculates OfficialPoint
-  -> Recommender queries Student.current_grade (F5 resolution) and updates CompetencyPoint
-  -> Recommender maps RecommendedDifficultyLevel
-  -> TestGen reads WeakTag advice for future tests
+         with weighted T_j^{(i)} from TopicGradeResult
+       - If Practice format:
+         1. Compute Δ_total per answer (Bước 1, unchanged)
+         2. For EACH tag in answer.TagWeights:
+              ΔP_tag_i = Δ_total × w_i (Bước 2, multi-tag)
+              practice_point += ΔP_tag_i (clamped)
+              series_answer_count++ (per-tag independent)
+         3. If series_answer_count >= 10: blend + reset
+  -> Recommender recalculates OfficialPoint per tag
+  -> Recommender queries Student.current_grade and updates CompetencyPoint
+  -> Recommender maps RecommendedDifficultyLevel per tag
+  -> TestGen reads WeakTag advice (including BR-19 Bottleneck) for future tests
 ```
 
 ### Difficulty Mapping
@@ -99,10 +108,14 @@ if (officialPoint < 7.50m) return 3;
 return 4;
 ```
 
-WeakTag is:
+WeakTag classification:
 
 ```csharp
+// Standard WeakTag (RCM-03)
 officialPoint < 5.00m
+
+// Bottleneck WeakTag for sub-tags (BR-19, RCM-14)
+officialPoint < 4.00m
 ```
 
 ## Verification Plan
