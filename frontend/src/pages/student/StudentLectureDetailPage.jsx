@@ -47,8 +47,8 @@ export default function StudentLectureDetailPage() {
       const mappedDiscussions = (res.data || []).map(d => ({
         id: d.discussionQuestionId,
         authorId: d.studentId,
-        author: d.studentId || "Học sinh ẩn danh",
-        authorInitials: d.studentId ? d.studentId.substring(0, 2).toUpperCase() : "HS",
+        author: d.authorName || "Học sinh ẩn danh",
+        authorInitials: d.authorName ? d.authorName.substring(0, 2).toUpperCase() : "HS",
         timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
         title: d.title,
         content: d.content,
@@ -56,7 +56,7 @@ export default function StudentLectureDetailPage() {
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
           authorId: a.accountId,
-          author: a.accountId || "Giáo viên",
+          author: a.authorName || "Giáo viên",
           role: "Giáo viên",
           timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
           content: a.content,
@@ -311,8 +311,8 @@ export default function StudentLectureDetailPage() {
                         <p className="text-[12px] text-on-surface-variant uppercase tracking-wider">{mat.format || mat.fileType}</p>
                       </div>
                     </div>
-                    <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center shrink-0" title="Tải xuống">
-                      <span className="material-symbols-outlined text-[20px]">download</span> 
+                    <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors flex items-center justify-center shrink-0" title={fmt.includes("MP4") ? "Xem" : "Tải xuống"}>
+                      <span className="material-symbols-outlined text-[20px]">{fmt.includes("MP4") ? "visibility" : "download"}</span> 
                     </a>
                   </div>
                 );

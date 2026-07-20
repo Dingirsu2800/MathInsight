@@ -41,7 +41,7 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
         {
             throw;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
             throw new QuestionImportException(QuestionBankErrors.QuestionImportTemplateInvalid, ex);
         }
@@ -245,8 +245,8 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
                 continue;
 
             issues.Add(new QuestionImportIssueResponse(
-                QuestionBankErrors.QuestionImportTemplateInvalid.Code,
-                "Formula cells are not supported in import data.",
+                QuestionBankErrors.QuestionImportFormulaNotAllowed.Code,
+                QuestionBankErrors.QuestionImportFormulaNotAllowed.Message,
                 sheet,
                 row.RowNumber(),
                 header.Key,

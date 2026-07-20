@@ -22,7 +22,7 @@ internal static partial class QuestionRequestValidator
         if (request.Grade is not (10 or 11 or 12))
             return QuestionBankErrors.QuestionGradeInvalid;
 
-        if (request.DefaultPoint < 0m || request.DefaultPoint > 10m)
+        if (request.DefaultPoint < 0m || request.DefaultPoint > 10m || !HasScaleAtMost(request.DefaultPoint, 2))
             return QuestionBankErrors.QuestionDefaultPointInvalid;
 
         if (request.Topics is null || request.Topics.Count == 0 || request.Topics.Any(topic => string.IsNullOrWhiteSpace(topic.TagId)))
@@ -48,11 +48,37 @@ internal static partial class QuestionRequestValidator
             if (request.Parts.GroupBy(part => part.PartOrder).Any(group => group.Count() > 1))
                 return QuestionBankErrors.QuestionPartOrderDuplicate;
 
-            if (request.Parts.Any(part => part.DefaultPoint < 0m || part.DefaultPoint > 10m))
-                return QuestionBankErrors.QuestionPartDefaultPointInvalid;
+            if (request.Parts.Any(part => part.PartLabel?.Trim().Length > 10))
+                return QuestionBankErrors.QuestionPartLabelInvalid;
 
-            if (request.Parts.Any(part => part.NumericTolerance is < 0m))
+            if (request.Parts
+                .Where(part => !string.IsNullOrWhiteSpace(part.PartLabel))
+                .GroupBy(part => part.PartLabel!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Any(group => group.Count() > 1))
+            {
+                return QuestionBankErrors.QuestionPartLabelDuplicate;
+            }
+
+            if (request.Parts.Any(part =>
+                    part.DefaultPoint < 0m ||
+                    part.DefaultPoint > 10m ||
+                    !HasScaleAtMost(part.DefaultPoint, 2)))
+            {
+                return QuestionBankErrors.QuestionPartDefaultPointInvalid;
+            }
+
+            if (request.Parts.Any(part =>
+                    part.NumericTolerance is < 0m ||
+                    part.NumericTolerance is decimal tolerance && !FitsDecimal18Scale6(tolerance)))
+            {
                 return QuestionBankErrors.QuestionPartNumericToleranceInvalid;
+            }
+
+            if (request.Parts.Any(part =>
+                    part.CorrectNumeric is decimal numeric && !FitsDecimal18Scale6(numeric)))
+            {
+                return QuestionBankErrors.QuestionPartNumericValueInvalid;
+            }
 
             foreach (var part in request.Parts)
             {
@@ -144,6 +170,14 @@ internal static partial class QuestionRequestValidator
         value.Length <= 100 &&
         !MarkupRegex().IsMatch(value) &&
         !value.Contains("![", StringComparison.Ordinal);
+
+    private static bool FitsDecimal18Scale6(decimal value) =>
+        value > -1_000_000_000_000m &&
+        value < 1_000_000_000_000m &&
+        HasScaleAtMost(value, 6);
+
+    private static bool HasScaleAtMost(decimal value, int maximumScale) =>
+        ((decimal.GetBits(value)[3] >> 16) & 0xFF) <= maximumScale;
 
     [GeneratedRegex("<[^>]+>")]
     private static partial Regex MarkupRegex();
