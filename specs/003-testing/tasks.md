@@ -79,13 +79,14 @@
 ## Phase 4: Verification
 
 - [x] `dotnet build` — zero compile errors
-- [ ] Integration tests (xUnit):
-  - [ ] UC-47: Start session → `InProgress`, correct question count
-  - [ ] UC-47: Start duplicate `InProgress` session → 409 (BR-15)
-  - [ ] UC-47: Auto-save 5 answers → persisted, `update_choice_time` set
-  - [ ] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `SubmissionType = SystemSubmit`
-  - [ ] UC-49: Normal submit → `Graded`, `SubmissionType = StudentSubmit`, grading fields populated
-  - [ ] UC-49: Submit `Graded` session → 409 (DC-03)
-  - [ ] UC-49: Submit with unanswered questions → `NumAbandoned` = unanswered count
-  - [ ] UC-50: View solution before `Graded` → 403
-  - [ ] UC-50: View solution after `Graded` → full question/answer data returned
+- [x] Integration tests (xUnit):
+  - [x] UC-47: Start session → `InProgress`, correct question count
+  - [x] UC-47: Start duplicate `InProgress` session → 409 (BR-15)
+  - [x] UC-47: Auto-save 5 answers → persisted, `update_choice_time` set
+  - [x] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `SubmissionType = SystemSubmit`
+  - [x] UC-49: Normal submit → `Graded`, `SubmissionType = StudentSubmit`, grading fields populated
+  - [x] UC-49: Submit `Graded` session → 409 (DC-03)
+  - [x] UC-49: Submit with unanswered questions → `NumAbandoned` = unanswered count
+  - [x] UC-50: View solution before `Graded` → 403
+  - [x] UC-50: View solution after `Graded` → full question/answer data returned
+
