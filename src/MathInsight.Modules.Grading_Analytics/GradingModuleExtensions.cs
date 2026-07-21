@@ -30,6 +30,11 @@ public static class GradingModuleExtensions
         // GradingEngine: per-question-type grading algorithm
         services.AddScoped<Services.IGradingEngine, Services.GradingEngine>();
 
+        // GradingOrchestrator: shared grading flow used by both MediatR handler (Practice)
+        // and MassTransit consumer (Exam). Encapsulates session loading, validation,
+        // grading execution, and transactional persistence (DC-05).
+        services.AddScoped<Services.IGradingOrchestrator, Services.GradingOrchestrator>();
+
         // ── ChatbotService (UC-51) ───────────────────────────────────────────
         // Bind Chatbot configuration section
         services.Configure<ChatbotOptions>(configuration.GetSection(ChatbotOptions.SectionName));
