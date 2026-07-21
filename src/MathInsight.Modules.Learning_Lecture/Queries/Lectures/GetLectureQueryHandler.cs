@@ -6,7 +6,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Learning_Lecture.Contracts;
 using MathInsight.Modules.Learning_Lecture.Persistence;
-using MathInsight.Modules.Learning_Lecture.Events;
+using MathInsight.Shared.Events;
 
 namespace MathInsight.Modules.Learning_Lecture.Queries.Lectures;
 

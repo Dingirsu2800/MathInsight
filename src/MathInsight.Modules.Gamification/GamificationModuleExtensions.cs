@@ -1,4 +1,5 @@
 using MathInsight.Modules.Gamification.Persistence;
+using MathInsight.Modules.Gamification.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,17 @@ public static class GamificationModuleExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null)));
 
-        // MediatR handlers, services, and controllers are added in a later step.
+        // MediatR in-process handlers: ActivityLoggedHandler (ActivityLoggedEvent) and
+        // TestSubmittedHandler (TestSubmittedEvent), both in this assembly.
+        services.AddMediatR(cfg =>
+            cfg.RegisterServicesFromAssembly(typeof(GamificationModuleExtensions).Assembly));
+
+        // Domain services
+        services.AddScoped<IStreakService, StreakService>();
+
+        // TODO: Student B replaces NullBadgeService with the real BadgeService (BR-43) — one line.
+        services.AddScoped<IBadgeService, NullBadgeService>();
+
         return services;
     }
 }
