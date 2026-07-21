@@ -1,3 +1,4 @@
+using MathInsight.Modules.Gamification.BackgroundJobs;
 using MathInsight.Modules.Gamification.Persistence;
 using MathInsight.Modules.Gamification.Services;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,12 @@ public static class GamificationModuleExtensions
 
         // TODO: Student B replaces NullBadgeService with the real BadgeService (BR-43) — one line.
         services.AddScoped<IBadgeService, NullBadgeService>();
+
+        // BR-45: daily streak-reminder detection. The service is scoped (DbContext + MediatR); the
+        // hosted BackgroundService is a singleton that opens a scope per run. Disabled by default —
+        // it does nothing unless Gamification:StreakReminder:Enabled = true in configuration.
+        services.AddScoped<IStreakReminderService, StreakReminderService>();
+        services.AddHostedService<StreakReminderBackgroundService>();
 
         return services;
     }
