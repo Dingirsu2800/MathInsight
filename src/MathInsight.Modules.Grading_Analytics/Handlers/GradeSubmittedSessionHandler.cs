@@ -182,20 +182,33 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
         GradingResult gradingResult,
         TestSubmittedEvent notification)
     {
-        // ── Build per-answer DTOs with primary TagId ──────────────────────────
+        // ── Default w_main for primary tag (BR-13) ────────────────────────────
+        const decimal DefaultWMain = 0.65m;
+
+        // ── Build per-answer DTOs with multi-tag weights (v4.1) ───────────────
         var gradedAnswers = new List<GradedAnswerDto>();
 
-        // ── Build per-tag results ────────────────────────────────────────────
-        // Track per-tag correctness for PerTagResults
-        var tagStats = new Dictionary<Guid, (int Correct, int Total)>();
+        // ── Track per-tag weighted contributions for Tầng 1–2 TopicScore ──────
+        // Key: TagId, Value: list of c_{q,i} contributions + correctness stats
+        var tagContributions = new Dictionary<Guid, (List<decimal> Contributions, int Correct, int Total)>();
 
         foreach (var answer in session.TestAnswers)
         {
-            // Find primary topic tag for this question
-            var primaryTopic = answer.Question.QuestionTopics
-                .FirstOrDefault(qt => qt.IsPrimary);
+            // Load ALL QuestionTopics (primary + secondary)
+            var allTopics = answer.Question.QuestionTopics.ToList();
 
-            var tagId = primaryTopic?.TagId ?? Guid.Empty;
+            // Find primary topic tag
+            var primaryTopic = allTopics.FirstOrDefault(qt => qt.IsPrimary);
+            var primaryTagId = primaryTopic?.TagId ?? Guid.Empty;
+
+            // ── Calculate tag weights per BR-13/14/15 ─────────────────────────
+            var tagWeights = CalculateTagWeights(allTopics, DefaultWMain);
+
+            // ── Calculate NormalizedScore s_q ──────────────────────────────────
+            decimal maxPoints = answer.Question.DefaultPoint;
+            decimal normalizedScore = maxPoints > 0
+                ? Math.Round(answer.PointsEarned / maxPoints * 10.0m, 2)
+                : 0m;
 
             // Determine abandoned status using same logic as GradingEngine
             bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
@@ -203,36 +216,43 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             gradedAnswers.Add(new GradedAnswerDto
             {
                 QuestionId = answer.QuestionId,
-                TagId = tagId,
+                TagId = primaryTagId,
+                TagWeights = tagWeights,
+                NormalizedScore = normalizedScore,
                 IsCorrect = answer.IsCorrect == true,
                 PointsEarned = answer.PointsEarned,
+                MaxPoints = maxPoints,
                 TimeSpent = answer.TimeSpent ?? 0,
                 DifficultyLevel = answer.Question.DifficultyLevel,
                 QuestionNo = answer.QuestionNo,
                 IsAbandoned = isAbandoned
             });
 
-            // Accumulate per-tag stats (skip questions without a primary tag)
-            if (tagId != Guid.Empty)
+            // ── Accumulate per-tag stats for ALL tags (Tầng 1–2) ──────────────
+            foreach (var tw in tagWeights)
             {
-                if (!tagStats.TryGetValue(tagId, out var stats))
-                    stats = (0, 0);
+                if (tw.TagId == Guid.Empty) continue;
 
+                if (!tagContributions.TryGetValue(tw.TagId, out var stats))
+                    stats = (new List<decimal>(), 0, 0);
+
+                // Tầng 1: c_{q,i} = s_q × w_{iq}
+                stats.Contributions.Add(normalizedScore * tw.Weight);
                 stats.Total++;
                 if (answer.IsCorrect == true)
                     stats.Correct++;
 
-                tagStats[tagId] = stats;
+                tagContributions[tw.TagId] = stats;
             }
         }
 
-        // ── Build PerTagResults ──────────────────────────────────────────────
-        var perTagResults = tagStats
+        // ── Build PerTagResults using Tầng 2: T_j^{(i)} = avg(c_{q,i}) ───────
+        var perTagResults = tagContributions
             .Select(kv => new TopicGradeResult
             {
                 TagId = kv.Key,
-                TopicScore = kv.Value.Total > 0
-                    ? Math.Round((decimal)kv.Value.Correct / kv.Value.Total * 10.0m, 2)
+                TopicScore = kv.Value.Contributions.Count > 0
+                    ? Math.Clamp(Math.Round(kv.Value.Contributions.Average(), 2), 0.00m, 10.00m)
                     : 0m,
                 CorrectCount = kv.Value.Correct,
                 TotalCount = kv.Value.Total
@@ -256,18 +276,77 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
     }
 
     /// <summary>
+    /// Calculates tag weights for a question's topics per BR-13/14/15.
+    /// Single-tag: w = 1.0.
+    /// Multi-tag: primary gets w_main (default 0.65), each secondary gets (1 - w_main) / N_sub.
+    /// Sum of all weights = 1.0.
+    /// </summary>
+    private static List<TagWeightEntry> CalculateTagWeights(
+        List<QuestionTopic> allTopics,
+        decimal wMain)
+    {
+        if (allTopics.Count == 0)
+            return [];
+
+        // Single-tag question: degenerate case, w = 1.0
+        if (allTopics.Count == 1)
+        {
+            return [new TagWeightEntry
+            {
+                TagId = allTopics[0].TagId,
+                Weight = 1.0m,
+                IsPrimary = allTopics[0].IsPrimary
+            }];
+        }
+
+        // Multi-tag: apply BR-13/14/15
+        var primary = allTopics.FirstOrDefault(t => t.IsPrimary);
+        var secondaries = allTopics.Where(t => !t.IsPrimary).ToList();
+        int nSub = secondaries.Count;
+        decimal wSub = nSub > 0 ? (1.0m - wMain) / nSub : 0m;
+
+        var result = new List<TagWeightEntry>();
+
+        if (primary != null)
+        {
+            result.Add(new TagWeightEntry
+            {
+                TagId = primary.TagId,
+                Weight = wMain,
+                IsPrimary = true
+            });
+        }
+
+        foreach (var sec in secondaries)
+        {
+            result.Add(new TagWeightEntry
+            {
+                TagId = sec.TagId,
+                Weight = wSub,
+                IsPrimary = false
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Mirrors GradingEngine.IsAbandoned logic for populating GradedAnswerDto.IsAbandoned.
     /// </summary>
     private static bool IsAbandoned(TestAnswer answer, string questionType)
     {
-        return questionType switch
+        var typeNormalized = questionType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+        return typeNormalized switch
         {
-            "SINGLE_CHOICE" => answer.AnswerId is null,
-            "TRUE_FALSE" => answer.AnswerId is null,
-            "MULTIPLE_SELECT" => answer.SelectedOptions.Count == 0,
-            "SHORT_ANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
-            "COMPOSITE" => answer.AnswerParts.All(p =>
-                string.IsNullOrWhiteSpace(p.StudentAnswer)),
+            "SINGLECHOICE" => answer.AnswerId is null,
+            "TRUEFALSE" => answer.AnswerId is null,
+            "MULTIPLESELECT" => answer.SelectedOptions.Count == 0,
+            "MULTIPLECHOICE" => answer.SelectedOptions.Count == 0,
+            "SHORTANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
+            "COMPOSITE" => answer.AnswerParts.Count == 0 || answer.AnswerParts.All(p =>
+                p.BooleanAnswer == null && 
+                string.IsNullOrWhiteSpace(p.TextAnswer) && 
+                p.NumericAnswer == null),
             _ => true
         };
     }

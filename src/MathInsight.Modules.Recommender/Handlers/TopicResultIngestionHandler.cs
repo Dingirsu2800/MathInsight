@@ -46,10 +46,12 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         if (notification.PerTagResults.Count == 0)
             return;
 
-        // We need a student grade to update CompetencyPoint.
-        // For MVP, derive grade from context if available; otherwise default to 0 (unknown).
-        // Full grade resolution from Identity module is deferred to a later phase.
-        const int defaultGrade = 0;
+        // Resolve student actual grade from database, default to 10 (valid grade in 10, 11, 12)
+        var student = await _db.Students
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.StudentId == notification.StudentId.ToString(), cancellationToken);
+
+        int grade = student?.CurrentGrade ?? 10;
 
         // PerTagResults.TagId is a TagTopic (topic tag) ID, not a TagDifficulty ID.
         // WeakTag evaluation is always per-topic. Difficulty is derived separately
@@ -60,7 +62,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         }
 
         // RCM-12 / G1: Recalculate CompetencyPoint once after all tags are updated.
-        await _competencyEngine.RecalculateAsync(notification.StudentId, defaultGrade, cancellationToken);
+        await _competencyEngine.RecalculateAsync(notification.StudentId.ToString(), grade, cancellationToken);
     }
 
     private async Task IngestTopicResultAsync(
@@ -71,22 +73,22 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         // ── RCM-08: Idempotency ──────────────────────────────────────────────────
         // Skip if (session_id, tag_id) already exists — safe to call multiple times.
         bool alreadyIngested = await _db.StudentTopicSessionResults
-            .AnyAsync(r => r.SessionId == evt.SessionId && r.TagId == tagResult.TagId, ct);
+            .AnyAsync(r => r.SessionId == evt.SessionId.ToString() && r.TagId == tagResult.TagId.ToString(), ct);
 
         if (alreadyIngested)
             return;
 
         // ── U3 / RCM no-history: Lazy-create TagsMastery if absent ───────────────
         var mastery = await _db.TagsMasteries
-            .FirstOrDefaultAsync(tm => tm.StudentId == evt.StudentId && tm.TagId == tagResult.TagId, ct);
+            .FirstOrDefaultAsync(tm => tm.StudentId == evt.StudentId.ToString() && tm.TagId == tagResult.TagId.ToString(), ct);
 
         if (mastery is null)
         {
             mastery = new TagsMastery
             {
-                TagsMasteryId = Guid.NewGuid(),
-                StudentId = evt.StudentId,
-                TagId = tagResult.TagId,
+                TagsMasteryId = Guid.NewGuid().ToString(),
+                StudentId = evt.StudentId.ToString(),
+                TagId = tagResult.TagId.ToString(),
                 OfficialPoint = 5.00m,   // neutral baseline (RCM spec U3)
                 PracticePoint = 5.00m,
                 ExamAnchor = 5.00m,
@@ -97,8 +99,6 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             };
             _db.TagsMasteries.Add(mastery);
         }
-
-        decimal pointBefore = mastery.OfficialPoint;
 
         if (string.Equals(evt.TestFormat, "Exam", StringComparison.OrdinalIgnoreCase))
         {
@@ -118,16 +118,52 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         }
         else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
         {
-            // ── RCM-06: Update PracticePoint using Elo formula sequentially ─────────
-            var tagAnswers = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
-                .Where(a => a.TagId == tagResult.TagId)
+            // ── RCM-06 v4.1: Update PracticePoint using multi-tag Elo formula ───
+            // Bước 1: Compute Δ_total per answer (unchanged)
+            // Bước 2: Distribute ΔP_tag_i = Δ_total × w_i to each tag
+            var allAnswers = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
                 .OrderBy(a => a.QuestionNo)
                 .ToList();
 
-            foreach (var ans in tagAnswers)
-            {
-                mastery.SeriesAnswerCount++;
+            // Collect all unique tags across all answers for this session
+            var allTagIds = allAnswers
+                .SelectMany(a => a.TagWeights)
+                .Select(tw => tw.TagId)
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
 
+            // Load or lazy-create TagsMastery for ALL tags involved
+            var masteryMap = new Dictionary<Guid, TagsMastery>();
+            foreach (var tid in allTagIds)
+            {
+                var tidStr = tid.ToString();
+                var m = await _db.TagsMasteries
+                    .FirstOrDefaultAsync(tm => tm.StudentId == evt.StudentId.ToString() && tm.TagId == tidStr, ct);
+
+                if (m is null)
+                {
+                    m = new TagsMastery
+                    {
+                        TagsMasteryId = Guid.NewGuid().ToString(),
+                        StudentId = evt.StudentId.ToString(),
+                        TagId = tidStr,
+                        OfficialPoint = 5.00m,
+                        PracticePoint = 5.00m,
+                        ExamAnchor = 5.00m,
+                        MasteryStatus = "NotLearned",
+                        NumberDone = 0,
+                        SeriesAnswerCount = 0,
+                        ExamHistory = "[]"
+                    };
+                    _db.TagsMasteries.Add(m);
+                }
+                masteryMap[tid] = m;
+            }
+
+            foreach (var ans in allAnswers)
+            {
+                // Bước 1: Compute Δ_total
                 decimal wD = ans.DifficultyLevel switch
                 {
                     1 => 0.5m,
@@ -139,21 +175,44 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
 
                 decimal timePenalty = (ans.TimeSpent < 5 && !ans.IsAbandoned) ? 1.5m : 1.0m;
 
-                decimal delta = ans.IsCorrect
+                decimal deltaTotal = ans.IsCorrect
                     ? 0.05m * wD
                     : -0.05m * (5.0m - wD) * timePenalty;
 
-                mastery.PracticePoint = Math.Clamp(mastery.PracticePoint + delta, 0.00m, 10.00m);
-
-                mastery.OfficialPoint = Math.Clamp(
-                    0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
-                    0.00m, 10.00m);
-
-                if (mastery.SeriesAnswerCount >= 10)
+                // Bước 2: Distribute to each tag
+                var tagWeights = ans.TagWeights;
+                if (tagWeights == null || tagWeights.Count == 0)
                 {
-                    mastery.PracticePoint = mastery.OfficialPoint;
-                    mastery.SeriesAnswerCount = 0;
+                    // Fallback for backward compatibility: use TagId with w=1.0
+                    if (ans.TagId != Guid.Empty && masteryMap.TryGetValue(ans.TagId, out var fallbackMastery))
+                    {
+                        ApplyDeltaToTag(fallbackMastery, deltaTotal, 1.0m);
+                    }
+                    continue;
                 }
+
+                foreach (var tw in tagWeights)
+                {
+                    if (tw.TagId == Guid.Empty) continue;
+                    if (!masteryMap.TryGetValue(tw.TagId, out var tagMastery)) continue;
+
+                    ApplyDeltaToTag(tagMastery, deltaTotal, tw.Weight);
+                }
+            }
+
+            // After processing all answers, update all masteries
+            foreach (var (_, m) in masteryMap)
+            {
+                // Recalculate OfficialPoint
+                m.OfficialPoint = Math.Clamp(
+                    0.7m * m.ExamAnchor + 0.3m * m.PracticePoint,
+                    0.00m, 10.00m);
+            }
+
+            // Use the primary tag's mastery for the original IngestTopicResultAsync flow
+            if (masteryMap.TryGetValue(tagResult.TagId, out var primaryMastery))
+            {
+                mastery = primaryMastery;
             }
         }
 
@@ -164,30 +223,63 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         mastery.NumberDone += tagResult.TotalCount;
         mastery.NumCorrect += tagResult.CorrectCount;
         mastery.AccuracyRate = mastery.NumberDone > 0
-            ? Math.Round((decimal)mastery.NumCorrect / mastery.NumberDone, 4)
+            ? Math.Round((decimal)mastery.NumCorrect / mastery.NumberDone * 100m, 2)
             : 0m;
         mastery.MasteryStatus = DetermineMasteryStatus(mastery.NumberDone, mastery.OfficialPoint);
         mastery.LastCalculatedAt = evt.GradedAt;
 
-        decimal pointAfter = mastery.OfficialPoint;
+        // Calculate EarnedPoints and MaxPoints from GradedAnswerDto list
+        var answersForTag = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
+            .Where(a => a.TagId == tagResult.TagId)
+            .ToList();
+
+        decimal earnedPoints = answersForTag.Sum(a => a.PointsEarned);
+        decimal maxPoints = answersForTag.Sum(a => a.MaxPoints);
+
+        if (answersForTag.Count == 0 || maxPoints == 0)
+        {
+            earnedPoints = tagResult.CorrectCount;
+            maxPoints = tagResult.TotalCount;
+        }
 
         // ── RCM-08: Insert StudentTopicSessionResult ────────────────────────────
         _db.StudentTopicSessionResults.Add(new StudentTopicSessionResult
         {
-            StudentTopicSessionResultId = Guid.NewGuid(),
-            StudentId = evt.StudentId,
-            SessionId = evt.SessionId,
-            TagId = tagResult.TagId,
-            TotalQuestions = tagResult.TotalCount,
-            CorrectCount = tagResult.CorrectCount,
-            WrongCount = tagResult.TotalCount - tagResult.CorrectCount,
+            StudentTopicSessionResultId = Guid.NewGuid().ToString(),
+            StudentId = evt.StudentId.ToString(),
+            SessionId = evt.SessionId.ToString(),
+            TagId = tagResult.TagId.ToString(),
+            TotalItems = tagResult.TotalCount,
+            CorrectItems = tagResult.CorrectCount,
+            EarnedPoints = earnedPoints,
+            MaxPoints = maxPoints,
             TopicScore = tagResult.TopicScore,
-            PointBefore = pointBefore,
-            PointAfter = pointAfter,
             CreatedTime = evt.GradedAt
         });
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    // ── RCM-06 v4.1: Apply weighted delta to a single tag's TagsMastery ────────────
+    // ΔP_tag_i = Δ_total × w_i; independent series_answer_count per tag.
+    private static void ApplyDeltaToTag(TagsMastery mastery, decimal deltaTotal, decimal weight)
+    {
+        mastery.SeriesAnswerCount++;
+
+        decimal deltaForTag = deltaTotal * weight;
+        mastery.PracticePoint = Math.Clamp(mastery.PracticePoint + deltaForTag, 0.00m, 10.00m);
+
+        // Recalculate OfficialPoint after each delta
+        mastery.OfficialPoint = Math.Clamp(
+            0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
+            0.00m, 10.00m);
+
+        // Series blend + reset at 10
+        if (mastery.SeriesAnswerCount >= 10)
+        {
+            mastery.PracticePoint = mastery.OfficialPoint;
+            mastery.SeriesAnswerCount = 0;
+        }
     }
 
     // ── RCM-05: Exponential Decay formula ────────────────────────────────────────

@@ -32,6 +32,24 @@ export const expertNavItems = [
   }
 ];
 
+export const adminNavItems = [
+  {
+    label: "Quản lý tài khoản",
+    path: "/admin/accounts",
+    icon: "group"
+  },
+  {
+    label: "Đơn đăng ký giáo viên",
+    path: "/admin/applications",
+    icon: "fact_check"
+  },
+  {
+    label: "Vai trò & Quyền",
+    path: "/admin/roles",
+    icon: "admin_panel_settings"
+  }
+];
+
 export const teacherNavItems = [
   {
     label: "Bài giảng",
@@ -74,9 +92,9 @@ export const studentNavItems = [
     disabled: true
   },
   {
+    // Role-agnostic profile page (UC-04); "/student/profile" is not a registered route.
     label: "Hồ sơ của tôi",
-    path: "/student/profile",
-    icon: "person",
-    disabled: true
+    path: "/profile",
+    icon: "person"
   }
 ];

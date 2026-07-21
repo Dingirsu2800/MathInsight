@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import { questionBankApi } from "../../services/questionBankApi";
+import { getAccountId } from "../../services/authStorage";
 import { mapQuestionDetailToViewModel } from "./questionMappers";
 import { getQuestionTypeShortLabel, getQuestionStatusLabel, getQuestionStatusVariant, getQuestionPartTypeLabel } from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
@@ -20,7 +21,7 @@ function getRoleLabel(role) {
 
 export default function ReportedQuestionsPage() {
   const navigate = useNavigate();
-  const currentAccountId = localStorage.getItem("AccountId");
+  const currentAccountId = getAccountId();
 
   const [loading, setLoading] = React.useState(false);
   const [questions, setQuestions] = React.useState([]);

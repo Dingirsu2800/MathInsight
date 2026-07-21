@@ -98,6 +98,7 @@
   - [ ] Manual SQL Server smoke: verify `QuestionReportSqlServerLock` serializes report mutations for the same QuestionID in a disposable test database
   - [x] UC-31/32: Admin workflow submit, approve/reject, ownership, active-workflow and question-status transitions correct
   - [x] UC-23: Excel template, preview without writes, invalid formula/template/taxonomy rejection, supported question types, and confirm draft revalidation are covered by automated tests
+  - [x] UC-23: Abnormal import hardening covers malformed/empty workbooks, locale-safe decimals, grade-scoped topic resolution, duplicate/oversized part labels, and database precision boundaries
   - [ ] UC-23: SQL Server relational transaction rollback smoke test for confirm import in a disposable database
   - [ ] UC-38: Delete tag with linked questions -> soft-delete (`is_active = false`) (DC-02)
   - [x] UC-38: Disable/delete topic with active descendant -> `TAG_TOPIC_HAS_ACTIVE_DESCENDANTS` / 409 with no data mutation (BR-66)

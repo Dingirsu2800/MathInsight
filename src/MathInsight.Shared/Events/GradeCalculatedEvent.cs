@@ -50,13 +50,37 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
 
 /// <summary>
 /// Detailed answer info for Elo calculation.
+/// Unified Multi-Tag v4.1: includes TagWeights for multi-tag delta distribution.
 /// </summary>
 public sealed record GradedAnswerDto
 {
     public Guid QuestionId { get; init; }
+
+    /// <summary>
+    /// Primary topic tag ID (backward-compatible). Always the IsPrimary=true tag.
+    /// </summary>
     public Guid TagId { get; init; }
+
+    /// <summary>
+    /// All tags (primary + secondary) with their role-based weights.
+    /// Sum of all weights = 1.0. For single-tag questions, contains one entry with Weight = 1.0.
+    /// Used by Recommender for multi-tag Elo delta distribution (Çông thức 2, Bước 2).
+    /// Weight rules (BR-13/14/15):
+    ///   - Single tag: w = 1.0
+    ///   - Tag Chính (primary): w_main ∈ [0.60, 0.70], default 0.65
+    ///   - Tag Phụ (secondary): w_sub_i = (1 − w_main) / N_sub
+    /// </summary>
+    public IReadOnlyList<TagWeightEntry> TagWeights { get; init; } = [];
+
+    /// <summary>
+    /// Normalized question score on 0–10 scale: s_q = PointsEarned / MaxPoints × 10.0.
+    /// Used for Tầng 1 contribution calculation: c_{q,i} = s_q × w_{iq}.
+    /// </summary>
+    public decimal NormalizedScore { get; init; }
+
     public bool IsCorrect { get; init; }
     public decimal PointsEarned { get; init; }
+    public decimal MaxPoints { get; init; }
     public int TimeSpent { get; init; }
     public byte DifficultyLevel { get; init; }
     public int QuestionNo { get; init; }
@@ -67,15 +91,37 @@ public sealed record GradedAnswerDto
 }
 
 /// <summary>
+/// Represents a question's tag assignment with its weight for multi-tag support.
+/// </summary>
+public sealed record TagWeightEntry
+{
+    public Guid TagId { get; init; }
+
+    /// <summary>
+    /// Role-based weight w_{iq}. Sum of all TagWeightEntry.Weight for a question = 1.0.
+    /// </summary>
+    public decimal Weight { get; init; }
+
+    public bool IsPrimary { get; init; }
+}
+
+/// <summary>
 /// Per-topic grading result snapshot for a single (SessionId, TagId) pair.
 /// Used by Recommender to update TagsMastery and insert StudentTopicSessionResult.
+///
+/// Unified Multi-Tag v4.1: TopicScore is now calculated using the weighted Tầng 1–2 formula:
+///   Tầng 1: c_{q,i} = s_q × w_{iq} (contribution of question q to tag i)
+///   Tầng 2: T_j^{(i)} = avg(c_{q,i}) across all questions in session j containing tag i
+/// For single-tag questions (w=1.0), T_j^{(i)} = avg(s_q) = traditional formula.
+/// PerTagResults now includes entries for ALL tags (primary + secondary), not just primary.
 /// </summary>
 public sealed record TopicGradeResult
 {
     public Guid TagId { get; init; }
 
     /// <summary>
-    /// Normalized topic score 0.00–10.00: correct_count / total_count × 10.0.
+    /// Weighted topic score 0.00–10.00: T_j^{(i)} = avg(c_{q,i}) where c_{q,i} = s_q × w_{iq}.
+    /// For single-tag questions, this equals the traditional correct_count / total_count × 10.0.
     /// </summary>
     public decimal TopicScore { get; init; }
 

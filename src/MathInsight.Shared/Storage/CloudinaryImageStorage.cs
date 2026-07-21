@@ -37,10 +37,8 @@ public sealed class CloudinaryImageStorage : IImageStorage
 
         var publicId = Guid.NewGuid().ToString("N");
 
-        await using var fileBuffer = new MemoryStream();
-        await request.Content.CopyToAsync(fileBuffer, cancellationToken);
         using var multipart = new MultipartFormDataContent();
-        using var fileContent = new ByteArrayContent(fileBuffer.ToArray());
+        using var fileContent = new StreamContent(request.Content);
         fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(request.ContentType);
 
         multipart.Add(fileContent, "file", request.FileName);
@@ -68,7 +66,7 @@ public sealed class CloudinaryImageStorage : IImageStorage
                     "Cloudinary rejected image upload. Status code: {StatusCode}; Error: {ErrorMessage}",
                     (int)response.StatusCode,
                     errorMessage);
-                throw new ImageUploadException();
+                throw new ImageUploadException($"Cloudinary error: {errorMessage}");
             }
 
             await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);

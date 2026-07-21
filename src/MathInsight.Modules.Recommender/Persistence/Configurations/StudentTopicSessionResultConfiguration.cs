@@ -18,52 +18,54 @@ public class StudentTopicSessionResultConfiguration : IEntityTypeConfiguration<S
         builder.HasKey(x => x.StudentTopicSessionResultId);
 
         builder.Property(x => x.StudentTopicSessionResultId)
-            .HasColumnName("student_topic_session_result_id");
+            .HasColumnName("StudentTopicSessionResultID")
+            .HasMaxLength(36);
 
         builder.Property(x => x.StudentId)
-            .HasColumnName("student_id")
+            .HasColumnName("StudentID")
+            .HasMaxLength(36)
             .IsRequired();
 
         builder.Property(x => x.SessionId)
-            .HasColumnName("session_id")
+            .HasColumnName("SessionID")
+            .HasMaxLength(36)
             .IsRequired();
 
         builder.Property(x => x.TagId)
-            .HasColumnName("tag_id")
+            .HasColumnName("TagID")
+            .HasMaxLength(36)
             .IsRequired();
 
-        builder.Property(x => x.TotalQuestions)
-            .HasColumnName("total_questions")
+        builder.Property(x => x.TotalItems)
+            .HasColumnName("TotalItems")
+            .HasPrecision(6, 2)
             .IsRequired();
 
-        builder.Property(x => x.CorrectCount)
-            .HasColumnName("correct_count")
+        builder.Property(x => x.CorrectItems)
+            .HasColumnName("CorrectItems")
+            .HasPrecision(6, 2)
             .IsRequired();
 
-        builder.Property(x => x.WrongCount)
-            .HasColumnName("wrong_count")
+        builder.Property(x => x.EarnedPoints)
+            .HasColumnName("EarnedPoints")
+            .HasPrecision(6, 2)
+            .IsRequired();
+
+        builder.Property(x => x.MaxPoints)
+            .HasColumnName("MaxPoints")
+            .HasPrecision(6, 2)
             .IsRequired();
 
         builder.Property(x => x.TopicScore)
-            .HasColumnName("topic_score")
-            .HasPrecision(4, 2)
-            .IsRequired();
-
-        builder.Property(x => x.PointBefore)
-            .HasColumnName("point_before")
-            .HasPrecision(4, 2)
-            .IsRequired();
-
-        builder.Property(x => x.PointAfter)
-            .HasColumnName("point_after")
-            .HasPrecision(4, 2)
+            .HasColumnName("TopicScore")
+            .HasPrecision(5, 2)
             .IsRequired();
 
         builder.Property(x => x.CreatedTime)
-            .HasColumnName("created_time")
+            .HasColumnName("CreatedTime")
             .IsRequired();
 
-        // Unique (session_id, tag_id) — idempotency key (RCM-08)
+        // Unique (SessionID, TagID) — idempotency key (RCM-08)
         builder.HasIndex(x => new { x.SessionId, x.TagId })
             .IsUnique()
             .HasDatabaseName("UQ_StudentTopicSessionResult_Session_Tag");
@@ -72,17 +74,20 @@ public class StudentTopicSessionResultConfiguration : IEntityTypeConfiguration<S
         builder.ToTable(t =>
         {
             t.HasCheckConstraint(
-                "CK_STSR_TotalQuestions_NonNeg",
-                "[total_questions] >= 0");
+                "CK_STSR_TotalItems_NonNeg",
+                "[TotalItems] >= 0");
             t.HasCheckConstraint(
-                "CK_STSR_CorrectCount_NonNeg",
-                "[correct_count] >= 0");
+                "CK_STSR_CorrectItems_NonNeg",
+                "[CorrectItems] >= 0");
             t.HasCheckConstraint(
-                "CK_STSR_WrongCount_NonNeg",
-                "[wrong_count] >= 0");
+                "CK_STSR_EarnedPoints_NonNeg",
+                "[EarnedPoints] >= 0");
+            t.HasCheckConstraint(
+                "CK_STSR_MaxPoints_NonNeg",
+                "[MaxPoints] >= 0");
             t.HasCheckConstraint(
                 "CK_STSR_TopicScore_Range",
-                "[topic_score] >= 0.00 AND [topic_score] <= 10.00");
+                "[TopicScore] >= 0.00 AND [TopicScore] <= 10.00");
         });
     }
 }

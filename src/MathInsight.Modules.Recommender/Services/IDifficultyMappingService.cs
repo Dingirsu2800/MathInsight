@@ -26,4 +26,11 @@ public interface IDifficultyMappingService
     /// Returns <c>true</c> when the student is at the easiest difficulty (level 1) and is weak.
     /// </summary>
     bool IsRemedial(byte recommendedDifficultyLevel, decimal officialPoint);
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="officialPoint"/> &lt; 4.00 (BR-19, RCM-14).
+    /// A secondary (sub) tag below this threshold creates a bottleneck risk for completing
+    /// questions that require it, even if the primary tag is above the standard weak threshold.
+    /// </summary>
+    bool IsBottleneckWeak(decimal officialPoint);
 }

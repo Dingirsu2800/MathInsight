@@ -20,6 +20,7 @@ public class RecommenderDbContext : DbContext
     public DbSet<StudentTopicSessionResult> StudentTopicSessionResults => Set<StudentTopicSessionResult>();
 
     // Cross-module read-only tables (not owned by Recommender)
+    public DbSet<StudentReadOnly> Students => Set<StudentReadOnly>();
     public DbSet<TagTopicReadOnly> TagTopics => Set<TagTopicReadOnly>();
     public DbSet<LectureReadOnly> Lectures => Set<LectureReadOnly>();
     public DbSet<LectureMaterialReadOnly> LectureMaterials => Set<LectureMaterialReadOnly>();

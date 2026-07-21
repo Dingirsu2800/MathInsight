@@ -147,6 +147,8 @@ Question.IsActive = 1
 
 For the MVP, Excel import is an Expert-only synchronous `Preview -> Confirm` flow. Preview never writes to the database. Confirm revalidates every selected normalized draft and creates all questions in one transaction; if any selected item is invalid, no question is created. The workbook supports at most 100 questions, must use template version `1`, and is rejected before parsing when the archive entry count, uncompressed size, or an input sheet row count exceeds the import safety limits. RabbitMQ, Redis, MassTransit, background queues, Word parsing, embedded images, and OCR batch import are outside UC-23 MVP scope.
 
+Import parsing is locale-safe and fail-closed. Decimal values may use either `.` or `,` as the decimal separator but must not use thousands separators. Topic names resolve within the question grade; an ambiguous active topic name in the same grade is rejected. Empty or malformed workbooks, orphan child rows, formulas, duplicate keys, and values that exceed database length/precision constraints are returned as stable validation issues rather than unhandled server errors.
+
 The system exposes `GET /api/question-bank/questions/import-template`, `POST /api/question-bank/questions/import-preview` (`multipart/form-data`, field `file`), and `POST /api/question-bank/questions/import-confirm`. The template contains `_Meta`, `Instructions`, `Questions`, `Answers`, `Parts`, `Topics`, and `Catalogs` sheets. Topic and difficulty references must resolve to active taxonomy records. Formula cells in import input sheets are rejected. `PictureUrl` is optional and must be an HTTPS URL; embedded workbook images are not supported.
 
 ## Success Criteria *(mandatory)*

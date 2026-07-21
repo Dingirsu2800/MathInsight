@@ -17,7 +17,7 @@ public sealed class LectureCommandTests
         // Arrange
         await using var database = await LearningInMemoryContext.CreateAsync();
         var handler = new CreateLectureCommandHandler(database.Context);
-        var command = new CreateLectureCommand("Test Lecture", "Content", null, null, "tag-1", "teacher-1");
+        var command = new CreateLectureCommand("Test Lecture", "Content", null, null, "tag-1", "teacher-1", null);
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);

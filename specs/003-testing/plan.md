@@ -58,12 +58,12 @@ src/MathInsight.Modules.Testing/
 
 | Table | Key Indexes |
 |-------|-------------|
-| `Test` | `TestCode` nullable with filtered unique index when not null; `BlueprintID` nullable FK; `TestFormat` (Practice | Exam); `GeneratedForStudentID` nullable FK; `GeneratedBy` |
+| `Test` | `TestID` PK; `TestCode` nullable with filtered unique index when not null; `BlueprintID` nullable FK; `TestFormat` (Practice | Exam); `GeneratedForStudentID` nullable FK; `GeneratedBy` |
 | `TestQuestion` | Composite PK `(TestID, QuestionID)` |
 | `TestSession` | `(StudentID, Status)` index; durable status values `InProgress`, `Graded`, `Abandoned`; `SubmissionType` captures submit reason |
 | `TestAnswer` | `SessionID`, `QuestionID`, grading fields |
 | `TestAnswerOption` | Composite PK `(TestAnswerID, AnswerID)` |
-| `TestAnswerPart` | `TestAnswerPartID` PK; `TestAnswerID` FK; `QuestionPartID` FK; `StudentAnswer` (nullable); `IsCorrect` (nullable); `PointsEarned` |
+| `TestAnswerPart` | Composite PK `(TestAnswerID, PartID)` (FKs to `TestAnswer` and `QuestionPart`); type-specific fields: `BooleanAnswer` (BIT), `TextAnswer` (NVARCHAR), `NumericAnswer` (DECIMAL); grading fields |
 | `TestIncidents` | `SessionID` FK |
 
 ### Service & API Gateway — REST Endpoints
@@ -89,15 +89,15 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 ### Cross-Module Dependencies
 
 - **TestGen module (009)**: Creates `Test` + `TestQuestion` records before session start.
-- **Grading module (004)**: Called in-process during submit; populates `TestAnswer.is_correct`, `points_earned`, session score, and sets `TestSession.status = Graded`.
-- **QuestionBank module (002)**: `question_id` references in `TestAnswer`; question content queried for solution display.
+- **Grading module (004)**: Called in-process during submit; populates `TestAnswer.IsCorrect`, `PointsEarned`, session score, and sets `TestSession.Status = Graded`.
+- **QuestionBank module (002)**: `QuestionID` references in `TestAnswer`; question content queried for solution display.
 - **Recommender module (005)**: Reads session results after grading for competency updates.
 
 ### Auto-Save Mechanics
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
-- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ questionPartId, studentAnswer }] }] }`.
-- Handler validates `session_id` is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
+- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ partId, booleanAnswer, textAnswer, numericAnswer }] }] }`.
+- Handler validates `SessionID` status is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
 
 ### Incident Force-Submit Logic
