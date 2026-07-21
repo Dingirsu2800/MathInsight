@@ -83,8 +83,11 @@ public class TopicResultIngestionHandlerTests : IDisposable
             {
                 QuestionId      = Guid.NewGuid(),
                 TagId           = tagId,
+                TagWeights      = [new TagWeightEntry { TagId = tagId, Weight = 1.0m, IsPrimary = true }],
+                NormalizedScore = isCorrect ? 10m : 0m,
                 IsCorrect       = isCorrect,
                 PointsEarned    = isCorrect ? 1m : 0m,
+                MaxPoints       = 1m,
                 TimeSpent       = timeSpent,
                 DifficultyLevel = difficultyLevel,
                 QuestionNo      = 1,

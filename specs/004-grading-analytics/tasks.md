@@ -27,14 +27,27 @@
   - [x] Calculate `score = SUM(points_earned) / SUM(max_points) × 10.0` (BR-20)
   - [x] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
 
-- [x] **GradeSubmittedSessionHandler** (MVP synchronous):
-  - [x] Called in-process by Testing submit/force-submit flow
+- [x] **GradingOrchestrator** (`IGradingOrchestrator`):
+  - [x] Core grading flow shared by both MediatR handler (Practice) and MassTransit consumer (Exam)
+  - [x] Load `TestSession` with all navigation properties: `TestAnswers` → `Question` → `Answers`, `Parts`, `QuestionTopics`; `SelectedOptions`; `AnswerParts` → `QuestionPart`
   - [x] Validate `TestSession.status = InProgress`
-  - [x] Run `GradingEngine.Grade()` synchronously for `Practice` and `Exam`
-  - [x] Write results in the same transaction as submission (DC-05): update `test_answers` + `test_sessions`
-  - [x] Set `TestSession.status = Graded`; preserve `submission_type` from Testing (`StudentSubmit`, `TimeoutSubmit`, `SystemSubmit`)
-  - [x] Publish `GradeCalculatedEvent` after commit
-  - [x] SLA: `Practice` < 2.0 seconds, `Exam` target < 5.0 seconds
+  - [x] Run `GradingEngine.Grade()` synchronously
+  - [x] Write results in single transaction (DC-05): update `TestAnswer` + `TestAnswerPart` + `TestSession`
+  - [x] Set `TestSession.status = Graded`; preserve `submission_type` from Testing
+  - [x] Build and return `GradeCalculatedEvent` (G3) for downstream publishing
+
+- [x] **GradeSubmittedSessionHandler** (MediatR, Practice mode):
+  - [x] `INotificationHandler<TestSubmittedEvent>` — called in-process by Testing submit flow
+  - [x] Delegates to `IGradingOrchestrator.GradeSessionAsync()`
+  - [x] Publishes `GradeCalculatedEvent` via MediatR after grading completes
+  - [x] SLA: `Practice` < 2.0 seconds
+
+- [x] **TestSubmittedConsumer** (MassTransit, Exam mode):
+  - [x] `IConsumer<TestSubmittedEvent>` — receives messages from MassTransit queue
+  - [x] Delegates to `IGradingOrchestrator.GradeSessionAsync()` (same shared logic)
+  - [x] Publishes `GradeCalculatedEvent` via MediatR after grading completes
+  - [x] Idempotent: orchestrator checks `session.Status == InProgress` before grading
+  - [x] SLA: `Exam` target < 5.0 seconds
 
 - [x] **Transactional Atomicity** (DC-05):
   - [x] Wrap grading writes + session status update in single `using var tx = db.BeginTransaction()`
@@ -42,13 +55,16 @@
   - [x] Log failure with structured logging (session_id, error)
 
 - [x] **ChatbotService** (UC-51):
-  - [x] Implement `IChatbotService.AskAsync(questionContent, studentAnswer)`
-  - [x] POST to Gemini API with system prompt: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
-  - [x] Apply 10-second timeout, Polly circuit breaker (3 fails = open 30s)
+  - [x] Implement `IChatbotService.AskAsync(questionContent, studentAnswer, studentId, sessionId)`
+  - [x] POST to Google Gemini API (`gemini-2.0-flash` model) with system instruction: "math tutor, explain step-by-step in clear natural language; use simple Unicode/plain-text math notation where needed"
+  - [x] Apply 10-second HttpClient timeout, Polly circuit breaker (3 fails = open 30s)
   - [x] Enforce 1 request per student per session using **in-memory rate limiter** (A2 — MVP only).
-    - Keyed by `(studentId, sessionId)`; TTL-based or flag per request scope.
-    - **Do NOT use Redis** for this in MVP — Constitution §IV prohibits Redis unless spec-backed. Redis becomes relevant only under multi-instance deployment (post-MVP).
+    - `ConcurrentDictionary<(Guid, Guid), DateTime>` keyed by `(studentId, sessionId)`.
+    - TTL-based eviction: entries older than 1 hour cleaned up every 10 minutes.
+    - **Do NOT use Redis** for this in MVP — Constitution §IV prohibits Redis unless spec-backed.
   - [x] Return explanation string — do NOT persist to database (BR-21)
+  - [x] Throw `ChatbotRateLimitException` on duplicate requests → controller maps to HTTP 429
+
 
 - [x] **Polly Retry Policy** (U2 — per Assumptions:L96):
   - [x] Configure Polly retry on grading DB transaction: 3 retries with exponential backoff (1s, 2s, 4s)
@@ -56,10 +72,12 @@
 
 - [x] **GradeCalculatedEvent Contract** (G3):
   - [x] Use `MathInsight.Shared.Events.GradeCalculatedEvent` — do NOT define a separate local copy
-  - [x] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct **primary** tag in session. Use `QuestionTopic.TagID WHERE IsPrimary = true` for each question. Multi-tag analytics deferred post-MVP.
+  - [x] Populate `PerTagResults` from grading output: one `TopicGradeResult(TagId, TopicScore, CorrectCount, TotalCount)` per distinct **primary** tag in session. TopicScore calculated as `CorrectCount / TotalCount × 10.0`. Multi-tag `PerTagResults` (all tags incl. secondary) deferred to Phase 6.
   - [x] Populate `GradedAnswerDto.TagId` with the question's **primary** topic tag (`QuestionTopic.TagID WHERE IsPrimary = true`).
+  - [x] Populate `GradedAnswerDto.IsAbandoned` using same `IsAbandoned()` logic as `GradingEngine`
   - [x] Populate `NumAbandoned` from count of unanswered/abandoned answers per BR-16b
   - [x] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
+  - [x] Note: `GradedAnswerDto.TagWeights`, `NormalizedScore`, and `MaxPoints` are defined in the shared event contract but **not yet populated** by `GradingOrchestrator.BuildGradeCalculatedEvent()` — deferred to Phase 6
 
 ---
 
@@ -136,3 +154,25 @@
 ### 5.5 Verification
 
 - [x] `dotnet build` — zero compile errors
+
+---
+
+## Phase 6: Multi-Tag PerTagResults & GradedAnswerDto Enhancement (Future)
+
+> **Dependency note**: Module 005 (Recommender) Phase 5 multi-tag Elo v4.1 is already implemented and uses `TagWeights` with a backward-compatible fallback when `TagWeights` is empty. This phase completes the data flow by having `GradingOrchestrator` populate the fields.
+
+- [x] **Populate `TagWeights` in `GradedAnswerDto`**:
+  - [x] In `GradingOrchestrator.BuildGradeCalculatedEvent()`, read `QuestionTopics` for each answer
+  - [x] For single-tag questions: `TagWeights = [{ TagId, Weight = 1.0, IsPrimary = true }]`
+  - [x] For multi-tag questions: apply weight formula BR-13/14/15 (`w_main ∈ [0.60, 0.70]`, `w_sub_i = (1 − w_main) / N_sub`)
+  - [x] Sum of all weights must equal 1.0
+
+- [x] **Populate `NormalizedScore` in `GradedAnswerDto`**:
+  - [x] `NormalizedScore = PointsEarned / MaxPoints × 10.0`
+
+- [x] **Populate `MaxPoints` in `GradedAnswerDto`**:
+  - [x] `MaxPoints = Question.DefaultPoint`
+
+- [x] **Expand `PerTagResults` to all tags**:
+  - [x] Include entries for secondary tags (not just primary)
+  - [x] Use weighted Tầng 1–2 formula: `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`

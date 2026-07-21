@@ -138,6 +138,16 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             foreach (var tid in allTagIds)
             {
                 var tidStr = tid.ToString();
+
+                // Reuse the already lazy-created mastery entity from the outer scope
+                // to avoid duplicate creation (the entity may not yet be visible to DB queries
+                // before SaveChangesAsync is called)
+                if (tid == tagResult.TagId && mastery is not null)
+                {
+                    masteryMap[tid] = mastery;
+                    continue;
+                }
+
                 var m = await _db.TagsMasteries
                     .FirstOrDefaultAsync(tm => tm.StudentId == evt.StudentId.ToString() && tm.TagId == tidStr, ct);
 

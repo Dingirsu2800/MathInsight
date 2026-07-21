@@ -115,7 +115,7 @@ InProgress ──(student submit + grading succeeds)──▶ Graded
 ## Assumptions
 
 - Target database is SQL Server. Backend maps to current DB script tables (`Test`, `TestQuestion`, `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestIncidents`) instead of schema-prefixed tables.
-- **Dual-path grading**: Practice mode uses MediatR in-process (synchronous); Exam mode uses MassTransit async (TestSubmittedEvent published to RabbitMQ or InMemory queue). The Grading module's `TestSubmittedConsumer` handles Exam messages.
-- `TestSubmittedEvent` serves dual purpose: MediatR notification (Practice) and MassTransit message contract (Exam). It is not a persisted `Submitted` status.
+- **Dual-path grading**: Practice mode uses MediatR in-process (synchronous); Exam mode uses MassTransit async (TestSubmittedEvent published to RabbitMQ or InMemory queue). The Grading module's `TestSubmittedConsumer` handles Exam messages. **In current code**, both `SubmitSessionCommandHandler` and `ForceSubmitSessionCommandHandler` use `_mediator.Publish(TestSubmittedEvent)` for both Practice and Exam paths — MassTransit interception/routing occurs at the infrastructure level within module 004, not via explicit `ISendEndpointProvider` calls from Testing.
+- `TestSubmittedEvent` serves dual purpose: MediatR notification (Practice) and MassTransit message contract (Exam). It is not a persisted `Submitted` status. The event is defined in `MathInsight.Shared.Events`.
 - Real-time timer sync may use SignalR or server-side session expiry check on every auto-save request.
 - `TestGen` module (009) is responsible for creating the `Test` and `TestQuestion` records before session start.

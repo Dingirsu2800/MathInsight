@@ -88,6 +88,8 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 | `TestSubmittedEvent` (Exam) | Testing module (003) | `TestSubmittedConsumer` (004) | MassTransit (RabbitMQ / InMemory) | Async grading, 202 Accepted |
 | `GradeCalculatedEvent` | Grading module (004) | Recommender/Gamification/Notification | MediatR in-process | Trigger competency update, activity, and "test graded" notification |
 
+> **Implementation note**: In the current codebase, both `SubmitSessionCommandHandler` and `ForceSubmitSessionCommandHandler` call `_mediator.Publish(TestSubmittedEvent)` regardless of `TestFormat`. MassTransit's MediatR integration routes the message to `TestSubmittedConsumer` when the transport is configured. For Practice mode, `GradeSubmittedSessionHandler` handles the notification synchronously via MediatR. The Testing module does **not** use `ISendEndpointProvider` or `IPublishEndpoint` directly — all routing is handled at the infrastructure/DI level in module 004.
+
 ### Cross-Module Dependencies
 
 - **TestGen module (009)**: Creates `Test` + `TestQuestion` records before session start.

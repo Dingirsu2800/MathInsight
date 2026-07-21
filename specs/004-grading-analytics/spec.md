@@ -154,8 +154,8 @@ Returns aggregate statistics computed from the student's graded sessions.
 
 | Mode | When | Mechanism | SLA |
 |------|------|-----------|-----|
-| **Practice** | `test_format = Practice` | Synchronous, in-process | < 2.0 seconds |
-| **Exam** | `test_format = Exam` | Synchronous for MVP | < 5.0 seconds |
+| **Practice** | `test_format = Practice` | Synchronous, in-process via MediatR → `GradeSubmittedSessionHandler` → `GradingOrchestrator` | < 2.0 seconds |
+| **Exam** | `test_format = Exam` | MassTransit consumer (`TestSubmittedConsumer`) → `GradingOrchestrator` (same shared logic). Testing publishes via MediatR; MassTransit intercepts at infrastructure level. For MVP, both paths execute synchronously. | < 5.0 seconds |
 
 ### Edge Cases
 
@@ -172,11 +172,12 @@ Returns aggregate statistics computed from the student's graded sessions.
 - **DC-03**: Once a session leaves `InProgress`, test answers are read-only. Grading writes only grading result fields (`is_correct`, `points_earned`) inside the submit transaction.
 - **DC-05**: Auto-grading writes (`TestAnswer` result fields and `TestSession` score/status) must execute as a **single database transaction**. Recommender updates are triggered after successful grading and must be idempotent through `StudentTopicSessionResult`.
 - **BR-17 (Practice grading)**: For `Practice` mode, grading must complete within **2.0 seconds** end-to-end from submit.
-- **BR-18 (Exam grading MVP)**: For `Exam` mode, grading is synchronous in MVP because `Submitted` is not persisted as a durable DB state. If the team later needs async grading, add a `PendingGrading` status or a separate grading job table first.
+- **BR-18 (Exam grading MVP)**: For `Exam` mode, a `TestSubmittedConsumer` (MassTransit `IConsumer<TestSubmittedEvent>`) is implemented and delegates to the shared `IGradingOrchestrator`. In production, MassTransit routes to RabbitMQ for true async processing. In MVP with InMemory transport, the consumer executes synchronously. `Submitted` is not persisted as a durable DB state — if the team later needs a durable pending state, add a `PendingGrading` status or a separate grading job table.
 - **BR-19**: After grading completes, `TestSession.status` is updated to `Graded`; `submission_type`, `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
 - **BR-20**: Score formula: `score = SUM(points_earned) / SUM(max_points) × 10.0` — normalized to a 0–10 scale.
   `max_points` for each parent question is defined as `Question.default_point`.
-- **BR-21**: AI Chatbot (UC-51) is called via the OpenAI/Claude REST API. Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
+- **BR-21**: AI Chatbot (UC-51) is called via the **Google Gemini API** (model: `gemini-2.0-flash`). Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
+- **BR-21a**: Chatbot rate limiting: **1 request per student per session** (keyed by `(studentId, sessionId)`). Subsequent requests return HTTP 429. Rate limiter is **in-memory only for MVP** — TTL-based eviction (1 hour) prevents unbounded memory growth. Redis is explicitly excluded per Constitution §IV.
 - **BR-22**: After grading completes, `GradeCalculatedEvent` is published in-process (MediatR). It has **two consumers**:
   1. **Recommender module (005)** — updates `StudentTopicSessionResult` and `TagsMastery` per topic (idempotent).
   2. **Notification module (008)** — sends a "test graded" push notification to the student.
@@ -237,9 +238,19 @@ Returns aggregate statistics computed from the student's graded sessions.
 | `SINGLE_CHOICE` | `is_correct = (student_answer_id == correct_answer_id)` |
 | `MULTIPLE_SELECT` | `is_correct = (all correct options selected AND no incorrect options selected)` |
 | `TRUE_FALSE` | Same as `SINGLE_CHOICE` — standalone single-answer True/False question |
-| `COMPOSITE (general)` | Grade each `QuestionPart` individually; `points_earned` = sum of part points earned |
+| `COMPOSITE (general)` | Grade each `QuestionPart` individually per part type (see per-part grading below); `points_earned` = sum of part points earned, capped at `Question.default_point`; `is_correct` = true only when ALL parts are correct |
 | `COMPOSITE (all-TRUE_FALSE parts)` | Apply BR-23 non-linear scoring table based on count of correct parts |
 | `SHORT_ANSWER` | Case-insensitive string match: `LOWER(short_answer_text) == LOWER(correct_answer_content)` |
+
+**COMPOSITE General — Per-Part Grading Logic** (for mixed-type parts):
+
+| Part Type | Grading Logic |
+|-----------|---------------|
+| `TRUE_FALSE` | `is_correct = (student_boolean_answer == part.correct_boolean)` |
+| `SHORT_ANSWER` | Case-insensitive string match: `LOWER(student_text_answer.Trim()) == LOWER(part.correct_text.Trim())` |
+| `NUMERIC_ANSWER` | `is_correct = ABS(student_numeric_answer - part.correct_numeric) <= part.numeric_tolerance` (tolerance defaults to 0 if null) |
+
+Each part's `points_earned` = `part.default_point` if correct, `0` otherwise. Parent `TestAnswer.points_earned` = `MIN(SUM(part points), question.default_point)`.
 
 ### Key Entities *(read from Testing module)*
 
@@ -264,8 +275,7 @@ Delegates competency updates to **Recommender module (005)** via `GradeCalculate
 ## Assumptions
 
 - Target database is SQL Server.
-- Testing module (003) calls Grading in-process during submit; `TestSubmittedEvent` is optional/transient and must not imply a persisted `Submitted` status.
-- No RabbitMQ grading queue is required for MVP under the current `TestSession.Status` design.
-- Polly retry policy: 3 retries with exponential backoff for grading transaction failures.
-- Chatbot integration uses OpenAI or Claude API; credentials injected via environment variables.
-- Chatbot rate limiter (UC-51): **in-memory only for MVP** — keyed by `(studentId, sessionId)`. Redis is explicitly excluded per Constitution §IV; it may be introduced only when multi-instance deployment becomes a spec-backed requirement.
+- Testing module (003) publishes `TestSubmittedEvent` via MediatR. For Practice mode, `GradeSubmittedSessionHandler` handles it in-process. For Exam mode, `TestSubmittedConsumer` (MassTransit) handles it — routing depends on transport configuration (InMemory for MVP, RabbitMQ for production). Both delegate to the shared `IGradingOrchestrator`.
+- Polly retry policy: EF Core `EnableRetryOnFailure` (3 retries, exponential backoff) + `CreateExecutionStrategy()` for explicit transactions.
+- Chatbot integration uses **Google Gemini API** (`gemini-2.0-flash` model); API key injected via `Chatbot:ApiKey` configuration. Base URL: `https://generativelanguage.googleapis.com/`.
+- Chatbot rate limiter (UC-51): **in-memory only for MVP** — keyed by `(studentId, sessionId)`, TTL-based eviction (1 hour). Redis is explicitly excluded per Constitution §IV; it may be introduced only when multi-instance deployment becomes a spec-backed requirement.

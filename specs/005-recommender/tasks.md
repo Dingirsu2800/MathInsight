@@ -108,25 +108,30 @@
 
 ## Phase 5: Unified Multi-Tag v4.1 Upgrade
 
-- [ ] **Multi-tag Elo Delta Distribution** (RCM-06 Bước 2):
-  - [ ] Parse `answer.TagWeights` (list of `TagWeightEntry`) from `GradeCalculatedEvent.Answers`.
-  - [ ] For each answer, compute `Δ_total` once (Bước 1, unchanged).
-  - [ ] For each tag in `answer.TagWeights`: `ΔP_tag_i = Δ_total × w_i`; update that tag's `practice_point`.
-  - [ ] Increment `series_answer_count` independently for each tag.
-  - [ ] Verify degenerate case: single-tag (w_i=1.0) produces identical results to MVP.
+> **Status**: Core logic implemented. `TopicResultIngestionHandler` already reads `TagWeights` and applies per-tag Elo delta. Backward-compatible fallback exists for when `TagWeights` is empty (uses `TagId` with `w=1.0`). Full activation depends on 004 Phase 6 populating `TagWeights` in `GradeCalculatedEvent.Answers`.
 
-- [ ] **Weighted Exam TopicScore** (RCM-05 Tầng 1–2):
-  - [ ] Use `TopicGradeResult.TopicScore` (now pre-calculated with weighted T_j^{(i)} by Grading module).
-  - [ ] No formula change needed in handler — TopicScore arrives already weighted.
+- [x] **Multi-tag Elo Delta Distribution** (RCM-06 Bước 2):
+  - [x] Parse `answer.TagWeights` (list of `TagWeightEntry`) from `GradeCalculatedEvent.Answers`.
+  - [x] For each answer, compute `Δ_total` once (Bước 1, unchanged).
+  - [x] For each tag in `answer.TagWeights`: `ΔP_tag_i = Δ_total × w_i`; update that tag's `practice_point`.
+  - [x] Increment `series_answer_count` independently for each tag.
+  - [x] Verify degenerate case: single-tag (w_i=1.0) produces identical results to MVP.
+  - [x] **Backward-compatible fallback**: When `TagWeights` is null/empty, falls back to `ans.TagId` with `w=1.0` (identical to MVP behavior).
+  - [x] Load or lazy-create `TagsMastery` for ALL unique tags across all answers in the session.
 
-- [ ] **Bottleneck Weak Tag** (BR-19, RCM-14):
-  - [ ] Add `IsBottleneckWeak(officialPoint)` to `IDifficultyMappingService` / `DifficultyMappingService` returning true when `< 4.00`.
-  - [ ] Update `RecommenderService.GetStudentWeakTagsAsync()` to include tags with `official_point < 4.00` with reason `BottleneckSubTag`.
-  - [ ] Update `WeakTagAdviceDto` or response mapping to flag `IsBottleneckWeak`.
+- [x] **Weighted Exam TopicScore** (RCM-05 Tầng 1–2):
+  - [x] Use `TopicGradeResult.TopicScore` (now pre-calculated with weighted T_j^{(i)} by Grading module).
+  - [x] No formula change needed in handler — TopicScore arrives already weighted.
 
-- [ ] **Multi-tag Exam PerTagResults ingestion**:
-  - [ ] PerTagResults now contains entries for ALL tags (primary + secondary). Handler must iterate all of them.
-  - [ ] Insert `StudentTopicSessionResult` for each `(session_id, tag_id)` pair — more rows per session than MVP.
+- [x] **Bottleneck Weak Tag** (BR-19, RCM-14):
+  - [x] Add `IsBottleneckWeak(officialPoint)` to `IDifficultyMappingService` / `DifficultyMappingService` returning true when `< 4.00`.
+  - [x] Update `RecommenderService.GetStudentWeakTagAdviceAsync()` to classify bottleneck tags with reason `BottleneckSubTag`.
+  - [x] `WeakTagAdviceDto` includes `IsWeak`, `IsRemedial`, `Reason` fields.
+
+- [x] **Multi-tag Exam PerTagResults ingestion** *(unblocked — 004 Phase 6 completed)*:
+  - [x] PerTagResults now contains entries for ALL tags (primary + secondary) via 004 Phase 6 `BuildGradeCalculatedEvent()`.
+  - [x] Handler iterates all `PerTagResults` entries and inserts `StudentTopicSessionResult` for each `(session_id, tag_id)` pair.
+  - [x] Note: Handler code already iterates all `PerTagResults` entries — no code change needed, only upstream data change (004 Phase 6).
 
 ---
 
@@ -156,13 +161,13 @@
   - [x] WeakTags query returns only rows with `official_point < 5.00`.
   - [x] Lecture/material recommendations prioritize remedial weak topics first.
   - [x] SQL-only recommender works without Redis/SAR configured.
-  - [ ] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
+  - [x] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
   - [x] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
 
-- [ ] **Multi-tag unit tests** (v4.1):
-  - [ ] Single-tag answer: `ΔP = Δ_total × 1.0` (suy biến, same as MVP).
-  - [ ] 1 primary (w=0.65) + 1 secondary (w=0.35), correct Mức 3: `Δ_total = +0.075` → `ΔP_main = 0.049`, `ΔP_sub = 0.026`.
-  - [ ] 1 primary (w=0.65) + 2 secondary (w=0.175 each), wrong Mức 1 t<5s: `Δ_total = -0.3375` → `ΔP_main = -0.219`, `ΔP_sub = -0.059 each`.
-  - [ ] series_answer_count reaches 10 independently per tag → blend + reset.
-  - [ ] Exam TopicScore: 3 câu liên tag INT: `c_{q,INT}` = `[8.0, 3.9, 1.75]`, `T_j = 13.65/3 = 4.55`.
-  - [ ] BR-19: sub-tag `official_point = 3.9` → `IsBottleneckWeak = true`; `4.1` → false.
+- [x] **Multi-tag unit tests** (v4.1):
+  - [x] Single-tag answer: `ΔP = Δ_total × 1.0` (suy biến, same as MVP).
+  - [x] 1 primary (w=0.65) + 1 secondary (w=0.35), correct Mức 3: `Δ_total = +0.075` → `ΔP_main = 0.049`, `ΔP_sub = 0.026`.
+  - [x] 1 primary (w=0.65) + 2 secondary (w=0.175 each), wrong Mức 1 t<5s: `Δ_total = -0.3375` → `ΔP_main = -0.219`, `ΔP_sub = -0.059 each`.
+  - [x] series_answer_count reaches 10 independently per tag → blend + reset.
+  - [x] Exam TopicScore: 3 câu liên tag INT: `c_{q,INT}` = `[8.0, 3.9, 1.75]`, `T_j = 13.65/3 = 4.55`.
+  - [x] BR-19: sub-tag `official_point = 3.9` → `IsBottleneckWeak = true`; `4.1` → false.

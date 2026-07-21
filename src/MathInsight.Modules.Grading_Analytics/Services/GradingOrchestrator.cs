@@ -167,28 +167,50 @@ public class GradingOrchestrator : IGradingOrchestrator
     }
 
     /// <summary>
+    /// Default weight for the primary (Tag Chính) topic when a question has multiple tags.
+    /// BR-13/14/15: w_main ∈ [0.60, 0.70], default 0.65.
+    /// </summary>
+    private const decimal DefaultPrimaryWeight = 0.65m;
+
+    /// <summary>
     /// Builds the GradeCalculatedEvent contract (G3) from grading results.
     /// Uses MathInsight.Shared.Events.GradeCalculatedEvent — no local copy.
+    ///
+    /// Phase 6 (Unified Multi-Tag v4.1):
+    ///   - Populates TagWeights per answer from QuestionTopics (BR-13/14/15)
+    ///   - Populates NormalizedScore per answer: PointsEarned / MaxPoints × 10.0
+    ///   - Populates MaxPoints per answer: Question.DefaultPoint
+    ///   - Expands PerTagResults to ALL tags (primary + secondary) with weighted Tầng 1–2 formula
     /// </summary>
     private static GradeCalculatedEvent BuildGradeCalculatedEvent(
         TestSession session,
         GradingResult gradingResult,
         TestSubmittedEvent notification)
     {
-        // ── Build per-answer DTOs with primary TagId ──────────────────────────
         var gradedAnswers = new List<GradedAnswerDto>();
 
-        // ── Build per-tag results ────────────────────────────────────────────
-        // Track per-tag correctness for PerTagResults
+        // ── Track per-tag weighted contributions for Tầng 1–2 formula ────────
+        // Key: TagId → list of c_{q,i} contributions (one per question containing this tag)
+        var tagContributions = new Dictionary<Guid, List<decimal>>();
+        // Track per-tag correct/total counts for PerTagResults
         var tagStats = new Dictionary<Guid, (int Correct, int Total)>();
 
         foreach (var answer in session.TestAnswers)
         {
-            // Find primary topic tag for this question
-            var primaryTopic = answer.Question.QuestionTopics
-                .FirstOrDefault(qt => qt.IsPrimary);
+            var questionTopics = answer.Question.QuestionTopics;
+            var primaryTopic = questionTopics.FirstOrDefault(qt => qt.IsPrimary);
+            var primaryTagId = primaryTopic?.TagId ?? Guid.Empty;
 
-            var tagId = primaryTopic?.TagId ?? Guid.Empty;
+            // ── Phase 6: Build TagWeights from QuestionTopics (BR-13/14/15) ──
+            var tagWeights = BuildTagWeights(questionTopics);
+
+            // ── Phase 6: MaxPoints = Question.DefaultPoint ───────────────────
+            decimal maxPoints = answer.Question.DefaultPoint;
+
+            // ── Phase 6: NormalizedScore = PointsEarned / MaxPoints × 10.0 ──
+            decimal normalizedScore = maxPoints > 0
+                ? Math.Round(answer.PointsEarned / maxPoints * 10.0m, 2)
+                : 0m;
 
             // Determine abandoned status using same logic as GradingEngine
             bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
@@ -196,39 +218,61 @@ public class GradingOrchestrator : IGradingOrchestrator
             gradedAnswers.Add(new GradedAnswerDto
             {
                 QuestionId = answer.QuestionId,
-                TagId = tagId,
+                TagId = primaryTagId,
+                TagWeights = tagWeights,
+                NormalizedScore = normalizedScore,
                 IsCorrect = answer.IsCorrect == true,
                 PointsEarned = answer.PointsEarned,
+                MaxPoints = maxPoints,
                 TimeSpent = answer.TimeSpent ?? 0,
                 DifficultyLevel = answer.Question.DifficultyLevel,
                 QuestionNo = answer.QuestionNo,
                 IsAbandoned = isAbandoned
             });
 
-            // Accumulate per-tag stats (skip questions without a primary tag)
-            if (tagId != Guid.Empty)
+            // ── Phase 6: Accumulate per-tag stats for ALL tags ───────────────
+            foreach (var tw in tagWeights)
             {
-                if (!tagStats.TryGetValue(tagId, out var stats))
-                    stats = (0, 0);
+                if (tw.TagId == Guid.Empty) continue;
 
+                // Tầng 1: c_{q,i} = s_q × w_{iq}
+                decimal contribution = normalizedScore * tw.Weight;
+
+                if (!tagContributions.TryGetValue(tw.TagId, out var contributions))
+                {
+                    contributions = new List<decimal>();
+                    tagContributions[tw.TagId] = contributions;
+                }
+                contributions.Add(contribution);
+
+                // Track correct/total per tag
+                if (!tagStats.TryGetValue(tw.TagId, out var stats))
+                    stats = (0, 0);
                 stats.Total++;
                 if (answer.IsCorrect == true)
                     stats.Correct++;
-
-                tagStats[tagId] = stats;
+                tagStats[tw.TagId] = stats;
             }
         }
 
-        // ── Build PerTagResults ──────────────────────────────────────────────
-        var perTagResults = tagStats
-            .Select(kv => new TopicGradeResult
+        // ── Phase 6: Build PerTagResults with Tầng 2 weighted TopicScore ────
+        var perTagResults = tagContributions
+            .Select(kv =>
             {
-                TagId = kv.Key,
-                TopicScore = kv.Value.Total > 0
-                    ? Math.Round((decimal)kv.Value.Correct / kv.Value.Total * 10.0m, 2)
-                    : 0m,
-                CorrectCount = kv.Value.Correct,
-                TotalCount = kv.Value.Total
+                // Tầng 2: T_j^{(i)} = avg(c_{q,i}) across all questions containing tag i
+                decimal topicScore = kv.Value.Count > 0
+                    ? Math.Round(kv.Value.Average(), 2)
+                    : 0m;
+
+                var (correct, total) = tagStats.TryGetValue(kv.Key, out var s) ? s : (0, 0);
+
+                return new TopicGradeResult
+                {
+                    TagId = kv.Key,
+                    TopicScore = Math.Clamp(topicScore, 0.00m, 10.00m),
+                    CorrectCount = correct,
+                    TotalCount = total
+                };
             })
             .ToList();
 
@@ -246,6 +290,64 @@ public class GradingOrchestrator : IGradingOrchestrator
             Answers = gradedAnswers,
             GradedAt = DateTime.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Builds TagWeightEntry list from QuestionTopics for a single question.
+    /// BR-13/14/15 weight rules:
+    ///   - Single tag: w = 1.0
+    ///   - Tag Chính (primary): w_main = 0.65
+    ///   - Tag Phụ (secondary): w_sub_i = (1 − w_main) / N_sub
+    /// Sum of all weights = 1.0.
+    /// </summary>
+    private static List<TagWeightEntry> BuildTagWeights(ICollection<QuestionTopic> questionTopics)
+    {
+        if (questionTopics.Count == 0)
+            return [];
+
+        if (questionTopics.Count == 1)
+        {
+            var qt = questionTopics.First();
+            return [new TagWeightEntry
+            {
+                TagId = qt.TagId,
+                Weight = 1.0m,
+                IsPrimary = qt.IsPrimary
+            }];
+        }
+
+        // Multi-tag question: primary gets w_main, each secondary gets (1 - w_main) / N_sub
+        var primary = questionTopics.FirstOrDefault(qt => qt.IsPrimary);
+        var secondaries = questionTopics.Where(qt => !qt.IsPrimary).ToList();
+
+        decimal wMain = DefaultPrimaryWeight;
+        decimal wSub = secondaries.Count > 0
+            ? (1.0m - wMain) / secondaries.Count
+            : 0m;
+
+        var weights = new List<TagWeightEntry>();
+
+        if (primary is not null)
+        {
+            weights.Add(new TagWeightEntry
+            {
+                TagId = primary.TagId,
+                Weight = wMain,
+                IsPrimary = true
+            });
+        }
+
+        foreach (var sec in secondaries)
+        {
+            weights.Add(new TagWeightEntry
+            {
+                TagId = sec.TagId,
+                Weight = wSub,
+                IsPrimary = false
+            });
+        }
+
+        return weights;
     }
 
     /// <summary>

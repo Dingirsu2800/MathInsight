@@ -12,28 +12,33 @@ Builds `MathInsight.Modules.Grading` — handles synchronous MVP auto-grading, s
 | Property | Value |
 |----------|-------|
 | Language | C# / .NET 10.0 |
-| Primary Dependencies | MediatR, EF Core, Polly |
+| Primary Dependencies | MediatR, EF Core, MassTransit (Exam consumer) |
 | Storage | SQL Server; cross-reads current DB script tables owned by Testing and QuestionBank |
-| External | OpenAI / Claude API (chatbot, UC-51) |
-| Queue | None for MVP; async grading requires a future `PendingGrading` state or grading job table |
+| External | Google Gemini API (chatbot, UC-51; model: `gemini-2.0-flash`) |
+| Queue | MassTransit — `TestSubmittedConsumer` registered for Exam mode. InMemory transport for MVP; RabbitMQ for production. |
 | Testing | xUnit / Integration tests |
 | Project Type | Modular Monolith Web API |
 
 ## Project Structure
 
 ```text
-src/MathInsight.Modules.Grading/
+src/MathInsight.Modules.Grading_Analytics/
+├── Consumers/
+│   └── TestSubmittedConsumer.cs      # MassTransit IConsumer<TestSubmittedEvent> for Exam mode async grading
 ├── Handlers/
-│   └── GradeSubmittedSessionHandler.cs  # Synchronous MVP grading from Testing submit flow
+│   └── GradeSubmittedSessionHandler.cs  # MediatR INotificationHandler<TestSubmittedEvent> for Practice mode
 ├── Services/
-│   ├── IGradingEngine.cs               # Grading algorithm interface
-│   ├── GradingEngine.cs                # Per-question-type grading logic
+│   ├── IGradingOrchestrator.cs          # Shared grading orchestration interface
+│   ├── GradingOrchestrator.cs           # Core grading flow: load session → validate → grade → save → build event
+│   ├── IGradingEngine.cs                # Grading algorithm interface
+│   ├── GradingEngine.cs                 # Per-question-type grading logic
 │   ├── IChatbotService.cs
-│   └── ChatbotService.cs               # OpenAI/Claude REST client
+│   └── ChatbotService.cs               # Google Gemini API REST client (gemini-2.0-flash)
 ├── Events/
-│   └── GradeCalculatedEvent.cs         # MediatR notification → Recommender module
+│   └── (uses MathInsight.Shared.Events.GradeCalculatedEvent)
 ├── Controllers/
-│   └── GradingController.cs            # UC-51: chatbot endpoint
+│   ├── GradingController.cs            # UC-51: chatbot endpoint (api/v1/chatbot)
+│   └── StudentGradingController.cs     # UC-55/56: session result + history (api/v1/grading)
 └── GradingModuleExtensions.cs
 ```
 
@@ -157,17 +162,17 @@ Publish GradeCalculatedEvent (MediatR in-process):
 ### Chatbot Integration (UC-51)
 
 ```csharp
-// ChatbotService.AskAsync(questionContent, studentAnswer):
-// POST https://api.openai.com/v1/chat/completions
-// System prompt: "You are a math tutor. Explain the solution step-by-step in clear natural language.
+// ChatbotService.AskAsync(questionContent, studentAnswer, studentId, sessionId):
+// POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={ApiKey}
+// System instruction: "You are a math tutor. Explain the solution step-by-step in clear natural language.
 // Use simple Unicode/plain-text math notation where needed; do not require technical markup syntax."
 // User message: questionContent + studentAnswer
 // Returns: string explanation (not persisted)
 ```
 
-- API key injected via `Chatbot:ApiKey` environment variable.
-- Timeout: 10 seconds (Polly circuit breaker after 3 failures).
-- Rate limiting: 1 request per student per session (enforced in service layer).
+- API key injected via `Chatbot:ApiKey` configuration section. Model configurable via `Chatbot:Model` (default: `gemini-2.0-flash`). Base URL: `Chatbot:BaseUrl` (default: `https://generativelanguage.googleapis.com/`).
+- Timeout: 10 seconds (HttpClient timeout). Polly circuit breaker: 3 failures = open 30s.
+- Rate limiting: 1 request per student per session — in-memory `ConcurrentDictionary<(Guid, Guid), DateTime>` with TTL-based eviction (1 hour cleanup interval).
 
 ## Verification Plan
 
