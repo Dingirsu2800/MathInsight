@@ -29,7 +29,7 @@ public class DiscussionsController : ControllerBase
     [HttpGet("lectures/{lectureId}")]
     public async Task<IActionResult> GetDiscussions(string lectureId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetDiscussionsQuery(lectureId, IsStudent, page, pageSize), cancellationToken);
+        var result = await _mediator.Send(new GetDiscussionsQuery(lectureId, IsStudent, CurrentUserId, page, pageSize), cancellationToken);
         return Ok(result);
     }
 

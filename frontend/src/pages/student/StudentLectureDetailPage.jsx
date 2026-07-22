@@ -37,9 +37,8 @@ export default function StudentLectureDetailPage() {
   const [editingComment, setEditingComment] = useState(null);
   const [editContent, setEditContent] = useState("");
   
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [replyContent, setReplyContent] = useState("");
-  const [submittingReply, setSubmittingReply] = useState(false);
+  const [replyContent, setReplyContent] = useState({});
+  const [submittingReply, setSubmittingReply] = useState(null);
 
   const fetchDiscussionsData = async () => {
     try {
@@ -122,18 +121,18 @@ export default function StudentLectureDetailPage() {
   };
 
   const handleAnswerQuestion = async (questionId) => {
-    if (!replyContent.trim()) return;
-    setSubmittingReply(true);
+    const content = replyContent[questionId];
+    if (!content || !content.trim()) return;
+    setSubmittingReply(questionId);
     try {
-      await answerQuestion(questionId, { content: replyContent });
-      setReplyContent("");
-      setReplyingTo(null);
+      await answerQuestion(questionId, { content });
+      setReplyContent(prev => ({ ...prev, [questionId]: "" }));
       await fetchDiscussionsData();
     } catch (err) {
       console.error("Lỗi khi gửi câu trả lời", err);
       alert("Lỗi khi gửi câu trả lời!");
     } finally {
-      setSubmittingReply(false);
+      setSubmittingReply(null);
     }
   };
 
@@ -361,7 +360,7 @@ export default function StudentLectureDetailPage() {
           
           <div className="space-y-6">
             {discussions.map((disc) => (
-              <div key={disc.id} className="bg-pure-surface rounded-xl border border-whisper-border p-6 relative group">
+              <div key={disc.id} className={`bg-pure-surface rounded-xl border border-whisper-border p-6 relative group ${disc.status === "Hidden" ? "opacity-60 bg-surface-container-lowest" : ""}`}>
                 {/* Actions Question */}
                 <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border">
                   {disc.authorId === currentAccountId ? (
@@ -398,14 +397,6 @@ export default function StudentLectureDetailPage() {
                         </h4>
                         <p className="text-[13px] text-on-surface-variant">{disc.timeAgo}</p>
                       </div>
-                      {(userRole === "Teacher" || userRole === "Admin") && (
-                        <button 
-                          onClick={() => setReplyingTo(replyingTo === disc.id ? null : disc.id)}
-                          className="px-3 py-1.5 bg-surface-variant text-on-surface-variant rounded-lg text-[13px] font-medium hover:bg-outline-variant transition-colors"
-                        >
-                          {replyingTo === disc.id ? "Hủy" : "Trả lời"}
-                        </button>
-                      )}
                     </div>
                     <h5 className="text-[16px] font-medium text-on-surface mt-2 mb-1">{disc.title}</h5>
                     {editingComment === disc.id ? (
@@ -417,34 +408,22 @@ export default function StudentLectureDetailPage() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-[14px] text-on-surface-variant">{disc.content}</p>
-                    )}
-                    
-                    {replyingTo === disc.id && (
-                      <div className="mt-4 bg-surface-container-low p-4 rounded-xl border border-outline-variant">
-                        <textarea 
-                          className="w-full px-4 py-3 bg-pure-surface border border-outline-variant rounded-lg text-[14px] focus:ring-primary focus:border-primary resize-y min-h-[100px] mb-3"
-                          placeholder="Nhập câu trả lời của bạn..."
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                        />
-                        <div className="flex justify-end gap-3">
-                          <button 
-                            className="px-5 py-2 bg-primary text-on-primary rounded-lg text-[14px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                            onClick={() => handleAnswerQuestion(disc.id)}
-                            disabled={!replyContent.trim() || submittingReply}
-                          >
-                            {submittingReply ? "Đang gửi..." : "Gửi câu trả lời"}
-                          </button>
-                        </div>
-                      </div>
+                      <>
+                        {disc.status === "Hidden" && (
+                          <div className="bg-[#fee2e2] text-[#ef4444] text-[13px] px-3 py-2 rounded-lg mb-3 flex items-center gap-2 border border-[#fca5a5]">
+                            <span className="material-symbols-outlined text-[16px]">info</span>
+                            Bình luận của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.
+                          </div>
+                        )}
+                        <p className={`text-[14px] text-on-surface-variant ${disc.status === "Hidden" ? "blur-[1px] select-none italic" : ""}`}>{disc.content}</p>
+                      </>
                     )}
                   </div>
                 </div>
 
                 {/* Answers */}
                 {disc.answers?.map((ans) => (
-                  <div key={ans.id} className="mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans">
+                  <div key={ans.id} className={`mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans ${ans.status === "Hidden" ? "opacity-60" : ""}`}>
                     {/* Actions Answer */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
                       {ans.authorId === currentAccountId ? (
@@ -488,11 +467,41 @@ export default function StudentLectureDetailPage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-[14px] text-on-surface">{ans.content}</p>
+                        <>
+                          {ans.status === "Hidden" && (
+                            <div className="bg-[#fee2e2] text-[#ef4444] text-[12px] px-2 py-1.5 rounded-md mb-2 flex items-start gap-1.5 border border-[#fca5a5]">
+                              <span className="material-symbols-outlined text-[14px] mt-0.5">info</span>
+                              <span>Bình luận đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.</span>
+                            </div>
+                          )}
+                          <p className={`text-[14px] text-on-surface ${ans.status === "Hidden" ? "blur-[1px] select-none italic text-on-surface-variant" : ""}`}>{ans.content}</p>
+                        </>
                       )}
                     </div>
                   </div>
                 ))}
+                
+                {/* Reply Input Box */}
+                {disc.status !== "Hidden" && (
+                  <div className="mt-4 ml-14 pl-4 flex gap-4">
+                      <input 
+                        className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-2 text-[14px] focus:ring-primary focus:border-primary" 
+                        placeholder="Nhập câu trả lời..." 
+                        value={replyContent[disc.id] || ""}
+                        onChange={(e) => setReplyContent(prev => ({ ...prev, [disc.id]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAnswerQuestion(disc.id);
+                        }}
+                      />
+                      <button 
+                        className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-medium flex items-center justify-center min-w-[70px] disabled:opacity-50"
+                        onClick={() => handleAnswerQuestion(disc.id)}
+                        disabled={submittingReply === disc.id || !(replyContent[disc.id] || "").trim()}
+                      >
+                        {submittingReply === disc.id ? "Đang gửi" : "Gửi"}
+                      </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
