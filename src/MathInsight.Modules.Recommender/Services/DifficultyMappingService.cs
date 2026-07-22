@@ -7,6 +7,7 @@ namespace MathInsight.Modules.Recommender.Services;
 public sealed class DifficultyMappingService : IDifficultyMappingService
 {
     private const decimal WeakThreshold = 5.00m;
+    private const decimal BottleneckThreshold = 4.00m; // BR-19, RCM-14
 
     /// <inheritdoc />
     public byte MapFromOfficialPoint(decimal officialPoint) => officialPoint switch
@@ -23,4 +24,7 @@ public sealed class DifficultyMappingService : IDifficultyMappingService
     /// <inheritdoc />
     public bool IsRemedial(byte recommendedDifficultyLevel, decimal officialPoint)
         => recommendedDifficultyLevel == 1 && IsWeak(officialPoint);
+
+    /// <inheritdoc />
+    public bool IsBottleneckWeak(decimal officialPoint) => officialPoint < BottleneckThreshold;
 }

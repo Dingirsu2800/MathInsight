@@ -139,7 +139,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             mastery.LastPracticedTime = evt.GradedAt;
             // ── RCM-06: Update PracticePoint using Elo formula sequentially ─────────
             var tagAnswers = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
-                .Where(a => a.TagId == tagResult.TagId)
+                .Where(answer => HasTag(answer, tagResult.TagId))
                 .OrderBy(a => a.QuestionNo)
                 .ToList();
 
@@ -162,7 +162,11 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
                     mastery.SeriesAnswerCount++;
                 }
 
-                mastery.PracticePoint = Math.Clamp(mastery.PracticePoint + delta, 0.00m, 10.00m);
+                var tagWeight = GetTagWeight(ans, tagResult.TagId);
+                mastery.PracticePoint = Math.Clamp(
+                    mastery.PracticePoint + (delta * tagWeight),
+                    0.00m,
+                    10.00m);
 
                 mastery.OfficialPoint = Math.Clamp(
                     0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
@@ -192,7 +196,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
 
         // Calculate EarnedPoints and MaxPoints from GradedAnswerDto list
         var answersForTag = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
-            .Where(a => a.TagId == tagResult.TagId && !a.IsScoreInvalidated)
+            .Where(answer => HasTag(answer, tagResult.TagId) && !answer.IsScoreInvalidated)
             .ToList();
 
         decimal earnedPoints = answersForTag.Sum(a => a.PointsEarned);
@@ -281,6 +285,22 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             ? 0.05m * difficultyWeight
             : -0.05m * (5.0m - difficultyWeight) * timePenalty;
     }
+
+    private static bool HasTag(GradedAnswerDto answer, string tagId)
+        => answer.TagWeights.Any(weight => string.Equals(
+               weight.TagId,
+               tagId,
+               StringComparison.OrdinalIgnoreCase)) ||
+           (answer.TagWeights.Count == 0 && string.Equals(
+               answer.TagId,
+               tagId,
+               StringComparison.OrdinalIgnoreCase));
+
+    private static decimal GetTagWeight(GradedAnswerDto answer, string tagId)
+        => answer.TagWeights.FirstOrDefault(weight => string.Equals(
+               weight.TagId,
+               tagId,
+               StringComparison.OrdinalIgnoreCase))?.Weight ?? 1m;
 
     private static List<ExamHistoryEntry> DeserializeHistory(string? json)
     {

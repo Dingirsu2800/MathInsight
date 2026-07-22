@@ -1,6 +1,10 @@
+// "Mục tiêu" and "Thành tích" have no page yet, so they land on the catch-all
+// "Không tìm thấy trang" screen. That is intended — the catch-all no longer redirects to
+// /login, so an unbuilt page reads as an unbuilt page rather than a logged-out session.
 export const studentNavItems = [
   { label: "Tổng quan", path: "/student/dashboard", icon: "dashboard" },
-  { label: "Làm bài", path: "/student/tests", icon: "edit_document" },
+  // App.jsx registers "/student/test" (singular).
+  { label: "Làm bài", path: "/student/test", icon: "edit_document" },
   { label: "Lịch sử làm bài", path: "/student/history", icon: "history" },
   { label: "Bài giảng", path: "/student/lectures", icon: "menu_book" },
   { label: "Mục tiêu", path: "/student/targets", icon: "ads_click" },

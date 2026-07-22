@@ -40,7 +40,7 @@ export default function TeacherLayout({ children }) {
       userName={userName}
       userRoleLabel="Teacher"
       userInitials={userInitials}
-      profilePath="/teacher/profile"
+      profilePath="/profile"
       primaryAction={{
         label: "Tạo bài giảng mới",
         icon: "add",

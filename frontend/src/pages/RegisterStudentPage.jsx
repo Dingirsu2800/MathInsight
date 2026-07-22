@@ -403,12 +403,20 @@ export default function RegisterStudentPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-slate-500">
-          Đã có tài khoản?{" "}
-          <Link to="/login" className="font-bold text-[#2f5fa8] hover:underline">
-            Đăng nhập
-          </Link>
-        </p>
+        <div className="text-center space-y-2">
+          <p className="text-sm text-slate-500">
+            Đã có tài khoản?{" "}
+            <Link to="/login" className="font-bold text-[#2f5fa8] hover:underline">
+              Đăng nhập
+            </Link>
+          </p>
+          <p className="text-xs text-slate-400">
+            Bạn là giáo viên?{" "}
+            <Link to="/register/teacher" className="font-semibold text-[#2f5fa8] hover:underline">
+              Đăng ký với tư cách giáo viên
+            </Link>
+          </p>
+        </div>
       </section>
     </main>
   );

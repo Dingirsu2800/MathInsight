@@ -8,7 +8,7 @@
 
 **Branch**: `005-recommender` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
-> **Updated**: 2026-07-04 - aligned with Rule-Based/Ptag v2 and migration 002
+> **Updated**: 2026-07-20 - aligned with Unified Multi-Tag Ptag v4.1 and migration 002
 
 ---
 
@@ -40,9 +40,15 @@
       - Prepend `topic_score` to `exam_history` (JSON array), keep at most 5 entries.
       - **Ordering contract (I2)**: `exam_history[0]` = most recent score (j=1); `exam_history[k-1]` = oldest. Always prepend new score; truncate last entry when `len > 5`. This ordering is mandatory for the Exponential Decay formula where j=1 must be the latest.
       - `exam_anchor = Σ(β^(j-1) × T_j) / Σ(β^(j-1))` with `β = 0.8`, `j=1` = latest (`history[0]`).
-    - If practice/adaptive result (TestFormat == "Practice"): update `practice_point` using Elo formula (RCM-06) sequentially and retrospectively for each answer in the provided `answers` list (ordered by `QuestionNo`) (F1 & F4 resolution):
-      - Correct: `practice_point = min(10.0, practice_point + 0.05 × w_D × γ_time)`
-      - Wrong:   `practice_point = max(0.0,  practice_point − 0.05 × (5 − w_D) × γ_time_penalty)`
+    - If practice/adaptive result (TestFormat == "Practice"): update `practice_point` using multi-tag Elo formula (RCM-06 v4.1) sequentially and retrospectively for each answer:
+      - **Bước 1**: Compute Δ_total (unchanged):
+        - Correct: `Δ_total = +0.05 × w_D × γ_time`
+        - Wrong:   `Δ_total = -0.05 × (5 − w_D) × γ_time_penalty`
+      - **Bước 2**: For EACH tag in `answer.TagWeights`:
+        - `ΔP_tag_i = Δ_total × w_i`
+        - `practice_point_i = clamp(practice_point_i + ΔP_tag_i, 0, 10)`
+        - Increment `series_answer_count` per-tag independently
+      - Degenerate case (single-tag, w_i=1.0): identical to MVP
       - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` for difficulty levels 1–4.
       - `γ_time_penalty = 1.5` when answer time `t < 5 seconds` and not abandoned (`!IsAbandoned`); otherwise `γ_time = 1.0`.
       - Increment `series_answer_count`.
@@ -106,6 +112,30 @@
 
 ---
 
+## Phase 5: Unified Multi-Tag v4.1 Upgrade
+
+- [ ] **Multi-tag Elo Delta Distribution** (RCM-06 Bước 2):
+  - [ ] Parse `answer.TagWeights` (list of `TagWeightEntry`) from `GradeCalculatedEvent.Answers`.
+  - [ ] For each answer, compute `Δ_total` once (Bước 1, unchanged).
+  - [ ] For each tag in `answer.TagWeights`: `ΔP_tag_i = Δ_total × w_i`; update that tag's `practice_point`.
+  - [ ] Increment `series_answer_count` independently for each tag.
+  - [ ] Verify degenerate case: single-tag (w_i=1.0) produces identical results to MVP.
+
+- [ ] **Weighted Exam TopicScore** (RCM-05 Tầng 1–2):
+  - [ ] Use `TopicGradeResult.TopicScore` (now pre-calculated with weighted T_j^{(i)} by Grading module).
+  - [ ] No formula change needed in handler — TopicScore arrives already weighted.
+
+- [ ] **Bottleneck Weak Tag** (BR-19, RCM-14):
+  - [ ] Add `IsBottleneckWeak(officialPoint)` to `IDifficultyMappingService` / `DifficultyMappingService` returning true when `< 4.00`.
+  - [ ] Update `RecommenderService.GetStudentWeakTagsAsync()` to include tags with `official_point < 4.00` with reason `BottleneckSubTag`.
+  - [ ] Update `WeakTagAdviceDto` or response mapping to flag `IsBottleneckWeak`.
+
+- [ ] **Multi-tag Exam PerTagResults ingestion**:
+  - [ ] PerTagResults now contains entries for ALL tags (primary + secondary). Handler must iterate all of them.
+  - [ ] Insert `StudentTopicSessionResult` for each `(session_id, tag_id)` pair — more rows per session than MVP.
+
+---
+
 ## Phase 4: Verification
 
 - [x] `dotnet build` - zero compile errors.
@@ -134,3 +164,11 @@
   - [x] SQL-only recommender works without Redis/SAR configured.
   - [ ] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
   - [x] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
+
+- [ ] **Multi-tag unit tests** (v4.1):
+  - [ ] Single-tag answer: `ΔP = Δ_total × 1.0` (suy biến, same as MVP).
+  - [ ] 1 primary (w=0.65) + 1 secondary (w=0.35), correct Mức 3: `Δ_total = +0.075` → `ΔP_main = 0.049`, `ΔP_sub = 0.026`.
+  - [ ] 1 primary (w=0.65) + 2 secondary (w=0.175 each), wrong Mức 1 t<5s: `Δ_total = -0.3375` → `ΔP_main = -0.219`, `ΔP_sub = -0.059 each`.
+  - [ ] series_answer_count reaches 10 independently per tag → blend + reset.
+  - [ ] Exam TopicScore: 3 câu liên tag INT: `c_{q,INT}` = `[8.0, 3.9, 1.75]`, `T_j = 13.65/3 = 4.55`.
+  - [ ] BR-19: sub-tag `official_point = 3.9` → `IsBottleneckWeak = true`; `4.1` → false.

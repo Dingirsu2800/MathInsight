@@ -13,6 +13,8 @@ namespace MathInsight.Modules.Grading_Analytics.Services;
 
 public sealed class ScoreAdjustmentService : IScoreAdjustmentService
 {
+    private const decimal PrimaryTagWeight = 0.65m;
+
     private readonly GradingDbContext _db;
     private readonly IPublisher _publisher;
 
@@ -180,7 +182,10 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
         {
             var testQuestion = testQuestions[answer.QuestionId];
             var snapshot = DeserializeSnapshot(testQuestion);
-            var tagId = snapshot.Topics.FirstOrDefault(topic => topic.IsPrimary)?.TagId ?? string.Empty;
+            var tagWeights = BuildTagWeights(snapshot);
+            var tagId = tagWeights.FirstOrDefault(item => item.IsPrimary)?.TagId
+                ?? tagWeights.FirstOrDefault()?.TagId
+                ?? string.Empty;
             var invalidated = testQuestion.IsScoreInvalidated;
             var earned = invalidated ? testQuestion.MaxPointsSnapshot : answer.PointsEarned;
             var isAbandoned = !invalidated && IsAbandoned(answer, snapshot.QuestionType);
@@ -189,6 +194,10 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
             {
                 QuestionId = answer.QuestionId,
                 TagId = tagId,
+                TagWeights = tagWeights,
+                NormalizedScore = testQuestion.MaxPointsSnapshot > 0m
+                    ? Math.Round(earned / testQuestion.MaxPointsSnapshot * 10m, 2)
+                    : 0m,
                 IsCorrect = invalidated || answer.IsCorrect == true,
                 MachineIsCorrect = answer.IsCorrect,
                 IsScoreInvalidated = invalidated,
@@ -200,19 +209,19 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                 IsAbandoned = isAbandoned
             });
 
-            if (string.IsNullOrWhiteSpace(tagId))
-                continue;
-
-            tagStats.TryGetValue(tagId, out var stats);
-            if (!invalidated)
+            foreach (var tagWeight in tagWeights)
             {
-                stats.Total++;
-                if (answer.IsCorrect == true)
-                    stats.Correct++;
-                stats.Earned += earned;
-                stats.Max += testQuestion.MaxPointsSnapshot;
+                tagStats.TryGetValue(tagWeight.TagId, out var stats);
+                if (!invalidated)
+                {
+                    stats.Total++;
+                    if (answer.IsCorrect == true)
+                        stats.Correct++;
+                    stats.Earned += answer.PointsEarned * tagWeight.Weight;
+                    stats.Max += testQuestion.MaxPointsSnapshot * tagWeight.Weight;
+                }
+                tagStats[tagWeight.TagId] = stats;
             }
-            tagStats[tagId] = stats;
         }
 
         return new GradeCalculatedEvent
@@ -240,6 +249,34 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
             }).ToList(),
             GradedAt = DateTime.UtcNow
         };
+    }
+
+    private static IReadOnlyList<TagWeightEntry> BuildTagWeights(QuestionSnapshotV2 snapshot)
+    {
+        var topics = snapshot.Topics.ToList();
+        if (topics.Count == 0)
+            return [];
+        if (topics.Count == 1)
+        {
+            return [new TagWeightEntry
+            {
+                TagId = topics[0].TagId,
+                Weight = 1m,
+                IsPrimary = true
+            }];
+        }
+
+        var primaryIndex = topics.FindIndex(item => item.IsPrimary);
+        if (primaryIndex < 0)
+            primaryIndex = 0;
+        var secondaryWeight = (1m - PrimaryTagWeight) / (topics.Count - 1);
+
+        return topics.Select((topic, index) => new TagWeightEntry
+        {
+            TagId = topic.TagId,
+            Weight = index == primaryIndex ? PrimaryTagWeight : secondaryWeight,
+            IsPrimary = index == primaryIndex
+        }).ToList();
     }
 
     private static QuestionSnapshotV2 DeserializeSnapshot(TestQuestion testQuestion)

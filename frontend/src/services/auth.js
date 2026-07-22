@@ -1,5 +1,6 @@
 import client from "./questionBankApiClient";
 import { getRefreshToken, clearAuthSession } from "./authStorage";
+import { clearCachedProfile } from "../hooks/useCurrentUser";
 
 // Shared logout used by every authenticated surface.
 //
@@ -24,6 +25,8 @@ export async function logout() {
     console.error("Đăng xuất phía máy chủ thất bại:", err);
   } finally {
     clearAuthSession();
+    // Drop the cached profile too, so the next sign-in never shows the previous user's name.
+    clearCachedProfile();
   }
 
   // Hard redirect: fully resets in-memory app state and lands on the login page.

@@ -113,7 +113,7 @@ src/MathInsight.Modules.Grading_Analytics/
 
 | Event | Direction | Details |
 |-------|-----------|---------|
-| `GradeCalculatedEvent` | **Published** to Recommender (005) | Contains `session_id`, `student_id`, per-tag correctness summary, and detailed answers list (F1 resolution) |
+| `GradeCalculatedEvent` | **Published** to Recommender (005) | Contains `session_id`, `student_id`, multi-tag per-answer weights (`TagWeights`), per-tag topic scores (Tầng 1–2), and detailed answers list |
 | `GradeCalculatedEvent` | **Published** to Notification (008) | Triggers "test graded" push notification |
 
 ### Grading Pipeline
@@ -137,8 +137,22 @@ GradingEngine.Grade(session):
     ├── TestAnswerPart: is_correct, points_earned (for Composite parts)
     └── TestSession: status=Graded, score, num_correct, num_incorrect, num_abandoned
         │
+Build GradeCalculatedEvent (Unified Multi-Tag v4.1):
+  foreach TestAnswer:
+    ├── Load ALL QuestionTopics (primary + secondary)
+    ├── Calculate tag weights w_{iq} per BR-13/14/15:
+    │     - Single tag: w = 1.0
+    │     - Primary (w_main): default 0.65
+    │     - Secondary (w_sub_i): (1 − w_main) / N_sub
+    ├── NormalizedScore s_q = PointsEarned / MaxPoints × 10.0
+    └── Emit TagWeights list per answer
+  foreach distinct TagId across all answers:
+    ├── Tầng 1: c_{q,i} = s_q × w_{iq} for each question containing this tag
+    ├── Tầng 2: T_j^{(i)} = avg(c_{q,i}) across all questions with this tag
+    └── Emit TopicGradeResult with weighted TopicScore
+        │
 Publish GradeCalculatedEvent (MediatR in-process):
-  → Recommender module: update StudentTopicSessionResult + TagsMastery idempotently
+  → Recommender module: update StudentTopicSessionResult + TagsMastery per tag (multi-tag delta distribution)
   → Notification module: send push notification
 ```
 

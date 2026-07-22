@@ -1,5 +1,5 @@
 import MaterialIcon from '../../../components/ui/MaterialIcon';
-import { getStoredUser } from '../../../services/authApi';
+import useCurrentUser from '../../../hooks/useCurrentUser';
 
 // TODO: Replace with real API data.
 // Needs endpoint: GET /api/v1/reports/competency-summary (not yet implemented in backend)
@@ -12,8 +12,8 @@ const MOCK_DATA = {
 };
 
 export default function WelcomeBanner() {
-  const user = getStoredUser();
-  const userName = user?.username || 'Bạn';
+  // Shares the single cached profile request with StudentLayout's header.
+  const { displayName: userName } = useCurrentUser('Bạn');
   const { grade, competencyPoint, weeklyProgress, trendDelta } = MOCK_DATA;
 
   return (

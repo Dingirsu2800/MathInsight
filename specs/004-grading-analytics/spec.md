@@ -195,15 +195,23 @@ Returns aggregate statistics computed from the student's graded sessions.
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
-  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per primary TagId: `(TagId, TopicScore, CorrectCount, TotalCount)`. **MVP rule**: group by `QuestionTopic.TagID WHERE IsPrimary = true` only. Multi-tag analytics deferred post-MVP. |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per distinct TagId (primary and secondary) covered in the session. `TopicScore` is calculated using the weighted contribution formula (Tầng 1–2, report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradedAt` | `DateTime` | UTC timestamp |
 
+  `TagWeightEntry` — represents a question's tag assignment with its weight:
+  - `TagId` (`Guid`) — topic tag ID from `QuestionTopic`
+  - `Weight` (`decimal`) — role-based weight `w_{iq}`: `1.0` for single-tag questions, `w_main ∈ [0.60, 0.70]` (default `0.65`) for Tag Chính, `(1 − w_main) / N_sub` for each Tag Phụ (BR-13/14/15)
+  - `IsPrimary` (`bool`) — true if `QuestionTopic.IsPrimary = true`
+
   `GradedAnswerDto` contains:
   - `QuestionId` (`Guid`)
-  - `TagId` (`Guid`) — **primary topic tag** of the question (`QuestionTopic.TagID WHERE IsPrimary = true`). MVP uses one tag per question for grading/recommender; multi-tag support is post-MVP.
+  - `TagId` (`Guid`) — **primary topic tag** of the question (backward-compatible; always the `IsPrimary = true` tag)
+  - `TagWeights` (`IReadOnlyList<TagWeightEntry>`) — **all tags** (primary + secondary) with their role-based weights. Sum of all weights = 1.0. For single-tag questions, this list has one entry with `Weight = 1.0`. Used by Recommender for multi-tag Elo delta distribution (Công thức 2, Bước 2).
+  - `NormalizedScore` (`decimal`) — `s_q = PointsEarned / MaxPoints × 10.0` — normalized question score on 0–10 scale, used for Tầng 1 contribution calculation `c_{q,i} = s_q × w_{iq}`
   - `IsCorrect` (`bool`)
   - `PointsEarned` (`decimal`)
+  - `MaxPoints` (`decimal`)
   - `TimeSpent` (`int`)
   - `DifficultyLevel` (`byte` - value 1..4)
   - `QuestionNo` (`int`)

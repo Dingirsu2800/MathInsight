@@ -14,7 +14,7 @@ The module is delivered in explicit slices:
 1. **Expert Blueprint MVP (complete)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
 2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
 3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
-4. **Checkpoint 6C (later)**: generate a 10-question `TopicPractice` test for one selected WeakTag.
+4. **Checkpoint 6C (later)**: generate a 10-question `TopicPractice` test for one selected WeakTag topic. WeakTag advice now includes **Bottleneck Weak Tags** (BR-19, RCM-14): secondary tags with `official_point < 4.0` that create bottleneck risk. TopicPractice should prioritize these tags for targeted remediation.
 
 TestGen creates `Test` and `TestQuestion` records only. Testing owns `TestSession` creation and the answer-taking workflow. No database migration is part of this feature.
 

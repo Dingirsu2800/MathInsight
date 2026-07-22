@@ -1,87 +1,42 @@
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MathInsight.Shared.Events;
-using MathInsight.Modules.Grading_Analytics.Persistence;
-using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 using MathInsight.Modules.Grading_Analytics.Services;
-using MathInsight.Shared.Questions;
-using System.Text.Json;
 
 namespace MathInsight.Modules.Grading_Analytics.Handlers;
 
 /// <summary>
-/// Synchronous MVP grading handler — called in-process by the Testing submit flow
-/// via TestSubmittedEvent (MediatR notification).
+/// In-process MediatR notification handler for Practice mode grading.
+/// Called synchronously during the Testing submit flow via TestSubmittedEvent.
 ///
-/// Responsibilities:
-///   1. Validate TestSession.Status == InProgress
-///   2. Run GradingEngine.Grade() synchronously
-///   3. Write results in a single transaction (DC-05: Transactional Atomicity)
-///   4. Set TestSession.Status = Graded; preserve SubmissionType from Testing
-///   5. Publish GradeCalculatedEvent after commit (G3)
+/// Delegates all grading logic to <see cref="IGradingOrchestrator"/> and publishes
+/// <see cref="GradeCalculatedEvent"/> after successful grading.
 ///
-/// Retry policy:
-///   U2 — EF Core's EnableRetryOnFailure is configured on the DbContext (3 retries,
-///   exponential backoff). For explicit transactions we use CreateExecutionStrategy()
-///   so that EF retries the entire unit-of-work on transient failures.
+/// For Exam mode, the equivalent flow is handled asynchronously by
+/// <see cref="Consumers.TestSubmittedConsumer"/> via MassTransit.
 ///
-/// SLA:
-///   Practice < 2.0s, Exam target < 5.0s.
+/// SLA: Practice &lt; 2.0s.
 /// </summary>
 public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEvent>
 {
-    private readonly GradingDbContext _db;
-    private readonly IGradingEngine _gradingEngine;
+    private readonly IGradingOrchestrator _orchestrator;
     private readonly IPublisher _publisher;
     private readonly ILogger<GradeSubmittedSessionHandler> _logger;
 
     public GradeSubmittedSessionHandler(
-        GradingDbContext db,
-        IGradingEngine gradingEngine,
+        IGradingOrchestrator orchestrator,
         IPublisher publisher,
         ILogger<GradeSubmittedSessionHandler> logger)
     {
-        _db = db;
-        _gradingEngine = gradingEngine;
+        _orchestrator = orchestrator;
         _publisher = publisher;
         _logger = logger;
     }
 
     public async Task Handle(TestSubmittedEvent notification, CancellationToken cancellationToken)
     {
-        var sessionId = notification.SessionId;
-
-        _logger.LogInformation(
-            "Grading session {SessionId} started (TestFormat={TestFormat})",
-            sessionId, notification.TestFormat);
-
-        // ── U2: EF Core execution strategy wraps the explicit transaction ─────────
-        // EnableRetryOnFailure is configured on the DbContext.
-        // When using explicit transactions, we MUST use CreateExecutionStrategy()
-        // so EF can retry the entire unit-of-work (including BeginTransaction)
-        // on transient failures — 3 retries with exponential backoff.
-        var strategy = _db.Database.CreateExecutionStrategy();
-
-        GradeCalculatedEvent? gradeEvent = null;
-
-        try
-        {
-            await strategy.ExecuteAsync(async ct =>
-            {
-                gradeEvent = await GradeSessionInTransactionAsync(sessionId, notification, ct);
-            }, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // All retries exhausted — transaction rolled back.
-            // Session stays InProgress so the student can retry submit.
-            _logger.LogError(ex,
-                "Grading failed for session {SessionId} after all retries. " +
-                "Session remains InProgress. Error: {Error}",
-                sessionId, ex.Message);
-            return;
-        }
+        var gradeEvent = await _orchestrator.GradeSessionAsync(
+            notification.SessionId, notification, cancellationToken);
 
         // ── G3: Publish GradeCalculatedEvent AFTER commit ─────────────────────────
         if (gradeEvent is not null)
@@ -94,221 +49,5 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
                 gradeEvent.SessionId, gradeEvent.Score,
                 gradeEvent.NumCorrect, gradeEvent.NumIncorrect, gradeEvent.NumAbandoned);
         }
-    }
-
-    /// <summary>
-    /// Loads session, runs grading engine, writes results in a single transaction (DC-05).
-    /// Returns the GradeCalculatedEvent to publish after commit.
-    /// </summary>
-    private async Task<GradeCalculatedEvent?> GradeSessionInTransactionAsync(
-        string sessionId,
-        TestSubmittedEvent notification,
-        CancellationToken ct)
-    {
-        // ── Load session with all required navigation properties ───────────────
-        var session = await _db.TestSessions
-            .Include(s => s.TestAnswers)
-                .ThenInclude(a => a.Question)
-                    .ThenInclude(q => q.Answers)
-            .Include(s => s.TestAnswers)
-                .ThenInclude(a => a.Question)
-                    .ThenInclude(q => q.Parts)
-            .Include(s => s.TestAnswers)
-                .ThenInclude(a => a.Question)
-                    .ThenInclude(q => q.QuestionTopics)
-            .Include(s => s.TestAnswers)
-                .ThenInclude(a => a.SelectedOptions)
-            .Include(s => s.TestAnswers)
-                .ThenInclude(a => a.AnswerParts)
-                    .ThenInclude(ap => ap.QuestionPart)
-            .FirstOrDefaultAsync(s => s.SessionId == sessionId, ct);
-
-        if (session is null)
-        {
-            _logger.LogWarning("Session {SessionId} not found for grading", sessionId);
-            return null;
-        }
-
-        // ── Validate status ───────────────────────────────────────────────────
-        if (!string.Equals(session.Status, "InProgress", StringComparison.OrdinalIgnoreCase))
-        {
-            _logger.LogWarning(
-                "Session {SessionId} status is '{Status}', expected 'InProgress'. Skipping grading.",
-                sessionId, session.Status);
-            return null;
-        }
-
-        var testQuestions = await _db.TestQuestions
-            .AsNoTracking()
-            .Include(item => item.QuestionVersion)
-            .Where(item => item.TestId == session.TestId)
-            .ToDictionaryAsync(item => item.QuestionId, StringComparer.OrdinalIgnoreCase, ct);
-
-        foreach (var answer in session.TestAnswers)
-        {
-            if (!testQuestions.TryGetValue(answer.QuestionId, out var testQuestion))
-            {
-                if (_db.Database.IsRelational())
-                    throw new InvalidOperationException($"Missing TestQuestion snapshot for question '{answer.QuestionId}'.");
-                continue;
-            }
-
-            if (testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
-                throw new InvalidOperationException($"Unsupported snapshot schema for version '{testQuestion.QuestionVersionId}'.");
-
-            answer.Snapshot = JsonSerializer.Deserialize<QuestionSnapshotV2>(
-                testQuestion.QuestionVersion.AnswersSnapshot)
-                ?? throw new InvalidOperationException($"Invalid snapshot JSON for version '{testQuestion.QuestionVersionId}'.");
-            answer.MaxPointsSnapshot = testQuestion.MaxPointsSnapshot;
-            answer.ScoringRuleSnapshot = testQuestion.ScoringRuleSnapshot;
-            answer.IsScoreInvalidated = testQuestion.IsScoreInvalidated;
-        }
-
-        // ── Run grading engine synchronously ──────────────────────────────────
-        var gradingResult = _gradingEngine.Grade(session);
-
-        // ── DC-05: Wrap writes in single transaction ──────────────────────────
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-
-        try
-        {
-            // Update TestSession with grading results
-            session.Status = "Graded";
-            session.Score = gradingResult.Score;
-            session.NumCorrect = gradingResult.NumCorrect;
-            session.NumIncorrect = gradingResult.NumIncorrect;
-            session.NumAbandoned = gradingResult.NumAbandoned;
-            session.GradeRevision = Math.Max(1, session.GradeRevision + 1);
-            session.SubmissionType = notification.SubmissionType;
-
-            // TestAnswer entities (IsCorrect, PointsEarned) are already mutated
-            // in-place by GradingEngine.Grade(). EF change tracker will persist them.
-
-            await _db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-        }
-        catch (Exception ex)
-        {
-            // ── DC-05: On failure, rollback → session stays InProgress ─────
-            _logger.LogError(ex,
-                "Transaction failed for grading session {SessionId}. Rolling back. Error: {Error}",
-                sessionId, ex.Message);
-
-            await transaction.RollbackAsync(ct);
-            throw; // Re-throw so the EF execution strategy can retry
-        }
-
-        // ── G3: Build GradeCalculatedEvent ────────────────────────────────────
-        return BuildGradeCalculatedEvent(session, gradingResult, notification);
-    }
-
-    /// <summary>
-    /// Builds the GradeCalculatedEvent contract (G3) from grading results.
-    /// Uses MathInsight.Shared.Events.GradeCalculatedEvent — no local copy.
-    /// </summary>
-    private static GradeCalculatedEvent BuildGradeCalculatedEvent(
-        TestSession session,
-        GradingResult gradingResult,
-        TestSubmittedEvent notification)
-    {
-        // ── Build per-answer DTOs with primary TagId ──────────────────────────
-        var gradedAnswers = new List<GradedAnswerDto>();
-
-        // ── Build per-tag results ────────────────────────────────────────────
-        // Track per-tag correctness for PerTagResults
-        var tagStats = new Dictionary<string, (decimal Correct, decimal Total, decimal Earned, decimal Max)>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var answer in session.TestAnswers)
-        {
-            // Find primary topic tag for this question
-            var tagId = answer.Snapshot?.Topics.FirstOrDefault(topic => topic.IsPrimary)?.TagId
-                ?? answer.Question.QuestionTopics.FirstOrDefault(topic => topic.IsPrimary)?.TagId
-                ?? string.Empty;
-
-            // Determine abandoned status using same logic as GradingEngine
-            bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
-
-            gradedAnswers.Add(new GradedAnswerDto
-            {
-                QuestionId = answer.QuestionId,
-                TagId = tagId,
-                IsCorrect = answer.IsCorrect == true,
-                MachineIsCorrect = answer.IsCorrect,
-                IsScoreInvalidated = answer.IsScoreInvalidated,
-                PointsEarned = answer.PointsEarned,
-                MaxPoints = answer.Snapshot is null ? answer.Question.DefaultWeight : answer.MaxPointsSnapshot,
-                TimeSpent = answer.TimeSpent ?? 0,
-                DifficultyLevel = 1,
-                QuestionNo = answer.QuestionNo,
-                IsAbandoned = isAbandoned
-            });
-
-            // Accumulate per-tag stats (skip questions without a primary tag)
-            if (!string.IsNullOrWhiteSpace(tagId))
-            {
-                if (!tagStats.TryGetValue(tagId, out var stats))
-                    stats = (0, 0, 0, 0);
-
-                stats.Total++;
-                if (answer.IsCorrect == true)
-                    stats.Correct++;
-                stats.Earned += answer.IsScoreInvalidated ? answer.MaxPointsSnapshot : answer.PointsEarned;
-                stats.Max += answer.Snapshot is null ? answer.Question.DefaultWeight : answer.MaxPointsSnapshot;
-
-                tagStats[tagId] = stats;
-            }
-        }
-
-        // ── Build PerTagResults ──────────────────────────────────────────────
-        var perTagResults = tagStats
-            .Select(kv => new TopicGradeResult
-            {
-                TagId = kv.Key,
-                TopicScore = kv.Value.Max > 0
-                    ? Math.Round(kv.Value.Earned / kv.Value.Max * 10.0m, 2)
-                    : 0m,
-                CorrectItems = kv.Value.Correct,
-                TotalItems = kv.Value.Total,
-                EarnedPoints = kv.Value.Earned,
-                MaxPoints = kv.Value.Max
-            })
-            .ToList();
-
-        return new GradeCalculatedEvent
-        {
-            SessionId = session.SessionId,
-            StudentId = session.StudentId,
-            TestId = session.TestId,
-            GradeRevision = session.GradeRevision,
-            TestFormat = session.TestFormat,
-            Score = gradingResult.Score,
-            NumCorrect = gradingResult.NumCorrect,
-            NumIncorrect = gradingResult.NumIncorrect,
-            NumAbandoned = gradingResult.NumAbandoned,
-            PerTagResults = perTagResults,
-            Answers = gradedAnswers,
-            GradedAt = DateTime.UtcNow
-        };
-    }
-
-    /// <summary>
-    /// Mirrors GradingEngine.IsAbandoned logic for populating GradedAnswerDto.IsAbandoned.
-    /// </summary>
-    private static bool IsAbandoned(TestAnswer answer, string questionType)
-    {
-        var typeNormalized = questionType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
-        return typeNormalized switch
-        {
-            "SINGLECHOICE" => answer.AnswerId is null,
-            "TRUEFALSE" => answer.AnswerId is null,
-            "MULTIPLESELECT" => answer.SelectedOptions.Count == 0,
-            "MULTIPLECHOICE" => answer.SelectedOptions.Count == 0,
-            "SHORTANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
-            "COMPOSITE" => answer.AnswerParts.Count == 0 || answer.AnswerParts.All(p =>
-                p.BooleanAnswer == null &&
-                string.IsNullOrWhiteSpace(p.TextAnswer) &&
-                p.NumericAnswer == null),
-            _ => true
-        };
     }
 }

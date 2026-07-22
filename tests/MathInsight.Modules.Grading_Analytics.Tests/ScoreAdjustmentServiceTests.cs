@@ -85,6 +85,33 @@ public sealed class ScoreAdjustmentServiceTests
             Times.Exactly(2));
     }
 
+    [Fact]
+    public async Task Adjust_PublishesRevisionForPrimaryAndSecondaryTags()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db, includeSecondaryTag: true);
+        GradeCalculatedEvent? published = null;
+        var publisher = new Mock<IPublisher>();
+        publisher
+            .Setup(item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<GradeCalculatedEvent, CancellationToken>((gradeEvent, _) => published = gradeEvent)
+            .Returns(Task.CompletedTask);
+
+        await new ScoreAdjustmentService(db, publisher.Object)
+            .AdjustInvalidQuestionVersionAsync(seed.ReportId);
+
+        Assert.NotNull(published);
+        var answer = Assert.Single(published!.Answers);
+        Assert.Equal(2, answer.TagWeights.Count);
+        Assert.Equal(1m, answer.TagWeights.Sum(item => item.Weight));
+        Assert.Equal(2, published.PerTagResults.Count);
+        Assert.All(published.PerTagResults, result =>
+        {
+            Assert.Equal(0m, result.TotalItems);
+            Assert.Equal(0m, result.MaxPoints);
+        });
+    }
+
     private static GradingDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<GradingDbContext>()
@@ -93,7 +120,9 @@ public sealed class ScoreAdjustmentServiceTests
         return new GradingDbContext(options);
     }
 
-    private static async Task<SeedData> SeedInvalidReportAsync(GradingDbContext db)
+    private static async Task<SeedData> SeedInvalidReportAsync(
+        GradingDbContext db,
+        bool includeSecondaryTag = false)
     {
         const string reportId = "report_01";
         const string questionId = "question_01";
@@ -103,13 +132,17 @@ public sealed class ScoreAdjustmentServiceTests
         const string tagId = "TOPIC-G12-DERIVAPP";
         const decimal maxPoints = 2.5m;
 
+        var topics = new List<QuestionTopicSnapshot> { new(tagId, true) };
+        if (includeSecondaryTag)
+            topics.Add(new QuestionTopicSnapshot("TOPIC-G12-SECONDARY", false));
+
         var snapshot = new QuestionSnapshotV2(
             questionId,
             "SINGLE_CHOICE",
             "DIFF-MEDIUM",
             12,
             1m,
-            [new QuestionTopicSnapshot(tagId, true)],
+            topics,
             [
                 new QuestionAnswerSnapshot("answer_correct", "Correct", true),
                 new QuestionAnswerSnapshot("answer_wrong", "Wrong", false)
@@ -144,6 +177,16 @@ public sealed class ScoreAdjustmentServiceTests
                 }
             ]
         };
+        if (includeSecondaryTag)
+        {
+            question.QuestionTopics.Add(new QuestionTopic
+            {
+                QuestionTopicId = "question_topic_02",
+                QuestionId = questionId,
+                TagId = "TOPIC-G12-SECONDARY",
+                IsPrimary = false
+            });
+        }
         var session = new TestSession
         {
             SessionId = sessionId,

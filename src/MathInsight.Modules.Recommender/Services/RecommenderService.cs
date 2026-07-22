@@ -12,6 +12,7 @@ namespace MathInsight.Modules.Recommender.Services;
 public sealed class RecommenderService : IRecommenderService
 {
     private const decimal WeakThreshold = 5.00m;
+    private const decimal BottleneckThreshold = 4.00m; // BR-19, RCM-14
 
     private readonly RecommenderDbContext _db;
     private readonly IDifficultyMappingService _difficultyMapping;
@@ -64,12 +65,16 @@ public sealed class RecommenderService : IRecommenderService
         {
             bool isWeak = _difficultyMapping.IsWeak(row.OfficialPoint);
             bool isRemedial = _difficultyMapping.IsRemedial(row.RecommendedDifficultyLevel, row.OfficialPoint);
+            bool isBottleneckWeak = _difficultyMapping.IsBottleneckWeak(row.OfficialPoint);
 
-            string reason = isRemedial
-                ? "RemedialLevel1"
-                : isWeak
-                    ? "OfficialPointBelow5"
-                    : "NormalPractice";
+            // BR-19: Bottleneck sub-tag (< 4.0) takes priority in reason classification
+            string reason = isBottleneckWeak
+                ? "BottleneckSubTag"
+                : isRemedial
+                    ? "RemedialLevel1"
+                    : isWeak
+                        ? "OfficialPointBelow5"
+                        : "NormalPractice";
 
             return new WeakTagAdviceDto(
                 row.TagId,
