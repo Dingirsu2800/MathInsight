@@ -173,6 +173,12 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
 
             foreach (var ans in allAnswers)
             {
+                // Skip invalidated questions — they don't affect student mastery.
+                // When IsScoreInvalidated=true, IsCorrect is false (cast from null)
+                // which would incorrectly penalize the student's PracticePoint.
+                if (ans.IsScoreInvalidated)
+                    continue;
+
                 // Bước 1: Compute Δ_total
                 decimal wD = ans.DifficultyLevel switch
                 {
