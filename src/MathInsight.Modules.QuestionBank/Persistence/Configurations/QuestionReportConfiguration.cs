@@ -80,16 +80,45 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
             .HasMaxLength(36)
             .IsUnicode(false);
 
+        builder.Property(report => report.SessionId)
+            .HasColumnName("SessionID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
+        builder.Property(report => report.QuestionVersionId)
+            .HasColumnName("QuestionVersionID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
+        builder.Property(report => report.ResolutionAction)
+            .HasColumnName("ResolutionAction")
+            .HasMaxLength(30)
+            .IsUnicode(false);
+
+        builder.Property(report => report.ScoreAdjustedTime)
+            .HasColumnName("ScoreAdjustedTime")
+            .HasColumnType("datetime2(0)");
+
         builder.HasIndex(report => new { report.QuestionId, report.Status })
             .HasDatabaseName("IX_QuestionReport_Question_Status");
 
         builder.HasIndex(report => report.ReporterAccountId)
             .HasDatabaseName("IX_QuestionReport_ReporterAccountID");
 
+        builder.HasIndex(report => new { report.QuestionVersionId, report.ResolutionAction })
+            .HasFilter("[QuestionVersionID] IS NOT NULL")
+            .HasDatabaseName("IX_QuestionReport_Version_ResolutionAction");
+
         builder.HasOne(report => report.Question)
             .WithMany(question => question.Reports)
             .HasForeignKey(report => report.QuestionId)
             .OnDelete(DeleteBehavior.NoAction)
             .HasConstraintName("FK_QuestionReport_Question_QuestionID");
+
+        builder.HasOne(report => report.QuestionVersion)
+            .WithMany()
+            .HasForeignKey(report => report.QuestionVersionId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_QuestionReport_QuestionVersion_QuestionVersionID");
     }
 }

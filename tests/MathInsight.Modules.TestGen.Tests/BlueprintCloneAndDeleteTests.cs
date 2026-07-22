@@ -259,7 +259,7 @@ public sealed class BlueprintCloneAndDeleteTests
             SectionName = "Section I",
             QuestionType = BlueprintQuestionTypes.SingleChoice,
             TotalQuestions = 2,
-            DefaultPointPerQuestion = 0.5m
+            ScoreBudget = 0.5m
         };
         section.Details.Add(new BlueprintDetail
         {

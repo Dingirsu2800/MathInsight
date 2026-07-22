@@ -7,9 +7,9 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class QuestionTopic
 {
-    public Guid QuestionTopicId { get; set; }
-    public Guid QuestionId { get; set; }
-    public Guid TagId { get; set; }
+    public string QuestionTopicId { get; set; } = string.Empty;
+    public string QuestionId { get; set; } = string.Empty;
+    public string TagId { get; set; } = string.Empty;
     public bool IsPrimary { get; set; }
 
     // Navigation

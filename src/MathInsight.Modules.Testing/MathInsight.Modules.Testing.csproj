@@ -9,5 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MathInsight.Shared\MathInsight.Shared.csproj" />
+    <ProjectReference Include="..\MathInsight.Modules.QuestionBank\MathInsight.Modules.QuestionBank.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
   </ItemGroup>
 </Project>

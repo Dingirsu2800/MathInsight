@@ -201,7 +201,7 @@ public sealed class QuestionImportValidationService
     {
         var grade = ParseInt(question.Grade, "Questions", question.SourceRow, "Grade", question.QuestionKey, errors) ?? 0;
         var difficultyLevel = ParseInt(question.DifficultyLevel, "Questions", question.SourceRow, "DifficultyLevel", question.QuestionKey, errors);
-        var defaultPoint = ParseDecimal(question.DefaultPoint, "Questions", question.SourceRow, "DefaultPoint", question.QuestionKey, errors) ?? 0.20m;
+        var defaultWeight = ParseDecimal(question.DefaultWeight, "Questions", question.SourceRow, "DefaultWeight", question.QuestionKey, errors) ?? 1.00m;
         if (!string.IsNullOrWhiteSpace(question.PictureUrl) &&
             (!Uri.TryCreate(question.PictureUrl, UriKind.Absolute, out var pictureUri) ||
              pictureUri.Scheme != Uri.UriSchemeHttps ||
@@ -256,7 +256,7 @@ public sealed class QuestionImportValidationService
         foreach (var partRow in partRows)
         {
             var partOrder = ParseInt(partRow.PartOrder, "Parts", partRow.SourceRow, "PartOrder", question.QuestionKey, errors) ?? 0;
-            var partDefaultPoint = ParseDecimal(partRow.DefaultPoint, "Parts", partRow.SourceRow, "DefaultPoint", question.QuestionKey, errors) ?? 0m;
+            var partDefaultWeight = ParseDecimal(partRow.DefaultWeight, "Parts", partRow.SourceRow, "DefaultWeight", question.QuestionKey, errors) ?? 1.00m;
             parts.Add(new CreateQuestionPartRequest
             {
                 PartOrder = partOrder,
@@ -268,7 +268,7 @@ public sealed class QuestionImportValidationService
                 CorrectNumeric = ParseDecimal(partRow.CorrectNumeric, "Parts", partRow.SourceRow, "CorrectNumeric", question.QuestionKey, errors),
                 NumericTolerance = ParseDecimal(partRow.NumericTolerance, "Parts", partRow.SourceRow, "NumericTolerance", question.QuestionKey, errors),
                 Explanation = EmptyToNull(partRow.Explanation),
-                DefaultPoint = partDefaultPoint
+                DefaultWeight = partDefaultWeight
             });
         }
 
@@ -280,7 +280,7 @@ public sealed class QuestionImportValidationService
             DifficultyId = difficultyId,
             Grade = grade,
             QuestionType = question.QuestionType,
-            DefaultPoint = defaultPoint,
+            DefaultWeight = defaultWeight,
             Topics = topics,
             Answers = answers,
             Parts = parts

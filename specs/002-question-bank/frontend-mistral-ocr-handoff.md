@@ -102,12 +102,12 @@ Read `error.response?.data?.code`; show the corresponding Vietnamese message and
 
 Implement a small pure mapper, preferably in `frontend/src/pages/expert/questionMappers.js` or a new adjacent `ocrDraftMappers.js`. Unit-test it if the repository has frontend test infrastructure.
 
-- Never set metadata automatically: do **not** set grade, difficulty, topics, default point, status, expert, or report state from OCR.
+- Never set metadata automatically: do **not** set grade, difficulty, topics, default weight, status, expert, or report state from OCR.
 - Map `MULTIPLE_CHOICE` to the Question Editor's existing multi-select enum expected by `mapEditorStateToCreateUpdateRequest`. Verify the currently accepted editor enum before coding; do not introduce a second incompatible spelling.
 - For `SINGLE_CHOICE`/multi-select: map extracted answer content to `form.options`, but set every `isCorrect` to `false`. Display any `suggestedIsCorrect` only as an untrusted visual hint in the review UI; it must not become an answer key after apply.
 - For `TRUE_FALSE`: retain the editor's canonical two “Đúng/Sai” options. Do not infer the correct value from OCR. If OCR returns statement-like content, treat that as a warning or require the Expert to classify it as `COMPOSITE`.
 - For `SHORT_ANSWER`: put no OCR answer into `shortAnswer`; leave answer key empty for the Expert. The stem and solution may be applied.
-- For `COMPOSITE`: map each valid OCR part to current state shape: `partOrder`, `partLabel`, `partContent`, `partType`, `explanation`, `defaultPoint`. Set `correctBoolean`, `correctText`, `correctNumeric`, and `numericTolerance` to `null` regardless of OCR suggestions. Ignore `UNKNOWN` parts on full apply and state the number ignored.
+- For `COMPOSITE`: map each valid OCR part to current state shape: `partOrder`, `partLabel`, `partContent`, `partType`, `explanation`, `defaultWeight`. Set `correctBoolean`, `correctText`, `correctNumeric`, and `numericTolerance` to `null` regardless of OCR suggestions. Ignore `UNKNOWN` parts on full apply and state the number ignored.
 - For `UNKNOWN`: do not change `form.questionType` on apply. Allow “apply content only”; let the Expert select a type manually.
 - Do not overwrite grade/difficulty/topics, and do not submit/create/update a question from the OCR action.
 - Any form changes are ordinary unsaved editor changes. Existing Save validation remains authoritative.

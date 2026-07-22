@@ -60,6 +60,10 @@ public class StudentTopicSessionResultConfiguration : IEntityTypeConfiguration<S
             .HasColumnName("TopicScore")
             .HasPrecision(5, 2)
             .IsRequired();
+        builder.Property(x => x.GradeRevision)
+            .HasColumnName("GradeRevision")
+            .HasDefaultValue(1)
+            .IsRequired();
 
         builder.Property(x => x.CreatedTime)
             .HasColumnName("CreatedTime")

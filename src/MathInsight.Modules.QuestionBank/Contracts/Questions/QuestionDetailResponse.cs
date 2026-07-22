@@ -13,8 +13,10 @@ public sealed record QuestionDetailResponse(
     string QuestionType,
     string ExpertId,
     string? ExpertName,
-    decimal DefaultPoint,
+    decimal DefaultWeight,
     bool IsActive,
+    DateTime CreatedTime,
+    DateTime UpdatedTime,
     IReadOnlyList<QuestionTopicResponse> Topics,
     IReadOnlyList<QuestionAnswerResponse> Answers,
     IReadOnlyList<QuestionPartResponse> Parts);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MathInsight.Modules.Grading_Analytics.Persistence;
 using MathInsight.Modules.Grading_Analytics.Services;
+using MathInsight.Shared.Scoring;
 using Polly;
 using Polly.CircuitBreaker;
 
@@ -29,6 +30,7 @@ public static class GradingModuleExtensions
 
         // GradingEngine: per-question-type grading algorithm
         services.AddScoped<Services.IGradingEngine, Services.GradingEngine>();
+        services.AddScoped<IScoreAdjustmentService, ScoreAdjustmentService>();
 
         // ── ChatbotService (UC-51) ───────────────────────────────────────────
         // Bind Chatbot configuration section

@@ -1,5 +1,12 @@
 # Tasks Checklist: Test Generator Module
 
+## Scoring Contract V2
+
+- [x] Replace Blueprint point fields with TotalScore, ScoreBudget, and ScoringRule.
+- [x] Persist Test MaxScore/ScoringPolicy and TestQuestion version/scoring snapshots.
+- [x] Validate active child shape and allocate exact cent budgets deterministically.
+- [x] Mark all TestQuestions using an invalidated version for recalculation.
+
 **Branch**: `testgen-test-generation` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 **Current delivery slice**: Checkpoint 6A - baseline BlueprintExam
 
@@ -19,7 +26,7 @@
   - [x] Map review audit to `ApprovedBy`, `ReviewNote`, `ReviewTime`.
   - [x] Remove non-existent `CreatedTime` mapping.
 - [x] Correct `BlueprintSection` mapping:
-  - [x] Required `SectionName`, required `DefaultPointPerQuestion`, and SQL decimal precision.
+  - [x] Required `SectionName`, `ScoreBudget`, `ScoringRule`, and SQL decimal precision.
   - [x] Unique `(BlueprintID, SectionOrder)` and composite-section metadata constraints.
 - [x] Correct `BlueprintDetail` mapping:
   - [x] Exact columns and string IDs.

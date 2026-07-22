@@ -3,6 +3,7 @@ using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
+using MathInsight.Shared.Scoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.QuestionBank.Tests;
@@ -264,6 +265,66 @@ public sealed class QuestionReportingTests
         Assert.Equal(QuestionBankErrors.ReportAlreadyHandled, result.Error);
     }
 
+    [Fact]
+    public async Task ResolveStudentReport_WithNewerVersion_TriggersAwardFullAdjustment()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "student-adjustment", "Approved", true);
+        var oldVersion = AddVersion(database, question, 1);
+        AddVersion(database, question, 2);
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+        report.SessionId = "session-1";
+        report.QuestionVersionId = oldVersion.VersionId;
+        await database.Context.SaveChangesAsync();
+        var adjustment = new RecordingScoreAdjustmentService();
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context, adjustment)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest
+                    {
+                        Status = "Resolved",
+                        ResolutionAction = "InvalidateAndAwardFull"
+                    },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("InvalidateAndAwardFull", report.ResolutionAction);
+        Assert.Equal(report.ReportId, adjustment.AdjustedReportId);
+    }
+
+    [Fact]
+    public async Task ResolveStudentReport_WithoutFix_ReturnsConflictAndDoesNotAdjustScore()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "student-adjustment-no-fix", "Approved", true);
+        var version = AddVersion(database, question, 1);
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+        report.SessionId = "session-1";
+        report.QuestionVersionId = version.VersionId;
+        await database.Context.SaveChangesAsync();
+        var adjustment = new RecordingScoreAdjustmentService();
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context, adjustment)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest
+                    {
+                        Status = "Resolved",
+                        ResolutionAction = "InvalidateAndAwardFull"
+                    },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionFixRequiredBeforeScoreAdjustment, result.Error);
+        Assert.Null(adjustment.AdjustedReportId);
+        Assert.Equal("Pending", report.Status);
+    }
+
     private static Task<MathInsight.Shared.Results.Result<ReportQuestionResponse>> CreateReportAsync(
         QuestionBankInMemoryContext database,
         Question question,
@@ -307,7 +368,7 @@ public sealed class QuestionReportingTests
             Status = status,
             QuestionType = "SingleChoice",
             ExpertId = "expert-1",
-            DefaultPoint = 1m,
+            DefaultWeight = 1m,
             IsActive = isActive
         };
 
@@ -337,5 +398,39 @@ public sealed class QuestionReportingTests
         database.Context.QuestionReports.Add(report);
         await database.Context.SaveChangesAsync();
         return report;
+    }
+
+    private static QuestionVersion AddVersion(
+        QuestionBankInMemoryContext database,
+        Question question,
+        int versionNumber)
+    {
+        var version = new QuestionVersion
+        {
+            VersionId = $"{question.QuestionId}-v{versionNumber}",
+            QuestionId = question.QuestionId,
+            QuestionContent = question.QuestionContent,
+            QuestionAnswer = question.SolutionContent,
+            AnswersSnapshot = "{}",
+            VersionNumber = versionNumber,
+            SnapshotSchemaVersion = 2,
+            CreatedTime = DateTime.UtcNow.AddMinutes(versionNumber),
+            ExpertId = question.ExpertId
+        };
+        database.Context.QuestionVersions.Add(version);
+        return version;
+    }
+
+    private sealed class RecordingScoreAdjustmentService : IScoreAdjustmentService
+    {
+        public string? AdjustedReportId { get; private set; }
+
+        public Task AdjustInvalidQuestionVersionAsync(
+            string reportId,
+            CancellationToken cancellationToken = default)
+        {
+            AdjustedReportId = reportId;
+            return Task.CompletedTask;
+        }
     }
 }

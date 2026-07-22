@@ -1,5 +1,7 @@
 # Feature Specification: Grading & Analytics Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) supersedes grading from current Question weight.
+
 **Feature Branch**: `004-grading-analytics`
 
 **Created**: 2026-06-23 | **Updated**: 2026-07-14
@@ -62,7 +64,7 @@ Authorization: Bearer <jwt>
 | `difficultyLevel` | `byte` | |
 | `isCorrect` | `bool?` | Null when not yet graded |
 | `pointsEarned` | `decimal` | |
-| `maxPoints` | `decimal` | `Question.DefaultPoint` |
+| `maxPoints` | `decimal` | `TestQuestion.MaxPointsSnapshot` |
 | `timeSpent` | `int?` | seconds |
 | `selectedOptionId` | `Guid?` | For SINGLE_CHOICE / TRUE_FALSE |
 | `shortAnswerText` | `string?` | For SHORT_ANSWER |
@@ -238,8 +240,9 @@ Returns aggregate statistics computed from the student's graded sessions.
 This module does **not own** additional tables. It reads and writes to:
 - `TestSession` — updates `Status`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
 - `TestAnswer` — updates `IsCorrect`, `PointsEarned` per answer
-- `Question` — reads `DefaultPoint` for scoring
-- `Answer` — reads `IsCorrect` flag for reference key
+- `QuestionVersion` - reads immutable content, correct-answer, and part-weight snapshot
+- `TestQuestion` - reads `MaxPointsSnapshot`, `ScoringRuleSnapshot`, and invalidation state
+- `Question` / `Answer` - legacy fallback only for pre-V2 data
 
 Delegates competency updates to **Recommender module (005)** via `GradeCalculatedEvent`.
 

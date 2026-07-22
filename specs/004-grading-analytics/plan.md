@@ -1,5 +1,7 @@
 # Implementation Plan: Grading & Analytics Module
 
+> **Current checkpoint**: implement snapshot scoring and recalculation from [Scoring Contract V2](../scoring-contract-v2.md).
+
 **Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-07-14
 **Spec**: [spec.md](spec.md)
 

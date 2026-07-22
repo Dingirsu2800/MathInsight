@@ -5,6 +5,7 @@ public sealed record BlueprintExamOptionResponse(
     string BlueprintName,
     int Grade,
     int TotalQuestions,
+    decimal TotalScore,
     int DurationMinutes,
     string Status,
     int SectionCount);
@@ -16,4 +17,6 @@ public sealed record GenerateBlueprintExamResponse(
     string TestName,
     int DurationMinutes,
     int TotalQuestions,
+    decimal MaxScore,
+    string ScoringPolicy,
     DateTime CreatedTime);

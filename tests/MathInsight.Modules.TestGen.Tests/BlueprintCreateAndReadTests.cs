@@ -82,7 +82,7 @@ public sealed class BlueprintCreateAndReadTests
         var request = ValidRequest();
         request.Sections[0].QuestionType = BlueprintQuestionTypes.Composite;
         request.Sections[0].PartCountPerQuestion = null;
-        request.Sections[0].DefaultPointPerPart = null;
+        request.Sections[0].ScoringRule = null;
 
         var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
 
@@ -115,7 +115,7 @@ public sealed class BlueprintCreateAndReadTests
         await using var testContext = TestGenInMemoryContext.Create();
         await SeedReferenceDataAsync(testContext);
         var request = ValidRequest();
-        request.Sections[0].DefaultPointPerQuestion = 0.125m;
+        request.Sections[0].ScoreBudget = 0.125m;
 
         var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
 
@@ -183,7 +183,7 @@ public sealed class BlueprintCreateAndReadTests
                 SectionName = "Duplicate section order",
                 QuestionType = BlueprintQuestionTypes.SingleChoice,
                 TotalQuestions = 1,
-                DefaultPointPerQuestion = 1m,
+                ScoreBudget = 1m,
                 Details =
                 [
                     new BlueprintDetailRequest
@@ -323,6 +323,7 @@ public sealed class BlueprintCreateAndReadTests
             BlueprintName = "Blueprint THPT",
             Grade = 12,
             TotalQuestions = 10,
+            TotalScore = 0.25m,
             DurationMinutes = 20,
             Sections =
             [
@@ -333,7 +334,7 @@ public sealed class BlueprintCreateAndReadTests
                     SectionName = "Trắc nghiệm",
                     QuestionType = BlueprintQuestionTypes.SingleChoice,
                     TotalQuestions = 10,
-                    DefaultPointPerQuestion = 0.25m,
+                    ScoreBudget = 0.25m,
                     Details =
                     [
                         new BlueprintDetailRequest
@@ -426,6 +427,7 @@ public sealed class BlueprintCreateAndReadTests
             BlueprintName = name,
             Grade = 12,
             TotalQuestions = sectionCount,
+            TotalScore = sectionCount,
             DurationMinutes = 15,
             ExpertId = expertId,
             Status = status
@@ -443,7 +445,7 @@ public sealed class BlueprintCreateAndReadTests
                 SectionName = $"Section {order}",
                 QuestionType = BlueprintQuestionTypes.SingleChoice,
                 TotalQuestions = 1,
-                DefaultPointPerQuestion = 1m
+                ScoreBudget = 1m
             };
             section.Details.Add(new BlueprintDetail
             {

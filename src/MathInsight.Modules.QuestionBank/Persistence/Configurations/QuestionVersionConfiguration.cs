@@ -42,6 +42,15 @@ public class QuestionVersionConfiguration : IEntityTypeConfiguration<QuestionVer
             .HasMaxLength(255)
             .IsUnicode(false);
 
+        builder.Property(version => version.VersionNumber)
+            .HasColumnName("VersionNumber")
+            .IsRequired();
+
+        builder.Property(version => version.SnapshotSchemaVersion)
+            .HasColumnName("SnapshotSchemaVersion")
+            .HasDefaultValue((short)2)
+            .IsRequired();
+
         builder.Property(version => version.CreatedTime)
             .HasColumnName("CreatedTime")
             .HasColumnType("datetime2(0)")
@@ -56,6 +65,10 @@ public class QuestionVersionConfiguration : IEntityTypeConfiguration<QuestionVer
 
         builder.HasIndex(version => version.QuestionId)
             .HasDatabaseName("IX_QuestionVersion_QuestionID");
+
+        builder.HasIndex(version => new { version.QuestionId, version.VersionNumber })
+            .IsUnique()
+            .HasDatabaseName("UX_QuestionVersion_Question_VersionNumber");
 
         builder.HasOne(version => version.Question)
             .WithMany(question => question.Versions)

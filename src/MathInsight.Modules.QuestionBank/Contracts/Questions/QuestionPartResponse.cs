@@ -11,4 +11,4 @@ public sealed record QuestionPartResponse(
     decimal? CorrectNumeric,
     decimal? NumericTolerance,
     string? Explanation,
-    decimal DefaultPoint);
+    decimal DefaultWeight);

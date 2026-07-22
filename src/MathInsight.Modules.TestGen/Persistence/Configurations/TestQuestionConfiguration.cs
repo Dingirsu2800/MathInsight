@@ -19,6 +19,9 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
                 "CK_TestQuestion_SelectionReason",
                 "[SelectionReason] IN ('BlueprintNormal', 'WeakTagPractice', 'RemedialPractice', " +
                 "'ChallengeMode', 'Exploration', 'TopicPractice', 'Diagnostic')");
+            table.HasCheckConstraint("CK_TestQuestion_WeightSnapshot", "[WeightSnapshot] > 0 AND [WeightSnapshot] <= 100");
+            table.HasCheckConstraint("CK_TestQuestion_MaxPointsSnapshot", "[MaxPointsSnapshot] >= 0 AND [MaxPointsSnapshot] <= 100");
+            table.HasCheckConstraint("CK_TestQuestion_ScoringRuleSnapshot", "[ScoringRuleSnapshot] IN ('AllOrNothing', 'TieredTrueFalse', 'WeightedParts')");
         });
 
         builder.HasKey(x => new { x.TestId, x.QuestionId }).HasName("PK_TestQuestion");
@@ -61,6 +64,27 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
             .HasColumnName("RuleVersion")
             .HasMaxLength(30)
             .IsUnicode(false);
+        builder.Property(x => x.QuestionVersionId)
+            .HasColumnName("QuestionVersionID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+        builder.Property(x => x.WeightSnapshot)
+            .HasColumnName("WeightSnapshot")
+            .HasPrecision(5, 2);
+        builder.Property(x => x.MaxPointsSnapshot)
+            .HasColumnName("MaxPointsSnapshot")
+            .HasPrecision(5, 2);
+        builder.Property(x => x.ScoringRuleSnapshot)
+            .HasColumnName("ScoringRuleSnapshot")
+            .HasMaxLength(30)
+            .IsUnicode(false);
+        builder.Property(x => x.IsScoreInvalidated)
+            .HasColumnName("IsScoreInvalidated")
+            .HasDefaultValue(false);
+        builder.Property(x => x.InvalidatedByReportId)
+            .HasColumnName("InvalidatedByReportID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
 
         builder.HasOne(x => x.Test)
             .WithMany(x => x.Questions)
@@ -77,6 +101,11 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
             .HasForeignKey(x => x.QuestionId)
             .OnDelete(DeleteBehavior.NoAction)
             .HasConstraintName("FK_TestQuestion_Question_QuestionID");
+        builder.HasOne(x => x.QuestionVersion)
+            .WithMany(x => x.TestQuestions)
+            .HasForeignKey(x => x.QuestionVersionId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_TestQuestion_QuestionVersion_QuestionVersionID");
         builder.HasOne<TagTopicReadModel>()
             .WithMany()
             .HasForeignKey(x => x.RecommendedForTagId)
@@ -99,5 +128,7 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
         builder.HasIndex(x => x.SourceBlueprintDetailId)
             .HasFilter("[SourceBlueprintDetailID] IS NOT NULL")
             .HasDatabaseName("IX_TestQuestion_SourceBlueprintDetailID");
+        builder.HasIndex(x => x.QuestionVersionId)
+            .HasDatabaseName("IX_TestQuestion_QuestionVersionID");
     }
 }

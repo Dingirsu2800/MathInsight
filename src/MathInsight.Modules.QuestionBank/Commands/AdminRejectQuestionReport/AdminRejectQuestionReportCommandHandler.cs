@@ -69,9 +69,11 @@ public sealed class AdminRejectQuestionReportCommandHandler
 
         report.Status = QuestionReportWorkflow.PendingFix;
         report.ReviewNote = reviewNote;
-        report.ReviewedTime = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+        report.ReviewedTime = now;
         report.ReviewedBy = command.AdminAccountId;
         report.Question.Status = "Rejected";
+        report.Question.UpdatedTime = now;
 
         await _context.SaveChangesAsync(cancellationToken);
 

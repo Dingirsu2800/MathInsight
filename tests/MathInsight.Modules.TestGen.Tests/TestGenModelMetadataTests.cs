@@ -50,9 +50,9 @@ public sealed class TestGenModelMetadataTests
         AssertStringColumn(entity, nameof(BlueprintSection.BlueprintId), "BlueprintID", 36, nullable: false);
         AssertStringColumn(entity, nameof(BlueprintSection.SectionName), "SectionName", 100, nullable: false, unicode: true);
         AssertStringColumn(entity, nameof(BlueprintSection.QuestionType), "QuestionType", 30, nullable: false);
-        Assert.False(Column(entity, nameof(BlueprintSection.DefaultPointPerQuestion)).IsNullable);
-        Assert.Equal(4, Column(entity, nameof(BlueprintSection.DefaultPointPerQuestion)).GetPrecision());
-        Assert.Equal(2, Column(entity, nameof(BlueprintSection.DefaultPointPerQuestion)).GetScale());
+        Assert.False(Column(entity, nameof(BlueprintSection.ScoreBudget)).IsNullable);
+        Assert.Equal(5, Column(entity, nameof(BlueprintSection.ScoreBudget)).GetPrecision());
+        Assert.Equal(2, Column(entity, nameof(BlueprintSection.ScoreBudget)).GetScale());
 
         Assert.Contains(
             entity.GetKeys(),
@@ -96,6 +96,9 @@ public sealed class TestGenModelMetadataTests
         Assert.Equal("Active", Column(entity, nameof(TestEntity.TestStatus)).GetDefaultValue());
         Assert.Equal("BlueprintExam", Column(entity, nameof(TestEntity.TestMode)).GetDefaultValue());
         Assert.Equal("datetime2(0)", Column(entity, nameof(TestEntity.CreatedTime)).GetColumnType());
+        Assert.Equal(5, Column(entity, nameof(TestEntity.MaxScore)).GetPrecision());
+        Assert.Equal(2, Column(entity, nameof(TestEntity.MaxScore)).GetScale());
+        AssertStringColumn(entity, nameof(TestEntity.ScoringPolicy), "ScoringPolicy", 30, nullable: false);
 
         var testCodeIndex = Assert.Single(entity.GetIndexes(), x => x.GetDatabaseName() == "UX_Test_TestCode_NotNull");
         Assert.True(testCodeIndex.IsUnique);
@@ -123,6 +126,10 @@ public sealed class TestGenModelMetadataTests
         Assert.Equal(5, Column(entity, nameof(TestQuestion.PtagAtSelection)).GetPrecision());
         Assert.Equal(2, Column(entity, nameof(TestQuestion.PtagAtSelection)).GetScale());
         Assert.Equal("BlueprintNormal", Column(entity, nameof(TestQuestion.SelectionReason)).GetDefaultValue());
+        AssertStringColumn(entity, nameof(TestQuestion.QuestionVersionId), "QuestionVersionID", 36, nullable: false);
+        Assert.Equal(5, Column(entity, nameof(TestQuestion.WeightSnapshot)).GetPrecision());
+        Assert.Equal(5, Column(entity, nameof(TestQuestion.MaxPointsSnapshot)).GetPrecision());
+        AssertStringColumn(entity, nameof(TestQuestion.ScoringRuleSnapshot), "ScoringRuleSnapshot", 30, nullable: false);
 
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "UQ_TestQuestion_Test_Order" && x.IsUnique);
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "IX_TestQuestion_RecommendedTag_Difficulty");
@@ -141,6 +148,7 @@ public sealed class TestGenModelMetadataTests
     [InlineData(typeof(StudentReadModel), "Student")]
     [InlineData(typeof(QuestionReadModel), "Question")]
     [InlineData(typeof(QuestionTopicReadModel), "QuestionTopic")]
+    [InlineData(typeof(QuestionVersionReadModel), "QuestionVersion")]
     public void ExternalReadModels_AreExcludedFromMigrations(Type clrType, string tableName)
     {
         var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(clrType));
@@ -167,6 +175,10 @@ public sealed class TestGenModelMetadataTests
         AssertStringColumn(topic, nameof(QuestionTopicReadModel.QuestionId), "QuestionID", 36, nullable: false);
         AssertStringColumn(topic, nameof(QuestionTopicReadModel.TagId), "TagID", 36, nullable: false);
         Assert.Contains(topic.GetIndexes(), x => x.GetDatabaseName() == "UQ_QuestionTopic_Question_Tag" && x.IsUnique);
+
+        var version = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(QuestionVersionReadModel)));
+        AssertStringColumn(version, nameof(QuestionVersionReadModel.VersionId), "VersionID", 36, nullable: false);
+        Assert.Equal("AnswersSnapshot", Column(version, nameof(QuestionVersionReadModel.AnswersSnapshot)).GetColumnName());
     }
 
     private IEntityType Entity<TEntity>(string tableName)

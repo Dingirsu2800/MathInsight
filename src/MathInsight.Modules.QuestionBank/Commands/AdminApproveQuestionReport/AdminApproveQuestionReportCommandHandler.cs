@@ -74,7 +74,10 @@ public sealed class AdminApproveQuestionReportCommandHandler
             cancellationToken);
 
         if (!hasPendingExpertReport)
+        {
             report.Question.Status = "Approved";
+            report.Question.UpdatedTime = now;
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 

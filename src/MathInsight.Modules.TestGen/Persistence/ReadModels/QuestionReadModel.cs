@@ -7,6 +7,7 @@ public sealed class QuestionReadModel
     public int Grade { get; set; }
     public string Status { get; set; } = string.Empty;
     public string QuestionType { get; set; } = string.Empty;
+    public decimal DefaultWeight { get; set; } = 1.00m;
     public bool IsActive { get; set; }
 
     public ICollection<QuestionTopicReadModel> Topics { get; set; } = new List<QuestionTopicReadModel>();

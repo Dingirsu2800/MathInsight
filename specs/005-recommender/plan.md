@@ -1,5 +1,7 @@
 # Implementation Plan: Recommender Module
 
+> **Current checkpoint**: consume the Recommender integration contract in [Scoring Contract V2](../scoring-contract-v2.md).
+
 **Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-07-04
 **Spec**: [spec.md](spec.md)
 

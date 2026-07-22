@@ -1,5 +1,11 @@
 # Tasks Checklist: Recommender Module
 
+## Scoring Contract V2
+
+- [x] Persist and compare GradeRevision per session/topic snapshot.
+- [x] Consume earned/max weighted topic totals and replace newer revisions.
+- [x] Replay affected mastery without applying scoring weight as `w_D`.
+
 **Branch**: `005-recommender` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 > **Updated**: 2026-07-04 - aligned with Rule-Based/Ptag v2 and migration 002

@@ -154,6 +154,7 @@ public sealed class SubmitBlueprintForReviewCommandHandler
             BlueprintName = blueprint.BlueprintName,
             Grade = blueprint.Grade,
             TotalQuestions = blueprint.TotalQuestions,
+            TotalScore = blueprint.TotalScore,
             DurationMinutes = blueprint.DurationMinutes,
             Sections = blueprint.Sections
                 .Select(section => new BlueprintSectionRequest
@@ -164,8 +165,8 @@ public sealed class SubmitBlueprintForReviewCommandHandler
                     QuestionType = section.QuestionType,
                     InstructionText = section.InstructionText,
                     TotalQuestions = section.TotalQuestions,
-                    DefaultPointPerQuestion = section.DefaultPointPerQuestion,
-                    DefaultPointPerPart = section.DefaultPointPerPart,
+                    ScoreBudget = section.ScoreBudget,
+                    ScoringRule = section.ScoringRule,
                     PartCountPerQuestion = section.PartCountPerQuestion,
                     Details = section.Details
                         .Select(detail => new BlueprintDetailRequest

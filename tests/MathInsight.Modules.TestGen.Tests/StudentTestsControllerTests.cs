@@ -44,6 +44,8 @@ public sealed class StudentTestsControllerTests
             "Exam",
             45,
             20,
+            10m,
+            "BlueprintBudget",
             DateTime.UtcNow);
         var mediator = new Mock<IMediator>();
         mediator

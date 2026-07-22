@@ -1,5 +1,12 @@
 # Tasks Checklist: Testing Module
 
+## Scoring Contract V2
+
+- [x] Map TestQuestion version/scoring fields and TestSession GradeRevision.
+- [x] Render and validate submissions against QuestionVersion V2.
+- [x] Implement trusted session-linked Student report creation.
+- [x] Return immutable content, machine points, effective points, and invalidation audit.
+
 **Branch**: `003-testing` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---

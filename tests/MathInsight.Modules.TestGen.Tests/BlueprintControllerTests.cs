@@ -224,7 +224,7 @@ public sealed class BlueprintControllerTests
                     SectionName = "Section I",
                     QuestionType = BlueprintQuestionTypes.SingleChoice,
                     TotalQuestions = 1,
-                    DefaultPointPerQuestion = 1m,
+                    ScoreBudget = 1m,
                     Details =
                     [
                         new BlueprintDetailRequest

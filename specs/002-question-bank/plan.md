@@ -1,5 +1,7 @@
 # Implementation Plan: Question Bank Module
 
+> **Current checkpoint**: implement the QuestionBank ownership items in [Scoring Contract V2](../scoring-contract-v2.md).
+
 **Branch**: `002-question-bank` | **Date**: 2026-06-23 | **Updated**: 2026-07-10
 **Spec**: [spec.md](spec.md)
 

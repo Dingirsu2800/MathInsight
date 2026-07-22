@@ -2,9 +2,12 @@ namespace MathInsight.Modules.TestGen.Generation;
 
 public sealed record BlueprintExamCandidate(
     string QuestionId,
+    string QuestionVersionId,
+    decimal DefaultWeight,
     string DifficultyId,
     string QuestionType,
-    IReadOnlySet<string> TagIds);
+    IReadOnlySet<string> TagIds,
+    IReadOnlySet<string> SupportedScoringRules);
 
 public sealed record BlueprintExamRequirement(
     string BlueprintDetailId,
@@ -13,6 +16,7 @@ public sealed record BlueprintExamRequirement(
     string TagId,
     string DifficultyId,
     string QuestionType,
+    string ScoringRule,
     int Quantity);
 
 public sealed record BlueprintExamAssignment(

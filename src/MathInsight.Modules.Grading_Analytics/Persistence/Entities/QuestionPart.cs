@@ -7,8 +7,8 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class QuestionPart
 {
-    public Guid QuestionPartId { get; set; }
-    public Guid QuestionId { get; set; }
+    public string QuestionPartId { get; set; } = string.Empty;
+    public string QuestionId { get; set; } = string.Empty;
     public int PartOrder { get; set; }
     public string? PartLabel { get; set; }
     public string Content { get; set; } = string.Empty;
@@ -18,7 +18,8 @@ public class QuestionPart
     public decimal? CorrectNumeric { get; set; }
     public decimal? NumericTolerance { get; set; }
 
-    public decimal DefaultPoint { get; set; }
+    public decimal DefaultWeight { get; set; }
+    public bool IsArchived { get; set; }
     public string? Explanation { get; set; }
 
     /// <summary>TrueFalse | ShortAnswer | NumericAnswer</summary>

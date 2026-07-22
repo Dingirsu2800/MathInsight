@@ -8,4 +8,6 @@ public sealed record ReportQuestionCommand(
     string QuestionId,
     ReportQuestionRequest Request,
     string ReporterAccountId,
-    string ReporterRole) : IRequest<Result<ReportQuestionResponse>>;
+    string ReporterRole,
+    string? SessionId = null,
+    string? QuestionVersionId = null) : IRequest<Result<ReportQuestionResponse>>;

@@ -84,7 +84,7 @@ public sealed class QuestionExcelImportTests
     public void Parser_UnsupportedTemplateVersion_ThrowsTemplateVersionError()
     {
         using var workbook = BuildValidWorkbook();
-        workbook.Worksheet("_Meta").Cell(1, 2).Value = "2";
+        workbook.Worksheet("_Meta").Cell(1, 2).Value = "99";
         using var stream = CreateWorkbookStream(workbook);
 
         var exception = Assert.Throws<QuestionImportException>(() => new QuestionImportWorkbookParser().Parse(stream));
@@ -179,7 +179,7 @@ public sealed class QuestionExcelImportTests
 
         var item = Assert.Single(result.Value!.Items);
         Assert.True(item.IsValid);
-        Assert.Equal(1.5m, item.Draft!.DefaultPoint);
+        Assert.Equal(1.5m, item.Draft!.DefaultWeight);
     }
 
     [Fact]
@@ -386,7 +386,7 @@ public sealed class QuestionExcelImportTests
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await SeedTaxonomyAsync(database);
         var draft = CreateSingleChoiceDraft();
-        draft.DefaultPoint = 1.234m;
+        draft.DefaultWeight = 1.234m;
         var handler = new ConfirmQuestionImportCommandHandler(
             database.Context,
             new QuestionImportValidationService(database.Context));
@@ -401,7 +401,7 @@ public sealed class QuestionExcelImportTests
 
         Assert.True(result.IsSuccess);
         Assert.False(result.Value!.IsValid);
-        Assert.Contains(result.Value.Errors, error => error.Code == "QUESTION_DEFAULT_POINT_INVALID");
+        Assert.Contains(result.Value.Errors, error => error.Code == "QUESTION_WEIGHT_INVALID");
         Assert.Equal(0, await database.Context.Questions.CountAsync());
     }
 
@@ -423,7 +423,7 @@ public sealed class QuestionExcelImportTests
                 PartType = "NUMERIC_ANSWER",
                 CorrectNumeric = 1.1234567m,
                 NumericTolerance = 0.001m,
-                DefaultPoint = 1m
+                DefaultWeight = 1m
             }
         ];
         var handler = new ConfirmQuestionImportCommandHandler(
@@ -581,7 +581,7 @@ public sealed class QuestionExcelImportTests
         Assert.True(workbook.Worksheets.Contains("Parts"));
         Assert.True(workbook.Worksheets.Contains("Topics"));
         Assert.True(workbook.Worksheets.Contains("Catalogs"));
-        Assert.Equal("1", workbook.Worksheet("_Meta").Cell(1, 2).GetString());
+        Assert.Equal("2", workbook.Worksheet("_Meta").Cell(1, 2).GetString());
     }
 
     private static async Task SeedTaxonomyAsync(
@@ -616,7 +616,7 @@ public sealed class QuestionExcelImportTests
         DifficultyId = "difficulty-1",
         Grade = 10,
         QuestionType = "SINGLE_CHOICE",
-        DefaultPoint = 1m,
+        DefaultWeight = 1m,
         Topics = [new CreateQuestionTopicRequest("topic-1", true)],
         Answers =
         [
@@ -629,10 +629,10 @@ public sealed class QuestionExcelImportTests
     {
         var workbook = new XLWorkbook();
         workbook.Worksheets.Add("_Meta").Cell(1, 1).Value = "TemplateVersion";
-        workbook.Worksheet("_Meta").Cell(1, 2).Value = "1";
+        workbook.Worksheet("_Meta").Cell(1, 2).Value = "2";
         workbook.Worksheets.Add("Instructions");
 
-        AddSheet(workbook, "Questions", ["QuestionKey", "QuestionContent", "SolutionContent", "QuestionType", "Grade", "DifficultyLevel", "DefaultPoint", "PictureUrl"]);
+        AddSheet(workbook, "Questions", ["QuestionKey", "QuestionContent", "SolutionContent", "QuestionType", "Grade", "DifficultyLevel", "DefaultWeight", "PictureUrl"]);
         var questions = workbook.Worksheet("Questions");
         questions.Cell(2, 1).Value = "Q001";
         questions.Cell(2, 2).Value = "What is 1 + 1?";
@@ -651,7 +651,7 @@ public sealed class QuestionExcelImportTests
         answers.Cell(3, 2).Value = "3";
         answers.Cell(3, 3).Value = false;
 
-        AddSheet(workbook, "Parts", ["QuestionKey", "PartOrder", "PartLabel", "PartContent", "PartType", "CorrectBoolean", "CorrectText", "CorrectNumeric", "NumericTolerance", "Explanation", "DefaultPoint"]);
+        AddSheet(workbook, "Parts", ["QuestionKey", "PartOrder", "PartLabel", "PartContent", "PartType", "CorrectBoolean", "CorrectText", "CorrectNumeric", "NumericTolerance", "Explanation", "DefaultWeight"]);
         AddSheet(workbook, "Topics", ["QuestionKey", "TopicName", "IsPrimary"]);
         var topics = workbook.Worksheet("Topics");
         topics.Cell(2, 1).Value = "Q001";

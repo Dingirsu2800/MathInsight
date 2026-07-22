@@ -5,6 +5,8 @@ using MathInsight.Shared.Events;
 using MathInsight.Modules.Grading_Analytics.Persistence;
 using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 using MathInsight.Modules.Grading_Analytics.Services;
+using MathInsight.Shared.Questions;
+using System.Text.Json;
 
 namespace MathInsight.Modules.Grading_Analytics.Handlers;
 
@@ -99,7 +101,7 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
     /// Returns the GradeCalculatedEvent to publish after commit.
     /// </summary>
     private async Task<GradeCalculatedEvent?> GradeSessionInTransactionAsync(
-        Guid sessionId,
+        string sessionId,
         TestSubmittedEvent notification,
         CancellationToken ct)
     {
@@ -136,6 +138,32 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             return null;
         }
 
+        var testQuestions = await _db.TestQuestions
+            .AsNoTracking()
+            .Include(item => item.QuestionVersion)
+            .Where(item => item.TestId == session.TestId)
+            .ToDictionaryAsync(item => item.QuestionId, StringComparer.OrdinalIgnoreCase, ct);
+
+        foreach (var answer in session.TestAnswers)
+        {
+            if (!testQuestions.TryGetValue(answer.QuestionId, out var testQuestion))
+            {
+                if (_db.Database.IsRelational())
+                    throw new InvalidOperationException($"Missing TestQuestion snapshot for question '{answer.QuestionId}'.");
+                continue;
+            }
+
+            if (testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
+                throw new InvalidOperationException($"Unsupported snapshot schema for version '{testQuestion.QuestionVersionId}'.");
+
+            answer.Snapshot = JsonSerializer.Deserialize<QuestionSnapshotV2>(
+                testQuestion.QuestionVersion.AnswersSnapshot)
+                ?? throw new InvalidOperationException($"Invalid snapshot JSON for version '{testQuestion.QuestionVersionId}'.");
+            answer.MaxPointsSnapshot = testQuestion.MaxPointsSnapshot;
+            answer.ScoringRuleSnapshot = testQuestion.ScoringRuleSnapshot;
+            answer.IsScoreInvalidated = testQuestion.IsScoreInvalidated;
+        }
+
         // ── Run grading engine synchronously ──────────────────────────────────
         var gradingResult = _gradingEngine.Grade(session);
 
@@ -150,7 +178,8 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             session.NumCorrect = gradingResult.NumCorrect;
             session.NumIncorrect = gradingResult.NumIncorrect;
             session.NumAbandoned = gradingResult.NumAbandoned;
-            // SubmissionType is preserved — it was set by Testing during submit
+            session.GradeRevision = Math.Max(1, session.GradeRevision + 1);
+            session.SubmissionType = notification.SubmissionType;
 
             // TestAnswer entities (IsCorrect, PointsEarned) are already mutated
             // in-place by GradingEngine.Grade(). EF change tracker will persist them.
@@ -187,15 +216,14 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
 
         // ── Build per-tag results ────────────────────────────────────────────
         // Track per-tag correctness for PerTagResults
-        var tagStats = new Dictionary<Guid, (int Correct, int Total)>();
+        var tagStats = new Dictionary<string, (decimal Correct, decimal Total, decimal Earned, decimal Max)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var answer in session.TestAnswers)
         {
             // Find primary topic tag for this question
-            var primaryTopic = answer.Question.QuestionTopics
-                .FirstOrDefault(qt => qt.IsPrimary);
-
-            var tagId = primaryTopic?.TagId ?? Guid.Empty;
+            var tagId = answer.Snapshot?.Topics.FirstOrDefault(topic => topic.IsPrimary)?.TagId
+                ?? answer.Question.QuestionTopics.FirstOrDefault(topic => topic.IsPrimary)?.TagId
+                ?? string.Empty;
 
             // Determine abandoned status using same logic as GradingEngine
             bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
@@ -205,23 +233,27 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
                 QuestionId = answer.QuestionId,
                 TagId = tagId,
                 IsCorrect = answer.IsCorrect == true,
+                MachineIsCorrect = answer.IsCorrect,
+                IsScoreInvalidated = answer.IsScoreInvalidated,
                 PointsEarned = answer.PointsEarned,
-                MaxPoints = answer.Question.DefaultPoint,
+                MaxPoints = answer.Snapshot is null ? answer.Question.DefaultWeight : answer.MaxPointsSnapshot,
                 TimeSpent = answer.TimeSpent ?? 0,
-                DifficultyLevel = answer.Question.DifficultyLevel,
+                DifficultyLevel = 1,
                 QuestionNo = answer.QuestionNo,
                 IsAbandoned = isAbandoned
             });
 
             // Accumulate per-tag stats (skip questions without a primary tag)
-            if (tagId != Guid.Empty)
+            if (!string.IsNullOrWhiteSpace(tagId))
             {
                 if (!tagStats.TryGetValue(tagId, out var stats))
-                    stats = (0, 0);
+                    stats = (0, 0, 0, 0);
 
                 stats.Total++;
                 if (answer.IsCorrect == true)
                     stats.Correct++;
+                stats.Earned += answer.IsScoreInvalidated ? answer.MaxPointsSnapshot : answer.PointsEarned;
+                stats.Max += answer.Snapshot is null ? answer.Question.DefaultWeight : answer.MaxPointsSnapshot;
 
                 tagStats[tagId] = stats;
             }
@@ -232,11 +264,13 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             .Select(kv => new TopicGradeResult
             {
                 TagId = kv.Key,
-                TopicScore = kv.Value.Total > 0
-                    ? Math.Round((decimal)kv.Value.Correct / kv.Value.Total * 10.0m, 2)
+                TopicScore = kv.Value.Max > 0
+                    ? Math.Round(kv.Value.Earned / kv.Value.Max * 10.0m, 2)
                     : 0m,
-                CorrectCount = kv.Value.Correct,
-                TotalCount = kv.Value.Total
+                CorrectItems = kv.Value.Correct,
+                TotalItems = kv.Value.Total,
+                EarnedPoints = kv.Value.Earned,
+                MaxPoints = kv.Value.Max
             })
             .ToList();
 
@@ -245,6 +279,7 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             SessionId = session.SessionId,
             StudentId = session.StudentId,
             TestId = session.TestId,
+            GradeRevision = session.GradeRevision,
             TestFormat = session.TestFormat,
             Score = gradingResult.Score,
             NumCorrect = gradingResult.NumCorrect,
@@ -270,8 +305,8 @@ public class GradeSubmittedSessionHandler : INotificationHandler<TestSubmittedEv
             "MULTIPLECHOICE" => answer.SelectedOptions.Count == 0,
             "SHORTANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
             "COMPOSITE" => answer.AnswerParts.Count == 0 || answer.AnswerParts.All(p =>
-                p.BooleanAnswer == null && 
-                string.IsNullOrWhiteSpace(p.TextAnswer) && 
+                p.BooleanAnswer == null &&
+                string.IsNullOrWhiteSpace(p.TextAnswer) &&
                 p.NumericAnswer == null),
             _ => true
         };
