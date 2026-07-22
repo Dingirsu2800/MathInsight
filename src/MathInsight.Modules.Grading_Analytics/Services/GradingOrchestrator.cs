@@ -12,11 +12,12 @@ namespace MathInsight.Modules.Grading_Analytics.Services;
 ///
 /// Responsibilities:
 ///   1. Load TestSession with all required navigation properties
-///   2. Validate TestSession.Status == InProgress
-///   3. Run GradingEngine.Grade() synchronously
-///   4. Write results in a single transaction (DC-05: Transactional Atomicity)
-///   5. Set TestSession.Status = Graded; preserve SubmissionType from Testing
-///   6. Build and return GradeCalculatedEvent (G3)
+///   2. Load TestQuestion scoring snapshots and resolve onto TestAnswer entities
+///   3. Validate TestSession.Status == InProgress
+///   4. Run GradingEngine.Grade() synchronously
+///   5. Write results in a single transaction (DC-05: Transactional Atomicity)
+///   6. Set TestSession.Status = Graded; increment GradeRevision; preserve SubmissionType
+///   7. Build and return GradeCalculatedEvent (G3)
 ///
 /// Retry policy:
 ///   U2 — EF Core's EnableRetryOnFailure is configured on the DbContext (3 retries,
@@ -79,9 +80,11 @@ public class GradingOrchestrator : IGradingOrchestrator
         {
             _logger.LogInformation(
                 "Grading completed for session {SessionId} (Score={Score}, " +
-                "Correct={NumCorrect}, Incorrect={NumIncorrect}, Abandoned={NumAbandoned})",
+                "Correct={NumCorrect}, Incorrect={NumIncorrect}, Abandoned={NumAbandoned}, " +
+                "GradeRevision={GradeRevision})",
                 gradeEvent.SessionId, gradeEvent.Score,
-                gradeEvent.NumCorrect, gradeEvent.NumIncorrect, gradeEvent.NumAbandoned);
+                gradeEvent.NumCorrect, gradeEvent.NumIncorrect, gradeEvent.NumAbandoned,
+                gradeEvent.GradeRevision);
         }
 
         return gradeEvent;
@@ -129,6 +132,28 @@ public class GradingOrchestrator : IGradingOrchestrator
             return null;
         }
 
+        // ── Load TestQuestion scoring snapshots ───────────────────────────────
+        // TestQuestion has composite PK (TestId, QuestionId). We load all TestQuestions
+        // for this Test and resolve them onto TestAnswer.TestQuestion manually,
+        // because EF cannot auto-navigate this cross-entity relationship.
+        var testQuestions = await _db.TestQuestions
+            .AsNoTracking()
+            .Where(tq => tq.TestId == session.TestId)
+            .ToDictionaryAsync(tq => tq.QuestionId, ct);
+
+        foreach (var answer in session.TestAnswers)
+        {
+            if (testQuestions.TryGetValue(answer.QuestionId, out var tq))
+            {
+                answer.TestQuestion = tq;
+            }
+        }
+
+        // ── Load Test for MaxScore ────────────────────────────────────────────
+        var test = await _db.Tests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TestId == session.TestId, ct);
+
         // ── Run grading engine synchronously ──────────────────────────────────
         var gradingResult = _gradingEngine.Grade(session);
 
@@ -143,6 +168,7 @@ public class GradingOrchestrator : IGradingOrchestrator
             session.NumCorrect = gradingResult.NumCorrect;
             session.NumIncorrect = gradingResult.NumIncorrect;
             session.NumAbandoned = gradingResult.NumAbandoned;
+            session.GradeRevision++;
             // SubmissionType is preserved — it was set by Testing during submit
 
             // TestAnswer entities (IsCorrect, PointsEarned) are already mutated
@@ -163,7 +189,7 @@ public class GradingOrchestrator : IGradingOrchestrator
         }
 
         // ── G3: Build GradeCalculatedEvent ────────────────────────────────────
-        return BuildGradeCalculatedEvent(session, gradingResult, notification);
+        return BuildGradeCalculatedEvent(session, gradingResult, notification, testQuestions, test);
     }
 
     /// <summary>
@@ -179,13 +205,15 @@ public class GradingOrchestrator : IGradingOrchestrator
     /// Phase 6 (Unified Multi-Tag v4.1):
     ///   - Populates TagWeights per answer from QuestionTopics (BR-13/14/15)
     ///   - Populates NormalizedScore per answer: PointsEarned / MaxPoints × 10.0
-    ///   - Populates MaxPoints per answer: Question.DefaultPoint
+    ///   - Populates MaxPoints per answer: TestQuestion.MaxPointsSnapshot (or Question.DefaultWeight fallback)
     ///   - Expands PerTagResults to ALL tags (primary + secondary) with weighted Tầng 1–2 formula
     /// </summary>
     private static GradeCalculatedEvent BuildGradeCalculatedEvent(
         TestSession session,
         GradingResult gradingResult,
-        TestSubmittedEvent notification)
+        TestSubmittedEvent notification,
+        Dictionary<Guid, TestQuestion> testQuestions,
+        Test? test)
     {
         var gradedAnswers = new List<GradedAnswerDto>();
 
@@ -204,8 +232,10 @@ public class GradingOrchestrator : IGradingOrchestrator
             // ── Phase 6: Build TagWeights from QuestionTopics (BR-13/14/15) ──
             var tagWeights = BuildTagWeights(questionTopics);
 
-            // ── Phase 6: MaxPoints = Question.DefaultPoint ───────────────────
-            decimal maxPoints = answer.Question.DefaultPoint;
+            // ── MaxPoints from TestQuestion.MaxPointsSnapshot ────────────────
+            decimal maxPoints = testQuestions.TryGetValue(answer.QuestionId, out var tq)
+                ? tq.MaxPointsSnapshot
+                : answer.Question.DefaultWeight;
 
             // ── Phase 6: NormalizedScore = PointsEarned / MaxPoints × 10.0 ──
             decimal normalizedScore = maxPoints > 0
@@ -214,6 +244,9 @@ public class GradingOrchestrator : IGradingOrchestrator
 
             // Determine abandoned status using same logic as GradingEngine
             bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
+
+            // Determine invalidation status
+            bool isInvalidated = tq?.IsScoreInvalidated ?? false;
 
             gradedAnswers.Add(new GradedAnswerDto
             {
@@ -227,31 +260,36 @@ public class GradingOrchestrator : IGradingOrchestrator
                 TimeSpent = answer.TimeSpent ?? 0,
                 DifficultyLevel = answer.Question.DifficultyLevel,
                 QuestionNo = answer.QuestionNo,
-                IsAbandoned = isAbandoned
+                IsAbandoned = isAbandoned,
+                IsScoreInvalidated = isInvalidated
             });
 
             // ── Phase 6: Accumulate per-tag stats for ALL tags ───────────────
-            foreach (var tw in tagWeights)
+            // Skip invalidated questions from tag statistics
+            if (!isInvalidated)
             {
-                if (tw.TagId == Guid.Empty) continue;
-
-                // Tầng 1: c_{q,i} = s_q × w_{iq}
-                decimal contribution = normalizedScore * tw.Weight;
-
-                if (!tagContributions.TryGetValue(tw.TagId, out var contributions))
+                foreach (var tw in tagWeights)
                 {
-                    contributions = new List<decimal>();
-                    tagContributions[tw.TagId] = contributions;
-                }
-                contributions.Add(contribution);
+                    if (tw.TagId == Guid.Empty) continue;
 
-                // Track correct/total per tag
-                if (!tagStats.TryGetValue(tw.TagId, out var stats))
-                    stats = (0, 0);
-                stats.Total++;
-                if (answer.IsCorrect == true)
-                    stats.Correct++;
-                tagStats[tw.TagId] = stats;
+                    // Tầng 1: c_{q,i} = s_q × w_{iq}
+                    decimal contribution = normalizedScore * tw.Weight;
+
+                    if (!tagContributions.TryGetValue(tw.TagId, out var contributions))
+                    {
+                        contributions = new List<decimal>();
+                        tagContributions[tw.TagId] = contributions;
+                    }
+                    contributions.Add(contribution);
+
+                    // Track correct/total per tag
+                    if (!tagStats.TryGetValue(tw.TagId, out var stats))
+                        stats = (0, 0);
+                    stats.Total++;
+                    if (answer.IsCorrect == true)
+                        stats.Correct++;
+                    tagStats[tw.TagId] = stats;
+                }
             }
         }
 
@@ -286,6 +324,7 @@ public class GradingOrchestrator : IGradingOrchestrator
             NumCorrect = gradingResult.NumCorrect,
             NumIncorrect = gradingResult.NumIncorrect,
             NumAbandoned = gradingResult.NumAbandoned,
+            GradeRevision = session.GradeRevision,
             PerTagResults = perTagResults,
             Answers = gradedAnswers,
             GradedAt = DateTime.UtcNow

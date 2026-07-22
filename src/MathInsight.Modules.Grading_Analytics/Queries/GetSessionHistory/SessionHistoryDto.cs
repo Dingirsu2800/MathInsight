@@ -20,6 +20,8 @@ public sealed record SessionHistoryDto
     public DateTime? SubmittedAt { get; init; }
     /// <summary>StudentSubmit | TimeoutSubmit | SystemSubmit</summary>
     public string? SubmissionType { get; init; }
+    /// <summary>Current grading revision. Increases when score is recalculated.</summary>
+    public int GradeRevision { get; init; }
 }
 
 /// <summary>

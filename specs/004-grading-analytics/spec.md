@@ -2,7 +2,7 @@
 
 **Feature Branch**: `004-grading-analytics`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-14
+**Created**: 2026-06-23 | **Updated**: 2026-07-22
 
 **Status**: Approved
 
@@ -49,6 +49,7 @@ Authorization: Bearer <jwt>
 | `totalQuestion` | `int` | |
 | `durationMinutes` | `int?` | `TestSession.Duration` |
 | `submittedAt` | `DateTime?` | `TestSession.EndTime` |
+| `gradeRevision` | `int` | Current grading revision; increments on re-grade (e.g., after report invalidation) |
 | `answers` | `GradedAnswerDetailDto[]` | From `TestAnswer` join |
 
 **`GradedAnswerDetailDto`**:
@@ -60,10 +61,12 @@ Authorization: Bearer <jwt>
 | `questionType` | `string` | |
 | `questionContent` | `string` | `Question.QuestionContent` |
 | `difficultyLevel` | `byte` | |
-| `isCorrect` | `bool?` | Null when not yet graded |
+| `isCorrect` | `bool?` | Null when not yet graded, or when invalidated |
 | `pointsEarned` | `decimal` | |
-| `maxPoints` | `decimal` | `Question.DefaultPoint` |
+| `maxPoints` | `decimal` | `TestQuestion.MaxPointsSnapshot` (fallback: `Question.DefaultWeight`) |
 | `timeSpent` | `int?` | seconds |
+| `isScoreInvalidated` | `bool` | True when the question was invalidated via confirmed report |
+| `invalidatedByReportId` | `Guid?` | The ReportID that caused invalidation |
 | `selectedOptionId` | `Guid?` | For SINGLE_CHOICE / TRUE_FALSE |
 | `shortAnswerText` | `string?` | For SHORT_ANSWER |
 | `selectedOptionIds` | `Guid[]` | For MULTIPLE_SELECT |
@@ -130,6 +133,7 @@ Authorization: Bearer <jwt>
 | `durationMinutes` | `int?` | |
 | `submittedAt` | `DateTime?` | `TestSession.EndTime` |
 | `submissionType` | `string?` | `StudentSubmit \| TimeoutSubmit \| SystemSubmit` |
+| `gradeRevision` | `int` | Current grading revision |
 
 ### Aggregate Stats Endpoint
 
@@ -174,8 +178,8 @@ Returns aggregate statistics computed from the student's graded sessions.
 - **BR-17 (Practice grading)**: For `Practice` mode, grading must complete within **2.0 seconds** end-to-end from submit.
 - **BR-18 (Exam grading MVP)**: For `Exam` mode, a `TestSubmittedConsumer` (MassTransit `IConsumer<TestSubmittedEvent>`) is implemented and delegates to the shared `IGradingOrchestrator`. In production, MassTransit routes to RabbitMQ for true async processing. In MVP with InMemory transport, the consumer executes synchronously. `Submitted` is not persisted as a durable DB state — if the team later needs a durable pending state, add a `PendingGrading` status or a separate grading job table.
 - **BR-19**: After grading completes, `TestSession.status` is updated to `Graded`; `submission_type`, `num_correct`, `num_incorrect`, `num_abandoned`, and `score` are calculated and persisted.
-- **BR-20**: Score formula: `score = SUM(points_earned) / SUM(max_points) × 10.0` — normalized to a 0–10 scale.
-  `max_points` for each parent question is defined as `Question.default_point`.
+- **BR-20**: Score formula: `score = SUM(effective_points) / SUM(max_points) × 10.0` — normalized to a 0–10 scale.
+  `max_points` for each question is `TestQuestion.MaxPointsSnapshot` (snapshot at test generation time). `effective_points` = `max_points` when `IsScoreInvalidated = true`, otherwise = `TestAnswer.points_earned`. Fallback: `Question.DefaultWeight` if TestQuestion not available (backward compat).
 - **BR-21**: AI Chatbot (UC-51) is called via the **Google Gemini API** (model: `gemini-2.0-flash`). Chatbot input: the stored question content + student's selected answer. Response includes a step-by-step explanation written in natural language with simple math notation suitable for students. Chatbot response is **not persisted** to the database.
 - **BR-21a**: Chatbot rate limiting: **1 request per student per session** (keyed by `(studentId, sessionId)`). Subsequent requests return HTTP 429. Rate limiter is **in-memory only for MVP** — TTL-based eviction (1 hour) prevents unbounded memory growth. Redis is explicitly excluded per Constitution §IV.
 - **BR-22**: After grading completes, `GradeCalculatedEvent` is published in-process (MediatR). It has **two consumers**:
@@ -194,8 +198,9 @@ Returns aggregate statistics computed from the student's graded sessions.
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
-  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per distinct TagId (primary and secondary) covered in the session. `TopicScore` is calculated using the weighted contribution formula (Tầng 1–2, report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per distinct TagId (primary and secondary) covered in the session. `TopicScore` is calculated using the weighted contribution formula (Tầng 1–2, report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. Invalidated questions are excluded from tag statistics. |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
+  | `GradeRevision` | `int` | Current grading revision; increases on re-grade (e.g., after report invalidation) |
   | `GradedAt` | `DateTime` | UTC timestamp |
 
   `TagWeightEntry` — represents a question's tag assignment with its weight:
@@ -210,22 +215,23 @@ Returns aggregate statistics computed from the student's graded sessions.
   - `NormalizedScore` (`decimal`) — `s_q = PointsEarned / MaxPoints × 10.0` — normalized question score on 0–10 scale, used for Tầng 1 contribution calculation `c_{q,i} = s_q × w_{iq}`
   - `IsCorrect` (`bool`)
   - `PointsEarned` (`decimal`)
-  - `MaxPoints` (`decimal`)
+  - `MaxPoints` (`decimal`) — from `TestQuestion.MaxPointsSnapshot`
   - `TimeSpent` (`int`)
   - `DifficultyLevel` (`byte` - value 1..4)
   - `QuestionNo` (`int`)
   - `IsAbandoned` (`bool`) — true if the question is abandoned/unanswered (per BR-16b)
+  - `IsScoreInvalidated` (`bool`) — true when the question was invalidated via confirmed report; effective points = MaxPoints
 
   Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
-- **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`**, the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to the question's `default_point`):
+- **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`** (or `ScoringRuleSnapshot = 'TieredTrueFalse'`), the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to `TestQuestion.MaxPointsSnapshot`):
 
   | Correct parts | Points earned |
   |---------------|---------------|
   | 0             | 0.00          |
-  | 1             | 0.10 × `default_point` |
-  | 2             | 0.25 × `default_point` |
-  | 3             | 0.50 × `default_point` |
-  | N (all)       | 1.00 × `default_point` |
+  | 1             | 0.10 × `max_points_snapshot` |
+  | 2             | 0.25 × `max_points_snapshot` |
+  | 3             | 0.50 × `max_points_snapshot` |
+  | N (all)       | 1.00 × `max_points_snapshot` |
 
   This rule applies regardless of **which** specific parts are correct. `is_correct` on the parent `TestAnswer` is `true` only when all parts are correct. Each child `TestAnswerPart.is_correct` is still recorded individually for solution display.
 
@@ -238,11 +244,24 @@ Returns aggregate statistics computed from the student's graded sessions.
 | `SINGLE_CHOICE` | `is_correct = (student_answer_id == correct_answer_id)` |
 | `MULTIPLE_SELECT` | `is_correct = (all correct options selected AND no incorrect options selected)` |
 | `TRUE_FALSE` | Same as `SINGLE_CHOICE` — standalone single-answer True/False question |
-| `COMPOSITE (general)` | Grade each `QuestionPart` individually per part type (see per-part grading below); `points_earned` = sum of part points earned, capped at `Question.default_point`; `is_correct` = true only when ALL parts are correct |
-| `COMPOSITE (all-TRUE_FALSE parts)` | Apply BR-23 non-linear scoring table based on count of correct parts |
+| `COMPOSITE (general)` / `WeightedParts` | Grade each `QuestionPart` individually per part type (see per-part grading below); part points distributed proportionally by `QuestionPart.DefaultWeight`; `points_earned` = sum of part points earned, capped at `TestQuestion.MaxPointsSnapshot`; `is_correct` = true only when ALL parts are correct |
+| `COMPOSITE (all-TRUE_FALSE parts)` / `TieredTrueFalse` | Apply BR-23 non-linear scoring table based on count of correct parts |
 | `SHORT_ANSWER` | Case-insensitive string match: `LOWER(short_answer_text) == LOWER(correct_answer_content)` |
 
-**COMPOSITE General — Per-Part Grading Logic** (for mixed-type parts):
+**ScoringRule Routing** (new, takes priority over QuestionType when available):
+
+| ScoringRuleSnapshot | Behavior |
+|---------------------|----------|
+| `AllOrNothing` | Correct = full `MaxPointsSnapshot`, incorrect = 0 |
+| `TieredTrueFalse` | BR-23 non-linear table based on correct part count |
+| `WeightedParts` | Per-part weighted scoring using `QuestionPart.DefaultWeight` ratios |
+
+**Score Invalidation** (new):
+- When `TestQuestion.IsScoreInvalidated = true`, the question is awarded full `MaxPointsSnapshot` without running grading logic (`EffectivePoints = MaxPointsSnapshot`)
+- `IsCorrect = null` for invalidated questions (neither correct nor incorrect)
+- Invalidated questions are **excluded** from correct/incorrect/abandoned counts and from tag statistics
+
+**COMPOSITE General — Per-Part Grading Logic** (for mixed-type parts / `WeightedParts`):
 
 | Part Type | Grading Logic |
 |-----------|---------------|
@@ -250,14 +269,17 @@ Returns aggregate statistics computed from the student's graded sessions.
 | `SHORT_ANSWER` | Case-insensitive string match: `LOWER(student_text_answer.Trim()) == LOWER(part.correct_text.Trim())` |
 | `NUMERIC_ANSWER` | `is_correct = ABS(student_numeric_answer - part.correct_numeric) <= part.numeric_tolerance` (tolerance defaults to 0 if null) |
 
-Each part's `points_earned` = `part.default_point` if correct, `0` otherwise. Parent `TestAnswer.points_earned` = `MIN(SUM(part points), question.default_point)`.
+Each part's `points_earned` = `(part.DefaultWeight / totalPartWeight) × MaxPointsSnapshot` if correct, `0` otherwise. Parent `TestAnswer.points_earned` = `MIN(SUM(part points), MaxPointsSnapshot)`.
 
-### Key Entities *(read from Testing module)*
+### Key Entities *(cross-read from Testing and QuestionBank modules)*
 
 This module does **not own** additional tables. It reads and writes to:
-- `TestSession` — updates `Status`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
+- `TestSession` — updates `Status`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`, `GradeRevision`
 - `TestAnswer` — updates `IsCorrect`, `PointsEarned` per answer
-- `Question` — reads `DefaultPoint` for scoring
+- `TestQuestion` — reads `MaxPointsSnapshot`, `ScoringRuleSnapshot`, `IsScoreInvalidated`, `InvalidatedByReportId` for scoring
+- `Test` — reads `MaxScore`, `ScoringPolicy` for final score calculation
+- `Question` — reads `DefaultWeight` (weight, not point), `QuestionType`, `DifficultyLevel`
+- `QuestionPart` — reads `DefaultWeight` for proportional part score distribution
 - `Answer` — reads `IsCorrect` flag for reference key
 
 Delegates competency updates to **Recommender module (005)** via `GradeCalculatedEvent`.

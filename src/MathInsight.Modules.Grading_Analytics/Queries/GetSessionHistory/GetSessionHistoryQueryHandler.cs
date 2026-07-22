@@ -61,6 +61,7 @@ public sealed class GetSessionHistoryQueryHandler
                 DurationMinutes = s.Duration,
                 SubmittedAt = s.EndTime,
                 SubmissionType = s.SubmissionType,
+                GradeRevision = s.GradeRevision,
             })
             .ToListAsync(cancellationToken);
 

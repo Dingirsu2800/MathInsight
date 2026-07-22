@@ -45,7 +45,7 @@ internal static class TestDataBuilder
         {
             QuestionId = questionId,
             QuestionType = questionType,
-            DefaultPoint = defaultPoint,
+            DefaultWeight = defaultPoint,
             DifficultyLevel = difficultyLevel,
             QuestionContent = "Test question",
             Answers = new List<Answer>
@@ -127,7 +127,7 @@ internal static class TestDataBuilder
         {
             QuestionId = questionId,
             QuestionType = "MULTIPLE_SELECT",
-            DefaultPoint = defaultPoint,
+            DefaultWeight = defaultPoint,
             DifficultyLevel = difficultyLevel,
             QuestionContent = "Test multiple select",
             Answers = answers,
@@ -184,7 +184,7 @@ internal static class TestDataBuilder
         {
             QuestionId = questionId,
             QuestionType = "SHORT_ANSWER",
-            DefaultPoint = defaultPoint,
+            DefaultWeight = defaultPoint,
             DifficultyLevel = difficultyLevel,
             QuestionContent = "Test short answer",
             Answers = new List<Answer>
@@ -241,7 +241,7 @@ internal static class TestDataBuilder
                 PartOrder = i + 1,
                 Content = $"Part {i + 1}",
                 CorrectBoolean = bool.TryParse(parts[i].answerKey, out var bVal) ? bVal : (bool?)null,
-                DefaultPoint = 0, // Not used for all-TF scoring
+                DefaultWeight = 0, // Not used for all-TF scoring
                 PartType = "TRUE_FALSE"
             });
         }
@@ -250,7 +250,7 @@ internal static class TestDataBuilder
         {
             QuestionId = questionId,
             QuestionType = "COMPOSITE",
-            DefaultPoint = defaultPoint,
+            DefaultWeight = defaultPoint,
             DifficultyLevel = difficultyLevel,
             QuestionContent = "Test composite",
             Answers = new List<Answer>(),
@@ -325,7 +325,7 @@ internal static class TestDataBuilder
                 CorrectText = pTypeNorm == "SHORTANSWER" ? parts[i].answerKey : null,
                 CorrectNumeric = pTypeNorm == "NUMERICANSWER" && decimal.TryParse(parts[i].answerKey, out var d) ? d : (decimal?)null,
                 NumericTolerance = pTypeNorm == "NUMERICANSWER" ? 0.01m : (decimal?)null,
-                DefaultPoint = parts[i].pointValue,
+                DefaultWeight = parts[i].pointValue,
                 PartType = pType
             });
         }
@@ -334,7 +334,7 @@ internal static class TestDataBuilder
         {
             QuestionId = questionId,
             QuestionType = "COMPOSITE",
-            DefaultPoint = defaultPoint,
+            DefaultWeight = defaultPoint,
             DifficultyLevel = difficultyLevel,
             QuestionContent = "Test composite general",
             Answers = new List<Answer>(),

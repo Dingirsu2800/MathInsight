@@ -8,9 +8,9 @@
 
 - [x] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
 - [x] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
-- [x] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
+- [x] Configure read access to `Question` (`DefaultWeight`) and `Answer` (`IsCorrect`).
 - [x] Configure read/write access to `TestAnswerPart` (`is_correct`, `points_earned`).
-- [x] Configure read access to `QuestionPart` (`part_type`, `answer_key`, `default_point`).
+- [x] Configure read access to `QuestionPart` (`part_type`, `answer_key`, `default_weight`).
 - [x] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules
 
 ---
@@ -21,11 +21,11 @@
   - [x] `SINGLE_CHOICE` grading: compare `TestAnswer.answer_id` to the correct `Answer.answer_id`
   - [x] `MULTIPLE_SELECT` grading: compare selected `TestAnswerOption` set to the full correct answer set — all correct + no incorrect = true
   - [x] `TRUE_FALSE` grading (standalone): same as `SINGLE_CHOICE`
-  - [x] `COMPOSITE` grading — general: grade each `QuestionPart`; `points_earned` = sum of correct part points
-  - [x] `COMPOSITE` grading — all-TRUE_FALSE parts (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×dp, 2→0.25×dp, 3→0.50×dp, N→1.00×dp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually for solution display; `TestAnswerPart.points_earned = 0` (parent `TestAnswer.points_earned` is the source of truth — do NOT distribute non-linear parent score to child parts)
+  - [x] `COMPOSITE` grading — general / `WeightedParts`: grade each `QuestionPart`; part `points_earned` distributed by `DefaultWeight` ratios; total capped at `MaxPointsSnapshot`
+  - [x] `COMPOSITE` grading — all-TRUE_FALSE parts / `TieredTrueFalse` (BR-23): count correct parts → look up non-linear table (0→0, 1→0.10×mp, 2→0.25×mp, 3→0.50×mp, N→1.00×mp); `is_correct` on parent = true only when all parts correct; each `TestAnswerPart.is_correct` still recorded individually for solution display; `TestAnswerPart.points_earned = 0` (parent `TestAnswer.points_earned` is the source of truth — do NOT distribute non-linear parent score to child parts)
   - [x] `SHORT_ANSWER` grading: `LOWER(short_answer_text) == LOWER(Answer.answer_content)` where `Answer.is_correct = true`
-  - [x] Calculate `score = SUM(points_earned) / SUM(max_points) × 10.0` (BR-20)
-  - [x] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b)
+  - [x] Calculate `score = SUM(effective_points) / SUM(max_points) × 10.0` (BR-20); max_points from `TestQuestion.MaxPointsSnapshot`
+  - [x] Count `num_correct`, `num_incorrect`, `num_abandoned` (abandoned per BR-16b; invalidated excluded)
 
 - [x] **GradingOrchestrator** (`IGradingOrchestrator`):
   - [x] Core grading flow shared by both MediatR handler (Practice) and MassTransit consumer (Exam)
@@ -33,7 +33,7 @@
   - [x] Validate `TestSession.status = InProgress`
   - [x] Run `GradingEngine.Grade()` synchronously
   - [x] Write results in single transaction (DC-05): update `TestAnswer` + `TestAnswerPart` + `TestSession`
-  - [x] Set `TestSession.status = Graded`; preserve `submission_type` from Testing
+  - [x] Set `TestSession.status = Graded`; increment `GradeRevision`; preserve `submission_type` from Testing
   - [x] Build and return `GradeCalculatedEvent` (G3) for downstream publishing
 
 - [x] **GradeSubmittedSessionHandler** (MediatR, Practice mode):
@@ -77,7 +77,8 @@
   - [x] Populate `GradedAnswerDto.IsAbandoned` using same `IsAbandoned()` logic as `GradingEngine`
   - [x] Populate `NumAbandoned` from count of unanswered/abandoned answers per BR-16b
   - [x] Publish via MediatR `IPublisher.Publish(event)` after transaction commit (not before)
-  - [x] Note: `GradedAnswerDto.TagWeights`, `NormalizedScore`, and `MaxPoints` are defined in the shared event contract but **not yet populated** by `GradingOrchestrator.BuildGradeCalculatedEvent()` — deferred to Phase 6
+  - [x] Populate `GradeRevision` from `TestSession.GradeRevision`
+  - [x] Populate `GradedAnswerDto.IsScoreInvalidated` from `TestQuestion.IsScoreInvalidated`
 
 ---
 
@@ -99,15 +100,15 @@
 - [x] Integration tests (xUnit):
   - [x] Practice: 40-question session graded in < 2.0s
   - [x] Exam: session graded synchronously and persisted as `Graded`
-  - [x] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
+  - [x] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = MaxPointsSnapshot`
   - [x] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
   - [x] SHORT_ANSWER case-insensitive match → `is_correct = true`
   - [x] Abandoned answer (per BR-16b) → `is_correct = false`, counted in `num_abandoned`
   - [x] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
-  - [x] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
-  - [x] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)
-  - [x] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × default_point` (BR-23)
-  - [x] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × MaxPointsSnapshot` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × MaxPointsSnapshot` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × MaxPointsSnapshot` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = MaxPointsSnapshot`; `is_correct = true` (BR-23)
   - [x] COMPOSITE general (mixed parts) — parent score = sum of part points earned
   - [x] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
   - [x] UC-51: Chatbot returns explanation JSON within 10s (happy path)
@@ -171,8 +172,79 @@
   - [x] `NormalizedScore = PointsEarned / MaxPoints × 10.0`
 
 - [x] **Populate `MaxPoints` in `GradedAnswerDto`**:
-  - [x] `MaxPoints = Question.DefaultPoint`
+  - [x] `MaxPoints = TestQuestion.MaxPointsSnapshot` (fallback: `Question.DefaultWeight`)
 
 - [x] **Expand `PerTagResults` to all tags**:
   - [x] Include entries for secondary tags (not just primary)
   - [x] Use weighted Tầng 1–2 formula: `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`
+  - [x] Exclude invalidated questions from tag statistics
+
+---
+
+## Phase 7: Scoring Weight & History Update (2026-07-22)
+
+> Source: `SCORING_WEIGHT_AND_HISTORY_DB_UPDATE.md`
+
+### 7.1 Entity Changes
+
+- [x] `Question.DefaultPoint` → `Question.DefaultWeight` (rename)
+- [x] `QuestionPart.DefaultPoint` → `QuestionPart.DefaultWeight` (rename)
+- [x] `TestSession` — add `GradeRevision` (int)
+- [x] New entity: `TestQuestion` (cross-read) — `MaxPointsSnapshot`, `WeightSnapshot`, `ScoringRuleSnapshot`, `IsScoreInvalidated`, `InvalidatedByReportId`
+- [x] New entity: `Test` (cross-read) — `MaxScore`, `ScoringPolicy`
+- [x] `TestAnswer` — add `TestQuestion` navigation property
+
+### 7.2 EF Configuration Changes
+
+- [x] Update `QuestionConfiguration.cs` — map `DefaultWeight`
+- [x] Update `QuestionPartConfiguration.cs` — map `DefaultWeight`
+- [x] Update `TestSessionConfiguration.cs` — map `GradeRevision`
+- [x] New: `TestQuestionConfiguration.cs` — composite PK `(TestId, QuestionId)`, all snapshot columns
+- [x] New: `TestConfiguration.cs` — PK `TestId`, map `MaxScore` and `ScoringPolicy`
+- [x] Update `TestAnswerConfiguration.cs` — `Ignore(x => x.TestQuestion)` (resolved manually)
+
+### 7.3 GradingDbContext
+
+- [x] Add `DbSet<TestQuestion>` and `DbSet<Test>`
+
+### 7.4 GradingEngine Core Logic
+
+- [x] Resolve `maxPoints` from `TestQuestion.MaxPointsSnapshot` (fallback: `Question.DefaultWeight`)
+- [x] Handle `IsScoreInvalidated`: award full `MaxPointsSnapshot`, set `IsCorrect = null`, skip grading
+- [x] Route by `ScoringRuleSnapshot` (priority) then `QuestionType` (fallback)
+  - [x] `AllOrNothing` → all-or-nothing grading
+  - [x] `TieredTrueFalse` → BR-23 non-linear table
+  - [x] `WeightedParts` → per-part weighted scoring via `DefaultWeight` ratios
+- [x] COMPOSITE part scoring uses proportional `DefaultWeight` distribution
+- [x] New: `GradeCompositeAllOrNothing` for COMPOSITE + AllOrNothing rule
+
+### 7.5 GradingOrchestrator Changes
+
+- [x] Load `TestQuestion` scoring snapshots and resolve onto `TestAnswer.TestQuestion` manually
+- [x] Load `Test` entity for `MaxScore` and `ScoringPolicy`
+- [x] Increment `TestSession.GradeRevision` on grading
+- [x] `BuildGradeCalculatedEvent` uses `MaxPointsSnapshot` for `MaxPoints` and `NormalizedScore`
+- [x] `GradeCalculatedEvent` includes `GradeRevision` and `IsScoreInvalidated`
+- [x] Exclude invalidated questions from tag statistics in `PerTagResults`
+
+### 7.6 Query & DTO Changes
+
+- [x] `SessionResultDto` — add `GradeRevision`, `IsScoreInvalidated`, `InvalidatedByReportId`
+- [x] `SessionHistoryDto` — add `GradeRevision`
+- [x] `GetSessionResultQueryHandler` — load `TestQuestion`, use `MaxPointsSnapshot` for `MaxPoints`
+- [x] `GetSessionHistoryQueryHandler` — project `GradeRevision`
+
+### 7.7 Shared Events
+
+- [x] `GradeCalculatedEvent` — add `GradeRevision`
+- [x] `GradedAnswerDto` — add `IsScoreInvalidated`
+
+### 7.8 Test Fixes
+
+- [x] `TestDataBuilder.cs` — 7× `DefaultPoint` → `DefaultWeight`
+
+### 7.9 Verification
+
+- [x] `dotnet build MathInsight.Shared` — 0 errors
+- [x] `dotnet build MathInsight.Modules.Grading_Analytics` — 0 errors
+- [x] `dotnet build MathInsight.sln` — 0 errors, 56 pre-existing warnings

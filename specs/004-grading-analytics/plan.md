@@ -1,6 +1,6 @@
 # Implementation Plan: Grading & Analytics Module
 
-**Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-07-14
+**Branch**: `004-grading-analytics` | **Date**: 2026-06-23 | **Updated**: 2026-07-22
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -47,8 +47,8 @@ src/MathInsight.Modules.Grading_Analytics/
 ### No Owned Database Tables
 
 This module reads/writes cross-schema:
-- **Reads**: `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestAnswerPart`, `Question`, `QuestionPart`, `Answer`
-- **Writes**: `TestSession` (status, score, counts), `TestAnswer` (is_correct, points_earned), `TestAnswerPart` (is_correct, points_earned)
+- **Reads**: `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestAnswerPart`, `TestQuestion` (scoring snapshots), `Test` (MaxScore, ScoringPolicy), `Question`, `QuestionPart`, `Answer`
+- **Writes**: `TestSession` (status, score, counts, `GradeRevision`), `TestAnswer` (is_correct, points_earned), `TestAnswerPart` (is_correct, points_earned)
 
 All writes are executed within a **single transaction** (DC-05).
 
@@ -124,39 +124,49 @@ src/MathInsight.Modules.Grading_Analytics/
 ```
 Testing submit flow calls GradeSubmittedSessionHandler
         │
-GradingEngine.Grade(session):
-  foreach TestAnswer in session:
-    ├── SINGLE_CHOICE / TRUE_FALSE (standalone): compare answer_id to correct answer
-    ├── MULTIPLE_SELECT: compare selected options (TestAnswerOption) to correct set
-    ├── COMPOSITE:
-    │     ├── if ALL QuestionParts are TRUE_FALSE → apply BR-23 non-linear table
-    │     │     (0 correct=0, 1=0.10×dp, 2=0.25×dp, 3=0.50×dp, N=1.00×dp)
-    │     │     (update each TestAnswerPart.is_correct for solution display; set TestAnswerPart.points_earned = 0 — parent TestAnswer.points_earned is the source of truth)
-    │     └── otherwise → grade each QuestionPart and update TestAnswerPart (is_correct, points_earned); parent score = sum of part points
-    └── SHORT_ANSWER: case-insensitive compare short_answer_text
-  Calculate: score = SUM(points_earned) / SUM(max_points) × 10.0 (where max_points is Question.default_point for each parent question)
-  Update in single transaction (DC-05):
-    ├── TestAnswer: is_correct, points_earned
-    ├── TestAnswerPart: is_correct, points_earned (for Composite parts)
-    └── TestSession: status=Graded, score, num_correct, num_incorrect, num_abandoned
+GradingOrchestrator.GradeSessionInTransactionAsync(session):
+  1. Load TestSession + TestAnswers + all navigation properties
+  2. Load TestQuestion scoring snapshots for this Test (MaxPointsSnapshot, ScoringRuleSnapshot, IsScoreInvalidated)
+  3. Resolve TestQuestion onto each TestAnswer.TestQuestion (manual join via TestId + QuestionId)
+  4. Load Test entity for MaxScore and ScoringPolicy
+  5. Run GradingEngine.Grade(session):
         │
-Build GradeCalculatedEvent (Unified Multi-Tag v4.1):
-  foreach TestAnswer:
-    ├── Load ALL QuestionTopics (primary + secondary)
-    ├── Calculate tag weights w_{iq} per BR-13/14/15:
-    │     - Single tag: w = 1.0
-    │     - Primary (w_main): default 0.65
-    │     - Secondary (w_sub_i): (1 − w_main) / N_sub
-    ├── NormalizedScore s_q = PointsEarned / MaxPoints × 10.0
-    └── Emit TagWeights list per answer
-  foreach distinct TagId across all answers:
-    ├── Tầng 1: c_{q,i} = s_q × w_{iq} for each question containing this tag
-    ├── Tầng 2: T_j^{(i)} = avg(c_{q,i}) across all questions with this tag
-    └── Emit TopicGradeResult with weighted TopicScore
+  GradingEngine.Grade(session):
+    foreach TestAnswer in session:
+      ├── Resolve maxPoints = TestQuestion.MaxPointsSnapshot (fallback: Question.DefaultWeight)
+      ├── If IsScoreInvalidated → award full maxPoints, IsCorrect = null, skip grading
+      ├── If abandoned (BR-16b) → IsCorrect = false, PointsEarned = 0
+      ├── Route by ScoringRuleSnapshot (priority) or QuestionType (fallback):
+      │     ├── AllOrNothing → correct = full maxPoints, incorrect = 0
+      │     ├── TieredTrueFalse → BR-23 non-linear table (0→0, 1→0.10×mp, 2→0.25×mp, 3→0.50×mp, N→1.00×mp)
+      │     ├── WeightedParts → per-part weighted scoring using QuestionPart.DefaultWeight ratios
+      │     ├── SINGLE_CHOICE / TRUE_FALSE → compare answer_id to correct answer
+      │     ├── MULTIPLE_SELECT → compare selected options to correct set
+      │     ├── COMPOSITE → dispatch to TieredTrueFalse or WeightedParts based on part types
+      │     └── SHORT_ANSWER → case-insensitive string match
+      └── Calculate: score = SUM(effective_points) / SUM(max_points) × 10.0 (BR-20)
         │
-Publish GradeCalculatedEvent (MediatR in-process):
-  → Recommender module: update StudentTopicSessionResult + TagsMastery per tag (multi-tag delta distribution)
-  → Notification module: send push notification
+  6. Write in single transaction (DC-05):
+      ├── TestAnswer: is_correct, points_earned
+      ├── TestAnswerPart: is_correct, points_earned (for Composite parts)
+      └── TestSession: status=Graded, score, num_correct, num_incorrect, num_abandoned, GradeRevision++
+        │
+  7. Build GradeCalculatedEvent (Unified Multi-Tag v4.1):
+    foreach TestAnswer:
+      ├── Load ALL QuestionTopics (primary + secondary)
+      ├── Calculate tag weights w_{iq} per BR-13/14/15
+      ├── MaxPoints from TestQuestion.MaxPointsSnapshot
+      ├── NormalizedScore s_q = PointsEarned / MaxPoints × 10.0
+      ├── IsScoreInvalidated from TestQuestion
+      └── Emit TagWeights list per answer (exclude invalidated from tag stats)
+    foreach distinct TagId across all non-invalidated answers:
+      ├── Tầng 1: c_{q,i} = s_q × w_{iq}
+      ├── Tầng 2: T_j^{(i)} = avg(c_{q,i})
+      └── Emit TopicGradeResult with weighted TopicScore
+        │
+  8. Publish GradeCalculatedEvent (MediatR in-process):
+    → Recommender module: update StudentTopicSessionResult + TagsMastery per tag
+    → Notification module: send push notification
 ```
 
 ### Chatbot Integration (UC-51)
@@ -180,10 +190,12 @@ Publish GradeCalculatedEvent (MediatR in-process):
 2. Integration tests (xUnit):
    - Practice grading completes in < 2.0s for a 40-question test.
    - Exam grading completes synchronously and persists `status = Graded`.
-   - SINGLE_CHOICE: correct answer selected → `is_correct = true`, `points_earned = default_point`.
+   - SINGLE_CHOICE: correct answer selected → `is_correct = true`, `points_earned = MaxPointsSnapshot`.
    - MULTIPLE_SELECT: all correct + no incorrect → `is_correct = true`.
    - MULTIPLE_SELECT: partial selection → `is_correct = false`.
    - SHORT_ANSWER: case-insensitive match → `is_correct = true`.
    - Unanswered: `is_correct = false`, `points_earned = 0.00`.
    - DC-05: Grading failure mid-transaction → rollback (session stays `InProgress`).
    - UC-51: Chatbot returns explanation within 10s.
+   - Score invalidation: `IsScoreInvalidated = true` → `PointsEarned = MaxPointsSnapshot`, `IsCorrect = null`.
+   - GradeRevision increments on each grading pass.

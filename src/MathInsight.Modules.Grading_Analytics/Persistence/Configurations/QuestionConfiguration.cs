@@ -13,7 +13,7 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
 
         builder.Property(x => x.QuestionId).HasColumnName("QuestionID");
         builder.Property(x => x.QuestionType).HasColumnName("QuestionType").HasMaxLength(30).IsRequired();
-        builder.Property(x => x.DefaultPoint).HasColumnName("DefaultPoint").HasPrecision(4, 2);
+        builder.Property(x => x.DefaultWeight).HasColumnName("DefaultWeight").HasPrecision(4, 2);
         builder.Property(x => x.DifficultyLevel).HasColumnName("DifficultyLevel");
         builder.Property(x => x.QuestionContent).HasColumnName("QuestionContent").IsRequired();
 

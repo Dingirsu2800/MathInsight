@@ -7,6 +7,7 @@ namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionResult;
 /// <summary>
 /// Handles GetSessionResultQuery (UC-55).
 /// Loads session + all nested navigation properties required for the result page.
+/// Uses TestQuestion.MaxPointsSnapshot for MaxPoints and exposes invalidation info.
 /// </summary>
 public sealed class GetSessionResultQueryHandler
     : IRequestHandler<GetSessionResultQuery, SessionResultDto?>
@@ -42,36 +43,50 @@ public sealed class GetSessionResultQueryHandler
             throw new UnauthorizedAccessException(
                 $"Student {request.AuthenticatedStudentId} does not own session {request.SessionId}.");
 
+        // ── Load TestQuestion scoring snapshots for this test ─────────────────
+        var testQuestions = await _db.TestQuestions
+            .AsNoTracking()
+            .Where(tq => tq.TestId == session.TestId)
+            .ToDictionaryAsync(tq => tq.QuestionId, cancellationToken);
+
         var answers = session.TestAnswers
             .OrderBy(a => a.QuestionNo)
-            .Select(a => new GradedAnswerDetailDto
+            .Select(a =>
             {
-                QuestionId = a.QuestionId,
-                QuestionNo = a.QuestionNo,
-                QuestionType = a.Question.QuestionType,
-                QuestionContent = a.Question.QuestionContent,
-                DifficultyLevel = a.Question.DifficultyLevel,
-                IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
-                PointsEarned = a.PointsEarned,
-                MaxPoints = a.Question.DefaultPoint,
-                TimeSpent = a.TimeSpent,
-                SelectedOptionId = a.AnswerId,
-                ShortAnswerText = a.ShortAnswerText,
-                SelectedOptionIds = a.SelectedOptions
-                    .Select(o => o.AnswerId)
-                    .ToList(),
-                AnswerParts = a.AnswerParts
-                    .Select(ap => new AnswerPartDetailDto
-                    {
-                        QuestionPartId = ap.PartId,
-                        PartType = ap.QuestionPart.PartType,
-                        StudentAnswer = ap.BooleanAnswer?.ToString() 
-                                        ?? ap.TextAnswer 
-                                        ?? ap.NumericAnswer?.ToString(),
-                        IsCorrect = ap.IsCorrect,
-                        PointsEarned = ap.PointsEarned,
-                    })
-                    .ToList(),
+                var tq = testQuestions.GetValueOrDefault(a.QuestionId);
+                decimal maxPoints = tq?.MaxPointsSnapshot ?? a.Question.DefaultWeight;
+
+                return new GradedAnswerDetailDto
+                {
+                    QuestionId = a.QuestionId,
+                    QuestionNo = a.QuestionNo,
+                    QuestionType = a.Question.QuestionType,
+                    QuestionContent = a.Question.QuestionContent,
+                    DifficultyLevel = a.Question.DifficultyLevel,
+                    IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
+                    PointsEarned = a.PointsEarned,
+                    MaxPoints = maxPoints,
+                    TimeSpent = a.TimeSpent,
+                    IsScoreInvalidated = tq?.IsScoreInvalidated ?? false,
+                    InvalidatedByReportId = tq?.InvalidatedByReportId,
+                    SelectedOptionId = a.AnswerId,
+                    ShortAnswerText = a.ShortAnswerText,
+                    SelectedOptionIds = a.SelectedOptions
+                        .Select(o => o.AnswerId)
+                        .ToList(),
+                    AnswerParts = a.AnswerParts
+                        .Select(ap => new AnswerPartDetailDto
+                        {
+                            QuestionPartId = ap.PartId,
+                            PartType = ap.QuestionPart.PartType,
+                            StudentAnswer = ap.BooleanAnswer?.ToString() 
+                                            ?? ap.TextAnswer 
+                                            ?? ap.NumericAnswer?.ToString(),
+                            IsCorrect = ap.IsCorrect,
+                            PointsEarned = ap.PointsEarned,
+                        })
+                        .ToList(),
+                };
             })
             .ToList();
 
@@ -88,6 +103,7 @@ public sealed class GetSessionResultQueryHandler
             TotalQuestion = session.TotalQuestion,
             DurationMinutes = session.Duration,
             SubmittedAt = session.EndTime,
+            GradeRevision = session.GradeRevision,
             Answers = answers,
         };
     }

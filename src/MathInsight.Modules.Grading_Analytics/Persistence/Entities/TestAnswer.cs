@@ -28,6 +28,10 @@ public class TestAnswer
     // Navigation
     public TestSession Session { get; set; } = null!;
     public Question Question { get; set; } = null!;
+
+    /// <summary>Scoring snapshot for this question within the test. Provides MaxPointsSnapshot, ScoringRuleSnapshot, IsScoreInvalidated.</summary>
+    public TestQuestion? TestQuestion { get; set; }
+
     public ICollection<TestAnswerOption> SelectedOptions { get; set; } = new List<TestAnswerOption>();
     public ICollection<TestAnswerPart> AnswerParts { get; set; } = new List<TestAnswerPart>();
 }

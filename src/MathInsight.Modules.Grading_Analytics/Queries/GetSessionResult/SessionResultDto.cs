@@ -17,6 +17,8 @@ public sealed record SessionResultDto
     public int TotalQuestion { get; init; }
     public int? DurationMinutes { get; init; }
     public DateTime? SubmittedAt { get; init; }
+    /// <summary>Current grading revision. Increases when score is recalculated after report invalidation.</summary>
+    public int GradeRevision { get; init; }
     public IReadOnlyList<GradedAnswerDetailDto> Answers { get; init; } = [];
 }
 
@@ -34,6 +36,10 @@ public sealed record GradedAnswerDetailDto
     public decimal PointsEarned { get; init; }
     public decimal MaxPoints { get; init; }
     public int? TimeSpent { get; init; }
+    /// <summary>True when the question was invalidated due to a confirmed report.</summary>
+    public bool IsScoreInvalidated { get; init; }
+    /// <summary>The ReportID that caused invalidation, if any.</summary>
+    public Guid? InvalidatedByReportId { get; init; }
     /// <summary>For SINGLE_CHOICE / TRUE_FALSE.</summary>
     public Guid? SelectedOptionId { get; init; }
     /// <summary>For SHORT_ANSWER.</summary>
