@@ -35,7 +35,7 @@ function parseSnapshot(snapshot, contentOverride, solutionOverride, imageOverrid
     return {
       rawType: "",
       grade: "",
-      defaultPoint: "",
+      defaultWeight: "",
       topicsList: [],
       answersList: [],
       partsList: [],
@@ -51,7 +51,7 @@ function parseSnapshot(snapshot, contentOverride, solutionOverride, imageOverrid
     return {
       rawType: "",
       grade: "",
-      defaultPoint: "",
+      defaultWeight: "",
       topicsList: [],
       answersList: [],
       partsList: [],
@@ -65,9 +65,10 @@ function parseSnapshot(snapshot, contentOverride, solutionOverride, imageOverrid
   // Extract Question Type (with normalization)
   const rawType = parsed.QuestionType || parsed.questionType || parsed.type || "";
 
-  // Extract Grade & Point
+  // V2 uses weight; V1 point fallbacks keep legacy snapshots readable.
   const grade = parsed.Grade || parsed.grade || "";
-  const defaultPoint = parsed.DefaultPoint ?? parsed.defaultPoint ?? parsed.points ?? "";
+  const defaultWeight = parsed.DefaultWeight ?? parsed.defaultWeight
+    ?? parsed.DefaultPoint ?? parsed.defaultPoint ?? parsed.points ?? "";
 
   // Extract Topics (array of objects with TagName or name)
   const rawTopics = parsed.Topics || parsed.topics || [];
@@ -93,7 +94,7 @@ function parseSnapshot(snapshot, contentOverride, solutionOverride, imageOverrid
   return {
     rawType,
     grade,
-    defaultPoint,
+    defaultWeight,
     topicsList,
     answersList,
     partsList,
@@ -116,7 +117,7 @@ function renderSnapshotDetails(parsedSnapshot) {
   const {
     rawType,
     grade,
-    defaultPoint,
+    defaultWeight,
     topicsList,
     answersList,
     partsList,
@@ -162,9 +163,9 @@ function renderSnapshotDetails(parsedSnapshot) {
                 Lớp {grade}
               </span>
             )}
-            {defaultPoint !== undefined && defaultPoint !== null && defaultPoint !== "" && (
+            {defaultWeight !== undefined && defaultWeight !== null && defaultWeight !== "" && (
               <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                {defaultPoint} điểm
+                Trọng số {defaultWeight}
               </span>
             )}
           </div>
@@ -406,13 +407,13 @@ export default function VersionHistoryDrawer({ isOpen, onClose, questionId, ques
             setCurrentVersion({
               expertId: currentDetails.expertId || "Hệ thống",
               expertName: currentDetails.expertName || "",
-              updatedAt: currentDetails.updatedAt || new Date().toISOString(),
+              updatedAt: currentDetails.updatedTime || new Date().toISOString(),
               status: currentDetails.status || "APPROVED",
               content: currentDetails.questionContent,
               answersSnapshot: {
                 type: currentDetails.questionType,
                 grade: currentDetails.grade,
-                defaultPoint: currentDetails.defaultPoint,
+                defaultWeight: currentDetails.defaultWeight,
                 topics: currentDetails.topics,
                 answers: currentDetails.answers,
                 parts: currentDetails.parts,
