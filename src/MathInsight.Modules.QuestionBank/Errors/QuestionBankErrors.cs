@@ -104,9 +104,9 @@ public static class QuestionBankErrors
         "QUESTION_GRADE_INVALID",
         "Question grade must be 10, 11, or 12.");
 
-    public static readonly Error QuestionDefaultPointInvalid = new(
-        "QUESTION_DEFAULT_POINT_INVALID",
-        "Question default point must be between 0 and 10.");
+    public static readonly Error QuestionDefaultWeightInvalid = new(
+        "QUESTION_WEIGHT_INVALID",
+        "Question weight must be greater than 0 and no greater than 100.");
 
     public static readonly Error QuestionTopicRequired = new(
         "QUESTION_TOPIC_REQUIRED",
@@ -168,9 +168,9 @@ public static class QuestionBankErrors
         "QUESTION_PART_LABEL_DUPLICATE",
         "Question parts must not contain duplicate labels.");
 
-    public static readonly Error QuestionPartDefaultPointInvalid = new(
-        "QUESTION_PART_DEFAULT_POINT_INVALID",
-        "Question part default point must be between 0 and 10.");
+    public static readonly Error QuestionPartDefaultWeightInvalid = new(
+        "QUESTION_PART_WEIGHT_INVALID",
+        "Question part weight must be greater than 0 and no greater than 100.");
 
     public static readonly Error QuestionPartNumericToleranceInvalid = new(
         "QUESTION_PART_NUMERIC_TOLERANCE_INVALID",
@@ -315,6 +315,22 @@ public static class QuestionBankErrors
     public static readonly Error ReportAlreadyHandled = new(
         "REPORT_ALREADY_HANDLED",
         "Question report has already been handled.");
+
+    public static readonly Error ReportSessionContextInvalid = new(
+        "REPORT_SESSION_CONTEXT_INVALID",
+        "The report session or question version context is invalid.");
+
+    public static readonly Error ReportResolutionActionInvalid = new(
+        "REPORT_RESOLUTION_ACTION_INVALID",
+        "The report resolution action is invalid.");
+
+    public static readonly Error QuestionFixRequiredBeforeScoreAdjustment = new(
+        "QUESTION_FIX_REQUIRED_BEFORE_SCORE_ADJUSTMENT",
+        "Create a corrected question version or deactivate the question before adjusting scores.");
+
+    public static readonly Error ScoreAdjustmentNotRetryable = new(
+        "SCORE_ADJUSTMENT_NOT_RETRYABLE",
+        "This report does not have a pending score adjustment.");
 
     public static readonly Error AdminReportWorkflowAlreadyExists = new(
         "ADMIN_REPORT_WORKFLOW_ALREADY_EXISTS",

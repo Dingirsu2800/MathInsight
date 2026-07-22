@@ -38,7 +38,7 @@ public class GradingController : ControllerBase
     {
         // Extract student ID from JWT claims
         var studentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrWhiteSpace(studentIdClaim) || !Guid.TryParse(studentIdClaim, out var studentId))
+        if (string.IsNullOrWhiteSpace(studentIdClaim))
         {
             return Unauthorized(new { error = "Invalid or missing student identity." });
         }
@@ -48,7 +48,7 @@ public class GradingController : ControllerBase
             var explanation = await _chatbotService.AskAsync(
                 request.QuestionContent,
                 request.StudentAnswer,
-                studentId,
+                studentIdClaim,
                 request.SessionId,
                 cancellationToken);
 
@@ -58,7 +58,7 @@ public class GradingController : ControllerBase
         {
             _logger.LogWarning(
                 "Rate limit hit: Student={StudentId}, Session={SessionId}",
-                studentId, request.SessionId);
+                studentIdClaim, request.SessionId);
 
             return StatusCode(429, new { error = "You have already used the chatbot for this session." });
         }
@@ -66,7 +66,7 @@ public class GradingController : ControllerBase
         {
             _logger.LogWarning(
                 "Chatbot request timed out: Student={StudentId}, Session={SessionId}",
-                studentId, request.SessionId);
+                studentIdClaim, request.SessionId);
 
             return StatusCode(503, new { error = "The AI service is currently unavailable. Please try again later." });
         }
@@ -74,7 +74,7 @@ public class GradingController : ControllerBase
         {
             _logger.LogError(ex,
                 "Chatbot API error: Student={StudentId}, Session={SessionId}",
-                studentId, request.SessionId);
+                studentIdClaim, request.SessionId);
 
             return StatusCode(503, new { error = "The AI service encountered an error. Please try again later." });
         }
@@ -87,10 +87,10 @@ public class GradingController : ControllerBase
 public record ChatbotAssistRequest
 {
     /// <summary>The test session ID.</summary>
-    public Guid SessionId { get; init; }
+    public string SessionId { get; init; } = string.Empty;
 
     /// <summary>The question ID (for audit/logging context).</summary>
-    public Guid QuestionId { get; init; }
+    public string QuestionId { get; init; } = string.Empty;
 
     /// <summary>The question text content.</summary>
     public string QuestionContent { get; init; } = string.Empty;

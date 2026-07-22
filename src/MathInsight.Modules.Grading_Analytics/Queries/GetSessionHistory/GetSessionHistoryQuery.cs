@@ -6,7 +6,7 @@ namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionHistory;
 /// UC-56: Paginated list of graded sessions for the authenticated student.
 /// </summary>
 public sealed record GetSessionHistoryQuery(
-    Guid StudentId,
+    string StudentId,
     int Page,
     int PageSize,
     string? TestFormat,
@@ -17,4 +17,4 @@ public sealed record GetSessionHistoryQuery(
 /// UC-56: Aggregate statistics across all graded sessions for the authenticated student.
 /// </summary>
 public sealed record GetStudentHistoryStatsQuery(
-    Guid StudentId) : IRequest<StudentHistoryStatsDto>;
+    string StudentId) : IRequest<StudentHistoryStatsDto>;

@@ -66,11 +66,43 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
             .HasMaxLength(30)
             .IsUnicode(false);
 
+        builder.Property(x => x.QuestionVersionId)
+            .HasColumnName("QuestionVersionID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
+        builder.Property(x => x.WeightSnapshot)
+            .HasColumnName("WeightSnapshot")
+            .HasPrecision(5, 2);
+
+        builder.Property(x => x.MaxPointsSnapshot)
+            .HasColumnName("MaxPointsSnapshot")
+            .HasPrecision(5, 2);
+
+        builder.Property(x => x.ScoringRuleSnapshot)
+            .HasColumnName("ScoringRuleSnapshot")
+            .HasMaxLength(30)
+            .IsUnicode(false);
+
+        builder.Property(x => x.IsScoreInvalidated)
+            .HasColumnName("IsScoreInvalidated");
+
+        builder.Property(x => x.InvalidatedByReportId)
+            .HasColumnName("InvalidatedByReportID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
         builder.HasOne(x => x.Test)
             .WithMany(x => x.Questions)
             .HasForeignKey(x => x.TestId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("FK_TestQuestion_Test_TestID");
+
+        builder.HasOne(x => x.QuestionVersion)
+            .WithMany()
+            .HasForeignKey(x => x.QuestionVersionId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_TestQuestion_QuestionVersion_QuestionVersionID");
 
         builder.HasIndex(x => new { x.TestId, x.QuestionOrder })
             .IsUnique()
@@ -86,5 +118,8 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
         builder.HasIndex(x => x.SourceBlueprintDetailId)
             .HasFilter("[SourceBlueprintDetailID] IS NOT NULL")
             .HasDatabaseName("IX_TestQuestion_SourceBlueprintDetailID");
+
+        builder.HasIndex(x => x.QuestionVersionId)
+            .HasDatabaseName("IX_TestQuestion_QuestionVersionID");
     }
 }

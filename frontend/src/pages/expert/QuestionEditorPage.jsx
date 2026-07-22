@@ -111,7 +111,7 @@ export default function QuestionEditorPage() {
     grade: 12,
     questionType: "SINGLE_CHOICE",
     difficultyId: "",
-    defaultPoint: 0.2,
+    defaultWeight: 1,
     topics: [], // Array of { tagId, isPrimary }
     options: [
       { content: "Đáp án A", isCorrect: true },
@@ -325,10 +325,16 @@ export default function QuestionEditorPage() {
     }
   }, [id, fromReported]);
 
-  const handleResolveReport = async (reportId, nextStatus) => {
+  const handleResolveReport = async (reportId, nextStatus, reporterRole) => {
     setUpdatingReportId(reportId);
     try {
-      await questionBankApi.updateQuestionReportStatus(reportId, { status: nextStatus });
+      await questionBankApi.updateQuestionReportStatus(reportId, {
+        status: nextStatus,
+        resolutionAction:
+          nextStatus === "Resolved" && reporterRole === "Student"
+            ? "InvalidateAndAwardFull"
+            : "NoScoreChange"
+      });
       const refreshResult = await fetchPendingReports();
       if (refreshResult.ok && refreshResult.reports.length === 0) {
         navigate("/expert/questions/reported");
@@ -339,6 +345,8 @@ export default function QuestionEditorPage() {
       if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
         showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
         await fetchPendingReports();
+      } else if (errorCode === "QUESTION_FIX_REQUIRED_BEFORE_SCORE_ADJUSTMENT") {
+        showError("Hãy lưu một phiên bản câu hỏi đã sửa hoặc tắt câu hỏi trước khi cộng đủ điểm.");
       } else if (errorCode === "REPORT_ACCESS_FORBIDDEN") {
         showError("Bạn không còn quyền xử lý báo cáo này.");
         await fetchPendingReports();
@@ -433,7 +441,7 @@ export default function QuestionEditorPage() {
               grade: 12,
               questionType: "SINGLE_CHOICE",
               difficultyId: "diff-3",
-              defaultPoint: 1.0,
+              defaultWeight: 1.0,
               topics: [{ tagId: "tag-1", isPrimary: true }],
               options: [
                 { content: "\\frac{1}{3}", isCorrect: true },
@@ -483,7 +491,7 @@ export default function QuestionEditorPage() {
               correctNumeric: null,
               numericTolerance: null,
               explanation: "",
-              defaultPoint: 0.05
+              defaultWeight: 1
             }
           ];
         }
@@ -557,7 +565,7 @@ export default function QuestionEditorPage() {
             correctNumeric: null,
             numericTolerance: null,
             explanation: "",
-            defaultPoint: 0.05
+            defaultWeight: 1
           }
         ]
       };
@@ -1097,14 +1105,15 @@ export default function QuestionEditorPage() {
                   <div className="space-y-4">
                     {/* Default Point Input */}
                     <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Điểm số mặc định</label>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Trọng số câu hỏi</label>
                       <input
-                        value={form.defaultPoint}
-                        onChange={(e) => handleFieldChange("defaultPoint", parseFloat(e.target.value) || 0)}
+                        value={form.defaultWeight}
+                        onChange={(e) => handleFieldChange("defaultWeight", parseFloat(e.target.value) || 0)}
                         className="w-full p-2.5 h-10 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-semibold outline-none"
                         type="number"
-                        step="0.05"
-                        min="0"
+                        step="0.01"
+                        min="0.01"
+                        max="100"
                       />
                     </div>
 
@@ -1725,14 +1734,16 @@ export default function QuestionEditorPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm số cho phần này:</label>
+                            <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số phần:</label>
                             <input
-                              value={part.defaultPoint}
-                              onChange={(e) => handlePartFieldChange(pIdx, "defaultPoint", e.target.value)}
+                              value={part.defaultWeight}
+                              onChange={(e) => handlePartFieldChange(pIdx, "defaultWeight", e.target.value)}
                               className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-semibold outline-none"
-                              placeholder="Điểm phụ"
+                              placeholder="Ví dụ: 1"
                               type="number"
-                              step="0.05"
+                              step="0.01"
+                              min="0.01"
+                              max="100"
                             />
                           </div>
                         </div>
@@ -1823,7 +1834,7 @@ export default function QuestionEditorPage() {
                               <button
                                 type="button"
                                 disabled={!hasSavedInSession || isUpdatingThisReport}
-                                onClick={() => handleResolveReport(reportIdVal, "Resolved")}
+                                onClick={() => handleResolveReport(reportIdVal, "Resolved", rep.reporterRole)}
                                 className={cn(
                                   "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
                                   hasSavedInSession && !isUpdatingThisReport
@@ -1841,7 +1852,7 @@ export default function QuestionEditorPage() {
                               <button
                                 type="button"
                                 disabled={!hasSavedInSession || isUpdatingThisReport}
-                                onClick={() => handleResolveReport(reportIdVal, "Dismissed")}
+                                onClick={() => handleResolveReport(reportIdVal, "Dismissed", rep.reporterRole)}
                                 className={cn(
                                   "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
                                   hasSavedInSession && !isUpdatingThisReport
@@ -1977,8 +1988,8 @@ export default function QuestionEditorPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm mặc định:</label>
-                  <p className="font-bold text-[14px] text-on-surface font-mono">{form.defaultPoint} điểm</p>
+                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số:</label>
+                  <p className="font-bold text-[14px] text-on-surface font-mono">{form.defaultWeight}</p>
                 </div>
               </div>
             </div>
@@ -2062,7 +2073,7 @@ export default function QuestionEditorPage() {
                           <div key={pIdx} className="p-2 border border-whisper-border bg-surface-container-low rounded-lg text-[12px] space-y-1">
                             <div className="flex justify-between items-center">
                               <span className="font-black text-[9px] uppercase text-primary">Phần {part.partLabel}: {getQuestionPartTypeLabel(part.partType)}</span>
-                              <span className="text-[9px] font-bold text-on-surface-variant">{part.defaultPoint} đ</span>
+                              <span className="text-[9px] font-bold text-on-surface-variant">Trọng số {part.defaultWeight}</span>
                             </div>
                             <div className="text-[12px] mt-1">
                               <LatexPreview content={part.partContent} />

@@ -71,6 +71,15 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
         builder.Property(x => x.TotalQuestions)
             .HasColumnName("TotalQuestions");
 
+        builder.Property(x => x.MaxScore)
+            .HasColumnName("MaxScore")
+            .HasPrecision(5, 2);
+
+        builder.Property(x => x.ScoringPolicy)
+            .HasColumnName("ScoringPolicy")
+            .HasMaxLength(30)
+            .IsUnicode(false);
+
         builder.Property(x => x.CreatedTime)
             .HasColumnName("CreatedTime")
             .HasColumnType("datetime2(0)")

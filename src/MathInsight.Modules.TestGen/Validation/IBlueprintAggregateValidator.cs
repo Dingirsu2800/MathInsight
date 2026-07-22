@@ -14,6 +14,7 @@ public sealed record ValidatedBlueprintAggregate(
     string BlueprintName,
     int Grade,
     int TotalQuestions,
+    decimal TotalScore,
     int DurationMinutes,
     IReadOnlyList<ValidatedBlueprintSection> Sections);
 
@@ -24,8 +25,8 @@ public sealed record ValidatedBlueprintSection(
     string QuestionType,
     string? InstructionText,
     int TotalQuestions,
-    decimal DefaultPointPerQuestion,
-    decimal? DefaultPointPerPart,
+    decimal ScoreBudget,
+    string ScoringRule,
     int? PartCountPerQuestion,
     IReadOnlyList<ValidatedBlueprintDetail> Details);
 

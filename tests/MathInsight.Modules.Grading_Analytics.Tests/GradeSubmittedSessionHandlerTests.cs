@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using MathInsight.Modules.Grading_Analytics.Services;
 
 namespace MathInsight.Modules.Grading_Analytics.Tests;
@@ -25,7 +25,7 @@ public class GradeSubmittedSessionHandlerTests
     {
         // Arrange: Create an Exam session with mixed question types
         var session = TestDataBuilder.CreateSession(testFormat: "Exam", status: "InProgress");
-        var correctId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
         TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 2.0m, correctId, studentAnswerId: correctId);
         TestDataBuilder.AddShortAnswer(session, defaultPoint: 1.5m, "42", "42");
 
@@ -56,7 +56,7 @@ public class GradeSubmittedSessionHandlerTests
         // Here we simulate by checking the state before status update.
 
         var session = TestDataBuilder.CreateSession(testFormat: "Exam", status: "InProgress");
-        var correctId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
         TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 1.0m, correctId, studentAnswerId: correctId);
 
         // Assert: before grading, status should still be InProgress
@@ -71,7 +71,7 @@ public class GradeSubmittedSessionHandlerTests
         }
         catch (InvalidOperationException)
         {
-            // Transaction rolled back — status should still be InProgress
+            // Transaction rolled back â€” status should still be InProgress
             // In a real scenario, EF rollback reverts all entity changes
         }
 
@@ -88,13 +88,13 @@ public class GradeSubmittedSessionHandlerTests
         // Build 40 questions: 10 each of 4 types
         for (int i = 0; i < 10; i++)
         {
-            var cid = Guid.NewGuid();
+            var cid = Guid.NewGuid().ToString("D");
             TestDataBuilder.AddSingleChoiceAnswer(session, 1.0m, cid, cid);
         }
         for (int i = 0; i < 10; i++)
         {
-            var a = Guid.NewGuid();
-            var b = Guid.NewGuid();
+            var a = Guid.NewGuid().ToString("D");
+            var b = Guid.NewGuid().ToString("D");
             TestDataBuilder.AddMultipleSelectAnswer(session, 2.0m, [a, b], [a, b]);
         }
         for (int i = 0; i < 10; i++)
@@ -133,14 +133,14 @@ public class GradeSubmittedSessionHandlerTests
         var session = TestDataBuilder.CreateSession(testFormat: "Exam", status: "InProgress");
 
         // Correct single choice (2pt)
-        var cid = Guid.NewGuid();
+        var cid = Guid.NewGuid().ToString("D");
         TestDataBuilder.AddSingleChoiceAnswer(session, 2.0m, cid, cid);
 
         // Incorrect single choice (2pt)
-        TestDataBuilder.AddSingleChoiceAnswer(session, 2.0m, Guid.NewGuid(), Guid.NewGuid());
+        TestDataBuilder.AddSingleChoiceAnswer(session, 2.0m, Guid.NewGuid().ToString("D"), Guid.NewGuid().ToString("D"));
 
         // Abandoned single choice (2pt)
-        TestDataBuilder.AddSingleChoiceAnswer(session, 2.0m, Guid.NewGuid(), null);
+        TestDataBuilder.AddSingleChoiceAnswer(session, 2.0m, Guid.NewGuid().ToString("D"), null);
 
         // Correct short answer (1pt)
         TestDataBuilder.AddShortAnswer(session, 1.0m, "hello", "HELLO");
@@ -154,7 +154,7 @@ public class GradeSubmittedSessionHandlerTests
         session.NumIncorrect = result.NumIncorrect;
         session.NumAbandoned = result.NumAbandoned;
 
-        // Assert: 2 + 0 + 0 + 1 = 3 earned, 2 + 2 + 2 + 1 = 7 max → 3/7 * 10 ≈ 4.29
+        // Assert: 2 + 0 + 0 + 1 = 3 earned, 2 + 2 + 2 + 1 = 7 max â†’ 3/7 * 10 â‰ˆ 4.29
         Assert.Equal("Graded", session.Status);
         Assert.Equal(Math.Round(3.0m / 7.0m * 10.0m, 2), result.Score);
         Assert.Equal(2, result.NumCorrect);

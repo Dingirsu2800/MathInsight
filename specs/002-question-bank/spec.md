@@ -1,5 +1,7 @@
 # Feature Specification: Question Bank Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) supersedes legacy point/version behavior in this document.
+
 **Feature Branch**: `002-question-bank`
 
 **Created**: 2026-06-23 | **Updated**: 2026-07-12

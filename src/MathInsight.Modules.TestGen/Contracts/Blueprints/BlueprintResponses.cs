@@ -33,6 +33,7 @@ public sealed record BlueprintListItemResponse(
     string BlueprintName,
     int Grade,
     int TotalQuestions,
+    decimal TotalScore,
     int DurationMinutes,
     string ExpertId,
     string? ExpertName,
@@ -45,6 +46,7 @@ public sealed record BlueprintDetailResponse(
     string BlueprintName,
     int Grade,
     int TotalQuestions,
+    decimal TotalScore,
     int DurationMinutes,
     string ExpertId,
     string? ExpertName,
@@ -63,8 +65,8 @@ public sealed record BlueprintSectionResponse(
     string QuestionType,
     string? InstructionText,
     int TotalQuestions,
-    decimal DefaultPointPerQuestion,
-    decimal? DefaultPointPerPart,
+    decimal ScoreBudget,
+    string ScoringRule,
     int? PartCountPerQuestion,
     IReadOnlyList<BlueprintDetailSlotResponse> Details);
 

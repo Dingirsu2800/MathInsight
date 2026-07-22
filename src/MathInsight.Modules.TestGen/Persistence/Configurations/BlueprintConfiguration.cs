@@ -13,6 +13,7 @@ public class BlueprintConfiguration : IEntityTypeConfiguration<Blueprint>
         {
             table.HasCheckConstraint("CK_Blueprint_Grade", "[Grade] IN (10, 11, 12)");
             table.HasCheckConstraint("CK_Blueprint_TotalQuestions", "[TotalQuestions] >= 0");
+            table.HasCheckConstraint("CK_Blueprint_TotalScore", "[TotalScore] > 0 AND [TotalScore] <= 100");
             table.HasCheckConstraint("CK_Blueprint_DurationMinutes", "[DurationMinutes] >= 0");
             table.HasCheckConstraint(
                 "CK_Blueprint_Status",
@@ -36,6 +37,10 @@ public class BlueprintConfiguration : IEntityTypeConfiguration<Blueprint>
         builder.Property(x => x.TotalQuestions)
             .HasColumnName("TotalQuestions")
             .HasDefaultValue(0);
+        builder.Property(x => x.TotalScore)
+            .HasColumnName("TotalScore")
+            .HasPrecision(5, 2)
+            .HasDefaultValue(10m);
         builder.Property(x => x.DurationMinutes)
             .HasColumnName("DurationMinutes")
             .HasDefaultValue(0);

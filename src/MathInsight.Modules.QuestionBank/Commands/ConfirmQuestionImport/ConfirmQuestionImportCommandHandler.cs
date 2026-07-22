@@ -1,4 +1,5 @@
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Imports;
 using MathInsight.Modules.QuestionBank.Persistence;
@@ -81,6 +82,8 @@ public sealed class ConfirmQuestionImportCommandHandler
             QuestionRequestValidator.Validate(candidate.Draft, out var databaseQuestionType);
             var question = QuestionImportQuestionFactory.Create(candidate.Draft, command.ExpertId, databaseQuestionType!);
             _context.Questions.Add(question);
+            _context.QuestionVersions.Add(
+                QuestionVersionSnapshotFactory.Create(question, command.ExpertId, 1, question.CreatedTime));
             questions.Add((candidate.QuestionKey, question.QuestionId));
         }
 

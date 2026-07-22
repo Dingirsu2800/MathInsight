@@ -6,6 +6,7 @@ using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Scoring;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -102,6 +103,22 @@ public sealed class GenerateBlueprintExamCommandHandler
         if (!selection.IsComplete || selection.Assignments.Count != blueprint.TotalQuestions)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.InsufficientQuestions);
 
+        var candidatesById = candidates.ToDictionary(candidate => candidate.QuestionId, StringComparer.OrdinalIgnoreCase);
+        var sectionsByOrder = blueprint.Sections.ToDictionary(section => section.SectionOrder);
+        var maxPointsByQuestion = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sectionAssignments in selection.Assignments.GroupBy(assignment => assignment.SectionOrder))
+        {
+            var section = sectionsByOrder[sectionAssignments.Key];
+            var weightedItems = sectionAssignments
+                .Select(assignment => new WeightedScoreItem(
+                    assignment.QuestionId,
+                    candidatesById[assignment.QuestionId].DefaultWeight,
+                    assignment.CandidateOrder))
+                .ToList();
+            foreach (var allocation in ScoringAllocator.Allocate(section.ScoreBudget, weightedItems))
+                maxPointsByQuestion.Add(allocation.Key, allocation.Value);
+        }
+
         var test = new TestEntity
         {
             TestId = testId,
@@ -114,12 +131,16 @@ public sealed class GenerateBlueprintExamCommandHandler
             TestCode = null,
             DurationMinutes = blueprint.DurationMinutes,
             TotalQuestions = blueprint.TotalQuestions,
+            MaxScore = blueprint.TotalScore,
+            ScoringPolicy = ScoringPolicies.BlueprintBudget,
             CreatedTime = createdTime
         };
 
         for (var index = 0; index < selection.Assignments.Count; index++)
         {
             var assignment = selection.Assignments[index];
+            var candidate = candidatesById[assignment.QuestionId];
+            var section = sectionsByOrder[assignment.SectionOrder];
             test.Questions.Add(new TestQuestion
             {
                 TestId = test.TestId,
@@ -131,7 +152,13 @@ public sealed class GenerateBlueprintExamCommandHandler
                 RecommendedForTagId = null,
                 RecommendedDifficultyId = null,
                 PtagAtSelection = null,
-                RuleVersion = null
+                RuleVersion = null,
+                QuestionVersionId = candidate.QuestionVersionId,
+                WeightSnapshot = candidate.DefaultWeight,
+                MaxPointsSnapshot = maxPointsByQuestion[assignment.QuestionId],
+                ScoringRuleSnapshot = section.ScoringRule,
+                IsScoreInvalidated = false,
+                InvalidatedByReportId = null
             });
         }
 
@@ -197,6 +224,9 @@ public sealed class GenerateBlueprintExamCommandHandler
             persisted.TestName == blueprint.BlueprintName &&
             persisted.DurationMinutes == blueprint.DurationMinutes &&
             persisted.TotalQuestions == persisted.Questions.Count &&
+            persisted.MaxScore == blueprint.TotalScore &&
+            persisted.ScoringPolicy == ScoringPolicies.BlueprintBudget &&
+            persisted.Questions.Sum(question => question.MaxPointsSnapshot) == persisted.MaxScore &&
             orders.SequenceEqual(Enumerable.Range(1, persisted.TotalQuestions)) &&
             detailQuantitiesMatch &&
             persisted.Questions.All(IsBaselineAuditRow);
@@ -224,6 +254,7 @@ public sealed class GenerateBlueprintExamCommandHandler
                     detail.TagId,
                     detail.DifficultyId,
                     section.QuestionType,
+                    section.ScoringRule,
                     detail.Quantity));
             }
         }
@@ -239,9 +270,12 @@ public sealed class GenerateBlueprintExamCommandHandler
            blueprint.Sections.Count > 0 &&
            blueprint.Sections.All(section =>
                section.TotalQuestions > 0 &&
+               section.ScoreBudget > 0m &&
+               ScoringRules.IsSupported(section.ScoringRule) &&
                section.Details.Count > 0 &&
                section.Details.Sum(detail => detail.Quantity) == section.TotalQuestions) &&
            blueprint.Sections.Sum(section => section.TotalQuestions) == blueprint.TotalQuestions &&
+           blueprint.Sections.Sum(section => section.ScoreBudget) == blueprint.TotalScore &&
            requirements.All(requirement => requirement.Quantity > 0) &&
            requirements.Sum(requirement => requirement.Quantity) == blueprint.TotalQuestions;
 
@@ -252,7 +286,13 @@ public sealed class GenerateBlueprintExamCommandHandler
            question.RecommendedForTagId is null &&
            question.RecommendedDifficultyId is null &&
            question.PtagAtSelection is null &&
-           question.RuleVersion is null;
+           question.RuleVersion is null &&
+           !string.IsNullOrWhiteSpace(question.QuestionVersionId) &&
+           question.WeightSnapshot > 0m &&
+           question.MaxPointsSnapshot >= 0m &&
+           ScoringRules.IsSupported(question.ScoringRuleSnapshot) &&
+           !question.IsScoreInvalidated &&
+           question.InvalidatedByReportId is null;
 
     private static GenerateBlueprintExamResponse ToResponse(TestEntity test)
         => new(
@@ -262,5 +302,7 @@ public sealed class GenerateBlueprintExamCommandHandler
             test.TestName,
             test.DurationMinutes,
             test.TotalQuestions,
+            test.MaxScore,
+            test.ScoringPolicy,
             test.CreatedTime);
 }

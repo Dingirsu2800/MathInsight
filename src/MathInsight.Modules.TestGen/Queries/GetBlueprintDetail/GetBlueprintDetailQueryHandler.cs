@@ -35,6 +35,7 @@ public sealed class GetBlueprintDetailQueryHandler
                 item.BlueprintName,
                 item.Grade,
                 item.TotalQuestions,
+                item.TotalScore,
                 item.DurationMinutes,
                 item.ExpertId,
                 _context.Accounts
@@ -60,8 +61,8 @@ public sealed class GetBlueprintDetailQueryHandler
                         section.QuestionType,
                         section.InstructionText,
                         section.TotalQuestions,
-                        section.DefaultPointPerQuestion,
-                        section.DefaultPointPerPart,
+                        section.ScoreBudget,
+                        section.ScoringRule,
                         section.PartCountPerQuestion,
                         section.Details
                             .OrderBy(detail => detail.TagId)

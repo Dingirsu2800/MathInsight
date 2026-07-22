@@ -34,4 +34,3 @@ public static class TestingModuleExtensions
         return services;
     }
 }
-

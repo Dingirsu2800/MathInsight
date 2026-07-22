@@ -136,7 +136,7 @@ public sealed class QuestionReportQueryTests
             Status = "Reported",
             QuestionType = "SingleChoice",
             ExpertId = expertId,
-            DefaultPoint = 1m,
+            DefaultWeight = 1m,
             IsActive = true,
             QuestionTopics = new List<QuestionTopic>
             {

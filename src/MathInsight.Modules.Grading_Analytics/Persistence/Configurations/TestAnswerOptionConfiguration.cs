@@ -8,13 +8,13 @@ public class TestAnswerOptionConfiguration : IEntityTypeConfiguration<TestAnswer
 {
     public void Configure(EntityTypeBuilder<TestAnswerOption> builder)
     {
-        builder.ToTable("TestAnswerOption");
+        builder.ToTable("TestAnswerOption", table => table.ExcludeFromMigrations());
 
         // Composite PK: (test_answer_id, answer_id)
         builder.HasKey(x => new { x.TestAnswerId, x.AnswerId });
 
-        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID");
-        builder.Property(x => x.AnswerId).HasColumnName("AnswerID");
+        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.AnswerId).HasColumnName("AnswerID").HasMaxLength(36).IsUnicode(false);
 
         builder.HasOne(x => x.TestAnswer)
                .WithMany(a => a.SelectedOptions)

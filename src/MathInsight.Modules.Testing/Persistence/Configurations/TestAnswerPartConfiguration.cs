@@ -42,7 +42,7 @@ public class TestAnswerPartConfiguration : IEntityTypeConfiguration<TestAnswerPa
 
         builder.Property(x => x.PointsEarned)
             .HasColumnName("PointsEarned")
-            .HasColumnType("decimal(4,2)")
+            .HasPrecision(4, 2)
             .HasDefaultValue(0.00m);
 
         builder.HasOne(x => x.TestAnswer)

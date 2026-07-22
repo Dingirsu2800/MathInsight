@@ -7,6 +7,8 @@ public sealed record QuestionVersionResponse(
     string QuestionAnswer,
     string AnswersSnapshot,
     string? PictureUrl,
+    int VersionNumber,
+    short SnapshotSchemaVersion,
     DateTime CreatedTime,
     string ExpertId,
     string? ExpertName,

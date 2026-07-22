@@ -67,6 +67,7 @@ public sealed class ToggleQuestionActiveCommandHandler
         }
 
         question.IsActive = command.IsActive;
+        question.UpdatedTime = DateTime.UtcNow;
 
         if (command.IsActive &&
             string.Equals(question.Status, "Deactivated", StringComparison.OrdinalIgnoreCase))

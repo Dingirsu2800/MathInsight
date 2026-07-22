@@ -62,23 +62,30 @@ public class QuestionPartConfiguration : IEntityTypeConfiguration<QuestionPart>
         builder.Property(part => part.Explanation)
             .HasColumnName("Explanation");
 
-        builder.Property(part => part.DefaultPoint)
-            .HasColumnName("DefaultPoint")
-            .HasColumnType("decimal(4,2)")
-            .HasDefaultValue(0.00m)
+        builder.Property(part => part.DefaultWeight)
+            .HasColumnName("DefaultWeight")
+            .HasColumnType("decimal(5,2)")
+            .HasDefaultValue(1.00m)
+            .IsRequired();
+
+        builder.Property(part => part.IsArchived)
+            .HasColumnName("IsArchived")
+            .HasDefaultValue(false)
             .IsRequired();
 
         builder.HasIndex(part => part.QuestionId)
-            .HasDatabaseName("IX_QuestionPart_QuestionID");
+            .HasFilter("[IsArchived] = 0")
+            .HasDatabaseName("IX_QuestionPart_Current_Question");
 
         builder.HasIndex(part => new { part.QuestionId, part.PartOrder })
             .IsUnique()
-            .HasDatabaseName("UQ_QuestionPart_Question_Order");
+            .HasFilter("[IsArchived] = 0")
+            .HasDatabaseName("UX_QuestionPart_Current_Order");
 
         builder.HasIndex(part => new { part.QuestionId, part.PartLabel })
             .IsUnique()
-            .HasFilter("[PartLabel] IS NOT NULL")
-            .HasDatabaseName("UX_QuestionPart_Label_NotNull");
+            .HasFilter("[PartLabel] IS NOT NULL AND [IsArchived] = 0")
+            .HasDatabaseName("UX_QuestionPart_Current_Label_NotNull");
 
         builder.HasOne(part => part.Question)
             .WithMany(question => question.Parts)

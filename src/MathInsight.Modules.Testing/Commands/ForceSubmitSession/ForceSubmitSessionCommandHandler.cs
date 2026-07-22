@@ -50,10 +50,11 @@ public sealed class ForceSubmitSessionCommandHandler
 
         var submissionEvent = new TestSubmittedEvent
         {
-            SessionId = Guid.Parse(session.SessionId),
-            StudentId = Guid.Parse(session.StudentId),
-            TestId = Guid.Parse(session.TestId),
+            SessionId = session.SessionId,
+            StudentId = session.StudentId,
+            TestId = session.TestId,
             TestFormat = session.TestFormat,
+            SubmissionType = request.SubmissionType,
             SubmittedTime = now
         };
 

@@ -33,6 +33,9 @@ public sealed class QuestionReadModelConfiguration : IEntityTypeConfiguration<Qu
             .HasMaxLength(30)
             .IsUnicode(false)
             .IsRequired();
+        builder.Property(x => x.DefaultWeight)
+            .HasColumnName("DefaultWeight")
+            .HasPrecision(5, 2);
         builder.Property(x => x.IsActive)
             .HasColumnName("IsActive");
     }

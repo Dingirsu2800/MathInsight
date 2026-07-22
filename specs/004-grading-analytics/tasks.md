@@ -1,5 +1,12 @@
 # Tasks Checklist: Grading & Analytics Module
 
+## Scoring Contract V2
+
+- [x] Grade immutable QuestionVersion data with TestQuestion scoring snapshots.
+- [x] Preserve machine points and calculate effective invalidated points.
+- [x] Recalculate version-wide affected sessions idempotently and increment GradeRevision.
+- [x] Publish revision-aware weighted topic results.
+
 **Branch**: `004-grading-analytics` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
@@ -8,7 +15,7 @@
 
 - [x] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
 - [x] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
-- [x] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
+- [x] Configure legacy fallback access to `Question.DefaultWeight`; normal grading reads immutable `QuestionVersion` and `TestQuestion` scoring snapshots.
 - [x] Configure read/write access to `TestAnswerPart` (`is_correct`, `points_earned`).
 - [x] Configure read access to `QuestionPart` (`part_type`, `answer_key`, `default_point`).
 - [x] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules

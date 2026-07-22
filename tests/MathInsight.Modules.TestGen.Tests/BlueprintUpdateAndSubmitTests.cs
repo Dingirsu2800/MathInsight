@@ -216,6 +216,7 @@ public sealed class BlueprintUpdateAndSubmitTests
             BlueprintName = "Updated blueprint",
             Grade = 12,
             TotalQuestions = 2,
+            TotalScore = 0.5m,
             DurationMinutes = 30,
             Sections =
             [
@@ -225,7 +226,7 @@ public sealed class BlueprintUpdateAndSubmitTests
                     SectionName = "Section I",
                     QuestionType = BlueprintQuestionTypes.SingleChoice,
                     TotalQuestions = 2,
-                    DefaultPointPerQuestion = 0.5m,
+                    ScoreBudget = 0.5m,
                     Details =
                     [
                         new BlueprintDetailRequest
@@ -285,6 +286,7 @@ public sealed class BlueprintUpdateAndSubmitTests
             BlueprintName = "Original blueprint",
             Grade = 12,
             TotalQuestions = 2,
+            TotalScore = 0.5m,
             DurationMinutes = 30,
             ExpertId = OwnerId,
             Status = status
@@ -297,7 +299,7 @@ public sealed class BlueprintUpdateAndSubmitTests
             SectionName = "Section I",
             QuestionType = BlueprintQuestionTypes.SingleChoice,
             TotalQuestions = 2,
-            DefaultPointPerQuestion = 0.5m
+            ScoreBudget = 0.5m
         };
         section.Details.Add(new BlueprintDetail
         {

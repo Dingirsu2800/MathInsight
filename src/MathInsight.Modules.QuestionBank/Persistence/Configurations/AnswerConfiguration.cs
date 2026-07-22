@@ -34,8 +34,14 @@ public class AnswerConfiguration : IEntityTypeConfiguration<Answer>
             .HasDefaultValue(false)
             .IsRequired();
 
+        builder.Property(answer => answer.IsArchived)
+            .HasColumnName("IsArchived")
+            .HasDefaultValue(false)
+            .IsRequired();
+
         builder.HasIndex(answer => answer.QuestionId)
-            .HasDatabaseName("IX_Answer_QuestionID");
+            .HasFilter("[IsArchived] = 0")
+            .HasDatabaseName("IX_Answer_Current_Question");
 
         builder.HasOne(answer => answer.Question)
             .WithMany(question => question.Answers)
