@@ -25,6 +25,9 @@ public class GradingDbContext : DbContext
     public DbSet<Answer> Answers => Set<Answer>();
     public DbSet<QuestionPart> QuestionParts => Set<QuestionPart>();
     public DbSet<QuestionTopic> QuestionTopics => Set<QuestionTopic>();
+    public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
+    public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
+    public DbSet<QuestionReport> QuestionReports => Set<QuestionReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

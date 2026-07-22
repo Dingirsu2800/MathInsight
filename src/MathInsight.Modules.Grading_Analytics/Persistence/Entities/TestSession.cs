@@ -6,9 +6,9 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class TestSession
 {
-    public Guid SessionId { get; set; }
-    public Guid TestId { get; set; }
-    public Guid StudentId { get; set; }
+    public string SessionId { get; set; } = string.Empty;
+    public string TestId { get; set; } = string.Empty;
+    public string StudentId { get; set; } = string.Empty;
 
     /// <summary>Practice | Exam</summary>
     public string TestFormat { get; set; } = string.Empty;
@@ -27,6 +27,7 @@ public class TestSession
     public int NumIncorrect { get; set; }
     public int NumAbandoned { get; set; }
     public decimal Score { get; set; }
+    public int GradeRevision { get; set; }
 
     // Navigation (read-only for Grading)
     public ICollection<TestAnswer> TestAnswers { get; set; } = new List<TestAnswer>();

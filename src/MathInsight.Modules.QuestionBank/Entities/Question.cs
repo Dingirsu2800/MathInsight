@@ -11,8 +11,10 @@ public class Question
     public string Status { get; set; } = default!;
     public string QuestionType { get; set; } = default!;
     public string ExpertId { get; set; } = default!;
-    public decimal DefaultPoint { get; set; }
+    public decimal DefaultWeight { get; set; } = 1.00m;
     public bool IsActive { get; set; }
+    public DateTime CreatedTime { get; set; }
+    public DateTime UpdatedTime { get; set; }
 
     public TagDifficulty Difficulty { get; set; } = default!;
     public ICollection<Answer> Answers { get; set; } = new List<Answer>();

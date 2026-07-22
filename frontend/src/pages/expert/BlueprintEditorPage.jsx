@@ -28,6 +28,7 @@ export default function BlueprintEditorPage() {
     blueprintName: "",
     grade: "12",
     totalQuestions: "",
+    totalScore: 10,
     durationMinutes: 90,
     sections: []
   });
@@ -53,9 +54,9 @@ export default function BlueprintEditorPage() {
     questionType: "SingleChoice",
     instructionText: "",
     totalQuestions: "",
-    defaultPointPerQuestion: 0.2,
+    scoreBudget: 10,
+    scoringRule: "AllOrNothing",
     partCountPerQuestion: "",
-    defaultPointPerPart: "",
     details: [
       { tagId: "", difficultyId: "", quantity: 1 }
     ]
@@ -203,10 +204,9 @@ export default function BlueprintEditorPage() {
       sections: prev.sections.map((sec, idx) => {
         if (idx !== secIndex) return sec;
         const updated = { ...sec, [field]: value };
-        // If type changes, clear Composite metadata if not Composite
-        if (field === "questionType" && value !== "Composite") {
-          updated.partCountPerQuestion = "";
-          updated.defaultPointPerPart = "";
+        if (field === "questionType") {
+          updated.scoringRule = value === "Composite" ? "WeightedParts" : "AllOrNothing";
+          if (value !== "Composite") updated.partCountPerQuestion = "";
         }
         return updated;
       })
@@ -420,7 +420,7 @@ export default function BlueprintEditorPage() {
                   />
                 </div>
 
-                <div className="col-span-4">
+                <div className="col-span-3">
                   <label className="block text-xs font-bold text-on-surface-variant mb-1">
                     Khối lớp <span className="text-error">*</span>
                   </label>
@@ -435,7 +435,7 @@ export default function BlueprintEditorPage() {
                   />
                 </div>
 
-                <div className="col-span-4 select-text">
+                <div className="col-span-3 select-text">
                   <label className="block text-xs font-bold text-on-surface-variant mb-1">
                     Tổng số câu mục tiêu <span className="text-error">*</span>
                   </label>
@@ -449,7 +449,22 @@ export default function BlueprintEditorPage() {
                   />
                 </div>
 
-                <div className="col-span-4 select-text">
+                <div className="col-span-3 select-text">
+                  <label className="block text-xs font-bold text-on-surface-variant mb-1">
+                    Tổng điểm <span className="text-error">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.totalScore}
+                    onChange={(e) => setForm(prev => ({ ...prev, totalScore: e.target.value }))}
+                    min="0.01"
+                    max="100"
+                    className="w-full rounded-lg border border-outline-variant p-2 h-10 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                  />
+                </div>
+
+                <div className="col-span-3 select-text">
                   <label className="block text-xs font-bold text-on-surface-variant mb-1">
                     Thời gian (phút) <span className="text-error">*</span>
                   </label>
@@ -552,7 +567,7 @@ export default function BlueprintEditorPage() {
                       </div>
                     </div>
 
-                    {/* Instruction, TotalQuestions and DefaultPoint Row */}
+                    {/* Instruction, question count and section score budget */}
                     <div className="grid grid-cols-12 gap-4 select-text">
                       <div className="col-span-6">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Hướng dẫn làm bài</label>
@@ -576,15 +591,15 @@ export default function BlueprintEditorPage() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Điểm / Câu <span className="text-error">*</span></label>
+                        <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Quỹ điểm phần <span className="text-error">*</span></label>
                         <input
                           type="number"
                           step="0.01"
-                          value={sec.defaultPointPerQuestion}
-                          onChange={(e) => updateSectionField(secIdx, "defaultPointPerQuestion", e.target.value)}
-                          placeholder="VD: 0.2"
-                          min="0"
-                          max="10"
+                          value={sec.scoreBudget}
+                          onChange={(e) => updateSectionField(secIdx, "scoreBudget", e.target.value)}
+                          placeholder="VD: 3.0"
+                          min="0.01"
+                          max="100"
                           className="w-full rounded-lg border border-outline-variant p-2 h-10 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                         />
                       </div>
@@ -608,17 +623,15 @@ export default function BlueprintEditorPage() {
                         </div>
                         <div className="col-span-6">
                           <label className="block text-[11px] font-bold text-primary mb-1">
-                            Điểm mỗi phần (Composite) <span className="text-error">*</span>
+                            Quy tắc chấm <span className="text-error">*</span>
                           </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={sec.defaultPointPerPart}
-                            onChange={(e) => updateSectionField(secIdx, "defaultPointPerPart", e.target.value)}
-                            placeholder="Ví dụ: 0.05"
-                            min="0"
-                            max="10"
-                            className="w-full rounded-lg border border-outline-variant p-2 text-xs bg-pure-surface text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                          <CustomSelect
+                            value={sec.scoringRule}
+                            onValueChange={(value) => updateSectionField(secIdx, "scoringRule", value)}
+                            items={[
+                              { value: "WeightedParts", label: "Theo trọng số từng phần" },
+                              { value: "TieredTrueFalse", label: "Đúng/Sai theo bậc 0-10-25-50-100%" }
+                            ]}
                           />
                         </div>
                       </div>

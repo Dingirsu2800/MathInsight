@@ -11,9 +11,10 @@ namespace MathInsight.Shared.Events;
 /// </summary>
 public sealed record GradeCalculatedEvent : MediatR.INotification
 {
-    public Guid SessionId { get; init; }
-    public Guid StudentId { get; init; }
-    public Guid TestId { get; init; }
+    public string SessionId { get; init; } = string.Empty;
+    public string StudentId { get; init; } = string.Empty;
+    public string TestId { get; init; } = string.Empty;
+    public int GradeRevision { get; init; }
     public string TestFormat { get; init; } = string.Empty;
 
     /// <summary>
@@ -54,13 +55,12 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
 /// </summary>
 public sealed record GradedAnswerDto
 {
-    public Guid QuestionId { get; init; }
+    public string QuestionId { get; init; } = string.Empty;
+    public string TagId { get; init; } = string.Empty;
 
     /// <summary>
     /// Primary topic tag ID (backward-compatible). Always the IsPrimary=true tag.
     /// </summary>
-    public Guid TagId { get; init; }
-
     /// <summary>
     /// All tags (primary + secondary) with their role-based weights.
     /// Sum of all weights = 1.0. For single-tag questions, contains one entry with Weight = 1.0.
@@ -77,8 +77,9 @@ public sealed record GradedAnswerDto
     /// Used for Tầng 1 contribution calculation: c_{q,i} = s_q × w_{iq}.
     /// </summary>
     public decimal NormalizedScore { get; init; }
-
     public bool IsCorrect { get; init; }
+    public bool? MachineIsCorrect { get; init; }
+    public bool IsScoreInvalidated { get; init; }
     public decimal PointsEarned { get; init; }
     public decimal MaxPoints { get; init; }
     public int TimeSpent { get; init; }
@@ -95,7 +96,7 @@ public sealed record GradedAnswerDto
 /// </summary>
 public sealed record TagWeightEntry
 {
-    public Guid TagId { get; init; }
+    public string TagId { get; init; } = string.Empty;
 
     /// <summary>
     /// Role-based weight w_{iq}. Sum of all TagWeightEntry.Weight for a question = 1.0.
@@ -117,7 +118,7 @@ public sealed record TagWeightEntry
 /// </summary>
 public sealed record TopicGradeResult
 {
-    public Guid TagId { get; init; }
+    public string TagId { get; init; } = string.Empty;
 
     /// <summary>
     /// Weighted topic score 0.00–10.00: T_j^{(i)} = avg(c_{q,i}) where c_{q,i} = s_q × w_{iq}.
@@ -125,6 +126,8 @@ public sealed record TopicGradeResult
     /// </summary>
     public decimal TopicScore { get; init; }
 
-    public int CorrectCount { get; init; }
-    public int TotalCount { get; init; }
+    public decimal TotalItems { get; init; }
+    public decimal CorrectItems { get; init; }
+    public decimal EarnedPoints { get; init; }
+    public decimal MaxPoints { get; init; }
 }

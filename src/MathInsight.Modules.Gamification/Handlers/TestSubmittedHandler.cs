@@ -49,7 +49,7 @@ public sealed class TestSubmittedHandler : INotificationHandler<TestSubmittedEve
             return;
         }
 
-        var studentId = notification.StudentId.ToString();
+        var studentId = notification.StudentId;
 
         // SubmittedTime may be unset on a malformed event; fall back to now.
         var submittedTime = notification.SubmittedTime == default
@@ -61,7 +61,7 @@ public sealed class TestSubmittedHandler : INotificationHandler<TestSubmittedEve
             ActivityLogId = Guid.NewGuid().ToString(),
             StudentId = studentId,
             ActivityType = activityType,
-            TestSessionId = notification.SessionId.ToString(),
+            TestSessionId = notification.SessionId,
             LectureId = null,
             MaterialId = null,
             DurationSeconds = null,

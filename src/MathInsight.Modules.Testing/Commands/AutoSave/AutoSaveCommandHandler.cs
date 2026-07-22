@@ -44,13 +44,21 @@ public sealed class AutoSaveCommandHandler
             .ToListAsync(cancellationToken);
 
         var answerLookup = existingAnswers.ToDictionary(a => a.QuestionId);
+        var snapshots = await QuestionSnapshotReader.LoadAsync(
+            _db,
+            session.TestId,
+            cancellationToken);
         var now = DateTime.UtcNow;
 
         // 3. Batch update answers
         foreach (var dto in request.Answers)
         {
-            if (!answerLookup.TryGetValue(dto.QuestionId, out var answer))
-                continue; // Skip unknown questions
+            if (!answerLookup.TryGetValue(dto.QuestionId, out var answer) ||
+                !snapshots.TryGetValue(dto.QuestionId, out var snapshot) ||
+                !QuestionSnapshotReader.IsValid(snapshot, dto))
+            {
+                return Result<AutoSaveResponse>.Failure(TestingErrors.AnswerNotInVersion);
+            }
 
             // Update basic answer fields
             answer.AnswerId = dto.AnswerId;

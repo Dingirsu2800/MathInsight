@@ -37,6 +37,9 @@ public sealed class ReportQuestionCommandHandler
         if (reporterRole is null || string.IsNullOrWhiteSpace(command.ReporterAccountId))
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
+        if ((command.SessionId is null) != (command.QuestionVersionId is null))
+            return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
+
         await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -49,6 +52,16 @@ public sealed class ReportQuestionCommandHandler
 
         if (question is null)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.QuestionNotFound);
+
+        if (command.QuestionVersionId is not null)
+        {
+            var versionExists = await _context.QuestionVersions.AnyAsync(
+                version => version.VersionId == command.QuestionVersionId &&
+                           version.QuestionId == question.QuestionId,
+                cancellationToken);
+            if (!versionExists)
+                return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
+        }
 
         if (reporterRole == "Admin")
         {
@@ -95,13 +108,18 @@ public sealed class ReportQuestionCommandHandler
             Status = reporterRole == "Admin"
                 ? QuestionReportWorkflow.PendingFix
                 : QuestionReportWorkflow.Pending,
-            CreatedTime = createdTime
+            CreatedTime = createdTime,
+            SessionId = command.SessionId,
+            QuestionVersionId = command.QuestionVersionId
         };
 
         _context.QuestionReports.Add(report);
 
         if (reporterRole is "Expert" or "Admin" && question.Status == "Approved")
+        {
             question.Status = "Reported";
+            question.UpdatedTime = createdTime;
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -116,7 +134,9 @@ public sealed class ReportQuestionCommandHandler
             report.Status,
             report.CreatedTime,
             question.Status,
-            question.IsActive));
+            question.IsActive,
+            report.SessionId,
+            report.QuestionVersionId));
     }
 
     private static string? NormalizeReporterRole(string? role)

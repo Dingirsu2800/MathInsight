@@ -5,6 +5,7 @@ public sealed class BlueprintRequest
     public string BlueprintName { get; set; } = string.Empty;
     public int Grade { get; set; }
     public int TotalQuestions { get; set; }
+    public decimal TotalScore { get; set; } = 10.00m;
     public int DurationMinutes { get; set; }
     public List<BlueprintSectionRequest> Sections { get; set; } = [];
 }
@@ -17,8 +18,8 @@ public sealed class BlueprintSectionRequest
     public string QuestionType { get; set; } = string.Empty;
     public string? InstructionText { get; set; }
     public int TotalQuestions { get; set; }
-    public decimal DefaultPointPerQuestion { get; set; }
-    public decimal? DefaultPointPerPart { get; set; }
+    public decimal ScoreBudget { get; set; }
+    public string ScoringRule { get; set; } = "AllOrNothing";
     public int? PartCountPerQuestion { get; set; }
     public List<BlueprintDetailRequest> Details { get; set; } = [];
 }

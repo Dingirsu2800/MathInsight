@@ -84,8 +84,12 @@ public class TestSessionConfiguration : IEntityTypeConfiguration<TestSession>
 
         builder.Property(x => x.Score)
             .HasColumnName("Score")
-            .HasColumnType("decimal(5,2)")
+            .HasPrecision(5, 2)
             .HasDefaultValue(0.00m);
+
+        builder.Property(x => x.GradeRevision)
+            .HasColumnName("GradeRevision")
+            .HasDefaultValue(0);
 
         builder.HasOne(x => x.Test)
             .WithMany()

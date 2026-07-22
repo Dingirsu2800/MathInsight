@@ -8,12 +8,12 @@ public class QuestionTopicConfiguration : IEntityTypeConfiguration<QuestionTopic
 {
     public void Configure(EntityTypeBuilder<QuestionTopic> builder)
     {
-        builder.ToTable("QuestionTopic");
+        builder.ToTable("QuestionTopic", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.QuestionTopicId);
 
-        builder.Property(x => x.QuestionTopicId).HasColumnName("QuestionTopicID");
-        builder.Property(x => x.QuestionId).HasColumnName("QuestionID");
-        builder.Property(x => x.TagId).HasColumnName("TagID");
+        builder.Property(x => x.QuestionTopicId).HasColumnName("QuestionTopicID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.QuestionId).HasColumnName("QuestionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.TagId).HasColumnName("TagID").HasMaxLength(36).IsUnicode(false);
         builder.Property(x => x.IsPrimary).HasColumnName("IsPrimary");
 
         builder.HasOne(x => x.Question)

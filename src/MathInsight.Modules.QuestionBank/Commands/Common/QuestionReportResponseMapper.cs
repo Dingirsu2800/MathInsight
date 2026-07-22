@@ -31,6 +31,10 @@ internal static class QuestionReportResponseMapper
             report.ReviewNote,
             report.SubmittedTime,
             report.ReviewedTime,
-            report.ReviewedBy);
+            report.ReviewedBy,
+            report.SessionId,
+            report.QuestionVersionId,
+            report.ResolutionAction,
+            report.ScoreAdjustedTime);
     }
 }

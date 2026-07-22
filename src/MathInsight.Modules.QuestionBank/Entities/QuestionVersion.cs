@@ -8,6 +8,8 @@ public class QuestionVersion
     public string QuestionAnswer { get; set; } = default!;
     public string AnswersSnapshot { get; set; } = default!;
     public string? PictureUrl { get; set; }
+    public int VersionNumber { get; set; }
+    public short SnapshotSchemaVersion { get; set; } = 2;
     public DateTime CreatedTime { get; set; }
     public string ExpertId { get; set; } = default!;
 

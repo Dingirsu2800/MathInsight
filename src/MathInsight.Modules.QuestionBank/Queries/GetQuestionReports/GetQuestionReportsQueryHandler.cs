@@ -62,7 +62,11 @@ public sealed class GetQuestionReportsQueryHandler
                     report.ReviewNote,
                     report.SubmittedTime,
                     report.ReviewedTime,
-                    report.ReviewedBy))
+                    report.ReviewedBy,
+                    report.SessionId,
+                    report.QuestionVersionId,
+                    report.ResolutionAction,
+                    report.ScoreAdjustedTime))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<QuestionReportResponse>>.Success(reports);

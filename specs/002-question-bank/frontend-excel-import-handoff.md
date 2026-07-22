@@ -37,7 +37,7 @@ All endpoints require the `Expert` role.
         "difficultyId": "guid",
         "grade": 12,
         "questionType": "SINGLE_CHOICE",
-        "defaultPoint": 1.0,
+        "defaultWeight": 1.0,
         "topics": [{ "tagId": "guid", "isPrimary": true }],
         "answers": [{ "answerContent": "A", "isCorrect": true }],
         "parts": []

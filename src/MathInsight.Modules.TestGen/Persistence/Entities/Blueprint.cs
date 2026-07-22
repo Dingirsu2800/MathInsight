@@ -10,6 +10,7 @@ public class Blueprint
     public string BlueprintName { get; set; } = string.Empty;
     public int Grade { get; set; }
     public int TotalQuestions { get; set; }
+    public decimal TotalScore { get; set; } = 10.00m;
     public int DurationMinutes { get; set; }
     public string ExpertId { get; set; } = string.Empty;
     public string Status { get; set; } = "Draft";

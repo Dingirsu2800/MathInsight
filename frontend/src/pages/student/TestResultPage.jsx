@@ -5,7 +5,9 @@ import ScoreOverviewCard from './test-result/ScoreOverviewCard';
 import TopicBreakdownCard from './test-result/TopicBreakdownCard';
 import QuestionAnswerCard from './test-result/QuestionAnswerCard';
 import CompositeQuestionCard from './test-result/CompositeQuestionCard';
-import { getSessionResult } from '../../services/gradingApi';
+import { getSessionResult, reportSessionQuestion } from '../../services/gradingApi';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 
 /** Map DifficultyLevel (1-4) to label and CSS class */
 function difficultyLabel(level) {
@@ -31,6 +33,10 @@ export default function TestResultPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [reportTarget, setReportTarget] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -50,6 +56,7 @@ export default function TestResultPage() {
     if (!result?.answers) return [];
     return result.answers.filter((a) => {
       if (filter === 'all') return true;
+      if (a.isScoreInvalidated) return false;
       if (filter === 'correct') return a.isCorrect === true;
       if (filter === 'wrong') return a.isCorrect === false && !a.isAbandoned;
       if (filter === 'skipped') return a.isCorrect === null || a.isAbandoned;
@@ -66,6 +73,35 @@ export default function TestResultPage() {
     if (opt.key === 'skipped') count = result.numAbandoned;
     return { ...opt, label: `${opt.label} (${count})` };
   });
+
+  const openReportDialog = (answer) => {
+    setReportTarget(answer);
+    setReportReason('');
+    setReportError('');
+  };
+
+  const submitReport = async () => {
+    const reason = reportReason.trim();
+    if (!reportTarget || reason.length < 10) {
+      setReportError('Lý do báo cáo phải có ít nhất 10 ký tự.');
+      return;
+    }
+
+    setReportSubmitting(true);
+    setReportError('');
+    try {
+      await reportSessionQuestion(sessionId, reportTarget.questionId, reason);
+      setReportTarget(null);
+      setReportReason('');
+    } catch (requestError) {
+      const code = requestError.response?.data?.code;
+      setReportError(code === 'REPORT_ALREADY_PENDING'
+        ? 'Bạn đã gửi báo cáo cho câu hỏi này và báo cáo đang được xử lý.'
+        : 'Không thể gửi báo cáo. Vui lòng thử lại.');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
 
   return (
     <StudentLayout>
@@ -143,11 +179,19 @@ export default function TestResultPage() {
                       difficulty={diff.text}
                       difficultyClass={diff.cls}
                       statements={answer.answerParts.map((p) => ({
-                        text: p.studentAnswer ?? '',
+                        text: p.partContent,
+                        correctAnswer: p.correctAnswer === 'True',
+                        studentAnswer: p.studentAnswer === 'True',
                         isCorrect: p.isCorrect,
                       }))}
                       maxScore={answer.maxPoints}
-                      earnedScore={answer.pointsEarned}
+                      earnedScore={answer.effectivePoints}
+                      machinePoints={answer.machinePointsEarned}
+                      isScoreInvalidated={answer.isScoreInvalidated}
+                      reportReason={answer.reportReason}
+                      scoreAdjustedTime={answer.scoreAdjustedTime}
+                      solution={answer.solutionContent ? [answer.solutionContent] : []}
+                      onReport={() => openReportDialog(answer)}
                     />
                   );
                 }
@@ -161,8 +205,20 @@ export default function TestResultPage() {
                     difficulty={diff.text}
                     difficultyClass={diff.cls}
                     isCorrect={answer.isCorrect}
-                    pointsEarned={answer.pointsEarned}
+                    options={(answer.answerOptions || []).map((option, optionIndex) => ({
+                      label: String.fromCharCode(65 + optionIndex),
+                      text: option.answerContent,
+                      isCorrect: option.isCorrect,
+                      isSelected: option.wasSelected,
+                    }))}
+                    solution={answer.solutionContent ? [answer.solutionContent] : []}
+                    machinePoints={answer.machinePointsEarned}
+                    effectivePoints={answer.effectivePoints}
                     maxPoints={answer.maxPoints}
+                    isScoreInvalidated={answer.isScoreInvalidated}
+                    reportReason={answer.reportReason}
+                    scoreAdjustedTime={answer.scoreAdjustedTime}
+                    onReport={() => openReportDialog(answer)}
                   />
                 );
               })}
@@ -170,6 +226,40 @@ export default function TestResultPage() {
           </>
         )}
       </div>
+
+      <Dialog isOpen={Boolean(reportTarget)} onClose={() => !reportSubmitting && setReportTarget(null)}>
+        <DialogHeader>
+          <DialogTitle>Báo cáo câu hỏi {reportTarget?.questionNo}</DialogTitle>
+          <DialogDescription>
+            Mô tả rõ nội dung hoặc đáp án bạn cho rằng chưa chính xác.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent>
+          <label className="block text-sm font-bold text-on-surface" htmlFor="student-question-report-reason">
+            Lý do báo cáo
+          </label>
+          <textarea
+            id="student-question-report-reason"
+            rows={5}
+            maxLength={1000}
+            value={reportReason}
+            onChange={(event) => setReportReason(event.target.value)}
+            className="mt-2 w-full resize-y rounded-lg border border-outline-variant bg-pure-surface p-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <div className="mt-1 flex justify-between text-xs text-on-surface-variant">
+            <span>{reportError && <span className="text-error">{reportError}</span>}</span>
+            <span>{reportReason.length}/1000</span>
+          </div>
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setReportTarget(null)} disabled={reportSubmitting}>
+            Hủy
+          </Button>
+          <Button onClick={submitReport} disabled={reportSubmitting || reportReason.trim().length < 10}>
+            {reportSubmitting ? 'Đang gửi...' : 'Gửi báo cáo'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </StudentLayout>
   );
 }

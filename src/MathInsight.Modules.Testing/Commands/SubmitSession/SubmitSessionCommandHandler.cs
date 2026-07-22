@@ -40,11 +40,24 @@ public sealed class SubmitSessionCommandHandler
         if (session.Status != "InProgress")
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionAlreadyCompleted);
 
-        // 3. Set end_time and submission_type
+        var savedAnswers = await _db.TestAnswers
+            .Include(answer => answer.Options)
+            .Include(answer => answer.Parts)
+            .Where(answer => answer.SessionId == request.SessionId)
+            .ToListAsync(cancellationToken);
+        var snapshots = await QuestionSnapshotReader.LoadAsync(
+            _db,
+            session.TestId,
+            cancellationToken);
+        if (savedAnswers.Any(answer =>
+                !snapshots.TryGetValue(answer.QuestionId, out var snapshot) ||
+                !QuestionSnapshotReader.IsValid(snapshot, answer)))
+        {
+            return Result<SubmitSessionResponse>.Failure(TestingErrors.AnswerNotInVersion);
+        }
+
+        // Submission timestamps and type are persisted atomically by Grading.
         var now = DateTime.UtcNow;
-        session.EndTime = now;
-        session.SubmissionType = "StudentSubmit";
-        session.Duration = (int)(now - session.StartTime).TotalSeconds;
 
         // 4. Count abandoned questions (BR-16b)
         session.NumAbandoned = await CountAbandonedAnswers(request.SessionId, cancellationToken);
@@ -59,10 +72,11 @@ public sealed class SubmitSessionCommandHandler
             // Commit only after grading updates status = Graded
             var submissionEvent = new TestSubmittedEvent
             {
-                SessionId = Guid.Parse(session.SessionId),
-                StudentId = Guid.Parse(session.StudentId),
-                TestId = Guid.Parse(session.TestId),
+                SessionId = session.SessionId,
+                StudentId = session.StudentId,
+                TestId = session.TestId,
                 TestFormat = "Practice",
+                SubmissionType = "StudentSubmit",
                 SubmittedTime = now
             };
 
@@ -84,10 +98,11 @@ public sealed class SubmitSessionCommandHandler
 
             var submissionEvent = new TestSubmittedEvent
             {
-                SessionId = Guid.Parse(session.SessionId),
-                StudentId = Guid.Parse(session.StudentId),
-                TestId = Guid.Parse(session.TestId),
+                SessionId = session.SessionId,
+                StudentId = session.StudentId,
+                TestId = session.TestId,
                 TestFormat = "Exam",
+                SubmissionType = "StudentSubmit",
                 SubmittedTime = now
             };
 
@@ -102,7 +117,7 @@ public sealed class SubmitSessionCommandHandler
             new SubmitSessionResponse(
                 SessionId: session.SessionId,
                 Status: session.Status,
-                SubmissionType: session.SubmissionType,
+                SubmissionType: session.SubmissionType ?? "StudentSubmit",
                 NumAbandoned: session.NumAbandoned,
                 Score: isPractice ? session.Score : null));
     }

@@ -18,7 +18,7 @@ public interface IChatbotService
     Task<string> AskAsync(
         string questionContent,
         string studentAnswer,
-        Guid studentId,
-        Guid sessionId,
+        string studentId,
+        string sessionId,
         CancellationToken cancellationToken = default);
 }

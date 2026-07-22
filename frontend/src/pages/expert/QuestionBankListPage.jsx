@@ -84,7 +84,7 @@ export default function QuestionBankListPage() {
       difficultyLevel: "hard",
       type: "MULTIPLE_CHOICE",
       status: "APPROVED",
-      points: 10,
+      weight: 1,
       answers: {
         options: [
           { content: "y'(\\frac{\\pi}{4}) = 0", isCorrect: true },
@@ -104,7 +104,7 @@ export default function QuestionBankListPage() {
       difficultyLevel: "very_hard",
       type: "SINGLE_CHOICE",
       status: "REPORTED",
-      points: 20,
+      weight: 1,
       answers: {
         options: [
           { content: "V = \\frac{a^3 \\sqrt{3}}{3}", isCorrect: true },
@@ -124,7 +124,7 @@ export default function QuestionBankListPage() {
       difficultyLevel: "medium",
       type: "COMPOSITE",
       status: "DEACTIVATED",
-      points: 15,
+      weight: 1,
       answers: {
         explanation: "1. Tập xác định D = R. 2. Sự biến thiên: y' = 3x^2 - 3. y' = 0 <=> x = +-1.",
         parts: [
@@ -294,7 +294,7 @@ export default function QuestionBankListPage() {
             questionContent: q.content,
             questionType: q.type,
             grade: parseInt(q.grade),
-            defaultPoint: q.points,
+            defaultWeight: q.weight,
             status: q.status,
             difficultyName: q.difficulty,
             difficultyLevel: q.difficultyLevel,
@@ -521,7 +521,7 @@ export default function QuestionBankListPage() {
                   <th className="py-3 px-4 w-48">Thuộc tính</th>
                   <th className="py-3 px-4 w-32">Loại</th>
                   <th className="py-3 px-4 w-36">Trạng thái</th>
-                  <th className="py-3 px-4 w-20 text-center">Điểm</th>
+                  <th className="py-3 px-4 w-20 text-center">Trọng số</th>
                   <th className="py-3 px-4 w-32 text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -589,7 +589,7 @@ export default function QuestionBankListPage() {
                         <Badge variant={getQuestionStatusVariant(q.status)}>{getQuestionStatusLabel(q.status)}</Badge>
                       </td>
                       <td className="py-4 px-4 font-bold text-center text-on-surface">
-                        {q.points}
+                        {q.weight}
                       </td>
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
@@ -711,11 +711,19 @@ export default function QuestionBankListPage() {
                       </p>
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm mặc định:</h4>
+                      <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số:</h4>
                       <p className="font-bold text-primary text-[14px]">
-                        {selectedQuestionDetails.points} điểm
+                        {selectedQuestionDetails.weight}
                       </p>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 border-t border-whisper-border pt-3 text-xs text-on-surface-variant sm:grid-cols-2">
+                    <span>
+                      Tạo lúc: <strong className="text-on-surface">{selectedQuestionDetails.createdTime ? new Date(selectedQuestionDetails.createdTime).toLocaleString("vi-VN") : "Chưa xác định"}</strong>
+                    </span>
+                    <span>
+                      Cập nhật: <strong className="text-on-surface">{selectedQuestionDetails.updatedTime ? new Date(selectedQuestionDetails.updatedTime).toLocaleString("vi-VN") : "Chưa xác định"}</strong>
+                    </span>
                   </div>
 
                   {/* Answers */}
@@ -773,7 +781,7 @@ export default function QuestionBankListPage() {
                           <div key={idx} className="border border-whisper-border rounded-xl p-3 bg-canvas-white">
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[10px] font-black uppercase text-primary">Phần {part.partOrder || (idx + 1)}: {getQuestionPartTypeLabel(part.partType)}</span>
-                              <Badge variant="outline" className="scale-90">{part.defaultPoint} đ</Badge>
+                              <Badge variant="outline" className="scale-90">Trọng số {part.defaultWeight}</Badge>
                             </div>
                             <div className="mb-2">
                               <LatexPreview content={part.partContent} />

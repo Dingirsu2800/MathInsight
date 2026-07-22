@@ -76,6 +76,9 @@ public class TagsMasteryConfiguration : IEntityTypeConfiguration<TagsMastery>
             .HasColumnName("RecommendedDifficultyLevel")
             .IsRequired();
 
+        builder.Property(x => x.LastPracticedTime)
+            .HasColumnName("LastPracticedTime");
+
         builder.Property(x => x.LastCalculatedAt)
             .HasColumnName("LastCalculatedAt");
 

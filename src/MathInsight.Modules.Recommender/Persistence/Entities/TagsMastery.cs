@@ -43,5 +43,6 @@ public class TagsMastery
     /// </summary>
     public byte RecommendedDifficultyLevel { get; set; }
 
+    public DateTime? LastPracticedTime { get; set; }
     public DateTime? LastCalculatedAt { get; set; }
 }

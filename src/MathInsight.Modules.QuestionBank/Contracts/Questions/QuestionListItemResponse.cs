@@ -12,6 +12,8 @@ public sealed record QuestionListItemResponse(
     string QuestionType,
     string ExpertId,
     string? ExpertName,
-    decimal DefaultPoint,
+    decimal DefaultWeight,
     bool IsActive,
+    DateTime CreatedTime,
+    DateTime UpdatedTime,
     IReadOnlyList<QuestionTopicSummaryResponse> Topics);

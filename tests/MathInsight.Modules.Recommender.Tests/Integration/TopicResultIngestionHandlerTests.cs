@@ -41,21 +41,24 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Guid studentId, Guid sessionId, Guid tagId, decimal topicScore)
         => new()
         {
-            StudentId    = studentId,
-            SessionId    = sessionId,
-            TestId       = Guid.NewGuid(),
-            TestFormat   = "Exam",
-            Score        = topicScore,
-            NumCorrect   = 1,
+            StudentId = studentId.ToString(),
+            SessionId = sessionId.ToString(),
+            TestId = Guid.NewGuid().ToString(),
+            GradeRevision = 1,
+            TestFormat = "Exam",
+            Score = topicScore,
+            NumCorrect = 1,
             NumIncorrect = 0,
             NumAbandoned = 0,
-            GradedAt     = DateTime.UtcNow,
+            GradedAt = DateTime.UtcNow,
             PerTagResults = [new TopicGradeResult
             {
-                TagId        = tagId,
+                TagId        = tagId.ToString(),
                 TopicScore   = topicScore,
-                CorrectCount = 1,
-                TotalCount   = 1
+                CorrectItems = 1,
+                TotalItems   = 1,
+                EarnedPoints = topicScore / 10m,
+                MaxPoints = 1m
             }]
         };
 
@@ -64,27 +67,31 @@ public class TopicResultIngestionHandlerTests : IDisposable
         bool isCorrect, byte difficultyLevel, int timeSpent = 10)
         => new()
         {
-            StudentId    = studentId,
-            SessionId    = sessionId,
-            TestId       = Guid.NewGuid(),
-            TestFormat   = "Practice",
-            Score        = isCorrect ? 10m : 0m,
-            NumCorrect   = isCorrect ? 1 : 0,
+            StudentId = studentId.ToString(),
+            SessionId = sessionId.ToString(),
+            TestId = Guid.NewGuid().ToString(),
+            GradeRevision = 1,
+            TestFormat = "Practice",
+            Score = isCorrect ? 10m : 0m,
+            NumCorrect = isCorrect ? 1 : 0,
             NumIncorrect = isCorrect ? 0 : 1,
-            GradedAt     = DateTime.UtcNow,
+            GradedAt = DateTime.UtcNow,
             PerTagResults = [new TopicGradeResult
             {
-                TagId        = tagId,
+                TagId        = tagId.ToString(),
                 TopicScore   = isCorrect ? 10m : 0m,
-                CorrectCount = isCorrect ? 1 : 0,
-                TotalCount   = 1
+                CorrectItems = isCorrect ? 1 : 0,
+                TotalItems   = 1,
+                EarnedPoints = isCorrect ? 1m : 0m,
+                MaxPoints = 1m
             }],
             Answers = [new GradedAnswerDto
             {
-                QuestionId      = Guid.NewGuid(),
-                TagId           = tagId,
+                QuestionId      = Guid.NewGuid().ToString(),
+                TagId           = tagId.ToString(),
                 IsCorrect       = isCorrect,
                 PointsEarned    = isCorrect ? 1m : 0m,
+                MaxPoints       = 1m,
                 TimeSpent       = timeSpent,
                 DifficultyLevel = difficultyLevel,
                 QuestionNo      = 1,
@@ -169,6 +176,46 @@ public class TopicResultIngestionHandlerTests : IDisposable
 
         // Unique key: only 1 row must exist
         Assert.Equal(1, masteryCount);
+    }
+
+    [Fact]
+    public async Task Handle_RevisedOlderExam_ReplacesMatchingSessionAndIgnoresStaleRevision()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+        var olderSessionId = Guid.NewGuid();
+
+        var olderEvent = MakeExamEvent(studentId, olderSessionId, tagId, topicScore: 2.00m);
+        await _handler.Handle(olderEvent, default);
+        await _handler.Handle(
+            MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 8.00m), default);
+
+        var revisedResult = new TopicGradeResult
+        {
+            TagId = tagId.ToString(),
+            TopicScore = 10m,
+            CorrectItems = 1,
+            TotalItems = 1,
+            EarnedPoints = 1m,
+            MaxPoints = 1m
+        };
+        await _handler.Handle(olderEvent with
+        {
+            GradeRevision = 2,
+            GradedAt = DateTime.UtcNow.AddMinutes(1),
+            PerTagResults = [revisedResult]
+        }, default);
+
+        var mastery = await _db.TagsMasteries.SingleAsync();
+        Assert.Equal(8.89m, Math.Round(mastery.ExamAnchor, 2));
+        var snapshot = await _db.StudentTopicSessionResults
+            .SingleAsync(item => item.SessionId == olderSessionId.ToString());
+        Assert.Equal(2, snapshot.GradeRevision);
+        Assert.Equal(10m, snapshot.TopicScore);
+
+        await _handler.Handle(olderEvent, default);
+        Assert.Equal(2, snapshot.GradeRevision);
+        Assert.Equal(10m, snapshot.TopicScore);
     }
 
     // ── Test: WeakTags query returns only rows with official_point < 5.00 ────
@@ -267,6 +314,53 @@ public class TopicResultIngestionHandlerTests : IDisposable
 
         // PracticePoint started at 5.00 (lazy-create), Δ=+0.05 → 5.05
         Assert.Equal(5.05m, mastery.PracticePoint);
+    }
+
+    [Fact]
+    public async Task Handle_RevisedPractice_ReversesMachineDeltaWithoutDoubleCounting()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var original = MakePracticeEvent(
+            studentId, sessionId, tagId, isCorrect: false, difficultyLevel: 2);
+        await _handler.Handle(original, default);
+
+        var revisedAnswers = original.Answers.Select(answer => answer with
+        {
+            IsCorrect = true,
+            MachineIsCorrect = false,
+            IsScoreInvalidated = true,
+            PointsEarned = 1m
+        }).ToList();
+        await _handler.Handle(original with
+        {
+            GradeRevision = 2,
+            Score = 10m,
+            NumCorrect = 0,
+            NumIncorrect = 0,
+            GradedAt = DateTime.UtcNow.AddMinutes(1),
+            Answers = revisedAnswers,
+            PerTagResults =
+            [
+                new TopicGradeResult
+                {
+                    TagId = tagId.ToString(),
+                    TopicScore = 0m,
+                    CorrectItems = 0,
+                    TotalItems = 0,
+                    EarnedPoints = 0m,
+                    MaxPoints = 0m
+                }
+            ]
+        }, default);
+
+        var mastery = await _db.TagsMasteries.SingleAsync();
+        Assert.Equal(5.00m, mastery.PracticePoint);
+        Assert.Equal(0, mastery.NumberDone);
+        Assert.Equal(0, mastery.NumCorrect);
+        Assert.Equal(0m, mastery.AccuracyRate);
+        Assert.Equal(0, mastery.SeriesAnswerCount);
     }
 
     // ── Test: Lecture/material recommendations prioritize remedial weak topics ─

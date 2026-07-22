@@ -10,6 +10,7 @@ public class TestingDbContext : DbContext
     public DbSet<Blueprint> Blueprints => Set<Blueprint>();
     public DbSet<Test> Tests => Set<Test>();
     public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
+    public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
     public DbSet<TestSession> TestSessions => Set<TestSession>();
     public DbSet<TestAnswer> TestAnswers => Set<TestAnswer>();
     public DbSet<TestAnswerOption> TestAnswerOptions => Set<TestAnswerOption>();

@@ -133,15 +133,15 @@ public sealed class BlueprintSqlServerSmokeTests
             VALUES ('smoke-difficulty', N'Smoke Difficulty', 1, 1, 1);
 
             INSERT INTO [Blueprint]
-                ([BlueprintID], [BlueprintName], [Grade], [TotalQuestions], [DurationMinutes], [ExpertID], [Status])
+                ([BlueprintID], [BlueprintName], [Grade], [TotalQuestions], [TotalScore], [DurationMinutes], [ExpertID], [Status])
             VALUES
-                ('smoke-blueprint', N'Smoke Blueprint', 12, 1, 15, 'smoke-owner', 'Draft'),
-                ('other-blueprint', N'Other Blueprint', 12, 1, 15, 'smoke-owner', 'Draft'),
-                ('generation-blueprint', N'Generation Blueprint', 12, 1, 15, 'smoke-owner', 'Approved');
+                ('smoke-blueprint', N'Smoke Blueprint', 12, 1, 1.00, 15, 'smoke-owner', 'Draft'),
+                ('other-blueprint', N'Other Blueprint', 12, 1, 1.00, 15, 'smoke-owner', 'Draft'),
+                ('generation-blueprint', N'Generation Blueprint', 12, 1, 1.00, 15, 'smoke-owner', 'Approved');
 
             INSERT INTO [BlueprintSection]
                 ([BlueprintSectionID], [BlueprintID], [SectionOrder], [SectionName], [QuestionType],
-                 [TotalQuestions], [DefaultPointPerQuestion])
+                 [TotalQuestions], [ScoreBudget])
             VALUES
                 ('smoke-section', 'smoke-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00),
                 ('other-section', 'other-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00),
@@ -155,7 +155,7 @@ public sealed class BlueprintSqlServerSmokeTests
 
             INSERT INTO [Question]
                 ([QuestionID], [QuestionContent], [SolutionContent], [DifficultyID], [Grade], [Status],
-                 [QuestionType], [ExpertID], [DefaultPoint], [IsActive])
+                 [QuestionType], [ExpertID], [DefaultWeight], [IsActive])
             VALUES
                 ('generation-question', N'Question', N'Solution', 'smoke-difficulty', 12, 'Approved',
                  'SingleChoice', 'smoke-owner', 1.00, 1);
@@ -163,6 +163,14 @@ public sealed class BlueprintSqlServerSmokeTests
             INSERT INTO [QuestionTopic]
                 ([QuestionTopicID], [QuestionID], [TagID], [IsPrimary])
             VALUES ('generation-question-topic', 'generation-question', 'smoke-topic', 1);
+
+            INSERT INTO [QuestionVersion]
+                ([VersionID], [QuestionID], [QuestionContent], [QuestionAnswer], [AnswersSnapshot],
+                 [VersionNumber], [SnapshotSchemaVersion], [ExpertID])
+            VALUES
+                ('generation-question-version', 'generation-question', N'Question', N'Solution',
+                 N'{"QuestionId":"generation-question","QuestionType":"SingleChoice","DifficultyId":"smoke-difficulty","Grade":12,"DefaultWeight":1.0,"Topics":[{"TagId":"smoke-topic","IsPrimary":true}],"Answers":[{"AnswerId":"generation-answer","AnswerContent":"Answer","IsCorrect":true}],"Parts":[]}',
+                 1, 2, 'smoke-owner');
             """;
 
         await using var connection = new SqlConnection(connectionString);

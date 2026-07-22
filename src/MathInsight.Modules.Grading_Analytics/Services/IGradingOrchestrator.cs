@@ -22,7 +22,7 @@ public interface IGradingOrchestrator
     /// commit, or null if the session was not found or not in InProgress status.
     /// </summary>
     Task<GradeCalculatedEvent?> GradeSessionAsync(
-        Guid sessionId,
+        string sessionId,
         TestSubmittedEvent notification,
         CancellationToken cancellationToken = default);
 }

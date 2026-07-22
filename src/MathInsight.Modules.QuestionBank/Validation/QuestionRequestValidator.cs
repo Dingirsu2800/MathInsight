@@ -22,8 +22,8 @@ internal static partial class QuestionRequestValidator
         if (request.Grade is not (10 or 11 or 12))
             return QuestionBankErrors.QuestionGradeInvalid;
 
-        if (request.DefaultPoint < 0m || request.DefaultPoint > 10m || !HasScaleAtMost(request.DefaultPoint, 2))
-            return QuestionBankErrors.QuestionDefaultPointInvalid;
+        if (request.DefaultWeight <= 0m || request.DefaultWeight > 100m || !HasScaleAtMost(request.DefaultWeight, 2))
+            return QuestionBankErrors.QuestionDefaultWeightInvalid;
 
         if (request.Topics is null || request.Topics.Count == 0 || request.Topics.Any(topic => string.IsNullOrWhiteSpace(topic.TagId)))
             return QuestionBankErrors.QuestionTopicRequired;
@@ -60,11 +60,11 @@ internal static partial class QuestionRequestValidator
             }
 
             if (request.Parts.Any(part =>
-                    part.DefaultPoint < 0m ||
-                    part.DefaultPoint > 10m ||
-                    !HasScaleAtMost(part.DefaultPoint, 2)))
+                    part.DefaultWeight <= 0m ||
+                    part.DefaultWeight > 100m ||
+                    !HasScaleAtMost(part.DefaultWeight, 2)))
             {
-                return QuestionBankErrors.QuestionPartDefaultPointInvalid;
+                return QuestionBankErrors.QuestionPartDefaultWeightInvalid;
             }
 
             if (request.Parts.Any(part =>

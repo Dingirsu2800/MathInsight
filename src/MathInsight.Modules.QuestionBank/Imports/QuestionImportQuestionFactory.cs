@@ -19,8 +19,10 @@ internal static class QuestionImportQuestionFactory
             Status = "Approved",
             QuestionType = databaseQuestionType,
             ExpertId = expertId,
-            DefaultPoint = request.DefaultPoint,
-            IsActive = true
+            DefaultWeight = request.DefaultWeight,
+            IsActive = true,
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
         };
 
         foreach (var topic in request.Topics)
@@ -51,7 +53,8 @@ internal static class QuestionImportQuestionFactory
                     CorrectNumeric = part.CorrectNumeric,
                     NumericTolerance = part.NumericTolerance,
                     Explanation = part.Explanation,
-                    DefaultPoint = part.DefaultPoint
+                    DefaultWeight = part.DefaultWeight,
+                    IsArchived = false
                 });
             }
         }
@@ -64,7 +67,8 @@ internal static class QuestionImportQuestionFactory
                     AnswerId = Guid.NewGuid().ToString(),
                     QuestionId = question.QuestionId,
                     AnswerContent = answer.AnswerContent,
-                    IsCorrect = answer.IsCorrect
+                    IsCorrect = answer.IsCorrect,
+                    IsArchived = false
                 });
             }
         }

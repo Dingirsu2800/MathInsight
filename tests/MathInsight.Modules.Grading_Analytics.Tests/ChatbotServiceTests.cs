@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -66,8 +66,8 @@ public class ChatbotServiceTests
         var httpClient = CreateMockHttpClient(handler);
         var service = CreateService(httpClient);
 
-        var studentId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
+        var studentId = Guid.NewGuid().ToString("D");
+        var sessionId = Guid.NewGuid().ToString("D");
 
         // Act
         var result = await service.AskAsync("What is 6 * 7?", "42", studentId, sessionId);
@@ -86,8 +86,8 @@ public class ChatbotServiceTests
         var httpClient = CreateMockHttpClient(handler, timeout: TimeSpan.FromMilliseconds(100));
         var service = CreateService(httpClient);
 
-        var studentId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
+        var studentId = Guid.NewGuid().ToString("D");
+        var sessionId = Guid.NewGuid().ToString("D");
 
         // Act & Assert: TaskCanceledException is thrown (which maps to 503 in controller)
         await Assert.ThrowsAsync<TaskCanceledException>(
@@ -120,8 +120,8 @@ public class ChatbotServiceTests
         var httpClient = CreateMockHttpClient(handler);
         var service = CreateService(httpClient);
 
-        var studentId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
+        var studentId = Guid.NewGuid().ToString("D");
+        var sessionId = Guid.NewGuid().ToString("D");
 
         // Act: first call succeeds
         await service.AskAsync("Question", "Answer", studentId, sessionId);
@@ -160,9 +160,9 @@ public class ChatbotServiceTests
         var httpClient = CreateMockHttpClient(handler);
         var service = CreateService(httpClient);
 
-        var studentId = Guid.NewGuid();
-        var sessionId1 = Guid.NewGuid();
-        var sessionId2 = Guid.NewGuid();
+        var studentId = Guid.NewGuid().ToString("D");
+        var sessionId1 = Guid.NewGuid().ToString("D");
+        var sessionId2 = Guid.NewGuid().ToString("D");
 
         // Act & Assert: different sessions = no rate limiting
         var result1 = await service.AskAsync("Q1", "A1", studentId, sessionId1);
@@ -183,8 +183,8 @@ public class ChatbotServiceTests
         var httpClient = CreateMockHttpClient(handler);
         var service = CreateService(httpClient);
 
-        var studentId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
+        var studentId = Guid.NewGuid().ToString("D");
+        var sessionId = Guid.NewGuid().ToString("D");
 
         // Act & Assert: HttpRequestException maps to 503 in controller
         await Assert.ThrowsAsync<HttpRequestException>(

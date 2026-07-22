@@ -1,5 +1,7 @@
 # Feature Specification: Recommender Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) defines revision-aware weighted topic input.
+
 **Feature Branch**: `005-recommender`
 
 **Created**: 2026-06-23 | **Updated**: 2026-07-04

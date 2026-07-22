@@ -3,6 +3,7 @@ using MathInsight.Modules.QuestionBank.Commands.AdminApproveQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.AdminRejectQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.HandleQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
+using MathInsight.Modules.QuestionBank.Commands.RetryScoreAdjustment;
 using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Errors;
@@ -121,6 +122,23 @@ public sealed class ReportsController : ControllerBase
     }
 
     [Authorize(Roles = "Expert")]
+    [HttpPost("reports/{reportId}/retry-score-adjustment")]
+    public async Task<IActionResult> RetryScoreAdjustment(
+        string reportId,
+        CancellationToken cancellationToken)
+    {
+        var expertId = GetAccountId();
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new RetryScoreAdjustmentCommand(reportId, expertId),
+            cancellationToken);
+
+        return result.IsFailure ? ToReportErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Expert")]
     [HttpPost("reports/{reportId}/submit-review")]
     public async Task<IActionResult> SubmitQuestionReportReview(
         string reportId,
@@ -233,7 +251,9 @@ public sealed class ReportsController : ControllerBase
             error == QuestionBankErrors.ReportAlreadyHandled ||
             error == QuestionBankErrors.QuestionNotReportable ||
             error == QuestionBankErrors.AdminReportWorkflowAlreadyExists ||
-            error == QuestionBankErrors.AdminReportRequiresReview)
+            error == QuestionBankErrors.AdminReportRequiresReview ||
+            error == QuestionBankErrors.ScoreAdjustmentNotRetryable ||
+            error == QuestionBankErrors.QuestionFixRequiredBeforeScoreAdjustment)
         {
             return Conflict(new ApiErrorResponse(error));
         }

@@ -1,9 +1,12 @@
-using MathInsight.Modules.Grading_Analytics.Services;
+﻿using MathInsight.Modules.Grading_Analytics.Services;
+
+using MathInsight.Shared.Questions;
+using MathInsight.Shared.Scoring;
 
 namespace MathInsight.Modules.Grading_Analytics.Tests;
 
 /// <summary>
-/// Unit tests for GradingEngine — validates per-question-type grading logic,
+/// Unit tests for GradingEngine â€” validates per-question-type grading logic,
 /// BR-23 non-linear composite scoring, BR-16b abandoned detection, and BR-20 score formula.
 /// All tests use pure in-memory entity graphs (no database).
 /// </summary>
@@ -11,13 +14,13 @@ public class GradingEngineTests
 {
     private readonly GradingEngine _engine = new();
 
-    // ── SINGLE_CHOICE ─────────────────────────────────────────────────────
+    // â”€â”€ SINGLE_CHOICE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
-    public void SingleChoice_Correct_SetsIsCorrectTrue_And_PointsEarnedEqualDefaultPoint()
+    public void SingleChoice_Correct_SetsIsCorrectTrue_And_PointsEarnedEqualDefaultWeight()
     {
         // Arrange
-        var correctId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 2.0m, correctId, studentAnswerId: correctId);
 
@@ -38,8 +41,8 @@ public class GradingEngineTests
     public void SingleChoice_Incorrect_SetsIsCorrectFalse_And_PointsEarnedZero()
     {
         // Arrange
-        var correctId = Guid.NewGuid();
-        var wrongId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
+        var wrongId = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 2.0m, correctId, studentAnswerId: wrongId);
 
@@ -54,14 +57,14 @@ public class GradingEngineTests
         Assert.Equal(1, result.NumIncorrect);
     }
 
-    // ── MULTIPLE_SELECT ───────────────────────────────────────────────────
+    // â”€â”€ MULTIPLE_SELECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void MultipleSelect_AllCorrectSelected_NoIncorrect_SetsIsCorrectTrue()
     {
         // Arrange
-        var id1 = Guid.NewGuid();
-        var id2 = Guid.NewGuid();
+        var id1 = Guid.NewGuid().ToString("D");
+        var id2 = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddMultipleSelectAnswer(
             session,
@@ -83,14 +86,14 @@ public class GradingEngineTests
     public void MultipleSelect_Partial_SetsIsCorrectFalse_And_PointsEarnedZero()
     {
         // Arrange: only select 1 of 2 correct answers
-        var id1 = Guid.NewGuid();
-        var id2 = Guid.NewGuid();
+        var id1 = Guid.NewGuid().ToString("D");
+        var id2 = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddMultipleSelectAnswer(
             session,
             defaultPoint: 3.0m,
             correctAnswerIds: [id1, id2],
-            selectedAnswerIds: [id1]); // Partial — missing id2
+            selectedAnswerIds: [id1]); // Partial â€” missing id2
 
         // Act
         var result = _engine.Grade(session);
@@ -107,8 +110,8 @@ public class GradingEngineTests
     public void MultipleSelect_ExtraIncorrect_SetsIsCorrectFalse()
     {
         // Arrange: select correct + 1 wrong
-        var id1 = Guid.NewGuid();
-        var extraWrong = Guid.NewGuid();
+        var id1 = Guid.NewGuid().ToString("D");
+        var extraWrong = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddMultipleSelectAnswer(
             session,
@@ -125,7 +128,7 @@ public class GradingEngineTests
         Assert.Equal(0m, answer.PointsEarned);
     }
 
-    // ── SHORT_ANSWER ──────────────────────────────────────────────────────
+    // â”€â”€ SHORT_ANSWER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void ShortAnswer_CaseInsensitiveMatch_SetsIsCorrectTrue()
@@ -189,13 +192,13 @@ public class GradingEngineTests
         Assert.Equal(0m, answer.PointsEarned);
     }
 
-    // ── ABANDONED (BR-16b) ────────────────────────────────────────────────
+    // â”€â”€ ABANDONED (BR-16b) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Abandoned_SingleChoice_NullAnswerId_IsIncorrect_And_CountedAsAbandoned()
     {
         // Arrange: student did not select any answer (AnswerId = null)
-        var correctId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 1.0m, correctId, studentAnswerId: null);
 
@@ -215,7 +218,7 @@ public class GradingEngineTests
     public void Abandoned_MultipleSelect_NoOptions_CountedAsAbandoned()
     {
         // Arrange: student did not select any options
-        var id1 = Guid.NewGuid();
+        var id1 = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddMultipleSelectAnswer(
             session,
@@ -259,12 +262,12 @@ public class GradingEngineTests
         Assert.Equal(1, result.NumAbandoned);
     }
 
-    // ── COMPOSITE ALL-TRUE_FALSE (BR-23) ──────────────────────────────────
+    // â”€â”€ COMPOSITE ALL-TRUE_FALSE (BR-23) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void CompositeAllTF_0Correct_PointsEarnedZero()
     {
-        // BR-23: 0 correct → 0
+        // BR-23: 0 correct â†’ 0
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
@@ -287,9 +290,9 @@ public class GradingEngineTests
     }
 
     [Fact]
-    public void CompositeAllTF_1ofN_Correct_PointsEarned_0_10_Times_DefaultPoint()
+    public void CompositeAllTF_1ofN_Correct_PointsEarned_0_10_Times_DefaultWeight()
     {
-        // BR-23: 1 correct → 0.10 × dp
+        // BR-23: 1 correct â†’ 0.10 Ã— dp
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
@@ -308,13 +311,13 @@ public class GradingEngineTests
         // Assert
         var answer = session.TestAnswers.First();
         Assert.False(answer.IsCorrect); // Not all correct
-        Assert.Equal(0.20m, answer.PointsEarned); // 0.10 × 2.0 = 0.20
+        Assert.Equal(0.20m, answer.PointsEarned); // 0.10 Ã— 2.0 = 0.20
     }
 
     [Fact]
-    public void CompositeAllTF_2ofN_Correct_PointsEarned_0_25_Times_DefaultPoint()
+    public void CompositeAllTF_2ofN_Correct_PointsEarned_0_25_Times_DefaultWeight()
     {
-        // BR-23: 2 correct → 0.25 × dp
+        // BR-23: 2 correct â†’ 0.25 Ã— dp
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
@@ -333,13 +336,13 @@ public class GradingEngineTests
         // Assert
         var answer = session.TestAnswers.First();
         Assert.False(answer.IsCorrect);
-        Assert.Equal(0.50m, answer.PointsEarned); // 0.25 × 2.0 = 0.50
+        Assert.Equal(0.50m, answer.PointsEarned); // 0.25 Ã— 2.0 = 0.50
     }
 
     [Fact]
-    public void CompositeAllTF_3ofN_Correct_PointsEarned_0_50_Times_DefaultPoint()
+    public void CompositeAllTF_3ofN_Correct_PointsEarned_0_50_Times_DefaultWeight()
     {
-        // BR-23: 3 correct → 0.50 × dp
+        // BR-23: 3 correct â†’ 0.50 Ã— dp
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
@@ -358,13 +361,13 @@ public class GradingEngineTests
         // Assert
         var answer = session.TestAnswers.First();
         Assert.False(answer.IsCorrect);
-        Assert.Equal(1.00m, answer.PointsEarned); // 0.50 × 2.0 = 1.00
+        Assert.Equal(1.00m, answer.PointsEarned); // 0.50 Ã— 2.0 = 1.00
     }
 
     [Fact]
-    public void CompositeAllTF_NofN_Correct_PointsEarned_DefaultPoint_And_IsCorrectTrue()
+    public void CompositeAllTF_NofN_Correct_PointsEarned_DefaultWeight_And_IsCorrectTrue()
     {
-        // BR-23: N (all) correct → 1.00 × dp, is_correct = true
+        // BR-23: N (all) correct â†’ 1.00 Ã— dp, is_correct = true
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
@@ -383,19 +386,21 @@ public class GradingEngineTests
         // Assert
         var answer = session.TestAnswers.First();
         Assert.True(answer.IsCorrect);
-        Assert.Equal(2.0m, answer.PointsEarned); // 1.00 × 2.0 = 2.0
+        Assert.Equal(2.0m, answer.PointsEarned); // 1.00 Ã— 2.0 = 2.0
     }
 
     [Fact]
     public void CompositeAllTF_ChildPartsHavePointsEarnedZero()
     {
-        // BR-23 spec: TestAnswerPart.points_earned = 0 — parent is source of truth
+        // BR-23 spec: TestAnswerPart.points_earned = 0 â€” parent is source of truth
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
             defaultPoint: 2.0m,
             parts:
             [
+                ("True", "True"),
+                ("False", "False"),
                 ("True", "True"),
                 ("False", "False"),
             ]);
@@ -438,7 +443,51 @@ public class GradingEngineTests
         Assert.True(answerParts[3].IsCorrect);    // False == False
     }
 
-    // ── COMPOSITE GENERAL (MIXED PARTS) ───────────────────────────────────
+    // â”€â”€ COMPOSITE GENERAL (MIXED PARTS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    [Fact]
+    public void TieredTrueFalse_WithNonFourPartSnapshot_ThrowsContractError()
+    {
+        var session = TestDataBuilder.CreateSession();
+        var answer = TestDataBuilder.AddCompositeAllTrueFalse(
+            session,
+            defaultPoint: 2.0m,
+            parts:
+            [
+                ("True", "True"),
+                ("False", "False"),
+                ("True", "True"),
+            ]);
+
+        answer.MaxPointsSnapshot = 2.0m;
+        answer.ScoringRuleSnapshot = ScoringRules.TieredTrueFalse;
+        answer.Snapshot = new QuestionSnapshotV2(
+            answer.QuestionId,
+            "Composite",
+            "difficulty_01",
+            12,
+            1m,
+            [],
+            [],
+            answer.Question.Parts
+                .Select(part => new QuestionPartSnapshot(
+                    part.QuestionPartId,
+                    part.PartOrder,
+                    null,
+                    part.Content,
+                    part.PartType,
+                    part.CorrectBoolean,
+                    part.CorrectText,
+                    part.CorrectNumeric,
+                    part.NumericTolerance,
+                    null,
+                    part.DefaultWeight))
+                .ToList());
+
+        var exception = Assert.Throws<InvalidOperationException>(() => _engine.Grade(session));
+
+        Assert.Contains("exactly four TrueFalse parts", exception.Message);
+    }
 
     [Fact]
     public void CompositeGeneral_ParentScore_EqualsSumOfPartPointsEarned()
@@ -450,9 +499,9 @@ public class GradingEngineTests
             defaultPoint: 3.0m,
             parts:
             [
-                ("SHORT_ANSWER", "42", 1.0m, "42"),        // correct → 1.0
-                ("TRUE_FALSE", "True", 1.0m, "False"),     // wrong → 0.0
-                ("NUMERIC_ANSWER", "3.14", 1.0m, "3.14"),  // correct → 1.0
+                ("SHORT_ANSWER", "42", 1.0m, "42"),        // correct â†’ 1.0
+                ("TRUE_FALSE", "True", 1.0m, "False"),     // wrong â†’ 0.0
+                ("NUMERIC_ANSWER", "3.14", 1.0m, "3.14"),  // correct â†’ 1.0
             ]);
 
         // Act
@@ -488,7 +537,7 @@ public class GradingEngineTests
     }
 
     [Fact]
-    public void CompositeGeneral_PartPointsCappedAtDefaultPoint()
+    public void CompositeGeneral_PartPointsCappedAtDefaultWeight()
     {
         // Arrange: part point values sum to more than default_point
         var session = TestDataBuilder.CreateSession();
@@ -497,8 +546,8 @@ public class GradingEngineTests
             defaultPoint: 2.0m,
             parts:
             [
-                ("SHORT_ANSWER", "A", 1.5m, "A"),    // correct → 1.5
-                ("SHORT_ANSWER", "B", 1.5m, "B"),    // correct → 1.5
+                ("SHORT_ANSWER", "A", 1.5m, "A"),    // correct â†’ 1.5
+                ("SHORT_ANSWER", "B", 1.5m, "B"),    // correct â†’ 1.5
             ]);
 
         // Act
@@ -506,35 +555,35 @@ public class GradingEngineTests
 
         // Assert
         var answer = session.TestAnswers.First();
-        Assert.Equal(2.0m, answer.PointsEarned); // Capped at DefaultPoint (2.0), not 3.0
+        Assert.Equal(2.0m, answer.PointsEarned); // Capped at DefaultWeight (2.0), not 3.0
     }
 
-    // ── SCORE CALCULATION (BR-20) ─────────────────────────────────────────
+    // â”€â”€ SCORE CALCULATION (BR-20) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Score_IsSumPointsEarned_DivBySumMaxPoints_Times10()
     {
         // Arrange: 2 questions, one correct (2pt), one incorrect (3pt)
-        var correctId = Guid.NewGuid();
-        var wrongId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
+        var wrongId = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 2.0m, correctId, studentAnswerId: correctId);
-        TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 3.0m, Guid.NewGuid(), studentAnswerId: wrongId);
+        TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 3.0m, Guid.NewGuid().ToString("D"), studentAnswerId: wrongId);
 
         // Act
         var result = _engine.Grade(session);
 
-        // Assert: 2.0 / 5.0 × 10.0 = 4.00
+        // Assert: 2.0 / 5.0 Ã— 10.0 = 4.00
         Assert.Equal(4.00m, result.Score);
     }
 
-    // ── TRUE_FALSE (standalone) ───────────────────────────────────────────
+    // â”€â”€ TRUE_FALSE (standalone) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void TrueFalse_Correct_SameAsSingleChoice()
     {
         // TRUE_FALSE standalone uses the same path as SINGLE_CHOICE
-        var correctId = Guid.NewGuid();
+        var correctId = Guid.NewGuid().ToString("D");
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddSingleChoiceAnswer(
             session, defaultPoint: 1.0m, correctId, studentAnswerId: correctId,
@@ -548,7 +597,7 @@ public class GradingEngineTests
         Assert.Equal(1.0m, session.TestAnswers.First().PointsEarned);
     }
 
-    // ── PERFORMANCE ──────────────────────────────────────────────────────
+    // â”€â”€ PERFORMANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Practice_40Questions_GradedInUnder2Seconds()
@@ -558,14 +607,14 @@ public class GradingEngineTests
 
         for (int i = 0; i < 10; i++)
         {
-            var correctId = Guid.NewGuid();
+            var correctId = Guid.NewGuid().ToString("D");
             TestDataBuilder.AddSingleChoiceAnswer(session, defaultPoint: 1.0m, correctId, studentAnswerId: correctId);
         }
 
         for (int i = 0; i < 10; i++)
         {
-            var id1 = Guid.NewGuid();
-            var id2 = Guid.NewGuid();
+            var id1 = Guid.NewGuid().ToString("D");
+            var id2 = Guid.NewGuid().ToString("D");
             TestDataBuilder.AddMultipleSelectAnswer(session, defaultPoint: 2.0m, [id1, id2], [id1, id2]);
         }
 

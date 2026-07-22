@@ -290,7 +290,7 @@ public sealed class AdminQuestionReportWorkflowTests
             Status = status,
             QuestionType = "SingleChoice",
             ExpertId = "expert-1",
-            DefaultPoint = 1m,
+            DefaultWeight = 1m,
             IsActive = true
         };
 

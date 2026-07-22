@@ -18,6 +18,8 @@ public class Test
     public string? TestCode { get; set; }
     public int DurationMinutes { get; set; }
     public int TotalQuestions { get; set; }
+    public decimal MaxScore { get; set; } = 10.00m;
+    public string ScoringPolicy { get; set; } = "BlueprintBudget";
     public DateTime CreatedTime { get; set; } = DateTime.UtcNow;
 
     public Blueprint? Blueprint { get; set; }

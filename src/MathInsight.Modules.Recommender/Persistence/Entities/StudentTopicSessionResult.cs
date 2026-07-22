@@ -20,6 +20,7 @@ public class StudentTopicSessionResult
 
     /// <summary>Per-topic score in range 0.00..10.00.</summary>
     public decimal TopicScore { get; set; }
+    public int GradeRevision { get; set; } = 1;
 
     public DateTime CreatedTime { get; set; }
 }
