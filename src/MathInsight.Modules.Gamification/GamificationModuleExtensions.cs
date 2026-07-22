@@ -30,8 +30,8 @@ public static class GamificationModuleExtensions
         // Domain services
         services.AddScoped<IStreakService, StreakService>();
 
-        // TODO: Student B replaces NullBadgeService with the real BadgeService (BR-43) — one line.
-        services.AddScoped<IBadgeService, NullBadgeService>();
+        // BR-43: BadgeService implemented by Student B
+        services.AddScoped<IBadgeService, BadgeService>();
 
         // BR-45: daily streak-reminder detection. The service is scoped (DbContext + MediatR); the
         // hosted BackgroundService is a singleton that opens a scope per run. Disabled by default —
