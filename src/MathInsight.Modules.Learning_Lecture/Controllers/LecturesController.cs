@@ -51,6 +51,20 @@ public class LecturesController : ControllerBase
         }
     }
 
+    [HttpPost("import-docx")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> ImportDocx([FromForm] Microsoft.AspNetCore.Http.IFormFile? file, CancellationToken cancellationToken)
+    {
+        if (IsStudent) return Forbid();
+        var cmd = new ExtractLectureDocumentCommand(file);
+        var result = await _mediator.Send(cmd, cancellationToken);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { message = result.Error?.Message ?? "Import Failed" });
+        }
+        return Ok(new { markdown = result.Value });
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateLecture([FromBody] CreateLectureRequest request, CancellationToken cancellationToken)
     {

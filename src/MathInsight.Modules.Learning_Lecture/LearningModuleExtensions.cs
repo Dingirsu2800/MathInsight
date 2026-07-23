@@ -17,6 +17,8 @@ public static class LearningModuleExtensions
             config.RegisterServicesFromAssembly(typeof(LearningModuleExtensions).Assembly);
         });
 
+        services.AddScoped<Services.ILectureDocumentParserService, Services.OpenXmlLectureDocumentParserService>();
+
         return services;
     }
 }

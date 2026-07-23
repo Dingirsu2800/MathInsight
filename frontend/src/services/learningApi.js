@@ -30,6 +30,11 @@ export const likeLecture = (id) =>
 export const unlikeLecture = (id) =>
   client.delete(`/api/v1/lectures/${id}/like`);
 
+export const importLectureDocx = (formData) =>
+  client.post('/api/v1/lectures/import-docx', formData, {
+    headers: { 'Content-Type': undefined }
+  });
+
 // ── Materials ─────────────────────────────────────────
 export const getMaterials = (params) =>
   client.get('/api/v1/materials', { params });

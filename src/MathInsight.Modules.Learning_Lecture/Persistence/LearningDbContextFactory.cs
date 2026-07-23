@@ -8,7 +8,10 @@ public class LearningDbContextFactory : IDesignTimeDbContextFactory<LearningDbCo
     public LearningDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<LearningDbContext>();
-        optionsBuilder.UseSqlServer("Server=tcp:okb-girsu.database.windows.net,1433;Initial Catalog=math-insight;Persist Security Info=False;User ID=Charlemagne;Password=J2tdr2fMKdsZgQ8;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;");
+        
+        // SECURITY WARNING: Never hardcode production connection strings here.
+        // This is only used for local EF Core Migrations.
+        optionsBuilder.UseSqlServer("Server=localhost;Database=MathInsight;User Id=sa;Password=yourStrong(!)Password;TrustServerCertificate=True;");
 
         return new LearningDbContext(optionsBuilder.Options);
     }

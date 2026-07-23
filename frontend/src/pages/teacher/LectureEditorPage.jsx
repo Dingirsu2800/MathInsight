@@ -26,9 +26,11 @@ export default function LectureEditorPage() {
   const [topics, setTopics] = useState([]);
   const [attachedMaterials, setAttachedMaterials] = useState([]);
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
+  const [isImportingDocx, setIsImportingDocx] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState("12");
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const materialInputRef = useRef(null);
+  const docxInputRef = useRef(null);
 
   useEffect(() => {
     const flattenTopics = (nodes, parentPath = "") => {
@@ -177,6 +179,46 @@ export default function LectureEditorPage() {
     }));
   };
 
+  const handleImportDocx = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Kích thước tệp vượt quá 10MB!");
+      if (docxInputRef.current) docxInputRef.current.value = '';
+      return;
+    }
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'docx') {
+      alert("Chỉ hỗ trợ tệp định dạng DOCX!");
+      if (docxInputRef.current) docxInputRef.current.value = '';
+      return;
+    }
+
+    setIsImportingDocx(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const { importLectureDocx } = await import('../../services/learningApi');
+      const res = await importLectureDocx(formData);
+      
+      const newText = res.data.markdown;
+      setForm(prev => ({
+        ...prev,
+        content: prev.content ? prev.content + "\n\n" + newText : newText
+      }));
+      alert("Nhập nội dung từ file Word thành công! Vui lòng kiểm tra lại các công thức toán nếu có.");
+    } catch (err) {
+      console.error("Lỗi bóc tách file Word", err);
+      alert(err.response?.data?.message || "Đã xảy ra lỗi khi bóc tách file Word");
+    } finally {
+      setIsImportingDocx(false);
+      if (docxInputRef.current) docxInputRef.current.value = '';
+    }
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -312,19 +354,42 @@ export default function LectureEditorPage() {
                 </label>
                 <div className="border border-outline-variant rounded-lg overflow-hidden bg-pure-surface focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
                   {/* Toolbar */}
-                  <div className="bg-surface-container-low border-b border-outline-variant px-3 py-2 flex items-center gap-2">
-                    {["format_bold", "format_italic", "format_underlined"].map((icon) => (
-                      <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
-                        <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                  <div className="bg-surface-container-low border-b border-outline-variant px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {["format_bold", "format_italic", "format_underlined"].map((icon) => (
+                        <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                        </button>
+                      ))}
+                      <div className="w-[1px] h-4 bg-outline-variant mx-1" />
+                      {["format_list_bulleted", "format_list_numbered"].map((icon) => (
+                        <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                        </button>
+                      ))}
+                      <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
+                    </div>
+                    
+                    <div>
+                      <input
+                        type="file"
+                        accept=".docx"
+                        className="hidden"
+                        ref={docxInputRef}
+                        onChange={handleImportDocx}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => docxInputRef.current?.click()}
+                        disabled={isImportingDocx}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-primary text-white rounded-md text-[13px] font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {isImportingDocx ? "sync" : "description"}
+                        </span>
+                        {isImportingDocx ? "Đang xử lý..." : "Nhập từ file Word"}
                       </button>
-                    ))}
-                    <div className="w-[1px] h-4 bg-outline-variant mx-1" />
-                    {["format_list_bulleted", "format_list_numbered"].map((icon) => (
-                      <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
-                        <span className="material-symbols-outlined text-[18px]">{icon}</span>
-                      </button>
-                    ))}
-                    <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
+                    </div>
                   </div>
                   
                   <MathTextArea
