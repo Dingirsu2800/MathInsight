@@ -2,7 +2,7 @@ namespace MathInsight.Modules.QuestionBank.Imports;
 
 internal static class QuestionImportConstants
 {
-    public const string TemplateVersion = "2";
+    public const string TemplateVersion = "3";
     public const int MaxFileBytes = 20 * 1024 * 1024;
     public const int MaxQuestions = 100;
     public const int MaxTotalDataRows = 5000;
@@ -34,5 +34,5 @@ internal static class QuestionImportConstants
     ];
 
     public static readonly string[] TopicHeaders =
-    ["QuestionKey", "TopicName", "IsPrimary"];
+    ["QuestionKey", "TopicCode", "IsPrimary"];
 }

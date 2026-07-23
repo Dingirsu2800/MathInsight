@@ -132,6 +132,7 @@ export default function BlueprintEditorPage() {
         blueprintName: "",
         grade: "12",
         totalQuestions: "",
+        totalScore: 10,
         durationMinutes: 90,
         sections: [createEmptySection()]
       });
@@ -250,7 +251,18 @@ export default function BlueprintEditorPage() {
           ...sec,
           details: sec.details.map((det, dIdx) => {
             if (dIdx !== detIndex) return det;
-            return { ...det, [field]: value };
+            const updated = { ...det, [field]: value };
+            const duplicatesExistingAllocation = sec.details.some((other, otherIndex) =>
+              otherIndex !== detIndex &&
+              other.tagId === updated.tagId &&
+              other.difficultyId === updated.difficultyId);
+
+            // A topic change must not silently create a duplicate allocation pair.
+            if (field === "tagId" && updated.difficultyId && duplicatesExistingAllocation) {
+              updated.difficultyId = "";
+            }
+
+            return updated;
           })
         };
       })
@@ -641,14 +653,14 @@ export default function BlueprintEditorPage() {
                     <div className="border border-whisper-border rounded-xl overflow-hidden mt-2">
                       <div className="bg-surface-container-low px-4 py-2 border-b border-whisper-border flex justify-between items-center">
                         <h3 className="text-xs font-bold text-on-surface">Phân bổ nội dung câu hỏi</h3>
-                        <Button
+                        <button
                           type="button"
-                          variant="ghost"
                           onClick={() => addDetailRow(secIdx)}
-                          className="h-7 text-[10px] font-bold uppercase tracking-wider py-1 px-3"
+                          className="h-8 rounded-lg border border-primary/20 px-3 text-[10px] font-bold uppercase tracking-wider text-primary transition-all duration-150 hover:border-primary hover:bg-primary/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex items-center gap-1.5 cursor-pointer"
                         >
+                          <span className="material-symbols-outlined text-[16px]">add</span>
                           Thêm dòng phân bổ
-                        </Button>
+                        </button>
                       </div>
 
                       <table className="w-full text-left border-collapse select-text">
@@ -663,7 +675,7 @@ export default function BlueprintEditorPage() {
                         <tbody className="divide-y divide-whisper-border bg-pure-surface">
                           {sec.details.map((det, detIdx) => (
                             <tr key={detIdx} className="hover:bg-surface-bright transition-colors">
-                              <td className="p-2">
+                              <td className="p-2 align-top">
                                 <BlueprintTopicPicker
                                   value={det.tagId}
                                   topics={topicList}
@@ -671,13 +683,28 @@ export default function BlueprintEditorPage() {
                                   onValueChange={(val) => updateDetailField(secIdx, detIdx, "tagId", val)}
                                 />
                               </td>
-                              <td className="p-2">
+                              <td className="p-2 align-top">
                                 <CustomSelect
                                   value={det.difficultyId}
                                   placeholder="Chọn độ khó..."
                                   onValueChange={(val) => updateDetailField(secIdx, detIdx, "difficultyId", val)}
-                                  items={difficultyList.map(d => ({ value: d.difficultyId || d.id, label: d.difficultyName || d.name }))}
+                                  items={difficultyList
+                                    .map(d => ({ value: d.difficultyId || d.id, label: d.difficultyName || d.name }))
+                                    .filter(difficulty =>
+                                      difficulty.value === det.difficultyId ||
+                                      !sec.details.some((other, otherIdx) =>
+                                        otherIdx !== detIdx &&
+                                        other.tagId === det.tagId &&
+                                        other.difficultyId === difficulty.value))}
                                 />
+                                {det.tagId && det.difficultyId && sec.details.some((other, otherIdx) =>
+                                  otherIdx !== detIdx &&
+                                  other.tagId === det.tagId &&
+                                  other.difficultyId === det.difficultyId) && (
+                                  <p className="mt-1 text-[10px] font-semibold text-error">
+                                    Trùng chủ đề và độ khó trong phần này.
+                                  </p>
+                                )}
                               </td>
                               <td className="p-2">
                                 <input

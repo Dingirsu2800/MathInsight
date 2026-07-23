@@ -60,6 +60,17 @@ export function validateBlueprint(state, isSubmit = false) {
       }
       return sum + (Number(detail.quantity) || 0);
     }, 0);
+
+    const allocationKeys = new Set();
+    (section.details || []).forEach((detail) => {
+      if (!detail.tagId || !detail.difficultyId) return;
+
+      const allocationKey = `${detail.tagId}\u001F${detail.difficultyId}`;
+      if (!allocationKeys.add(allocationKey)) {
+        errors.push(`${label}: Không được trùng cặp chủ đề và độ khó trong cùng phần.`);
+      }
+    });
+
     if (detailQuantity !== sectionQuestions) {
       const message = `${label}: Tổng số lượng phân bổ (${detailQuantity}) phải bằng số câu (${sectionQuestions || 0}).`;
       (isSubmit ? errors : warnings).push(message);
