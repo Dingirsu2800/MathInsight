@@ -292,11 +292,11 @@ export default function BlueprintListPage() {
             <div className="flex gap-3 w-full md:w-auto">
               <div className="w-36">
                 <CustomSelect
-                  value={selectedGrade}
-                  onValueChange={setSelectedGrade}
+                  value={selectedGrade || "ALL"}
+                  onValueChange={(value) => setSelectedGrade(value === "ALL" ? "" : value)}
                   placeholder="Khối lớp"
                   items={[
-                    { value: "", label: "Tất cả khối" },
+                    { value: "ALL", label: "Tất cả khối" },
                     { value: "10", label: "Khối 10" },
                     { value: "11", label: "Khối 11" },
                     { value: "12", label: "Khối 12" }
@@ -305,11 +305,11 @@ export default function BlueprintListPage() {
               </div>
               <div className="w-44">
                 <CustomSelect
-                  value={selectedStatus}
-                  onValueChange={setSelectedStatus}
+                  value={selectedStatus || "ALL"}
+                  onValueChange={(value) => setSelectedStatus(value === "ALL" ? "" : value)}
                   placeholder="Trạng thái"
                   items={[
-                    { value: "", label: "Tất cả trạng thái" },
+                    { value: "ALL", label: "Tất cả trạng thái" },
                     { value: "Draft", label: "Bản nháp" },
                     { value: "PendingReview", label: "Chờ phản biện" },
                     { value: "Approved", label: "Đã duyệt" },
