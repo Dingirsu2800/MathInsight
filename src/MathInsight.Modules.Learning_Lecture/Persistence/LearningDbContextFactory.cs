@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -9,9 +10,13 @@ public class LearningDbContextFactory : IDesignTimeDbContextFactory<LearningDbCo
     {
         var optionsBuilder = new DbContextOptionsBuilder<LearningDbContext>();
         
-        // SECURITY WARNING: Never hardcode production connection strings here.
-        // This is only used for local EF Core Migrations.
-        optionsBuilder.UseSqlServer("Server=localhost;Database=MathInsight;User Id=sa;Password=yourStrong(!)Password;TrustServerCertificate=True;");
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            connectionString = "Server=localhost;Database=MathInsight;User Id=sa;Password=yourStrong(!)Password;TrustServerCertificate=True;";
+        }
+        
+        optionsBuilder.UseSqlServer(connectionString);
 
         return new LearningDbContext(optionsBuilder.Options);
     }

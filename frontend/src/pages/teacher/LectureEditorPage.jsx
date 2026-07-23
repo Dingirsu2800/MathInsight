@@ -26,11 +26,11 @@ export default function LectureEditorPage() {
   const [topics, setTopics] = useState([]);
   const [attachedMaterials, setAttachedMaterials] = useState([]);
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
-  const [isImportingDocx, setIsImportingDocx] = useState(false);
+  const [isExtractingOcr, setIsExtractingOcr] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState("12");
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const materialInputRef = useRef(null);
-  const docxInputRef = useRef(null);
+  const ocrInputRef = useRef(null);
 
   useEffect(() => {
     const flattenTopics = (nodes, parentPath = "") => {
@@ -179,43 +179,42 @@ export default function LectureEditorPage() {
     }));
   };
 
-  const handleImportDocx = async (e) => {
+  const handleExtractOcr = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Kích thước tệp vượt quá 10MB!");
-      if (docxInputRef.current) docxInputRef.current.value = '';
+    if (file.size > 20 * 1024 * 1024) {
+      alert("Kích thước tệp vượt quá 20MB!");
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
       return;
     }
 
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (ext !== 'docx') {
-      alert("Chỉ hỗ trợ tệp định dạng DOCX!");
-      if (docxInputRef.current) docxInputRef.current.value = '';
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      alert("Chỉ hỗ trợ file PDF hoặc ảnh (JPG, PNG)!");
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
       return;
     }
 
-    setIsImportingDocx(true);
+    setIsExtractingOcr(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
 
-      const { importLectureDocx } = await import('../../services/learningApi');
-      const res = await importLectureDocx(formData);
+      const { extractLectureOcr } = await import('../../services/learningApi');
+      const res = await extractLectureOcr(formData);
       
       const newText = res.data.markdown;
       setForm(prev => ({
         ...prev,
         content: prev.content ? prev.content + "\n\n" + newText : newText
       }));
-      alert("Nhập nội dung từ file Word thành công! Vui lòng kiểm tra lại các công thức toán nếu có.");
+      alert("Đã nhận diện thành công nội dung từ ảnh!");
     } catch (err) {
-      console.error("Lỗi bóc tách file Word", err);
-      alert(err.response?.data?.message || "Đã xảy ra lỗi khi bóc tách file Word");
+      console.error("Lỗi OCR ảnh", err);
+      alert(err.response?.data?.message || "Đã xảy ra lỗi khi quét ảnh OCR");
     } finally {
-      setIsImportingDocx(false);
-      if (docxInputRef.current) docxInputRef.current.value = '';
+      setIsExtractingOcr(false);
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
     }
   };
 
@@ -373,21 +372,21 @@ export default function LectureEditorPage() {
                     <div>
                       <input
                         type="file"
-                        accept=".docx"
+                        accept=".pdf, image/png, image/jpeg, image/jpg"
                         className="hidden"
-                        ref={docxInputRef}
-                        onChange={handleImportDocx}
+                        ref={ocrInputRef}
+                        onChange={handleExtractOcr}
                       />
                       <button
                         type="button"
-                        onClick={() => docxInputRef.current?.click()}
-                        disabled={isImportingDocx}
+                        onClick={() => ocrInputRef.current?.click()}
+                        disabled={isExtractingOcr}
                         className="flex items-center gap-1.5 px-3 py-1 bg-primary text-white rounded-md text-[13px] font-medium transition-colors hover:opacity-90 disabled:opacity-50"
                       >
                         <span className="material-symbols-outlined text-[16px]">
-                          {isImportingDocx ? "sync" : "description"}
+                          {isExtractingOcr ? "sync" : "document_scanner"}
                         </span>
-                        {isImportingDocx ? "Đang xử lý..." : "Nhập từ file Word"}
+                        {isExtractingOcr ? "Đang xử lý..." : "Nhập PDF/Ảnh (OCR)"}
                       </button>
                     </div>
                   </div>

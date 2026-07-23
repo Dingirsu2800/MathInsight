@@ -51,18 +51,18 @@ public class LecturesController : ControllerBase
         }
     }
 
-    [HttpPost("import-docx")]
+    [HttpPost("ocr")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> ImportDocx([FromForm] Microsoft.AspNetCore.Http.IFormFile? file, CancellationToken cancellationToken)
+    public async Task<IActionResult> ExtractOcr([FromForm] Microsoft.AspNetCore.Http.IFormFile? file, CancellationToken cancellationToken)
     {
         if (IsStudent) return Forbid();
-        var cmd = new ExtractLectureDocumentCommand(file);
+        var cmd = new ExtractLectureOcrCommand(file);
         var result = await _mediator.Send(cmd, cancellationToken);
         if (result.IsFailure)
         {
-            return BadRequest(new { message = result.Error?.Message ?? "Import Failed" });
+            return BadRequest(new { message = result.Error?.Message ?? "OCR Extraction Failed" });
         }
-        return Ok(new { markdown = result.Value });
+        return Ok(result.Value);
     }
 
     [HttpPost]
