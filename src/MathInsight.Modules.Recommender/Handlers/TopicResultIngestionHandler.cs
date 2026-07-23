@@ -115,6 +115,9 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             mastery.OfficialPoint = Math.Clamp(
                 0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
                 0.00m, 10.00m);
+
+            // ── BR-09b: Reset practice_point ← official_point after Blending on Exam submission ──
+            mastery.PracticePoint = mastery.OfficialPoint;
         }
         else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
         {
