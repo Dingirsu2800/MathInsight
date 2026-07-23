@@ -33,7 +33,11 @@ public class GetLectureListQueryHandler : IRequestHandler<GetLectureListQuery, P
 
         if (!string.IsNullOrEmpty(request.Search))
         {
-            query = query.Where(x => x.Title.Contains(request.Search));
+            var searchStr = request.Search.Trim().ToLower();
+            
+            query = query.Where(x => 
+                x.Title.ToLower().Contains(searchStr) || 
+                _dbContext.AccountProfileViews.Any(a => a.AccountId == x.TeacherId && a.AuthorName.ToLower().Contains(searchStr)));
         }
         
         if (!string.IsNullOrEmpty(request.Status))
