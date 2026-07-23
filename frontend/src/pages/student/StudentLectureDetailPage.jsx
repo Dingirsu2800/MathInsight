@@ -4,12 +4,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import StudentLayout from "./StudentLayout";
 import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
+import MathTextArea from "../../components/common/MathTextArea";
 
 const getYouTubeEmbedUrl = (url) => {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+};
+
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return null;
+  return new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
 };
 
 export default function StudentLectureDetailPage() {
@@ -19,8 +25,8 @@ export default function StudentLectureDetailPage() {
   const [loading, setLoading] = useState(true);
   const [discussions, setDiscussions] = useState([]);
   const [newQuestionTitle, setNewQuestionTitle] = useState("");
-  const currentAccountId = localStorage.getItem("AccountId");
-  const userRole = localStorage.getItem("RoleName");
+  const currentAccountId = localStorage.getItem("account_id") || localStorage.getItem("AccountId");
+  const userRole = localStorage.getItem("role_name") || localStorage.getItem("RoleName");
   
   const getFormatIcon = (format) => {
     const f = format?.toUpperCase() || "";
@@ -40,6 +46,7 @@ export default function StudentLectureDetailPage() {
   const [replyContent, setReplyContent] = useState({});
   const [submittingReply, setSubmittingReply] = useState(null);
 
+
   const fetchDiscussionsData = async () => {
     try {
       const res = await getDiscussions(id, { page: 1, pageSize: 50 });
@@ -48,18 +55,20 @@ export default function StudentLectureDetailPage() {
         authorId: d.studentId,
         author: d.authorName || "Học sinh ẩn danh",
         authorInitials: d.authorName ? d.authorName.substring(0, 2).toUpperCase() : "HS",
-        timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
+        timeAgo: parseUtcDate(d.createdTime).toLocaleString("vi-VN"),
         title: d.title,
         content: d.content,
         status: d.status,
+        moderationReason: d.moderationReason,
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
           authorId: a.accountId,
-          author: a.authorName || "Giáo viên",
-          role: "Giáo viên",
-          timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
+          author: a.authorName || "Ẩn danh",
+          role: a.roleName || "Giáo viên",
+          timeAgo: parseUtcDate(a.createdTime).toLocaleString("vi-VN"),
           content: a.content,
-          status: a.status
+          status: a.status,
+          moderationReason: a.moderationReason
         }))
       }));
       setDiscussions(mappedDiscussions);
@@ -340,11 +349,12 @@ export default function StudentLectureDetailPage() {
                 value={newQuestionTitle}
                 onChange={(e) => setNewQuestionTitle(e.target.value)}
               />
-              <textarea 
-                className="w-full px-4 py-3 bg-pure-surface border border-outline-variant rounded-lg text-[14px] focus:ring-primary focus:border-primary resize-y min-h-[100px]"
-                placeholder="Mô tả chi tiết câu hỏi của bạn..."
-                value={newQuestionContent}
-                onChange={(e) => setNewQuestionContent(e.target.value)}
+              <MathTextArea 
+                value={newQuestionContent} 
+                onChange={(e) => setNewQuestionContent(e.target.value)} 
+                placeholder="Mô tả chi tiết câu hỏi của bạn..." 
+                minHeight="min-h-[100px]" 
+                className="mb-4" 
               />
               <div className="flex justify-end">
                 <button 
@@ -401,22 +411,32 @@ export default function StudentLectureDetailPage() {
                     <h5 className="text-[16px] font-medium text-on-surface mt-2 mb-1">{disc.title}</h5>
                     {editingComment === disc.id ? (
                       <div className="mt-2">
-                        <textarea className="w-full px-3 py-2 border border-outline-variant rounded-md text-[14px] focus:border-primary focus:ring-1 focus:ring-primary mb-2" value={editContent} onChange={e => setEditContent(e.target.value)} />
+                        <MathTextArea 
+                          value={editContent} 
+                          onChange={e => setEditContent(e.target.value)} 
+                          minHeight="min-h-[100px]" 
+                          className="mb-2" 
+                        />
                         <div className="flex gap-2">
                           <button className="px-3 py-1 bg-primary text-white rounded-md text-[13px]" onClick={() => handleUpdateComment(disc.id, true)}>Lưu</button>
                           <button className="px-3 py-1 bg-surface-variant rounded-md text-[13px]" onClick={() => setEditingComment(null)}>Hủy</button>
                         </div>
                       </div>
                     ) : (
-                      <>
+                      <div className="mt-2">
                         {disc.status === "Hidden" && (
                           <div className="bg-[#fee2e2] text-[#ef4444] text-[13px] px-3 py-2 rounded-lg mb-3 flex items-center gap-2 border border-[#fca5a5]">
                             <span className="material-symbols-outlined text-[16px]">info</span>
-                            Bình luận của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.
+                            <span>
+                              Bình luận của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.
+                              {disc.moderationReason && <strong> Lý do: {disc.moderationReason}</strong>}
+                            </span>
                           </div>
                         )}
-                        <p className={`text-[14px] text-on-surface-variant ${disc.status === "Hidden" ? "blur-[1px] select-none italic" : ""}`}>{disc.content}</p>
-                      </>
+                        <div className={`text-[14px] text-on-surface-variant ${disc.status === "Hidden" ? "blur-[1px] select-none italic" : ""}`}>
+                          <LatexPreview content={disc.content} />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -460,38 +480,46 @@ export default function StudentLectureDetailPage() {
                       <p className="text-[12px] text-on-surface-variant mb-2">{ans.timeAgo}</p>
                       {editingComment === ans.id ? (
                         <div className="mt-2">
-                          <textarea className="w-full px-3 py-2 border border-outline-variant rounded-md text-[14px] focus:border-primary focus:ring-1 focus:ring-primary mb-2" value={editContent} onChange={e => setEditContent(e.target.value)} />
+                          <MathTextArea 
+                            value={editContent} 
+                            onChange={e => setEditContent(e.target.value)} 
+                            minHeight="min-h-[100px]" 
+                            className="mb-2" 
+                          />
                           <div className="flex gap-2">
                             <button className="px-3 py-1 bg-primary text-white rounded-md text-[13px]" onClick={() => handleUpdateComment(ans.id, false)}>Lưu</button>
                             <button className="px-3 py-1 bg-surface-variant rounded-md text-[13px]" onClick={() => setEditingComment(null)}>Hủy</button>
                           </div>
                         </div>
                       ) : (
-                        <>
+                        <div className="mt-2">
                           {ans.status === "Hidden" && (
-                            <div className="bg-[#fee2e2] text-[#ef4444] text-[12px] px-2 py-1.5 rounded-md mb-2 flex items-start gap-1.5 border border-[#fca5a5]">
-                              <span className="material-symbols-outlined text-[14px] mt-0.5">info</span>
-                              <span>Bình luận đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.</span>
+                            <div className="bg-[#fee2e2] text-[#ef4444] text-[13px] px-3 py-2 rounded-lg mb-3 flex items-center gap-2 border border-[#fca5a5]">
+                              <span className="material-symbols-outlined text-[16px]">info</span>
+                              <span>
+                                Bình luận của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.
+                                {ans.moderationReason && <strong> Lý do: {ans.moderationReason}</strong>}
+                              </span>
                             </div>
                           )}
-                          <p className={`text-[14px] text-on-surface ${ans.status === "Hidden" ? "blur-[1px] select-none italic text-on-surface-variant" : ""}`}>{ans.content}</p>
-                        </>
+                          <div className={`text-[14px] text-on-surface ${ans.status === "Hidden" ? "blur-[1px] select-none italic text-on-surface-variant" : ""}`}>
+                            <LatexPreview content={ans.content} />
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
                 ))}
                 
                 {/* Reply Input Box */}
-                {disc.status !== "Hidden" && (
+                {disc.status !== "Hidden" && disc.authorId === currentAccountId && (
                   <div className="mt-4 ml-14 pl-4 flex gap-4">
-                      <input 
-                        className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-2 text-[14px] focus:ring-primary focus:border-primary" 
-                        placeholder="Nhập câu trả lời..." 
+                      <MathTextArea
                         value={replyContent[disc.id] || ""}
                         onChange={(e) => setReplyContent(prev => ({ ...prev, [disc.id]: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleAnswerQuestion(disc.id);
-                        }}
+                        placeholder="Nhập câu trả lời..."
+                        minHeight="min-h-[80px]"
+                        className="flex-1"
                       />
                       <button 
                         className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-medium flex items-center justify-center min-w-[70px] disabled:opacity-50"

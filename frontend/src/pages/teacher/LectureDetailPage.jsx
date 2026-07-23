@@ -4,12 +4,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
 import { getLecture, getDiscussions, answerQuestion, hideComment, reportDiscussion, updateComment, deleteComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
+import MathTextArea from "../../components/common/MathTextArea";
 
 const getYouTubeEmbedUrl = (url) => {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+};
+
+const parseUtcDate = (dateStr) => {
+  if (!dateStr) return null;
+  return new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
 };
 
 export default function LectureDetailPage() {
@@ -21,6 +27,7 @@ export default function LectureDetailPage() {
   const [replyContent, setReplyContent] = useState({});
   const [submittingReply, setSubmittingReply] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
+  const [hideModal, setHideModal] = useState({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
   
   const [editingComment, setEditingComment] = useState(null);
   const [editContent, setEditContent] = useState("");
@@ -33,16 +40,16 @@ export default function LectureDetailPage() {
         id: d.discussionQuestionId,
         author: d.authorName || "Học sinh ẩn danh",
         authorInitials: d.authorName ? d.authorName.substring(0, 2).toUpperCase() : "HS",
-        timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
+        timeAgo: parseUtcDate(d.createdTime).toLocaleString("vi-VN"),
         title: d.title,
         content: d.content,
         status: d.status,
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
           authorId: a.accountId,
-          author: a.authorName || "Giáo viên",
-          role: "Giáo viên",
-          timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
+          author: a.authorName || "Ẩn danh",
+          role: a.roleName || "Giáo viên",
+          timeAgo: parseUtcDate(a.createdTime).toLocaleString("vi-VN"),
           content: a.content,
           status: a.status
         }))
@@ -81,10 +88,18 @@ export default function LectureDetailPage() {
     }
   };
 
-  const handleHideComment = async (commentId, isQuestion) => {
-    if (!window.confirm("Bạn có chắc chắn muốn ẩn bình luận này?")) return;
+  const handleHideComment = (commentId, isQuestion) => {
+    setHideModal({ isOpen: true, targetId: commentId, isQuestion, reason: "" });
+  };
+
+  const confirmHideComment = async () => {
+    if (!hideModal.reason.trim()) {
+      alert("Vui lòng nhập lý do!");
+      return;
+    }
     try {
-      await hideComment(commentId, isQuestion);
+      await hideComment(hideModal.targetId, hideModal.isQuestion, hideModal.reason);
+      setHideModal({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
       await fetchDiscussionsData();
     } catch (err) {
       console.error("Lỗi khi ẩn bình luận", err);
@@ -290,14 +305,21 @@ export default function LectureDetailPage() {
                     <h5 className="text-[16px] font-medium text-on-surface mt-2 mb-1">{disc.title}</h5>
                     {editingComment === disc.id ? (
                       <div className="mt-2 mb-4">
-                        <textarea className="w-full px-3 py-2 border border-outline-variant rounded-md text-[14px] focus:border-primary focus:ring-1 focus:ring-primary mb-2" value={editContent} onChange={e => setEditContent(e.target.value)} />
+                        <MathTextArea 
+                          value={editContent} 
+                          onChange={e => setEditContent(e.target.value)} 
+                          minHeight="min-h-[100px]" 
+                          className="mb-2" 
+                        />
                         <div className="flex gap-2">
                           <button className="px-3 py-1 bg-primary text-white rounded-md text-[13px]" onClick={() => handleUpdateComment(disc.id, true)}>Lưu</button>
                           <button className="px-3 py-1 bg-surface-variant rounded-md text-[13px]" onClick={() => setEditingComment(null)}>Hủy</button>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-[14px] text-on-surface-variant mb-4">{disc.content}</p>
+                      <div className="text-[14px] text-on-surface-variant mb-4">
+                        <LatexPreview content={disc.content} />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -347,21 +369,36 @@ export default function LectureDetailPage() {
                           <p className="text-[13px] text-on-surface-variant">{ans.timeAgo}</p>
                         </div>
                       </div>
-                      <p className="text-[14px] text-on-surface">{ans.content}</p>
+                      {editingComment === ans.id ? (
+                        <div className="mt-2 mb-4">
+                          <MathTextArea 
+                            value={editContent} 
+                            onChange={e => setEditContent(e.target.value)} 
+                            minHeight="min-h-[100px]" 
+                            className="mb-2" 
+                          />
+                          <div className="flex gap-2">
+                            <button className="px-3 py-1 bg-primary text-white rounded-md text-[13px]" onClick={() => handleUpdateComment(ans.id, false)}>Lưu</button>
+                            <button className="px-3 py-1 bg-surface-variant rounded-md text-[13px]" onClick={() => setEditingComment(null)}>Hủy</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-[14px] text-on-surface">
+                          <LatexPreview content={ans.content} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
                 
                 {/* Reply Input Box */}
                 <div className="mt-4 ml-14 pl-4 flex gap-4">
-                    <input 
-                      className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-2 text-[14px] focus:ring-primary focus:border-primary" 
-                      placeholder="Nhập câu trả lời..." 
+                    <MathTextArea
                       value={replyContent[disc.id] || ""}
                       onChange={(e) => setReplyContent(prev => ({ ...prev, [disc.id]: e.target.value }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSubmitReply(disc.id);
-                      }}
+                      placeholder="Nhập câu trả lời..."
+                      minHeight="min-h-[80px]"
+                      className="flex-1"
                     />
                     <button 
                       className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-medium flex items-center justify-center min-w-[70px] disabled:opacity-50"
@@ -377,6 +414,38 @@ export default function LectureDetailPage() {
         </section>
       </div>
 
+      {/* Hide Comment Reason Modal */}
+      {hideModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-pure-surface rounded-2xl p-6 w-full max-w-md shadow-xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-semibold text-on-surface">Ẩn bình luận</h3>
+            <p className="text-[14px] text-on-surface-variant">
+              Vui lòng nhập lý do cụ thể để học sinh hiểu rõ vì sao bình luận của họ bị ẩn (ví dụ: Ngôn từ thô tục, Spam,...).
+            </p>
+            <textarea
+              className="w-full h-24 p-3 border border-outline-variant rounded-xl text-[14px] text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none"
+              placeholder="Nhập lý do ở đây..."
+              value={hideModal.reason}
+              onChange={(e) => setHideModal(prev => ({ ...prev, reason: e.target.value }))}
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button
+                onClick={() => setHideModal({ isOpen: false, targetId: null, isQuestion: false, reason: "" })}
+                className="px-4 py-2 rounded-lg text-[14px] font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={confirmHideComment}
+                className="px-4 py-2 rounded-lg text-[14px] font-medium bg-error text-white hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Xác nhận Ẩn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </TeacherLayout>
   );
 }

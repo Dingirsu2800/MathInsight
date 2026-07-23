@@ -47,6 +47,7 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
                 Status = x.Status,
                 CreatedTime = x.CreatedTime,
                 UpdatedTime = x.UpdatedTime,
+                ModerationReason = x.ModerationReason,
                 Answers = x.Answers
                     .Where(a => a.Status != "Deleted" && (!request.IsStudent || a.Status == "Active" || (a.Status == "Hidden" && a.AccountId == request.CurrentAccountId)))
                     .OrderBy(a => a.CreatedTime)
@@ -54,11 +55,13 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
                     {
                         DiscussionAnswerId = a.DiscussionAnswerId,
                         AccountId = a.AccountId,
-                        AuthorName = _dbContext.AccountProfileViews.Where(acc => acc.AccountId == a.AccountId).Select(acc => acc.AuthorName).FirstOrDefault() ?? "Giáo viên",
+                        AuthorName = _dbContext.AccountProfileViews.Where(acc => acc.AccountId == a.AccountId).Select(acc => acc.AuthorName).FirstOrDefault() ?? (a.AccountId == x.StudentId ? "Học sinh" : "Giáo viên"),
+                        RoleName = a.AccountId == x.StudentId ? "Học sinh" : "Giáo viên",
                         Content = a.Content,
                         Status = a.Status,
                         CreatedTime = a.CreatedTime,
-                        UpdatedTime = a.UpdatedTime
+                        UpdatedTime = a.UpdatedTime,
+                        ModerationReason = a.ModerationReason
                     }).ToList()
             }).ToListAsync(cancellationToken);
 

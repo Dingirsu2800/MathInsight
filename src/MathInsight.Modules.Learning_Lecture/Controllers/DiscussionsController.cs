@@ -68,7 +68,7 @@ public class DiscussionsController : ControllerBase
     {
         try
         {
-            var result = await _mediator.Send(new AnswerDiscussionQuestionCommand(questionId, CurrentUserId, request.Content), cancellationToken);
+            var result = await _mediator.Send(new AnswerDiscussionQuestionCommand(questionId, CurrentUserId, request.Content, IsTeacherOrAdmin), cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)
@@ -111,7 +111,7 @@ public class DiscussionsController : ControllerBase
         if (!IsTeacherOrAdmin) return Forbid();
         try
         {
-            await _mediator.Send(new HideDiscussionCommentCommand(id, request.IsQuestion, CurrentUserId), cancellationToken);
+            await _mediator.Send(new HideDiscussionCommentCommand(id, request.IsQuestion, CurrentUserId, request.Reason), cancellationToken);
             return NoContent();
         }
         catch (Exception ex)
@@ -140,7 +140,7 @@ public class DiscussionsController : ControllerBase
         if (!IsTeacherOrAdmin) return Forbid();
         try
         {
-            await _mediator.Send(new ResolveModerationCommand(reportId, CurrentUserId, request.IsDismissed), cancellationToken);
+            await _mediator.Send(new ResolveModerationCommand(reportId, CurrentUserId, request.IsDismissed, request.Reason), cancellationToken);
             return NoContent();
         }
         catch (Exception ex)
@@ -153,6 +153,6 @@ public class DiscussionsController : ControllerBase
 public record AskQuestionRequest(string LectureId, string Title, string Content);
 public record AnswerQuestionRequest(string Content);
 public record UpdateCommentRequest(bool IsQuestion, string Content);
-public record HideCommentRequest(bool IsQuestion);
+public record HideCommentRequest(bool IsQuestion, string? Reason = null);
 public record ReportDiscussionRequest(string? QuestionId, string? AnswerId, string Reason);
-public record ResolveReportRequest(bool IsDismissed);
+public record ResolveReportRequest(bool IsDismissed, string? Reason = null);

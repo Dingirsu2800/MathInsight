@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -26,6 +26,11 @@ public class AnswerDiscussionQuestionCommandHandler : IRequestHandler<AnswerDisc
         var question = await _dbContext.DiscussionQuestions.FirstOrDefaultAsync(x => x.DiscussionQuestionId == request.DiscussionQuestionId, cancellationToken);
         if (question == null) throw new Exception("Question not found");
         if (question.Status != "Active") throw new Exception("Cannot answer inactive questions");
+
+        if (!request.IsTeacherOrAdmin && question.StudentId != request.AccountId)
+        {
+            throw new Exception("Students can only reply to their own questions.");
+        }
 
         var answer = new DiscussionAnswer
         {

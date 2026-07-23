@@ -9,11 +9,16 @@ export default function ModerationPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [activeReportId, setActiveReportId] = useState(null);
+  const [reasonInput, setReasonInput] = useState("");
+
   const fetchReports = async () => {
     setLoading(true);
     try {
-      // Fetch all reports to calculate accurate statistics
-      const res = await getModerationQueue({ search });
+      // Fetch all reports to calculate accurate statistics (fetch 100 to make sure we get most for now)
+      const res = await getModerationQueue({ search, pageSize: 100 });
       setReports(res.data?.items || res.data || []);
     } catch (err) {
       console.error("Lỗi khi tải danh sách báo cáo:", err);
@@ -26,17 +31,47 @@ export default function ModerationPage() {
   useEffect(() => { fetchReports(); }, [statusFilter, search]);
 
   const handleResolve = async (id, isDismissed) => {
-    try {
-      await resolveReport(id, isDismissed);
-      fetchReports();
-    } catch (e) {
-      console.error(e);
+    if (isDismissed) {
+      // Dismiss directly
+      try {
+        await resolveReport(id, { isDismissed: true, reason: null });
+        fetchReports();
+      } catch (e) {
+        console.error(e);
+        alert("Lỗi khi xử lý báo cáo");
+      }
+    } else {
+      // Show modal for 'Hidden'
+      setActiveReportId(id);
+      setReasonInput("");
+      setShowModal(true);
     }
   };
 
+  const confirmResolveHidden = async () => {
+    if (!reasonInput.trim()) {
+      alert("Vui lòng nhập lý do!");
+      return;
+    }
+    try {
+      await resolveReport(activeReportId, { isDismissed: false, reason: reasonInput });
+      setShowModal(false);
+      fetchReports();
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi khi xử lý báo cáo");
+    }
+  };
+
+  const parseUtcDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    if (dateStr.endsWith('Z')) return new Date(dateStr);
+    return new Date(dateStr + 'Z');
+  };
+
   const timeAgo = (dateStr) => {
-    const hours = Math.floor((new Date() - new Date(dateStr)) / 3600000);
-    if (hours < 24) return `${hours} giờ trước`;
+    const hours = Math.floor((new Date() - parseUtcDate(dateStr)) / 3600000);
+    if (hours < 24) return `${Math.max(0, hours)} giờ trước`;
     return `${Math.floor(hours/24)} ngày trước`;
   };
 
@@ -154,7 +189,7 @@ export default function ModerationPage() {
                         <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Phân loại:</span> <span>{report.targetType === "Question" ? "Câu hỏi" : "Câu trả lời"} của <strong>{report.targetAuthorName || "Đang tải tên..."}</strong></span></div>
                         <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Nội dung:</span> <span className="italic text-on-surface-variant line-clamp-2">"{report.targetPreview}"</span></div>
                         <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Xử lý bởi:</span> <span>{report.resolvedBy || "Đang tải tên..."}</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Thời gian xử lý:</span> <span className="font-mono text-[13px]">{new Date(report.resolvedAt).toLocaleString("vi-VN")}</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Thời gian xử lý:</span> <span className="font-mono text-[13px]">{parseUtcDate(report.resolvedAt).toLocaleString("vi-VN")}</span></div>
                       </>
                     )}
                   </div>
@@ -186,6 +221,39 @@ export default function ModerationPage() {
           </button>
         </div>
       </div>
+
+      {/* Moderation Reason Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-pure-surface rounded-2xl p-6 w-full max-w-md shadow-xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-semibold text-on-surface">Ghi nhận vi phạm & Ẩn</h3>
+            <p className="text-[14px] text-on-surface-variant">
+              Vui lòng nhập lý do cụ thể để học sinh hiểu rõ vì sao bình luận của họ bị ẩn (ví dụ: Ngôn từ thô tục, Spam,...).
+            </p>
+            <textarea
+              className="w-full h-24 p-3 border border-outline-variant rounded-xl text-[14px] text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none"
+              placeholder="Nhập lý do ở đây..."
+              value={reasonInput}
+              onChange={(e) => setReasonInput(e.target.value)}
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-lg text-[14px] font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={confirmResolveHidden}
+                className="px-4 py-2 rounded-lg text-[14px] font-medium bg-error text-white hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Xác nhận Ẩn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </TeacherLayout>
   );
 }

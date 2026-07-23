@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace MathInsight.Modules.Learning_Lecture.Entities;
@@ -12,6 +12,7 @@ public class DiscussionAnswer
     public string Status { get; set; } = "Active";
     public DateTime CreatedTime { get; set; }
     public DateTime UpdatedTime { get; set; }
+    public string? ModerationReason { get; set; }
 
     public DiscussionQuestion Question { get; set; } = default!;
     public ICollection<DiscussionReport> Reports { get; set; } = new List<DiscussionReport>();

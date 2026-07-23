@@ -14,6 +14,7 @@ public class DiscussionQuestionDto
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }
     public DateTime UpdatedTime { get; set; }
+    public string? ModerationReason { get; set; }
     public List<DiscussionAnswerDto> Answers { get; set; } = new();
 }
 
@@ -22,10 +23,12 @@ public class DiscussionAnswerDto
     public string DiscussionAnswerId { get; set; } = default!;
     public string AccountId { get; set; } = default!;
     public string AuthorName { get; set; } = default!;
+    public string RoleName { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }
     public DateTime UpdatedTime { get; set; }
+    public string? ModerationReason { get; set; }
 }
 
 public class DiscussionReportDto

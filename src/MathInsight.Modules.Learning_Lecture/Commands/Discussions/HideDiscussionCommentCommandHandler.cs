@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -25,6 +25,8 @@ public class HideDiscussionCommentCommandHandler : IRequestHandler<HideDiscussio
             if (question == null) throw new Exception("Question not found");
             question.Status = "Hidden";
             question.UpdatedTime = DateTime.UtcNow;
+            if (!string.IsNullOrEmpty(request.Reason))
+                question.ModerationReason = request.Reason;
         }
         else
         {
@@ -32,6 +34,8 @@ public class HideDiscussionCommentCommandHandler : IRequestHandler<HideDiscussio
             if (answer == null) throw new Exception("Answer not found");
             answer.Status = "Hidden";
             answer.UpdatedTime = DateTime.UtcNow;
+            if (!string.IsNullOrEmpty(request.Reason))
+                answer.ModerationReason = request.Reason;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

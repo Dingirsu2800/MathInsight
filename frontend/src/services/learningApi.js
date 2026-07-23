@@ -68,11 +68,11 @@ export const reportDiscussion = (data) =>
 export const getModerationQueue = (params) =>
   client.get('/api/v1/discussions/moderation-queue', { params });
 
-export const resolveReport = (reportId, isDismissed) =>
-  client.post(`/api/v1/discussions/reports/${reportId}/resolve`, { isDismissed });
+export const resolveReport = (reportId, payload) =>
+  client.post(`/api/v1/discussions/reports/${reportId}/resolve`, payload);
 
-export const hideComment = (id, isQuestion) =>
-  client.post(`/api/v1/discussions/comments/${id}/hide`, { isQuestion });
+export const hideComment = (id, isQuestion, reason) =>
+  client.post(`/api/v1/discussions/comments/${id}/hide`, { isQuestion, reason });
 
 export const updateComment = (id, isQuestion, content) =>
   client.put(`/api/v1/discussions/comments/${id}`, { isQuestion, content });
