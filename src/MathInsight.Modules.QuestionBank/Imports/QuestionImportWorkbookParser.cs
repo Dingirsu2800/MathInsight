@@ -199,7 +199,7 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
             rows.Add(new RawTopicRow(
                 Text(row, headers, "QuestionKey"),
                 row.RowNumber(),
-                Text(row, headers, "TopicName"),
+                Text(row, headers, "TopicCode"),
                 Text(row, headers, "IsPrimary")));
         }
 
@@ -297,7 +297,7 @@ public sealed record RawPartRow(
     string Explanation,
     string DefaultWeight);
 
-public sealed record RawTopicRow(string QuestionKey, int SourceRow, string TopicName, string IsPrimary);
+public sealed record RawTopicRow(string QuestionKey, int SourceRow, string TopicCode, string IsPrimary);
 
 public sealed class QuestionImportException : Exception
 {

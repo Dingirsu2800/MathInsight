@@ -206,7 +206,7 @@ public sealed class QuestionExcelImportTests
     }
 
     [Fact]
-    public async Task Preview_SameTopicNameInDifferentGrades_ResolvesByQuestionGrade()
+    public async Task Preview_TopicCode_ResolvesEvenWhenTopicNamesAreDuplicated()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await SeedTaxonomyAsync(database);
@@ -233,30 +233,23 @@ public sealed class QuestionExcelImportTests
     }
 
     [Fact]
-    public async Task Preview_DuplicateTopicNameInSameGrade_ReturnsAmbiguousTopicError()
+    public async Task Preview_UnknownTopicCode_ReturnsTopicNotFoundError()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await SeedTaxonomyAsync(database);
-        database.Context.TagTopics.Add(new TagTopic
-        {
-            TagId = "topic-duplicate",
-            TagName = "Functions",
-            Grade = 10,
-            DisplayOrder = 2,
-            IsActive = true
-        });
-        await database.Context.SaveChangesAsync();
+        using var workbook = BuildValidWorkbook();
+        workbook.Worksheet("Topics").Cell(2, 2).Value = "unknown-topic";
         var handler = new PreviewQuestionImportCommandHandler(
             new QuestionImportWorkbookParser(),
             new QuestionImportValidationService(database.Context));
 
         var result = await handler.Handle(
-            new PreviewQuestionImportCommand(CreateWorkbookFile(BuildValidWorkbook())),
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
             CancellationToken.None);
 
         var item = Assert.Single(result.Value!.Items);
         Assert.False(item.IsValid);
-        Assert.Contains(item.Errors, error => error.Code == "QUESTION_IMPORT_TOPIC_AMBIGUOUS");
+        Assert.Contains(item.Errors, error => error.Code == "QUESTION_TOPIC_NOT_FOUND");
     }
 
     [Fact]
@@ -581,7 +574,10 @@ public sealed class QuestionExcelImportTests
         Assert.True(workbook.Worksheets.Contains("Parts"));
         Assert.True(workbook.Worksheets.Contains("Topics"));
         Assert.True(workbook.Worksheets.Contains("Catalogs"));
-        Assert.Equal("2", workbook.Worksheet("_Meta").Cell(1, 2).GetString());
+        Assert.Equal("3", workbook.Worksheet("_Meta").Cell(1, 2).GetString());
+        Assert.Equal("TopicCode", workbook.Worksheet("Topics").Cell(1, 2).GetString());
+        Assert.Equal("topic-1", workbook.Worksheet("Catalogs").Cell(2, 1).GetString());
+        Assert.Equal("Functions", workbook.Worksheet("Catalogs").Cell(2, 2).GetString());
     }
 
     private static async Task SeedTaxonomyAsync(
@@ -629,7 +625,7 @@ public sealed class QuestionExcelImportTests
     {
         var workbook = new XLWorkbook();
         workbook.Worksheets.Add("_Meta").Cell(1, 1).Value = "TemplateVersion";
-        workbook.Worksheet("_Meta").Cell(1, 2).Value = "2";
+        workbook.Worksheet("_Meta").Cell(1, 2).Value = "3";
         workbook.Worksheets.Add("Instructions");
 
         AddSheet(workbook, "Questions", ["QuestionKey", "QuestionContent", "SolutionContent", "QuestionType", "Grade", "DifficultyLevel", "DefaultWeight", "PictureUrl"]);
@@ -652,10 +648,10 @@ public sealed class QuestionExcelImportTests
         answers.Cell(3, 3).Value = false;
 
         AddSheet(workbook, "Parts", ["QuestionKey", "PartOrder", "PartLabel", "PartContent", "PartType", "CorrectBoolean", "CorrectText", "CorrectNumeric", "NumericTolerance", "Explanation", "DefaultWeight"]);
-        AddSheet(workbook, "Topics", ["QuestionKey", "TopicName", "IsPrimary"]);
+        AddSheet(workbook, "Topics", ["QuestionKey", "TopicCode", "IsPrimary"]);
         var topics = workbook.Worksheet("Topics");
         topics.Cell(2, 1).Value = "Q001";
-        topics.Cell(2, 2).Value = "Functions";
+        topics.Cell(2, 2).Value = "topic-1";
         topics.Cell(2, 3).Value = true;
 
         ConfigureQuestionType(workbook, questionType);

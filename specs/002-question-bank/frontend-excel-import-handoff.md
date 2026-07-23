@@ -14,6 +14,15 @@ Use a dialog launched by the secondary **Nhập Excel** button on the Question B
 
 All endpoints require the `Expert` role.
 
+## Excel Topic Contract
+
+The `Topics` sheet uses `QuestionKey | TopicCode | IsPrimary`.
+
+- `TopicCode` is the stable `TagID` shown in the `Catalogs` sheet, for example `TOPIC-G12-DERIVAPP`.
+- `TopicName` is displayed in `Catalogs` only to help the Expert choose the code; it is not imported.
+- The code must refer to an active topic whose grade matches the question grade.
+- Template version 3 is required. Version 2 files that used `TopicName` are rejected and must be recreated from the latest template.
+
 ## Preview
 
 ```json
