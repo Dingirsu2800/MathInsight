@@ -4,6 +4,7 @@ using MathInsight.Modules.Learning_Lecture.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MathInsight.Modules.Learning_Lecture.Migrations
 {
     [DbContext(typeof(LearningDbContext))]
-    partial class LearningDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724034430_AddNextLectureId")]
+    partial class AddNextLectureId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

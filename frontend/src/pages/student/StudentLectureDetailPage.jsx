@@ -78,6 +78,8 @@ export default function StudentLectureDetailPage() {
   };
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setLoading(true);
     getLecture(id)
       .then((res) => {
         setLecture(res.data);
@@ -535,6 +537,37 @@ export default function StudentLectureDetailPage() {
           </div>
         </section>
       </div>
+
+      {/* Next Lecture Suggestion */}
+      {lecture.nextLectureId && (
+        <section className="bg-primary/5 border-t border-primary/20 py-10 mt-12">
+          <div className="max-w-4xl mx-auto px-gutter flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex-1">
+              <h3 className="text-[14px] font-bold text-primary uppercase tracking-wider mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                Bài học tiếp theo
+              </h3>
+              <p className="text-[22px] font-semibold text-on-surface mb-1">
+                {lecture.nextLectureTitle || "Bài giảng tiếp theo"}
+              </p>
+              <p className="text-[14px] text-on-surface-variant">
+                Tiếp tục lộ trình học tập của bạn với bài giảng này.
+              </p>
+            </div>
+            
+            <button 
+              onClick={() => {
+                navigate(`/student/lectures/${lecture.nextLectureId}`);
+                window.scrollTo(0, 0);
+              }}
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-xl font-medium hover:bg-primary/90 transition-colors shadow-sm group whitespace-nowrap"
+            >
+              Học tiếp ngay
+              <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Report Modal */}
       {reportModal.isOpen && (

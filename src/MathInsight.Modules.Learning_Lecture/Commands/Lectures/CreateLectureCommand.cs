@@ -10,5 +10,6 @@ public record CreateLectureCommand(
     string? ThumbnailUrl,
     string TagId,
     string TeacherId,
-    System.Collections.Generic.List<string>? MaterialIds
+    System.Collections.Generic.List<string>? MaterialIds,
+    string? NextLectureId = null
 ) : IRequest<LectureDto>;

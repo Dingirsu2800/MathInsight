@@ -20,4 +20,8 @@ public class LectureDto
     public DateTime CreatedTime { get; set; }
     public DateTime UpdatedTime { get; set; }
     public List<MaterialDto> Materials { get; set; } = new();
+    
+    public string? NextLectureId { get; set; }
+    public string? NextLectureTitle { get; set; }
+    public string? NextLectureThumbnailUrl { get; set; }
 }

@@ -246,6 +246,17 @@ a {
   animation: mi-panel-down 160ms ease-out both;
 }
 
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 .mi-line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

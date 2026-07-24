@@ -2,6 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import TeacherLayout from "./TeacherLayout";
 import { getModerationQueue, resolveReport, hideComment } from "../../services/learningApi";
+import { toast } from "../../components/common/Toast";
 
 export default function ModerationPage() {
   const [reports, setReports] = useState([]);
@@ -35,10 +36,11 @@ export default function ModerationPage() {
       // Dismiss directly
       try {
         await resolveReport(id, { isDismissed: true, reason: null });
+        toast.success("Đã bỏ qua báo cáo thành công");
         fetchReports();
       } catch (e) {
         console.error(e);
-        alert("Lỗi khi xử lý báo cáo");
+        toast.error("Lỗi khi xử lý báo cáo");
       }
     } else {
       // Show modal for 'Hidden'
@@ -50,16 +52,17 @@ export default function ModerationPage() {
 
   const confirmResolveHidden = async () => {
     if (!reasonInput.trim()) {
-      alert("Vui lòng nhập lý do!");
+      toast.warning("Vui lòng nhập lý do ẩn bình luận!");
       return;
     }
     try {
       await resolveReport(activeReportId, { isDismissed: false, reason: reasonInput });
       setShowModal(false);
+      toast.success("Đã ẩn bình luận vi phạm thành công");
       fetchReports();
     } catch (e) {
       console.error(e);
-      alert("Lỗi khi xử lý báo cáo");
+      toast.error("Lỗi khi xử lý báo cáo");
     }
   };
 

@@ -2,9 +2,10 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { createLecture, getLecture, updateLecture, getTopics, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
+import { getLectures, createLecture, getLecture, updateLecture, getTopics, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 import MathTextArea from "../../components/common/MathTextArea";
+import { toast } from "../../components/common/Toast";
 
 export default function LectureEditorPage() {
   const navigate = useNavigate();
@@ -19,11 +20,13 @@ export default function LectureEditorPage() {
     thumbnailFile: null,
     thumbnailUrl: "",
     materialIds: [],
+    nextLectureId: "",
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [topics, setTopics] = useState([]);
+  const [availableLectures, setAvailableLectures] = useState([]);
   const [attachedMaterials, setAttachedMaterials] = useState([]);
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
   const [isExtractingOcr, setIsExtractingOcr] = useState(false);
@@ -57,6 +60,15 @@ export default function LectureEditorPage() {
   }, [selectedGrade]);
 
   useEffect(() => {
+    // Fetch available lectures for Next Lecture dropdown
+    getLectures({ pageSize: 200 })
+      .then((res) => {
+        // Exclude current lecture from the list to avoid self-referencing
+        const filtered = (res.data?.items || []).filter(l => l.lectureId !== id);
+        setAvailableLectures(filtered);
+      })
+      .catch((err) => console.error("Lỗi khi tải danh sách bài giảng:", err));
+
     if (!isEdit) return;
     getLecture(id)
       .then((res) => {
@@ -68,7 +80,8 @@ export default function LectureEditorPage() {
           videoUrl: data.videoUrl || "",
           thumbnailFile: null,
           thumbnailUrl: data.thumbnailUrl || "",
-          materialIds: (data.materials || []).map(m => m.id || m.materialId)
+          materialIds: (data.materials || []).map(m => m.id || m.materialId),
+          nextLectureId: data.nextLectureId || "",
         });
         setAttachedMaterials(data.materials || []);
         if (data.thumbnailUrl) {
@@ -96,6 +109,10 @@ export default function LectureEditorPage() {
     try {
       let currentLectureId = id;
       let finalForm = { ...form };
+      // Convert empty string to null for nextLectureId
+      if (finalForm.nextLectureId === "") {
+        finalForm.nextLectureId = null;
+      }
 
       if (form.thumbnailFile) {
         const formData = new FormData();
@@ -113,15 +130,15 @@ export default function LectureEditorPage() {
 
       if (isPublish && currentLectureId) {
         await publishLecture(currentLectureId);
-        alert("Xuất bản bài giảng thành công!");
+        toast.success("Xuất bản bài giảng thành công!");
       } else {
-        alert(isEdit ? "Cập nhật bài giảng thành công!" : "Tạo bài giảng thành công!");
+        toast.success(isEdit ? "Cập nhật bài giảng thành công!" : "Tạo bài giảng thành công!");
       }
 
-      navigate("/teacher/lectures");
+      setTimeout(() => navigate("/teacher/lectures"), 1200);
     } catch (err) {
       console.error("Lưu bài giảng thất bại:", err);
-      alert("Đã xảy ra lỗi khi lưu bài giảng!");
+      toast.error("Đã xảy ra lỗi khi lưu bài giảng!");
     } finally {
       setSaving(false);
       setPublishing(false);
@@ -337,6 +354,28 @@ export default function LectureEditorPage() {
                             {errors.tagId}
                           </p>
                         )}
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
+                          <span className="material-symbols-outlined">expand_more</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 lg:col-span-2">
+                    {/* Next Lecture Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Bài giảng tiếp theo (Gợi ý cho học sinh)</label>
+                      <div className="relative">
+                        <select
+                          className={`appearance-none ${fieldClass("")} pr-10`}
+                          value={form.nextLectureId || ""}
+                          onChange={(e) => setForm((f) => ({ ...f, nextLectureId: e.target.value }))}
+                        >
+                          <option value="">Không thiết lập (Kết thúc)</option>
+                          {availableLectures.map((l) => (
+                            <option key={l.lectureId} value={l.lectureId}>{l.title}</option>
+                          ))}
+                        </select>
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
                           <span className="material-symbols-outlined">expand_more</span>
                         </div>
