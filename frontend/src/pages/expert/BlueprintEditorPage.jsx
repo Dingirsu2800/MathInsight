@@ -14,6 +14,7 @@ import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { getBlueprintActions } from "../../utils/blueprintAuth";
 import { getQuestionTypeLabel } from "../../utils/blueprintLabels";
 import { flattenTopicTree } from "./questionMappers";
+import { getAccountId } from "../../services/authStorage";
 import { cn } from "../../utils/cn";
 
 export default function BlueprintEditorPage() {
@@ -21,7 +22,7 @@ export default function BlueprintEditorPage() {
   const { blueprintId } = useParams();
   const location = useLocation();
   const isEditMode = !!blueprintId;
-  const currentAccountId = localStorage.getItem("AccountId");
+  const currentAccountId = getAccountId();
 
   // Form state
   const [form, setForm] = useState({
