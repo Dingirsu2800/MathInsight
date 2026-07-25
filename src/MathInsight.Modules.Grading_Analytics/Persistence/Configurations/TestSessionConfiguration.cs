@@ -26,7 +26,6 @@ public class TestSessionConfiguration : IEntityTypeConfiguration<TestSession>
         builder.Property(x => x.NumAbandoned).HasColumnName("NumAbandoned");
         builder.Property(x => x.Score).HasColumnName("Score").HasPrecision(5, 2);
         builder.Property(x => x.GradeRevision).HasColumnName("GradeRevision");
-
         builder.HasMany(x => x.TestAnswers)
                .WithOne(a => a.Session)
                .HasForeignKey(a => a.SessionId);

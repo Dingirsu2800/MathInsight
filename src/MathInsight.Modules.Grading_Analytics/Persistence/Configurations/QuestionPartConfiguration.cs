@@ -22,9 +22,8 @@ public class QuestionPartConfiguration : IEntityTypeConfiguration<QuestionPart>
         builder.Property(x => x.CorrectText).HasColumnName("CorrectText").HasMaxLength(255);
         builder.Property(x => x.CorrectNumeric).HasColumnName("CorrectNumeric").HasPrecision(18, 6);
         builder.Property(x => x.NumericTolerance).HasColumnName("NumericTolerance").HasPrecision(18, 6);
-
-        builder.Property(x => x.DefaultWeight).HasColumnName("DefaultWeight").HasPrecision(5, 2);
-        builder.Property(x => x.IsArchived).HasColumnName("IsArchived");
+        
+        builder.Property(x => x.DefaultWeight).HasColumnName("DefaultWeight").HasPrecision(4, 2);
         builder.Property(x => x.Explanation).HasColumnName("Explanation");
 
         builder.HasOne(x => x.Question)
