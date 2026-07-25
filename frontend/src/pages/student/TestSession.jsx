@@ -13,6 +13,7 @@ import {
 } from '../../services/testingApi';
 
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (BR-11)
+const getLocalStorageKey = (sessionId) => `mathinsight_practice_session_${sessionId}`;
 
 /**
  * Full test-taking page.
@@ -27,7 +28,7 @@ export default function TestSession() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Answers: { [questionId]: { answerId?, shortAnswerText?, selectedOptions?, parts? } }
+  // Answers: { [questionId]: { answerId?, shortAnswerText?, selectedOptions?, parts?, timeSpent? } }
   const [answers, setAnswers] = useState({});
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -40,12 +41,56 @@ export default function TestSession() {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Refs for auto-save
+  // Refs for auto-save & question time tracking
   const answersRef = useRef(answers);
   answersRef.current = answers;
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const dirtyRef = useRef(false);
+
+  const questionStartTimeRef = useRef(Date.now());
+  const prevQuestionIdRef = useRef(null);
+
+  // ─── LocalStorage Cache (Practice sessions) ──────────────────────────
+  const clearPracticeCache = useCallback((sessionId) => {
+    if (sessionId) {
+      try {
+        localStorage.removeItem(getLocalStorageKey(sessionId));
+      } catch { /* ignore */ }
+    }
+  }, []);
+
+  // Save answers to LocalStorage on change (Practice only)
+  useEffect(() => {
+    if (session?.sessionId && session?.testFormat === 'Practice' && Object.keys(answers).length > 0) {
+      try {
+        localStorage.setItem(getLocalStorageKey(session.sessionId), JSON.stringify(answers));
+      } catch { /* ignore quota errors */ }
+    }
+  }, [answers, session]);
+
+  // ─── Question Time Tracker ──────────────────────────────────────────
+  useEffect(() => {
+    if (currentQuestionId && prevQuestionIdRef.current && prevQuestionIdRef.current !== currentQuestionId) {
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0, Math.floor((now - questionStartTimeRef.current) / 1000));
+      questionStartTimeRef.current = now;
+
+      if (elapsedSeconds > 0) {
+        const qIdToUpdate = prevQuestionIdRef.current;
+        setAnswers((prev) => {
+          const existing = prev[qIdToUpdate] || {};
+          return {
+            ...prev,
+            [qIdToUpdate]: { ...existing, timeSpent: (existing.timeSpent || 0) + elapsedSeconds },
+          };
+        });
+        dirtyRef.current = true;
+      }
+    }
+    prevQuestionIdRef.current = currentQuestionId;
+    questionStartTimeRef.current = Date.now();
+  }, [currentQuestionId]);
 
   // ─── Start Session ──────────────────────────────────────────────────
   useEffect(() => {
@@ -66,6 +111,19 @@ export default function TestSession() {
         setRemainingSeconds(data.durationMinutes * 60);
         if (data.questions?.length > 0) {
           setCurrentQuestionId(data.questions[0].questionId);
+        }
+
+        // Restore draft answers from LocalStorage if Practice format
+        if (data.testFormat === 'Practice' && data.sessionId) {
+          try {
+            const cached = localStorage.getItem(getLocalStorageKey(data.sessionId));
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed && typeof parsed === 'object') {
+                setAnswers(parsed);
+              }
+            }
+          } catch { /* ignore invalid cache */ }
         }
       })
       .catch((err) => {
@@ -99,6 +157,7 @@ export default function TestSession() {
           setIncidentCount(res.totalIncidents);
           if (res.forceSubmitted) {
             setForceSubmitted(true);
+            clearPracticeCache(sessionRef.current.sessionId);
             navigate(`/student/test-result/${sessionRef.current.sessionId}`);
           }
         })
@@ -107,19 +166,36 @@ export default function TestSession() {
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [session, forceSubmitted, isExam, navigate]);
+  }, [session, forceSubmitted, isExam, navigate, clearPracticeCache]);
 
   // ─── Auto-Save (BR-11): every 5 minutes + on answer change ────────
   const performAutoSave = useCallback(async () => {
-    if (!sessionRef.current || !dirtyRef.current) return;
+    if (!sessionRef.current) return;
+
+    // Flush elapsed time for active question
+    const now = Date.now();
+    const elapsedSeconds = Math.max(0, Math.floor((now - questionStartTimeRef.current) / 1000));
+    questionStartTimeRef.current = now;
+
+    let currentAnswersMap = { ...answersRef.current };
+    if (currentQuestionId && elapsedSeconds > 0) {
+      const existing = currentAnswersMap[currentQuestionId] || {};
+      currentAnswersMap[currentQuestionId] = {
+        ...existing,
+        timeSpent: (existing.timeSpent || 0) + elapsedSeconds,
+      };
+      setAnswers(currentAnswersMap);
+      dirtyRef.current = true;
+    }
+
+    if (!dirtyRef.current) return;
     dirtyRef.current = false;
 
-    const answersMap = answersRef.current;
-    const dtos = Object.entries(answersMap).map(([questionId, ans]) => ({
+    const dtos = Object.entries(currentAnswersMap).map(([questionId, ans]) => ({
       questionId,
       answerId: ans.answerId || null,
       shortAnswerText: ans.shortAnswerText || null,
-      timeSpent: 0,
+      timeSpent: ans.timeSpent || 0,
       selectedOptions: ans.selectedOptions?.map((id) => ({ optionId: id })) || null,
       parts: ans.parts?.map((p) => ({
         partId: p.partId,
@@ -139,7 +215,7 @@ export default function TestSession() {
     } catch {
       // Silently fail — will retry next interval
     }
-  }, []);
+  }, [currentQuestionId]);
 
   // Periodic auto-save
   useEffect(() => {
@@ -200,9 +276,10 @@ export default function TestSession() {
     await performAutoSave();
     try {
       await submitSession(sessionRef.current.sessionId);
+      clearPracticeCache(sessionRef.current.sessionId);
     } catch { /* ignore */ }
     navigate(`/student/test-result/${sessionRef.current.sessionId}`);
-  }, [navigate, performAutoSave, submitting]);
+  }, [navigate, performAutoSave, submitting, clearPracticeCache]);
 
   // ─── Submit Flow ───────────────────────────────────────────────────
   const handleSubmitClick = () => setShowSubmitModal(true);
@@ -216,6 +293,7 @@ export default function TestSession() {
 
     try {
       await submitSession(session.sessionId);
+      clearPracticeCache(session.sessionId);
       navigate(`/student/test-result/${session.sessionId}`);
     } catch {
       setSubmitting(false);
