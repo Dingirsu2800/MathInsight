@@ -94,30 +94,19 @@ public sealed class GenerateBlueprintExamCommandHandler
         if (blueprint.Grade != studentGrade)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.GradeMismatch);
 
-        var requirements = BuildRequirements(blueprint);
-        if (!HasValidStructure(blueprint, requirements))
+        var requirements = BlueprintExamGenerationPlanner.BuildRequirements(blueprint);
+        if (BlueprintExamGenerationPlanner.ValidateStructure(blueprint, requirements) != BlueprintExamStructureError.None)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.BlueprintUnavailable);
 
-        var candidates = await _candidateProvider.GetCandidatesAsync(blueprint, cancellationToken);
-        var selection = _selector.Select(requirements, candidates, cancellationToken);
+        var candidatePool = await _candidateProvider.GetCandidatesAsync(blueprint, cancellationToken);
+        var selection = _selector.Select(requirements, candidatePool.Candidates, cancellationToken);
         if (!selection.IsComplete || selection.Assignments.Count != blueprint.TotalQuestions)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.InsufficientQuestions);
 
-        var candidatesById = candidates.ToDictionary(candidate => candidate.QuestionId, StringComparer.OrdinalIgnoreCase);
-        var sectionsByOrder = blueprint.Sections.ToDictionary(section => section.SectionOrder);
-        var maxPointsByQuestion = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        foreach (var sectionAssignments in selection.Assignments.GroupBy(assignment => assignment.SectionOrder))
-        {
-            var section = sectionsByOrder[sectionAssignments.Key];
-            var weightedItems = sectionAssignments
-                .Select(assignment => new WeightedScoreItem(
-                    assignment.QuestionId,
-                    candidatesById[assignment.QuestionId].DefaultWeight,
-                    assignment.CandidateOrder))
-                .ToList();
-            foreach (var allocation in ScoringAllocator.Allocate(section.ScoreBudget, weightedItems))
-                maxPointsByQuestion.Add(allocation.Key, allocation.Value);
-        }
+        var preparedQuestions = BlueprintExamGenerationPlanner.PrepareQuestions(
+            blueprint,
+            selection,
+            candidatePool.Candidates);
 
         var test = new TestEntity
         {
@@ -136,27 +125,24 @@ public sealed class GenerateBlueprintExamCommandHandler
             CreatedTime = createdTime
         };
 
-        for (var index = 0; index < selection.Assignments.Count; index++)
+        foreach (var prepared in preparedQuestions)
         {
-            var assignment = selection.Assignments[index];
-            var candidate = candidatesById[assignment.QuestionId];
-            var section = sectionsByOrder[assignment.SectionOrder];
             test.Questions.Add(new TestQuestion
             {
                 TestId = test.TestId,
-                QuestionId = assignment.QuestionId,
-                QuestionOrder = index + 1,
-                SourceBlueprintDetailId = assignment.BlueprintDetailId,
+                QuestionId = prepared.Assignment.QuestionId,
+                QuestionOrder = prepared.QuestionOrder,
+                SourceBlueprintDetailId = prepared.Assignment.BlueprintDetailId,
                 SelectionReason = GeneratedTestValues.BlueprintNormalReason,
                 IsAdaptiveSelected = false,
                 RecommendedForTagId = null,
                 RecommendedDifficultyId = null,
                 PtagAtSelection = null,
                 RuleVersion = null,
-                QuestionVersionId = candidate.QuestionVersionId,
-                WeightSnapshot = candidate.DefaultWeight,
-                MaxPointsSnapshot = maxPointsByQuestion[assignment.QuestionId],
-                ScoringRuleSnapshot = section.ScoringRule,
+                QuestionVersionId = prepared.Candidate.QuestionVersionId,
+                WeightSnapshot = prepared.Candidate.DefaultWeight,
+                MaxPointsSnapshot = prepared.MaxPoints,
+                ScoringRuleSnapshot = prepared.ScoringRule,
                 IsScoreInvalidated = false,
                 InvalidatedByReportId = null
             });
@@ -235,49 +221,6 @@ public sealed class GenerateBlueprintExamCommandHandler
             ? (true, Result<GenerateBlueprintExamResponse>.Success(ToResponse(persisted)))
             : (false, default!);
     }
-
-    private static IReadOnlyList<BlueprintExamRequirement> BuildRequirements(Blueprint blueprint)
-    {
-        var requirements = new List<BlueprintExamRequirement>();
-        var detailOrder = 0;
-        foreach (var section in blueprint.Sections.OrderBy(section => section.SectionOrder))
-        {
-            foreach (var detail in section.Details
-                         .OrderBy(detail => detail.TagId, StringComparer.OrdinalIgnoreCase)
-                         .ThenBy(detail => detail.DifficultyId, StringComparer.OrdinalIgnoreCase)
-                         .ThenBy(detail => detail.BlueprintDetailId, StringComparer.OrdinalIgnoreCase))
-            {
-                requirements.Add(new BlueprintExamRequirement(
-                    detail.BlueprintDetailId,
-                    section.SectionOrder,
-                    detailOrder++,
-                    detail.TagId,
-                    detail.DifficultyId,
-                    section.QuestionType,
-                    section.ScoringRule,
-                    detail.Quantity));
-            }
-        }
-
-        return requirements;
-    }
-
-    private static bool HasValidStructure(
-        Blueprint blueprint,
-        IReadOnlyList<BlueprintExamRequirement> requirements)
-        => blueprint.TotalQuestions > 0 &&
-           blueprint.DurationMinutes > 0 &&
-           blueprint.Sections.Count > 0 &&
-           blueprint.Sections.All(section =>
-               section.TotalQuestions > 0 &&
-               section.ScoreBudget > 0m &&
-               ScoringRules.IsSupported(section.ScoringRule) &&
-               section.Details.Count > 0 &&
-               section.Details.Sum(detail => detail.Quantity) == section.TotalQuestions) &&
-           blueprint.Sections.Sum(section => section.TotalQuestions) == blueprint.TotalQuestions &&
-           blueprint.Sections.Sum(section => section.ScoreBudget) == blueprint.TotalScore &&
-           requirements.All(requirement => requirement.Quantity > 0) &&
-           requirements.Sum(requirement => requirement.Quantity) == blueprint.TotalQuestions;
 
     private static bool IsBaselineAuditRow(TestQuestion question)
         => !string.IsNullOrWhiteSpace(question.SourceBlueprintDetailId) &&

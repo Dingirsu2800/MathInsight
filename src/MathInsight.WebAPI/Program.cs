@@ -11,6 +11,7 @@ using MathInsight.Modules.Identity_Access;
 using MathInsight.Modules.QuestionBank;
 using MathInsight.Modules.Testing;
 using MathInsight.Modules.TestGen;
+using MathInsight.Modules.TestGen.RateLimiting;
 using MathInsight.Modules.Grading_Analytics;
 using MathInsight.Modules.Recommender;
 using MathInsight.Modules.Learning_Lecture;
@@ -226,6 +227,24 @@ builder.Services.AddRateLimiter(options =>
     };
 
     options.AddPolicy(QuestionOcrRateLimit.PolicyName, httpContext =>
+    {
+        var partitionKey = httpContext.User.FindFirst("account_id")?.Value
+            ?? httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+
+    options.AddPolicy(TestCodeResolutionRateLimit.PolicyName, httpContext =>
     {
         var partitionKey = httpContext.User.FindFirst("account_id")?.Value
             ?? httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
