@@ -1,3 +1,4 @@
+using MassTransit;
 using MathInsight.Modules.Testing.Contracts;
 using MathInsight.Modules.Testing.Errors;
 using MathInsight.Modules.Testing.Persistence;
@@ -13,11 +14,16 @@ public sealed class ForceSubmitSessionCommandHandler
 {
     private readonly TestingDbContext _db;
     private readonly IMediator _mediator;
+    private readonly IPublishEndpoint? _publishEndpoint;
 
-    public ForceSubmitSessionCommandHandler(TestingDbContext db, IMediator mediator)
+    public ForceSubmitSessionCommandHandler(
+        TestingDbContext db,
+        IMediator mediator,
+        IPublishEndpoint? publishEndpoint = null)
     {
         _db = db;
         _mediator = mediator;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<Result<SubmitSessionResponse>> Handle(
@@ -66,7 +72,11 @@ public sealed class ForceSubmitSessionCommandHandler
         }
         else
         {
-            // Exam mode: publish to MassTransit queue for async grading
+            // Exam mode: publish to MassTransit queue for async grading when available
+            if (_publishEndpoint is not null)
+            {
+                await _publishEndpoint.Publish(submissionEvent, cancellationToken);
+            }
             await _mediator.Publish(submissionEvent, cancellationToken);
         }
 

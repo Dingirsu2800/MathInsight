@@ -161,7 +161,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             if (mastery.SeriesAnswerCount >= 10)
             {
                 mastery.PracticePoint = mastery.OfficialPoint;
-                mastery.SeriesAnswerCount = 0;
+                mastery.SeriesAnswerCount -= 10;
             }
         }
 

@@ -107,6 +107,11 @@ public class GradingOrchestrator : IGradingOrchestrator
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.TestId == session.TestId, cancellationToken);
 
+        // ── Load TagDifficulty lookup map ─────────────────────────────────────
+        var difficultyLevels = await _db.TagDifficulties
+            .AsNoTracking()
+            .ToDictionaryAsync(td => td.DifficultyId, td => td.LevelValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
         // ── Run grading engine synchronously ──────────────────────────────────
         var gradingResult = _gradingEngine.Grade(session);
 
@@ -135,7 +140,7 @@ public class GradingOrchestrator : IGradingOrchestrator
         }
 
         // ── Build and return GradeCalculatedEvent ─────────────────────────────
-        return BuildGradeCalculatedEvent(session, gradingResult, notification, testQuestions, test);
+        return BuildGradeCalculatedEvent(session, gradingResult, notification, testQuestions, test, difficultyLevels);
     }
 
     private static GradeCalculatedEvent BuildGradeCalculatedEvent(
@@ -143,7 +148,8 @@ public class GradingOrchestrator : IGradingOrchestrator
         GradingResult gradingResult,
         TestSubmittedEvent notification,
         Dictionary<string, TestQuestion> testQuestions,
-        Test? test)
+        Test? test,
+        Dictionary<string, byte> difficultyLevels)
     {
         var gradedAnswers = new List<GradedAnswerDto>();
 
@@ -169,6 +175,13 @@ public class GradingOrchestrator : IGradingOrchestrator
             bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
             bool isInvalidated = tq?.IsScoreInvalidated ?? false;
 
+            byte difficultyLevel = 1;
+            if (!string.IsNullOrEmpty(answer.Question.DifficultyId) &&
+                difficultyLevels.TryGetValue(answer.Question.DifficultyId, out var level))
+            {
+                difficultyLevel = level;
+            }
+
             gradedAnswers.Add(new GradedAnswerDto
             {
                 QuestionId = answer.QuestionId,
@@ -179,7 +192,7 @@ public class GradingOrchestrator : IGradingOrchestrator
                 PointsEarned = answer.PointsEarned,
                 MaxPoints = maxPoints,
                 TimeSpent = answer.TimeSpent ?? 0,
-                DifficultyLevel = 1,
+                DifficultyLevel = difficultyLevel,
                 QuestionNo = answer.QuestionNo,
                 IsAbandoned = isAbandoned,
                 IsScoreInvalidated = isInvalidated
