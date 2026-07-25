@@ -10,7 +10,11 @@ public static class TestingErrors
 
     public static readonly Error TestNotActive = new(
         "TESTING_TEST_NOT_ACTIVE",
-        "The test is not in ACTIVE status and cannot be started.");
+        "The test is not in Active status and cannot be started.");
+
+    public static readonly Error TestAccessDenied = new(
+        "TESTING_TEST_ACCESS_DENIED",
+        "The student is not allowed to start this test.");
 
     public static readonly Error SessionNotFound = new(
         "TESTING_SESSION_NOT_FOUND",

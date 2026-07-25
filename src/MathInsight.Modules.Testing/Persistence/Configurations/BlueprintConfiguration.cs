@@ -21,5 +21,14 @@ public class BlueprintConfiguration : IEntityTypeConfiguration<Blueprint>
             .HasMaxLength(100)
             .IsUnicode()
             .IsRequired();
+
+        builder.Property(x => x.Grade)
+            .HasColumnName("Grade");
+
+        builder.Property(x => x.Status)
+            .HasColumnName("Status")
+            .HasMaxLength(20)
+            .IsUnicode(false)
+            .IsRequired();
     }
 }

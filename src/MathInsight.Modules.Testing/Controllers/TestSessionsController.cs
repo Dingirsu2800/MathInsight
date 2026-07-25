@@ -9,6 +9,7 @@ using MathInsight.Modules.Testing.Queries.GetSessionContent;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MathInsight.Modules.Testing.Controllers;
@@ -77,6 +78,9 @@ public class TestSessionsController : ControllerBase
 
             if (result.Error.Code == "TESTING_TEST_NOT_FOUND")
                 return NotFound(new ApiErrorResponse(result.Error));
+
+            if (result.Error.Code == "TESTING_TEST_ACCESS_DENIED")
+                return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(result.Error));
 
             return BadRequest(new ApiErrorResponse(result.Error));
         }
