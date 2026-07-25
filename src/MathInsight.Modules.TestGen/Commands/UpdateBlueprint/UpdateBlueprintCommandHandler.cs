@@ -130,6 +130,7 @@ public sealed class UpdateBlueprintCommandHandler
         if (persisted.BlueprintName != expected.BlueprintName ||
             persisted.Grade != expected.Grade ||
             persisted.TotalQuestions != expected.TotalQuestions ||
+            persisted.TotalScore != expected.TotalScore ||
             persisted.DurationMinutes != expected.DurationMinutes ||
             persisted.Sections.Count != expected.Sections.Count)
         {
@@ -153,8 +154,8 @@ public sealed class UpdateBlueprintCommandHandler
                 actualSection.QuestionType != expectedSection.QuestionType ||
                 actualSection.InstructionText != expectedSection.InstructionText ||
                 actualSection.TotalQuestions != expectedSection.TotalQuestions ||
-                actualSection.DefaultPointPerQuestion != expectedSection.DefaultPointPerQuestion ||
-                actualSection.DefaultPointPerPart != expectedSection.DefaultPointPerPart ||
+                actualSection.ScoreBudget != expectedSection.ScoreBudget ||
+                actualSection.ScoringRule != expectedSection.ScoringRule ||
                 actualSection.PartCountPerQuestion != expectedSection.PartCountPerQuestion ||
                 actualSection.Details.Count != expectedSection.Details.Count)
             {

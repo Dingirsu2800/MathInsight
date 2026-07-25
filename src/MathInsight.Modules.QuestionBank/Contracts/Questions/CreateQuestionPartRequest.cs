@@ -12,5 +12,5 @@ public sealed class CreateQuestionPartRequest
     public decimal? CorrectNumeric { get; set; }
     public decimal? NumericTolerance { get; set; }
     public string? Explanation { get; set; }
-    public decimal DefaultPoint { get; set; } = 0.00m;
+    public decimal DefaultWeight { get; set; } = 1.00m;
 }

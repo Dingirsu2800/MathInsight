@@ -1,3 +1,5 @@
+using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
+using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.Testing.Errors;
 using MathInsight.Modules.Testing.Persistence;
 using MathInsight.Shared.Results;
@@ -33,7 +35,7 @@ public sealed class ReportSessionQuestionCommandHandler
         ReportSessionQuestionCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Validate session exists, belongs to student, and is InProgress
+        // Validate ownership. Reports are allowed while taking the test or from history.
         var session = await _db.TestSessions
             .FirstOrDefaultAsync(s => s.SessionId == request.SessionId, cancellationToken);
 
@@ -43,31 +45,29 @@ public sealed class ReportSessionQuestionCommandHandler
         if (session.StudentId != request.StudentId)
             return Result<bool>.Failure(TestingErrors.SessionNotFound);
 
-        if (session.Status != "InProgress")
-            return Result<bool>.Failure(TestingErrors.SessionNotInProgress);
-
-        // 2. Verify question belongs to this session's test
-        var questionExists = await _db.TestAnswers
-            .AnyAsync(a => a.SessionId == request.SessionId
-                        && a.QuestionId == request.QuestionId,
+        var testQuestion = await _db.TestQuestions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.TestId == session.TestId &&
+                                         item.QuestionId == request.QuestionId,
                 cancellationToken);
-
-        if (!questionExists)
+        if (testQuestion is null)
             return Result<bool>.Failure(TestingErrors.RequestInvalid);
 
-        // 3. Delegate to QuestionBank module
-        // In the modular monolith, this would call the QuestionBank module's
-        // ReportQuestionCommand via MediatR. For now, log the report for audit.
-        _logger.LogInformation(
-            "Question report: SessionId={SessionId}, QuestionId={QuestionId}, StudentId={StudentId}, Reason={Reason}",
-            request.SessionId,
+        var result = await _mediator.Send(new ReportQuestionCommand(
             request.QuestionId,
+            new ReportQuestionRequest { ReportReason = request.Reason },
             request.StudentId,
-            request.Reason);
-
-        // TODO: When QuestionBank module (002) exposes ReportQuestionCommand via MediatR,
-        // replace this with:
-        // await _mediator.Send(new ReportQuestionCommand(request.QuestionId, request.StudentId, request.Reason, request.SessionId));
+            "Student",
+            request.SessionId,
+            testQuestion.QuestionVersionId), cancellationToken);
+        if (result.IsFailure)
+        {
+            _logger.LogWarning(
+                "Question report was rejected for session {SessionId}: {Code}",
+                request.SessionId,
+                result.Error?.Code);
+            return Result<bool>.Failure(result.Error ?? TestingErrors.RequestInvalid);
+        }
 
         return Result<bool>.Success(true);
     }

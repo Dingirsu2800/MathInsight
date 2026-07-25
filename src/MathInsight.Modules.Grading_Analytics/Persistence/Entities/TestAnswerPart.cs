@@ -6,9 +6,9 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class TestAnswerPart
 {
-    public Guid TestAnswerId { get; set; }
-    public Guid PartId { get; set; }
-    
+    public string TestAnswerId { get; set; } = string.Empty;
+    public string PartId { get; set; } = string.Empty;
+
     public bool? BooleanAnswer { get; set; }
     public string? TextAnswer { get; set; }
     public decimal? NumericAnswer { get; set; }

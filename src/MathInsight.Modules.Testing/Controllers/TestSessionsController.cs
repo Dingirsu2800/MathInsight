@@ -5,6 +5,7 @@ using MathInsight.Modules.Testing.Commands.StartSession;
 using MathInsight.Modules.Testing.Commands.SubmitSession;
 using MathInsight.Modules.Testing.Commands.ReportSessionQuestion;
 using MathInsight.Modules.Testing.Contracts;
+using MathInsight.Modules.Testing.Queries.GetSessionContent;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -31,6 +32,25 @@ public class TestSessionsController : ControllerBase
     private string? GetStudentId() =>
         User.FindFirst("account_id")?.Value
         ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetSession(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var studentId = GetStudentId();
+        if (string.IsNullOrWhiteSpace(studentId))
+            return Unauthorized();
+
+        var result = await _mediator.Send(
+            new GetSessionContentQuery(id, studentId),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return NotFound(new ApiErrorResponse(result.Error!));
+
+        return Ok(result.Value);
+    }
 
     /// <summary>
     /// UC-47: Creates a new InProgress test session for the authenticated student.

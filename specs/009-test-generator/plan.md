@@ -1,5 +1,7 @@
 # Implementation Plan: Test Generator Module
 
+> **Current checkpoint**: implement Blueprint budgets and generated snapshots from [Scoring Contract V2](../scoring-contract-v2.md).
+
 **Branch**: `testgen-test-generation` | **Updated**: 2026-07-16
 **Spec**: [spec.md](spec.md)
 

@@ -12,6 +12,8 @@ public class Test
     public string? TestCode { get; set; }
     public int DurationMinutes { get; set; }
     public int TotalQuestions { get; set; }
+    public decimal MaxScore { get; set; }
+    public string ScoringPolicy { get; set; } = "NormalizedWeight";
     public DateTime CreatedTime { get; set; }
 
     // Navigation properties

@@ -66,6 +66,10 @@ export const questionBankApi = {
     return client.patch(`/api/question-bank/reports/${reportId}`, payload);
   },
 
+  retryQuestionReportScoreAdjustment(reportId) {
+    return client.post(`/api/question-bank/reports/${reportId}/retry-score-adjustment`);
+  },
+
   uploadQuestionImage(file) {
     const formData = new FormData();
     formData.append("file", file);

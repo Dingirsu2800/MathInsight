@@ -1,5 +1,7 @@
+using System.Text.Json;
 using MathInsight.Modules.Testing.Entities;
 using MathInsight.Modules.Testing.Persistence;
+using MathInsight.Shared.Questions;
 
 namespace MathInsight.Modules.Testing.Tests;
 
@@ -34,6 +36,8 @@ internal static class TestDataSeeder
             TestName = "Practice Test 1",
             DurationMinutes = 60,
             TotalQuestions = 5,
+            MaxScore = 10m,
+            ScoringPolicy = "NormalizedWeight",
             CreatedTime = DateTime.UtcNow.AddDays(-1),
             GeneratedBy = "System"
         };
@@ -43,12 +47,27 @@ internal static class TestDataSeeder
         var questionIds = new[] { Question1Id, Question2Id, Question3Id, Question4Id, Question5Id };
         for (int i = 0; i < questionIds.Length; i++)
         {
+            var versionId = $"version-{i + 1}";
+            var snapshot = CreateSnapshot(questionIds[i], i);
+            db.QuestionVersions.Add(new QuestionVersion
+            {
+                VersionId = versionId,
+                QuestionId = questionIds[i],
+                QuestionContent = snapshot.QuestionContent!,
+                QuestionAnswer = "Test solution",
+                AnswersSnapshot = JsonSerializer.Serialize(snapshot),
+                SnapshotSchemaVersion = 2
+            });
             db.TestQuestions.Add(new TestQuestion
             {
                 TestId = ActiveTestId,
                 QuestionId = questionIds[i],
                 QuestionOrder = i + 1,
-                SelectionReason = "BlueprintNormal"
+                SelectionReason = "BlueprintNormal",
+                QuestionVersionId = versionId,
+                WeightSnapshot = 1m,
+                MaxPointsSnapshot = 2m,
+                ScoringRuleSnapshot = "AllOrNothing"
             });
         }
 
@@ -67,5 +86,35 @@ internal static class TestDataSeeder
         db.Tests.Add(archivedTest);
 
         await db.SaveChangesAsync();
+    }
+
+    private static QuestionSnapshotV2 CreateSnapshot(string questionId, int index)
+    {
+        IReadOnlyList<QuestionAnswerSnapshot> answers = index switch
+        {
+            0 => [new(Answer1Id, "Answer 1", true)],
+            1 => [new("ans-2", "Answer 2", true)],
+            2 => [new("opt-a", "Option A", true), new("opt-b", "Option B", true)],
+            4 => [new("ans-5", "Answer 5", true)],
+            _ => []
+        };
+        IReadOnlyList<QuestionPartSnapshot> parts = index == 3
+            ?
+            [
+                new("part-1", 1, "a", "Statement 1", "Boolean", true, null, null, null, null, 1m),
+                new("part-2", 2, "b", "Statement 2", "Text", null, "answer text", null, null, null, 1m)
+            ]
+            : [];
+
+        return new QuestionSnapshotV2(
+            questionId,
+            index == 3 ? "COMPOSITE" : "SINGLE_CHOICE",
+            "DIFF-MEDIUM",
+            12,
+            1m,
+            [new QuestionTopicSnapshot("TOPIC-G12-TEST", true)],
+            answers,
+            parts,
+            $"Immutable question {index + 1}");
     }
 }

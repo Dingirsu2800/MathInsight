@@ -427,7 +427,7 @@ export default function BlueprintDetailPage() {
                         Số lượng câu hỏi: <span className="font-bold text-on-surface font-mono">{sec.totalQuestions} câu</span>
                       </div>
                       <div className="border-l border-whisper-border pl-6">
-                        Điểm mặc định: <span className="font-bold text-on-surface font-mono">{sec.defaultPointPerQuestion}đ/câu</span>
+                        Quỹ điểm: <span className="font-bold text-on-surface font-mono">{sec.scoreBudget} điểm</span>
                       </div>
                       {isComposite && (
                         <>
@@ -435,7 +435,7 @@ export default function BlueprintDetailPage() {
                             Số phần: <span className="font-bold text-primary font-mono">{sec.partCountPerQuestion} phần/câu</span>
                           </div>
                           <div className="border-l border-whisper-border pl-6">
-                            Điểm/Phần: <span className="font-bold text-primary font-mono">{sec.defaultPointPerPart}đ/phần</span>
+                            Quy tắc: <span className="font-bold text-primary">{sec.scoringRule}</span>
                           </div>
                         </>
                       )}
@@ -499,6 +499,10 @@ export default function BlueprintDetailPage() {
                 <li className="flex justify-between items-center border-b border-whisper-border/30 pb-2">
                   <span className="text-on-surface-variant font-medium">Tổng số câu hỏi</span>
                   <span className="text-on-surface font-bold font-mono">{blueprint.totalQuestions} câu</span>
+                </li>
+                <li className="flex justify-between items-center border-b border-whisper-border/30 pb-2">
+                  <span className="text-on-surface-variant font-medium">Tổng điểm</span>
+                  <span className="text-on-surface font-bold font-mono">{blueprint.totalScore} điểm</span>
                 </li>
                 <li className="flex justify-between items-center border-b border-whisper-border/30 pb-2">
                   <span className="text-on-surface-variant font-medium">Thời gian làm bài</span>

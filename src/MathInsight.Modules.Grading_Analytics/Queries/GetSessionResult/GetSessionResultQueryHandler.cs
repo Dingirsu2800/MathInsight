@@ -1,6 +1,8 @@
+using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Grading_Analytics.Persistence;
+using MathInsight.Shared.Questions;
 
 namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionResult;
 
@@ -31,15 +33,12 @@ public sealed class GetSessionResultQueryHandler
                 .ThenInclude(a => a.SelectedOptions)
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.AnswerParts)
-                    .ThenInclude(ap => ap.QuestionPart)
             .FirstOrDefaultAsync(s => s.SessionId == request.SessionId, cancellationToken);
 
-        // 404
         if (session is null)
             return null;
 
-        // 403 — student does not own the session (BR-UC55-01)
-        if (session.StudentId != request.AuthenticatedStudentId)
+        if (!string.Equals(session.StudentId, request.AuthenticatedStudentId, StringComparison.Ordinal))
             throw new UnauthorizedAccessException(
                 $"Student {request.AuthenticatedStudentId} does not own session {request.SessionId}.");
 

@@ -18,6 +18,35 @@ public sealed record SessionQuestionDto(
     string QuestionId,
     int QuestionOrder);
 
+public sealed record TestSessionViewResponse(
+    string SessionId,
+    string TestId,
+    string TestName,
+    string Status,
+    int DurationMinutes,
+    decimal MaxScore,
+    IReadOnlyList<StudentQuestionResponse> Questions);
+
+public sealed record StudentQuestionResponse(
+    string QuestionId,
+    string QuestionVersionId,
+    int QuestionNo,
+    string QuestionType,
+    string QuestionContent,
+    string? PictureUrl,
+    decimal MaxPoints,
+    IReadOnlyList<StudentAnswerOptionResponse> AnswerOptions,
+    IReadOnlyList<StudentQuestionPartResponse> Parts);
+
+public sealed record StudentAnswerOptionResponse(string AnswerId, string AnswerContent);
+
+public sealed record StudentQuestionPartResponse(
+    string PartId,
+    int PartOrder,
+    string? PartLabel,
+    string PartContent,
+    string PartType);
+
 // ─── AutoSave ───
 
 public sealed record AutoSaveRequest(

@@ -1,4 +1,4 @@
-using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
+﻿using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 
 namespace MathInsight.Modules.Grading_Analytics.Tests;
 
@@ -18,9 +18,9 @@ internal static class TestDataBuilder
     {
         return new TestSession
         {
-            SessionId = Guid.NewGuid(),
-            TestId = Guid.NewGuid(),
-            StudentId = Guid.NewGuid(),
+            SessionId = Guid.NewGuid().ToString("D"),
+            TestId = Guid.NewGuid().ToString("D"),
+            StudentId = Guid.NewGuid().ToString("D"),
             TestFormat = testFormat,
             Status = status,
             TotalQuestion = 0,
@@ -34,13 +34,13 @@ internal static class TestDataBuilder
     public static TestAnswer AddSingleChoiceAnswer(
         TestSession session,
         decimal defaultPoint,
-        Guid correctAnswerId,
-        Guid? studentAnswerId,
+        string correctAnswerId,
+        string? studentAnswerId,
         string questionType = "SINGLE_CHOICE",
         byte difficultyLevel = 1,
-        Guid? primaryTagId = null)
+        string? primaryTagId = null)
     {
-        var questionId = Guid.NewGuid();
+        var questionId = Guid.NewGuid().ToString("D");
         var question = new Question
         {
             QuestionId = questionId,
@@ -51,21 +51,21 @@ internal static class TestDataBuilder
             Answers = new List<Answer>
             {
                 new() { AnswerId = correctAnswerId, QuestionId = questionId, AnswerContent = "Correct", IsCorrect = true },
-                new() { AnswerId = Guid.NewGuid(), QuestionId = questionId, AnswerContent = "Wrong1", IsCorrect = false },
-                new() { AnswerId = Guid.NewGuid(), QuestionId = questionId, AnswerContent = "Wrong2", IsCorrect = false },
+                new() { AnswerId = Guid.NewGuid().ToString("D"), QuestionId = questionId, AnswerContent = "Wrong1", IsCorrect = false },
+                new() { AnswerId = Guid.NewGuid().ToString("D"), QuestionId = questionId, AnswerContent = "Wrong2", IsCorrect = false },
             },
             Parts = new List<QuestionPart>(),
-            QuestionTopics = primaryTagId.HasValue
+            QuestionTopics = primaryTagId is not null
                 ? new List<QuestionTopic>
                 {
-                    new() { QuestionTopicId = Guid.NewGuid(), QuestionId = questionId, TagId = primaryTagId.Value, IsPrimary = true }
+                    new() { QuestionTopicId = Guid.NewGuid().ToString("D"), QuestionId = questionId, TagId = primaryTagId, IsPrimary = true }
                 }
                 : new List<QuestionTopic>()
         };
 
         var answer = new TestAnswer
         {
-            TestAnswerId = Guid.NewGuid(),
+            TestAnswerId = Guid.NewGuid().ToString("D"),
             SessionId = session.SessionId,
             QuestionId = questionId,
             AnswerId = studentAnswerId,
@@ -87,12 +87,12 @@ internal static class TestDataBuilder
     public static TestAnswer AddMultipleSelectAnswer(
         TestSession session,
         decimal defaultPoint,
-        List<Guid> correctAnswerIds,
-        List<Guid> selectedAnswerIds,
+        List<string> correctAnswerIds,
+        List<string> selectedAnswerIds,
         byte difficultyLevel = 1,
-        Guid? primaryTagId = null)
+        string? primaryTagId = null)
     {
-        var questionId = Guid.NewGuid();
+        var questionId = Guid.NewGuid().ToString("D");
         var answers = new List<Answer>();
 
         // Create correct answers
@@ -110,7 +110,7 @@ internal static class TestDataBuilder
         // Create some incorrect answers that aren't in correctAnswerIds
         for (int i = 0; i < 2; i++)
         {
-            var wrongId = Guid.NewGuid();
+            var wrongId = Guid.NewGuid().ToString("D");
             if (!correctAnswerIds.Contains(wrongId))
             {
                 answers.Add(new Answer
@@ -132,24 +132,24 @@ internal static class TestDataBuilder
             QuestionContent = "Test multiple select",
             Answers = answers,
             Parts = new List<QuestionPart>(),
-            QuestionTopics = primaryTagId.HasValue
+            QuestionTopics = primaryTagId is not null
                 ? new List<QuestionTopic>
                 {
-                    new() { QuestionTopicId = Guid.NewGuid(), QuestionId = questionId, TagId = primaryTagId.Value, IsPrimary = true }
+                    new() { QuestionTopicId = Guid.NewGuid().ToString("D"), QuestionId = questionId, TagId = primaryTagId, IsPrimary = true }
                 }
                 : new List<QuestionTopic>()
         };
 
         var selectedOptions = selectedAnswerIds.Select(id => new TestAnswerOption
         {
-            TestAnswerId = Guid.NewGuid(),
+            TestAnswerId = Guid.NewGuid().ToString("D"),
             AnswerId = id,
             Answer = answers.FirstOrDefault(a => a.AnswerId == id)!
         }).ToList();
 
         var testAnswer = new TestAnswer
         {
-            TestAnswerId = Guid.NewGuid(),
+            TestAnswerId = Guid.NewGuid().ToString("D"),
             SessionId = session.SessionId,
             QuestionId = questionId,
             AnswerId = null,
@@ -177,9 +177,9 @@ internal static class TestDataBuilder
         string correctAnswer,
         string? studentAnswer,
         byte difficultyLevel = 1,
-        Guid? primaryTagId = null)
+        string? primaryTagId = null)
     {
-        var questionId = Guid.NewGuid();
+        var questionId = Guid.NewGuid().ToString("D");
         var question = new Question
         {
             QuestionId = questionId,
@@ -189,20 +189,20 @@ internal static class TestDataBuilder
             QuestionContent = "Test short answer",
             Answers = new List<Answer>
             {
-                new() { AnswerId = Guid.NewGuid(), QuestionId = questionId, AnswerContent = correctAnswer, IsCorrect = true }
+                new() { AnswerId = Guid.NewGuid().ToString("D"), QuestionId = questionId, AnswerContent = correctAnswer, IsCorrect = true }
             },
             Parts = new List<QuestionPart>(),
-            QuestionTopics = primaryTagId.HasValue
+            QuestionTopics = primaryTagId is not null
                 ? new List<QuestionTopic>
                 {
-                    new() { QuestionTopicId = Guid.NewGuid(), QuestionId = questionId, TagId = primaryTagId.Value, IsPrimary = true }
+                    new() { QuestionTopicId = Guid.NewGuid().ToString("D"), QuestionId = questionId, TagId = primaryTagId, IsPrimary = true }
                 }
                 : new List<QuestionTopic>()
         };
 
         var answer = new TestAnswer
         {
-            TestAnswerId = Guid.NewGuid(),
+            TestAnswerId = Guid.NewGuid().ToString("D"),
             SessionId = session.SessionId,
             QuestionId = questionId,
             AnswerId = null,
@@ -227,16 +227,16 @@ internal static class TestDataBuilder
         decimal defaultPoint,
         List<(string answerKey, string? studentAnswer)> parts,
         byte difficultyLevel = 1,
-        Guid? primaryTagId = null)
+        string? primaryTagId = null)
     {
-        var questionId = Guid.NewGuid();
+        var questionId = Guid.NewGuid().ToString("D");
         var questionParts = new List<QuestionPart>();
 
         for (int i = 0; i < parts.Count; i++)
         {
             questionParts.Add(new QuestionPart
             {
-                QuestionPartId = Guid.NewGuid(),
+                QuestionPartId = Guid.NewGuid().ToString("D"),
                 QuestionId = questionId,
                 PartOrder = i + 1,
                 Content = $"Part {i + 1}",
@@ -255,16 +255,16 @@ internal static class TestDataBuilder
             QuestionContent = "Test composite",
             Answers = new List<Answer>(),
             Parts = questionParts,
-            QuestionTopics = primaryTagId.HasValue
+            QuestionTopics = primaryTagId is not null
                 ? new List<QuestionTopic>
                 {
-                    new() { QuestionTopicId = Guid.NewGuid(), QuestionId = questionId, TagId = primaryTagId.Value, IsPrimary = true }
+                    new() { QuestionTopicId = Guid.NewGuid().ToString("D"), QuestionId = questionId, TagId = primaryTagId, IsPrimary = true }
                 }
                 : new List<QuestionTopic>()
         };
 
         var answerParts = new List<TestAnswerPart>();
-        var testAnswerId = Guid.NewGuid();
+        var testAnswerId = Guid.NewGuid().ToString("D");
         for (int i = 0; i < questionParts.Count; i++)
         {
             answerParts.Add(new TestAnswerPart
@@ -305,9 +305,9 @@ internal static class TestDataBuilder
         decimal defaultPoint,
         List<(string partType, string answerKey, decimal pointValue, string? studentAnswer)> parts,
         byte difficultyLevel = 1,
-        Guid? primaryTagId = null)
+        string? primaryTagId = null)
     {
-        var questionId = Guid.NewGuid();
+        var questionId = Guid.NewGuid().ToString("D");
         var questionParts = new List<QuestionPart>();
 
         for (int i = 0; i < parts.Count; i++)
@@ -317,7 +317,7 @@ internal static class TestDataBuilder
 
             questionParts.Add(new QuestionPart
             {
-                QuestionPartId = Guid.NewGuid(),
+                QuestionPartId = Guid.NewGuid().ToString("D"),
                 QuestionId = questionId,
                 PartOrder = i + 1,
                 Content = $"Part {i + 1}",
@@ -339,16 +339,16 @@ internal static class TestDataBuilder
             QuestionContent = "Test composite general",
             Answers = new List<Answer>(),
             Parts = questionParts,
-            QuestionTopics = primaryTagId.HasValue
+            QuestionTopics = primaryTagId is not null
                 ? new List<QuestionTopic>
                 {
-                    new() { QuestionTopicId = Guid.NewGuid(), QuestionId = questionId, TagId = primaryTagId.Value, IsPrimary = true }
+                    new() { QuestionTopicId = Guid.NewGuid().ToString("D"), QuestionId = questionId, TagId = primaryTagId, IsPrimary = true }
                 }
                 : new List<QuestionTopic>()
         };
 
         var answerParts = new List<TestAnswerPart>();
-        var testAnswerId = Guid.NewGuid();
+        var testAnswerId = Guid.NewGuid().ToString("D");
         for (int i = 0; i < questionParts.Count; i++)
         {
             var pType = questionParts[i].PartType;

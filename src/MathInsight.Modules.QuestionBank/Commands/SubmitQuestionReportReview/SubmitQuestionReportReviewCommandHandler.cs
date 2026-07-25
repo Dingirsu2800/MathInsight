@@ -59,9 +59,11 @@ public sealed class SubmitQuestionReportReviewCommandHandler
         if (report.Status != QuestionReportWorkflow.PendingFix)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
 
+        var now = DateTime.UtcNow;
         report.Status = QuestionReportWorkflow.PendingReview;
-        report.SubmittedTime = DateTime.UtcNow;
+        report.SubmittedTime = now;
         report.Question.Status = "Reported";
+        report.Question.UpdatedTime = now;
 
         await _context.SaveChangesAsync(cancellationToken);
 

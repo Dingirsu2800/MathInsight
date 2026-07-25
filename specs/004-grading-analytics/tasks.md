@@ -1,5 +1,12 @@
 # Tasks Checklist: Grading & Analytics Module
 
+## Scoring Contract V2
+
+- [x] Grade immutable QuestionVersion data with TestQuestion scoring snapshots.
+- [x] Preserve machine points and calculate effective invalidated points.
+- [x] Recalculate version-wide affected sessions idempotently and increment GradeRevision.
+- [x] Publish revision-aware weighted topic results.
+
 **Branch**: `004-grading-analytics` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---

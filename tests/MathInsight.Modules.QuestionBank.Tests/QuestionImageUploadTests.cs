@@ -208,7 +208,7 @@ public sealed class QuestionImageUploadTests
         Assert.Equal("https://res.cloudinary.com/mathinsight/image/upload/test.png", pictureUrl);
         Assert.NotNull(capturedRequest);
         Assert.Equal(HttpMethod.Post, capturedRequest.Method);
-        Assert.Equal("https://api.cloudinary.com/v1_1/mathinsight/image/upload", capturedRequest.RequestUri!.AbsoluteUri);
+        Assert.Equal("https://api.cloudinary.com/v1_1/mathinsight/auto/upload", capturedRequest.RequestUri!.AbsoluteUri);
         Assert.NotNull(capturedRequest.Headers.Authorization);
         Assert.Equal("Basic", capturedRequest.Headers.Authorization!.Scheme);
         Assert.Equal(

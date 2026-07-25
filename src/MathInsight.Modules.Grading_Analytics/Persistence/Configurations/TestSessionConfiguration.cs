@@ -8,12 +8,12 @@ public class TestSessionConfiguration : IEntityTypeConfiguration<TestSession>
 {
     public void Configure(EntityTypeBuilder<TestSession> builder)
     {
-        builder.ToTable("TestSession");
+        builder.ToTable("TestSession", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.SessionId);
 
-        builder.Property(x => x.SessionId).HasColumnName("SessionID");
-        builder.Property(x => x.TestId).HasColumnName("TestID");
-        builder.Property(x => x.StudentId).HasColumnName("StudentID");
+        builder.Property(x => x.SessionId).HasColumnName("SessionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.TestId).HasColumnName("TestID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.StudentId).HasColumnName("StudentID").HasMaxLength(36).IsUnicode(false);
         builder.Property(x => x.TestFormat).HasColumnName("TestFormat").HasMaxLength(20).IsRequired();
         builder.Property(x => x.Status).HasColumnName("Status").HasMaxLength(20).IsRequired();
         builder.Property(x => x.SubmissionType).HasColumnName("SubmissionType").HasMaxLength(30);

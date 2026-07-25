@@ -1,5 +1,7 @@
 # Feature Specification: Testing Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) requires immutable rendering, snapshot validation, and effective-point history.
+
 **Feature Branch**: `003-testing`
 
 **Created**: 2026-06-23 | **Updated**: 2026-06-26

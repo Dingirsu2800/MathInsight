@@ -1,5 +1,7 @@
 # Feature Specification: Grading & Analytics Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) supersedes grading from current Question weight.
+
 **Feature Branch**: `004-grading-analytics`
 
 **Created**: 2026-06-23 | **Updated**: 2026-07-22

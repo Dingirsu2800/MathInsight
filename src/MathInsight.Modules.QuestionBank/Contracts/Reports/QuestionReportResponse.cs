@@ -14,4 +14,8 @@ public sealed record QuestionReportResponse(
     string? ReviewNote,
     DateTime? SubmittedTime,
     DateTime? ReviewedTime,
-    string? ReviewedBy);
+    string? ReviewedBy,
+    string? SessionId,
+    string? QuestionVersionId,
+    string? ResolutionAction,
+    DateTime? ScoreAdjustedTime);

@@ -77,6 +77,7 @@ public sealed class GetBlueprintListQueryHandler
                 blueprint.BlueprintName,
                 blueprint.Grade,
                 blueprint.TotalQuestions,
+                blueprint.TotalScore,
                 blueprint.DurationMinutes,
                 blueprint.ExpertId,
                 _context.Accounts

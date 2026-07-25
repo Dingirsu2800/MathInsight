@@ -8,5 +8,5 @@ namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionResult;
 /// Throws UnauthorizedAccessException when student does not own the session (controller maps to 403).
 /// </summary>
 public sealed record GetSessionResultQuery(
-    Guid SessionId,
-    Guid AuthenticatedStudentId) : IRequest<SessionResultDto?>;
+    string SessionId,
+    string AuthenticatedStudentId) : IRequest<SessionResultDto?>;

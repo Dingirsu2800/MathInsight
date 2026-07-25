@@ -34,13 +34,13 @@ public class StudentGradingController : ControllerBase
     /// <param name="sessionId">The test session ID.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>SessionResultDto or 403/404.</returns>
-    [HttpGet("sessions/{sessionId:guid}")]
+    [HttpGet("sessions/{sessionId}")]
     [ProducesResponseType(typeof(SessionResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSessionResult(
-        Guid sessionId,
+        string sessionId,
         CancellationToken cancellationToken)
     {
         var studentId = GetAuthenticatedStudentId();
@@ -50,7 +50,7 @@ public class StudentGradingController : ControllerBase
         try
         {
             var result = await _mediator.Send(
-                new GetSessionResultQuery(sessionId, studentId.Value),
+                new GetSessionResultQuery(sessionId, studentId),
                 cancellationToken);
 
             if (result is null)
@@ -86,7 +86,7 @@ public class StudentGradingController : ControllerBase
 
         var result = await _mediator.Send(
             new GetSessionHistoryQuery(
-                studentId.Value,
+                studentId,
                 page,
                 pageSize,
                 testFormat,
@@ -111,7 +111,7 @@ public class StudentGradingController : ControllerBase
             return Unauthorized(new { error = "Invalid or missing student identity." });
 
         var result = await _mediator.Send(
-            new GetStudentHistoryStatsQuery(studentId.Value),
+            new GetStudentHistoryStatsQuery(studentId),
             cancellationToken);
 
         return Ok(result);
@@ -119,11 +119,9 @@ public class StudentGradingController : ControllerBase
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Guid? GetAuthenticatedStudentId()
+    private string? GetAuthenticatedStudentId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrWhiteSpace(claim) || !Guid.TryParse(claim, out var studentId))
-            return null;
-        return studentId;
+        return string.IsNullOrWhiteSpace(claim) ? null : claim;
     }
 }

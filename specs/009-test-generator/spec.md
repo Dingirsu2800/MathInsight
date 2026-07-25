@@ -1,5 +1,7 @@
 # Feature Specification: Test Generator Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) supersedes Checkpoint 6A's no-schema-change and legacy point assumptions.
+
 **Feature Branch**: `testgen-test-generation`
 **Created**: 2026-06-23 | **Clarified**: 2026-07-16
 **Status**: Checkpoint 6A - baseline BlueprintExam generation
@@ -63,9 +65,11 @@ The current table has no `CreatedTime`. List queries use stable ordering by `Blu
 - `SectionOrder > 0` and unique within a blueprint.
 - `SectionName` is required and at most 100 characters; `SectionCode` is optional and at most 20 characters.
 - `QuestionType` uses DB values `SingleChoice`, `MultipleChoice`, `TrueFalse`, `ShortAnswer`, or `Composite`.
-- `TotalQuestions >= 0`; `DefaultPointPerQuestion` is required and between 0 and 10.
-- A `Composite` section requires `PartCountPerQuestion > 0` and `DefaultPointPerPart` between 0 and 10.
-- Non-composite sections must leave `PartCountPerQuestion` and `DefaultPointPerPart` null.
+- `TotalQuestions >= 0`; `ScoreBudget` is required, greater than 0, and at most 100.
+- `ScoringRule` is `AllOrNothing`, `TieredTrueFalse`, or `WeightedParts`.
+- A `Composite` section requires `PartCountPerQuestion > 0` and uses `TieredTrueFalse` or `WeightedParts`; tiered scoring requires exactly four TrueFalse parts.
+- Non-composite sections must leave `PartCountPerQuestion` null and use `AllOrNothing`.
+- The sum of section `ScoreBudget` values must equal `Blueprint.TotalScore` exactly to two decimal places.
 
 ### BlueprintDetail
 

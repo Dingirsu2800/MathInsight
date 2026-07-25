@@ -492,7 +492,7 @@ public class TestSessionIntegrationTests
             {
                 if (notification is TestSubmittedEvent evt)
                 {
-                    var sessionIdStr = evt.SessionId.ToString();
+                    var sessionIdStr = evt.SessionId;
                     var allSessions = await db.TestSessions.ToListAsync(ct);
                     var session = allSessions.FirstOrDefault(s => s.SessionId == sessionIdStr);
 
@@ -500,6 +500,8 @@ public class TestSessionIntegrationTests
                     {
                         // Simulate grading: set status and score
                         session.Status = "Graded";
+                        session.SubmissionType = evt.SubmissionType;
+                        session.EndTime = evt.SubmittedTime;
                         session.NumCorrect = 2;
                         session.NumIncorrect = 1;
                         session.Score = 6.67m;

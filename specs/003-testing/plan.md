@@ -1,5 +1,7 @@
 # Implementation Plan: Testing Module
 
+> **Current checkpoint**: implement the Testing ownership items in [Scoring Contract V2](../scoring-contract-v2.md).
+
 **Branch**: `003-testing` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
 **Spec**: [spec.md](spec.md)
 

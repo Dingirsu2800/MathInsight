@@ -8,8 +8,8 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class QuestionPart
 {
-    public Guid QuestionPartId { get; set; }
-    public Guid QuestionId { get; set; }
+    public string QuestionPartId { get; set; } = string.Empty;
+    public string QuestionId { get; set; } = string.Empty;
     public int PartOrder { get; set; }
     public string? PartLabel { get; set; }
     public string Content { get; set; } = string.Empty;

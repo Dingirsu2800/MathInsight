@@ -26,7 +26,7 @@ public sealed class QuestionImportTemplateService : IQuestionImportTemplateServi
             .Where(topic => topic.IsActive)
             .OrderBy(topic => topic.Grade)
             .ThenBy(topic => topic.DisplayOrder)
-            .Select(topic => new { topic.TagName, topic.Grade })
+            .Select(topic => new { topic.TagId, topic.TagName, topic.Grade })
             .ToListAsync(cancellationToken);
         var difficulties = await _context.TagDifficulties
             .AsNoTracking()
@@ -48,7 +48,7 @@ public sealed class QuestionImportTemplateService : IQuestionImportTemplateServi
         workbook.SaveAs(stream);
         return new QuestionImportTemplateResponse(
             stream.ToArray(),
-            "MathInsight_Question_Import_v1.xlsx",
+            "MathInsight_Question_Import_v3.xlsx",
             QuestionImportConstants.ExcelContentType);
     }
 
@@ -63,11 +63,11 @@ public sealed class QuestionImportTemplateService : IQuestionImportTemplateServi
     private static void AddInstructions(XLWorkbook workbook)
     {
         var worksheet = workbook.Worksheets.Add("Instructions");
-        worksheet.Cell(1, 1).Value = "MathInsight Excel import template v1";
+        worksheet.Cell(1, 1).Value = "MathInsight Excel import template v3";
         worksheet.Cell(3, 1).Value = "Use QuestionKey to connect Questions, Answers, Parts, and Topics.";
         worksheet.Cell(4, 1).Value = "Use only the documented enum values. Do not use Excel formulas in input sheets.";
         worksheet.Cell(5, 1).Value = "COMPOSITE questions use Parts and must not have Answers.";
-        worksheet.Cell(6, 1).Value = "Questions use active topic names and active difficulty level values from Catalogs.";
+        worksheet.Cell(6, 1).Value = "Questions use active TopicCode values and active difficulty level values from Catalogs.";
         worksheet.Column(1).Width = 120;
         worksheet.Cell(1, 1).Style.Font.Bold = true;
     }
@@ -92,23 +92,25 @@ public sealed class QuestionImportTemplateService : IQuestionImportTemplateServi
         IReadOnlyList<dynamic> difficulties)
     {
         var worksheet = workbook.Worksheets.Add("Catalogs");
-        worksheet.Cell(1, 1).Value = "TopicName";
-        worksheet.Cell(1, 2).Value = "Grade";
-        worksheet.Cell(1, 4).Value = "DifficultyLevel";
-        worksheet.Cell(1, 5).Value = "DifficultyName";
-        worksheet.Range(1, 1, 1, 5).Style.Font.Bold = true;
-        worksheet.Range(1, 1, 1, 5).Style.Fill.BackgroundColor = XLColor.LightBlue;
+        worksheet.Cell(1, 1).Value = "TopicCode";
+        worksheet.Cell(1, 2).Value = "TopicName";
+        worksheet.Cell(1, 3).Value = "Grade";
+        worksheet.Cell(1, 5).Value = "DifficultyLevel";
+        worksheet.Cell(1, 6).Value = "DifficultyName";
+        worksheet.Range(1, 1, 1, 6).Style.Font.Bold = true;
+        worksheet.Range(1, 1, 1, 6).Style.Fill.BackgroundColor = XLColor.LightBlue;
 
         for (var index = 0; index < topics.Count; index++)
         {
-            worksheet.Cell(index + 2, 1).Value = topics[index].TagName;
-            worksheet.Cell(index + 2, 2).Value = topics[index].Grade;
+            worksheet.Cell(index + 2, 1).Value = topics[index].TagId;
+            worksheet.Cell(index + 2, 2).Value = topics[index].TagName;
+            worksheet.Cell(index + 2, 3).Value = topics[index].Grade;
         }
 
         for (var index = 0; index < difficulties.Count; index++)
         {
-            worksheet.Cell(index + 2, 4).Value = difficulties[index].LevelValue;
-            worksheet.Cell(index + 2, 5).Value = difficulties[index].DifficultyName;
+            worksheet.Cell(index + 2, 5).Value = difficulties[index].LevelValue;
+            worksheet.Cell(index + 2, 6).Value = difficulties[index].DifficultyName;
         }
 
         worksheet.Columns().AdjustToContents();

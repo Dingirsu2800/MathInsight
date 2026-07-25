@@ -1,6 +1,8 @@
+using System.Text.Json;
 using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Entities;
+using MathInsight.Shared.Questions;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.QuestionBank.Tests;
@@ -21,8 +23,15 @@ public sealed class QuestionVersionSnapshotTests
         Assert.True(result.IsSuccess);
         Assert.True(result.Value!.VersionCreated);
         var version = await database.Context.QuestionVersions.SingleAsync();
-        Assert.Equal("Question content", version.QuestionContent);
+        Assert.Equal("Updated question content", version.QuestionContent);
         Assert.Equal(question.QuestionId, version.QuestionId);
+        Assert.Equal(1, version.VersionNumber);
+        Assert.Equal(2, version.SnapshotSchemaVersion);
+        var snapshot = JsonSerializer.Deserialize<QuestionSnapshotV2>(version.AnswersSnapshot);
+        Assert.NotNull(snapshot);
+        Assert.Equal("Updated question content", snapshot.QuestionContent);
+        Assert.Equal("Updated solution content", snapshot.SolutionContent);
+        Assert.Equal(version.PictureUrl, snapshot.PictureUrl);
     }
 
     private static UpdateQuestionRequest CreateRequest(Question question)
@@ -34,7 +43,7 @@ public sealed class QuestionVersionSnapshotTests
             DifficultyId = question.DifficultyId,
             Grade = question.Grade,
             QuestionType = "SINGLE_CHOICE",
-            DefaultPoint = 1m,
+            DefaultWeight = 1m,
             Topics = [new CreateQuestionTopicRequest("topic-1", true)],
             Answers =
             [
@@ -76,7 +85,7 @@ public sealed class QuestionVersionSnapshotTests
             Status = status,
             QuestionType = "SingleChoice",
             ExpertId = "expert-1",
-            DefaultPoint = 1m,
+            DefaultWeight = 1m,
             IsActive = true,
             Answers =
             [

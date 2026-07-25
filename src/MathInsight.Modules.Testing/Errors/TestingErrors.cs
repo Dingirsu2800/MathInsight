@@ -39,4 +39,8 @@ public static class TestingErrors
     public static readonly Error RequestInvalid = new(
         "TESTING_REQUEST_INVALID",
         "The request payload is invalid or malformed.");
+
+    public static readonly Error AnswerNotInVersion = new(
+        "ANSWER_NOT_IN_TEST_VERSION",
+        "An answer or part does not belong to the question version used by this test.");
 }

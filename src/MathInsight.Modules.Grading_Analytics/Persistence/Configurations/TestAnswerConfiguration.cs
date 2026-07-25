@@ -8,20 +8,20 @@ public class TestAnswerConfiguration : IEntityTypeConfiguration<TestAnswer>
 {
     public void Configure(EntityTypeBuilder<TestAnswer> builder)
     {
-        builder.ToTable("TestAnswer");
+        builder.ToTable("TestAnswer", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.TestAnswerId);
 
-        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID");
-        builder.Property(x => x.SessionId).HasColumnName("SessionID");
-        builder.Property(x => x.QuestionId).HasColumnName("QuestionID");
-        builder.Property(x => x.AnswerId).HasColumnName("AnswerID");
+        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.SessionId).HasColumnName("SessionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.QuestionId).HasColumnName("QuestionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.AnswerId).HasColumnName("AnswerID").HasMaxLength(36).IsUnicode(false);
         builder.Property(x => x.QuestionNo).HasColumnName("QuestionNo");
         builder.Property(x => x.TimeSpent).HasColumnName("TimeSpent");
         builder.Property(x => x.FirstChoiceTime).HasColumnName("FirstChoiceTime");
         builder.Property(x => x.UpdateChoiceTime).HasColumnName("UpdateChoiceTime");
         builder.Property(x => x.ShortAnswerText).HasColumnName("ShortAnswerText");
         builder.Property(x => x.IsCorrect).HasColumnName("IsCorrect");
-        builder.Property(x => x.PointsEarned).HasColumnName("PointsEarned").HasPrecision(4, 2);
+        builder.Property(x => x.PointsEarned).HasColumnName("PointsEarned").HasPrecision(5, 2);
 
         builder.HasOne(x => x.Session)
                .WithMany(s => s.TestAnswers)

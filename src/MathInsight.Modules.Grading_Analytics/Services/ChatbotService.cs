@@ -28,7 +28,7 @@ public class ChatbotService : IChatbotService
 
     // In-memory rate limiter: (studentId, sessionId) → timestamp of the request.
     // TTL-based eviction: entries older than 1 hour are cleaned up on each access.
-    private static readonly ConcurrentDictionary<(Guid StudentId, Guid SessionId), DateTime> _rateLimitStore = new();
+    private static readonly ConcurrentDictionary<(string StudentId, string SessionId), DateTime> _rateLimitStore = new();
 
     // Cleanup threshold: evict entries older than this duration.
     private static readonly TimeSpan RateLimitTtl = TimeSpan.FromHours(1);
@@ -53,8 +53,8 @@ public class ChatbotService : IChatbotService
     public async Task<string> AskAsync(
         string questionContent,
         string studentAnswer,
-        Guid studentId,
-        Guid sessionId,
+        string studentId,
+        string sessionId,
         CancellationToken cancellationToken = default)
     {
         // ── A2: In-memory rate limiting ──────────────────────────────────────
@@ -147,10 +147,10 @@ public class ChatbotService : IChatbotService
 /// </summary>
 public class ChatbotRateLimitException : Exception
 {
-    public Guid StudentId { get; }
-    public Guid SessionId { get; }
+    public string StudentId { get; }
+    public string SessionId { get; }
 
-    public ChatbotRateLimitException(Guid studentId, Guid sessionId)
+    public ChatbotRateLimitException(string studentId, string sessionId)
         : base($"Chatbot rate limit exceeded for student {studentId} in session {sessionId}")
     {
         StudentId = studentId;

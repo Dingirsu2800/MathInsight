@@ -12,6 +12,13 @@ export default function QuestionAnswerCard({
   difficultyClass = 'bg-primary-fixed text-primary',
   options = [],
   solution = [],
+  machinePoints = 0,
+  effectivePoints = 0,
+  maxPoints = 0,
+  isScoreInvalidated = false,
+  reportReason,
+  scoreAdjustedTime,
+  onReport,
 }) {
   const [showSolution, setShowSolution] = useState(false);
 
@@ -32,6 +39,21 @@ export default function QuestionAnswerCard({
 
       {/* Body */}
       <div className="p-6">
+        {isScoreInvalidated && (
+          <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-center gap-2 font-bold">
+              <MaterialIcon name="warning" size={18} />
+              Câu hỏi đã bị vô hiệu hóa sau khi chấm
+            </div>
+            <p className="mt-1">{reportReason || 'Câu hỏi hoặc đáp án của phiên bản này đã được xác nhận có lỗi.'}</p>
+            <p className="mt-2 font-mono text-xs">
+              Điểm máy chấm: {Number(machinePoints).toFixed(2)} · Điểm hiệu lực: {Number(effectivePoints).toFixed(2)} / {Number(maxPoints).toFixed(2)}
+            </p>
+            {scoreAdjustedTime && (
+              <p className="mt-1 text-xs">Điều chỉnh lúc {new Date(scoreAdjustedTime).toLocaleString('vi-VN')}</p>
+            )}
+          </div>
+        )}
         <p className="text-base mb-4 text-on-surface">{question}</p>
 
         {/* Options grid */}
@@ -69,6 +91,12 @@ export default function QuestionAnswerCard({
 
         {/* Solution toggle */}
         <div className="mt-6 pt-6 border-t border-whisper-border">
+          <div className="mb-4 flex items-center justify-between gap-4 text-sm">
+            <span className="text-on-surface-variant">Điểm</span>
+            <span className="font-mono font-bold text-primary">
+              {Number(effectivePoints).toFixed(2)} / {Number(maxPoints).toFixed(2)}
+            </span>
+          </div>
           <button
             className="flex items-center gap-2 text-primary font-bold text-sm hover:underline"
             onClick={() => setShowSolution(!showSolution)}
@@ -93,6 +121,16 @@ export default function QuestionAnswerCard({
                 💬 Hỏi AI giải thích câu này
               </button>
             </div>
+          )}
+          {!isScoreInvalidated && onReport && (
+            <button
+              type="button"
+              className="mt-4 flex items-center gap-2 text-sm font-bold text-error hover:underline"
+              onClick={onReport}
+            >
+              <MaterialIcon name="flag" size={18} />
+              Báo cáo câu hỏi
+            </button>
           )}
         </div>
       </div>

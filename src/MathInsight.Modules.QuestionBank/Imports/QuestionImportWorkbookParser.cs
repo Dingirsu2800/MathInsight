@@ -125,7 +125,7 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
                 Text(row, headers, "QuestionType"),
                 Text(row, headers, "Grade"),
                 Text(row, headers, "DifficultyLevel"),
-                Text(row, headers, "DefaultPoint"),
+                Text(row, headers, "DefaultWeight"),
                 Text(row, headers, "PictureUrl")));
         }
 
@@ -178,7 +178,7 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
                 Text(row, headers, "CorrectNumeric"),
                 Text(row, headers, "NumericTolerance"),
                 Text(row, headers, "Explanation"),
-                Text(row, headers, "DefaultPoint")));
+                Text(row, headers, "DefaultWeight")));
         }
 
         return rows;
@@ -199,7 +199,7 @@ public sealed class QuestionImportWorkbookParser : IQuestionImportWorkbookParser
             rows.Add(new RawTopicRow(
                 Text(row, headers, "QuestionKey"),
                 row.RowNumber(),
-                Text(row, headers, "TopicName"),
+                Text(row, headers, "TopicCode"),
                 Text(row, headers, "IsPrimary")));
         }
 
@@ -278,7 +278,7 @@ public sealed record RawQuestionRow(
     string QuestionType,
     string Grade,
     string DifficultyLevel,
-    string DefaultPoint,
+    string DefaultWeight,
     string PictureUrl);
 
 public sealed record RawAnswerRow(string QuestionKey, int SourceRow, string AnswerContent, string IsCorrect);
@@ -295,9 +295,9 @@ public sealed record RawPartRow(
     string CorrectNumeric,
     string NumericTolerance,
     string Explanation,
-    string DefaultPoint);
+    string DefaultWeight);
 
-public sealed record RawTopicRow(string QuestionKey, int SourceRow, string TopicName, string IsPrimary);
+public sealed record RawTopicRow(string QuestionKey, int SourceRow, string TopicCode, string IsPrimary);
 
 public sealed class QuestionImportException : Exception
 {

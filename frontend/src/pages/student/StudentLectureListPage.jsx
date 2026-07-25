@@ -129,16 +129,22 @@ export default function StudentLectureListPage() {
                   <h3 className="text-[16px] font-semibold text-on-surface leading-snug mb-2 group-hover:text-primary transition-colors line-clamp-2">
                     {lec.title}
                   </h3>
-                  <div className="mt-auto pt-4 flex items-center justify-between text-[13px] text-on-surface-variant">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-[10px]">
-                        {lec.teacherName?.[0] || "GV"}
+                  <div className="mt-auto pt-4 flex flex-col gap-2">
+                    <div className="flex items-center justify-between text-[13px] text-on-surface-variant">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-[10px]">
+                          {lec.teacherName?.[0] || "GV"}
+                        </div>
+                        <span className="truncate max-w-[120px] font-medium">{lec.teacherName || "Giáo viên"}</span>
                       </div>
-                      <span className="truncate max-w-[100px]">{lec.teacherName || "Giáo viên"}</span>
+                      <div className="flex items-center gap-1 font-medium text-primary">
+                        <span className="material-symbols-outlined text-[14px]">favorite</span>
+                        {lec.likes || 0}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">favorite</span>
-                      {lec.likes || 0}
+                    <div className="flex items-center gap-1.5 text-[12px] text-on-surface-variant/80">
+                      <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                      {new Date(lec.createdTime).toLocaleDateString("vi-VN")}
                     </div>
                   </div>
                 </div>

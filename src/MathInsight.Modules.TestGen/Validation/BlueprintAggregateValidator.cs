@@ -3,6 +3,7 @@ using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Scoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.TestGen.Validation;
@@ -25,6 +26,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
             blueprintName.Length > 100 ||
             request.Grade is not (10 or 11 or 12) ||
             request.TotalQuestions < 0 ||
+            !IsScoreValid(request.TotalScore) ||
             request.DurationMinutes < 0)
         {
             return Result<ValidatedBlueprintAggregate>.Failure(BlueprintErrors.RequestInvalid);
@@ -43,6 +45,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
             var sectionName = section.SectionName?.Trim();
             var sectionCode = NullIfWhiteSpace(section.SectionCode);
             var questionType = BlueprintQuestionTypes.Normalize(section.QuestionType);
+            var scoringRule = NormalizeScoringRule(section.ScoringRule);
 
             if (section.SectionOrder <= 0 ||
                 !sectionOrders.Add(section.SectionOrder) ||
@@ -51,8 +54,9 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
                 sectionCode?.Length > 20 ||
                 string.IsNullOrEmpty(questionType) ||
                 section.TotalQuestions < 0 ||
-                !IsPointValid(section.DefaultPointPerQuestion) ||
-                !IsCompositeMetadataValid(section, questionType) ||
+                !IsScoreValid(section.ScoreBudget) ||
+                scoringRule is null ||
+                !IsCompositeMetadataValid(section, questionType, scoringRule) ||
                 section.Details is null ||
                 section.Details.Count == 0)
             {
@@ -88,8 +92,8 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
                 questionType,
                 NullIfWhiteSpace(section.InstructionText),
                 section.TotalQuestions,
-                section.DefaultPointPerQuestion,
-                section.DefaultPointPerPart,
+                section.ScoreBudget,
+                scoringRule,
                 section.PartCountPerQuestion,
                 normalizedDetails));
         }
@@ -116,29 +120,45 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
             return Result<ValidatedBlueprintAggregate>.Failure(BlueprintErrors.TaxonomyInvalid);
         }
 
+        if (normalizedSections.Sum(section => section.ScoreBudget) != request.TotalScore)
+            return Result<ValidatedBlueprintAggregate>.Failure(BlueprintErrors.StructureInvalid);
+
         return Result<ValidatedBlueprintAggregate>.Success(
             new ValidatedBlueprintAggregate(
                 blueprintName,
                 request.Grade,
                 request.TotalQuestions,
+                request.TotalScore,
                 request.DurationMinutes,
                 normalizedSections));
     }
 
-    private static bool IsCompositeMetadataValid(BlueprintSectionRequest section, string questionType)
+    private static bool IsCompositeMetadataValid(
+        BlueprintSectionRequest section,
+        string questionType,
+        string scoringRule)
     {
         if (questionType == BlueprintQuestionTypes.Composite)
         {
             return section.PartCountPerQuestion > 0 &&
-                section.DefaultPointPerPart is not null &&
-                IsPointValid(section.DefaultPointPerPart.Value);
+                scoringRule is ScoringRules.TieredTrueFalse or ScoringRules.WeightedParts &&
+                (scoringRule != ScoringRules.TieredTrueFalse || section.PartCountPerQuestion == 4);
         }
 
-        return section.PartCountPerQuestion is null && section.DefaultPointPerPart is null;
+        return section.PartCountPerQuestion is null && scoringRule == ScoringRules.AllOrNothing;
     }
 
-    private static bool IsPointValid(decimal point)
-        => point is >= 0m and <= 10m && decimal.Round(point, 2) == point;
+    private static bool IsScoreValid(decimal score)
+        => score is > 0m and <= 100m && decimal.Round(score, 2) == score;
+
+    private static string? NormalizeScoringRule(string? value)
+        => value?.Trim().ToUpperInvariant() switch
+        {
+            "ALLORNOTHING" => ScoringRules.AllOrNothing,
+            "TIEREDTRUEFALSE" => ScoringRules.TieredTrueFalse,
+            "WEIGHTEDPARTS" => ScoringRules.WeightedParts,
+            _ => null
+        };
 
     private static string? NullIfWhiteSpace(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

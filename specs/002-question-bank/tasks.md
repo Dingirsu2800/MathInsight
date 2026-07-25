@@ -1,5 +1,13 @@
 # Tasks Checklist: Question Bank Module
 
+## Scoring Contract V2
+
+- [x] Replace point contracts with weights and UTC Question timestamps.
+- [x] Archive superseded Answer/QuestionPart rows and filter current queries.
+- [x] Create immutable full QuestionVersion V2 snapshots on create/update.
+- [x] Add trusted session/version report context and award-full resolution.
+- [x] Add archive, version, report, and idempotency tests.
+
 **Branch**: `002-question-bank` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---

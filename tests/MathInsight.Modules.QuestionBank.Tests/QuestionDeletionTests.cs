@@ -183,7 +183,7 @@ public sealed class QuestionDeletionTests
             Status = "Approved",
             QuestionType = "SingleChoice",
             ExpertId = "expert-1",
-            DefaultPoint = 1m,
+            DefaultWeight = 1m,
             IsActive = true
         };
 

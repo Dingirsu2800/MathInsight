@@ -5,8 +5,8 @@ namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionHistory;
 /// </summary>
 public sealed record SessionHistoryDto
 {
-    public Guid SessionId { get; init; }
-    public Guid TestId { get; init; }
+    public string SessionId { get; init; } = string.Empty;
+    public string TestId { get; init; } = string.Empty;
     /// <summary>Practice | Exam</summary>
     public string TestFormat { get; init; } = string.Empty;
     /// <summary>Graded | Abandoned</summary>

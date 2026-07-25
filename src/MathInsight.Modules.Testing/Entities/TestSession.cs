@@ -16,6 +16,7 @@ public class TestSession
     public int NumIncorrect { get; set; }
     public int NumAbandoned { get; set; }
     public decimal Score { get; set; }
+    public int GradeRevision { get; set; }
 
     // Navigation
     public Test? Test { get; set; }

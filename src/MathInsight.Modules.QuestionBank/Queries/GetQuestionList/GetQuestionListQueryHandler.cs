@@ -65,7 +65,8 @@ public class GetQuestionListQueryHandler
             : (int)Math.Ceiling(totalCount / (double)pageSize);
 
         var items = await query
-            .OrderBy(question => question.QuestionId)
+            .OrderByDescending(question => question.CreatedTime)
+            .ThenBy(question => question.QuestionId)
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
             .Select(question => new QuestionListItemResponse(
@@ -83,8 +84,10 @@ public class GetQuestionListQueryHandler
                     .Where(account => account.AccountId == question.ExpertId)
                     .Select(account => account.FirstName + " " + account.LastName)
                     .FirstOrDefault(),
-                question.DefaultPoint,
+                question.DefaultWeight,
                 question.IsActive,
+                question.CreatedTime,
+                question.UpdatedTime,
                 question.QuestionTopics
                     .OrderByDescending(topic => topic.IsPrimary)
                     .ThenBy(topic => topic.Tag.DisplayOrder)

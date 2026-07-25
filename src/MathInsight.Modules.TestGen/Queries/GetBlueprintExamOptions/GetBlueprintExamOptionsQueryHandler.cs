@@ -53,6 +53,7 @@ public sealed class GetBlueprintExamOptionsQueryHandler
                 blueprint.BlueprintName,
                 blueprint.Grade,
                 blueprint.TotalQuestions,
+                blueprint.TotalScore,
                 blueprint.DurationMinutes,
                 blueprint.Status,
                 blueprint.Sections.Count))

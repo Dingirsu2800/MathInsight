@@ -43,8 +43,10 @@ public sealed class GetQuestionDetailQueryHandler
                     .Where(account => account.AccountId == question.ExpertId)
                     .Select(account => account.FirstName + " " + account.LastName)
                     .FirstOrDefault(),
-                question.DefaultPoint,
+                question.DefaultWeight,
                 question.IsActive,
+                question.CreatedTime,
+                question.UpdatedTime,
                 question.QuestionTopics
                     .OrderByDescending(topic => topic.IsPrimary)
                     .ThenBy(topic => topic.Tag.DisplayOrder)
@@ -54,6 +56,7 @@ public sealed class GetQuestionDetailQueryHandler
                         topic.IsPrimary))
                     .ToList(),
                 question.Answers
+                    .Where(answer => !answer.IsArchived)
                     .OrderBy(answer => answer.AnswerId)
                     .Select(answer => new QuestionAnswerResponse(
                         answer.AnswerId,
@@ -61,6 +64,7 @@ public sealed class GetQuestionDetailQueryHandler
                         answer.IsCorrect))
                     .ToList(),
                 question.Parts
+                    .Where(part => !part.IsArchived)
                     .OrderBy(part => part.PartOrder)
                     .Select(part => new QuestionPartResponse(
                         part.PartId,
@@ -73,7 +77,7 @@ public sealed class GetQuestionDetailQueryHandler
                         part.CorrectNumeric,
                         part.NumericTolerance,
                         part.Explanation,
-                        part.DefaultPoint))
+                        part.DefaultWeight))
                     .ToList()))
             .FirstOrDefaultAsync(cancellationToken);
 

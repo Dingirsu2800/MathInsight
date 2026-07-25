@@ -29,7 +29,7 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
 
         if (request.IsStudent)
         {
-            query = query.Where(x => x.Status == "Active");
+            query = query.Where(x => x.Status == "Active" || (x.Status == "Hidden" && x.StudentId == request.CurrentAccountId));
         }
 
         var questions = await query
@@ -48,7 +48,7 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
                 CreatedTime = x.CreatedTime,
                 UpdatedTime = x.UpdatedTime,
                 Answers = x.Answers
-                    .Where(a => a.Status != "Deleted" && (!request.IsStudent || a.Status == "Active"))
+                    .Where(a => a.Status != "Deleted" && (!request.IsStudent || a.Status == "Active" || (a.Status == "Hidden" && a.AccountId == request.CurrentAccountId)))
                     .OrderBy(a => a.CreatedTime)
                     .Select(a => new DiscussionAnswerDto
                     {

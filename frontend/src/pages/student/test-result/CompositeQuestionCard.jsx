@@ -14,11 +14,16 @@ export default function CompositeQuestionCard({
   maxScore = 1,
   earnedScore = 0,
   solution = [],
+  machinePoints = 0,
+  isScoreInvalidated = false,
+  reportReason,
+  scoreAdjustedTime,
+  onReport,
 }) {
   const [showSolution, setShowSolution] = useState(false);
 
   const correctCount = statements.filter(
-    (s) => s.correctAnswer === s.studentAnswer
+    (s) => s.isCorrect === true
   ).length;
 
   return (
@@ -40,6 +45,21 @@ export default function CompositeQuestionCard({
 
       {/* Body */}
       <div className="p-6">
+        {isScoreInvalidated && (
+          <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-center gap-2 font-bold">
+              <MaterialIcon name="warning" size={18} />
+              Câu hỏi đã bị vô hiệu hóa sau khi chấm
+            </div>
+            <p className="mt-1">{reportReason || 'Câu hỏi hoặc đáp án của phiên bản này đã được xác nhận có lỗi.'}</p>
+            <p className="mt-2 font-mono text-xs">
+              Điểm máy chấm: {Number(machinePoints).toFixed(2)} · Điểm hiệu lực: {Number(earnedScore).toFixed(2)} / {Number(maxScore).toFixed(2)}
+            </p>
+            {scoreAdjustedTime && (
+              <p className="mt-1 text-xs">Điều chỉnh lúc {new Date(scoreAdjustedTime).toLocaleString('vi-VN')}</p>
+            )}
+          </div>
+        )}
         {/* Stem */}
         <div className="mb-6 p-4 bg-surface-container-low rounded-lg border-l-4 border-primary">
           <p className="text-base text-on-surface">{stem}</p>
@@ -58,7 +78,7 @@ export default function CompositeQuestionCard({
             </thead>
             <tbody className="divide-y divide-whisper-border text-sm">
               {statements.map((stmt, i) => {
-                const isCorrectAnswer = stmt.correctAnswer === stmt.studentAnswer;
+                const isCorrectAnswer = stmt.isCorrect === true;
                 return (
                   <tr key={i}>
                     <td className="px-6 py-4 italic">{stmt.text}</td>
@@ -127,6 +147,16 @@ export default function CompositeQuestionCard({
                 💬 Hỏi AI giải thích câu này
               </button>
             </div>
+          )}
+          {!isScoreInvalidated && onReport && (
+            <button
+              type="button"
+              className="mt-4 flex items-center gap-2 text-sm font-bold text-error hover:underline"
+              onClick={onReport}
+            >
+              <MaterialIcon name="flag" size={18} />
+              Báo cáo câu hỏi
+            </button>
           )}
         </div>
       </div>

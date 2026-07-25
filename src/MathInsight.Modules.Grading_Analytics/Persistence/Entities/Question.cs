@@ -7,7 +7,7 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class Question
 {
-    public Guid QuestionId { get; set; }
+    public string QuestionId { get; set; } = string.Empty;
 
     /// <summary>SINGLE_CHOICE | MULTIPLE_SELECT | TRUE_FALSE | SHORT_ANSWER | COMPOSITE</summary>
     public string QuestionType { get; set; } = string.Empty;
@@ -16,7 +16,7 @@ public class Question
     public decimal DefaultWeight { get; set; }
 
     /// <summary>Difficulty level value (1..4) from TagDifficulty, for GradeCalculatedEvent.</summary>
-    public byte DifficultyLevel { get; set; }
+    public string DifficultyId { get; set; } = string.Empty;
 
     /// <summary>
     /// Question text content — cross-read from QuestionBank.

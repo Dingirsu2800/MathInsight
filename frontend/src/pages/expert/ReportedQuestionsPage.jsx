@@ -327,9 +327,9 @@ export default function ReportedQuestionsPage() {
                       </p>
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm mặc định:</h4>
+                      <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số:</h4>
                       <p className="font-bold text-primary text-[14px]">
-                        {selectedQuestionDetails.points} điểm
+                        {selectedQuestionDetails.weight}
                       </p>
                     </div>
                   </div>
@@ -379,7 +379,7 @@ export default function ReportedQuestionsPage() {
                           <div key={idx} className="border border-whisper-border rounded-xl p-3 bg-canvas-white">
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[10px] font-black uppercase text-primary">Phần {part.partOrder || (idx + 1)}: {getQuestionPartTypeLabel(part.partType)}</span>
-                              <Badge variant="outline" className="scale-90">{part.defaultPoint} đ</Badge>
+                              <Badge variant="outline" className="scale-90">Trọng số {part.defaultWeight}</Badge>
                             </div>
                             <div className="mb-2">
                               <LatexPreview content={part.partContent} />

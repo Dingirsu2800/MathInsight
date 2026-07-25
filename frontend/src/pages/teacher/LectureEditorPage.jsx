@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { createLecture, getLecture, updateLecture, getTopics, getMaterials, attachMaterial, publishLecture, uploadLectureThumbnail } from "../../services/learningApi";
+import { createLecture, getLecture, updateLecture, getTopics, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 
 export default function LectureEditorPage() {
@@ -23,11 +23,13 @@ export default function LectureEditorPage() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [topics, setTopics] = useState([]);
-  const [availableMaterials, setAvailableMaterials] = useState([]);
+  const [attachedMaterials, setAttachedMaterials] = useState([]);
+  const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState("12");
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [isMathHelperOpen, setIsMathHelperOpen] = useState(false);
   const contentTextareaRef = useRef(null);
+  const materialInputRef = useRef(null);
 
   const handleInsertLatex = (latex) => {
     const textarea = contentTextareaRef.current;
@@ -71,11 +73,6 @@ export default function LectureEditorPage() {
   }, [selectedGrade]);
 
   useEffect(() => {
-    // Load available materials
-    getMaterials({ pageSize: 100 })
-      .then(res => setAvailableMaterials(res.data?.items || res.data || []))
-      .catch(err => console.error("Lỗi tải tài liệu:", err));
-
     if (!isEdit) return;
     getLecture(id)
       .then((res) => {
@@ -89,6 +86,7 @@ export default function LectureEditorPage() {
           thumbnailUrl: data.thumbnailUrl || "",
           materialIds: (data.materials || []).map(m => m.id || m.materialId)
         });
+        setAttachedMaterials(data.materials || []);
         if (data.thumbnailUrl) {
           setThumbnailPreview(data.thumbnailUrl);
         }
@@ -146,15 +144,55 @@ export default function LectureEditorPage() {
     }
   };
 
-  const toggleMaterial = (matId) => {
-    setForm(prev => {
-      const isSelected = prev.materialIds.includes(matId);
-      if (isSelected) {
-        return { ...prev, materialIds: prev.materialIds.filter(id => id !== matId) };
-      } else {
-        return { ...prev, materialIds: [...prev.materialIds, matId] };
-      }
-    });
+  const handleUploadMaterial = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate Size (500MB)
+    if (file.size > 500 * 1024 * 1024) {
+      alert("Kích thước tệp vượt quá 500MB!");
+      if (materialInputRef.current) materialInputRef.current.value = '';
+      return;
+    }
+    // Validate Format
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'mp4', 'docx'].includes(ext)) {
+      alert("Chỉ hỗ trợ tệp định dạng PDF, MP4, DOCX!");
+      if (materialInputRef.current) materialInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploadingMaterial(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("materialName", file.name.split('.')[0]);
+
+      const res = await uploadMaterial(formData);
+      const newMaterial = res.data;
+      const newMaterialId = newMaterial.materialId || newMaterial.id;
+      
+      setAttachedMaterials(prev => [...prev, newMaterial]);
+      setForm(prev => ({
+        ...prev,
+        materialIds: [...prev.materialIds, newMaterialId]
+      }));
+      
+    } catch (err) {
+      console.error("Upload material failed:", err);
+      alert("Tải lên tài liệu thất bại: " + (err.response?.data?.message || err.message));
+    } finally {
+      setIsUploadingMaterial(false);
+      if (materialInputRef.current) materialInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachedMaterial = (matId) => {
+    setAttachedMaterials(prev => prev.filter(m => (m.materialId || m.id) !== matId));
+    setForm(prev => ({
+      ...prev,
+      materialIds: prev.materialIds.filter(id => id !== matId)
+    }));
   };
 
   const handleFileSelect = (e) => {
@@ -413,27 +451,65 @@ export default function LectureEditorPage() {
 
               {/* Attach Materials */}
               <div className="space-y-3">
-                <label className="block text-[16px] font-medium text-on-surface">
-                  Đính kèm Tài liệu <span className="text-[13px] text-on-surface-variant font-normal">({form.materialIds.length} đã chọn)</span>
-                </label>
-                <div className="max-h-48 overflow-y-auto border border-outline-variant rounded-lg bg-pure-surface p-2 space-y-1">
-                  {availableMaterials.length === 0 ? (
-                    <p className="p-3 text-[14px] text-on-surface-variant text-center">Chưa có tài liệu nào. Hãy upload tài liệu trước.</p>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[16px] font-medium text-on-surface">
+                    Đính kèm Tài liệu <span className="text-[13px] text-on-surface-variant font-normal">({attachedMaterials.length} file)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => materialInputRef.current?.click()}
+                    disabled={isUploadingMaterial}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {isUploadingMaterial ? "sync" : "upload"}
+                    </span>
+                    {isUploadingMaterial ? "Đang tải lên..." : "Tải lên tài liệu mới"}
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={materialInputRef} 
+                    className="hidden" 
+                    accept=".pdf,.mp4,.docx"
+                    onChange={handleUploadMaterial}
+                  />
+                </div>
+                
+                <div className="min-h-[100px] border border-outline-variant rounded-lg bg-surface-container-lowest p-3 space-y-2">
+                  {attachedMaterials.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-24 text-on-surface-variant">
+                      <span className="material-symbols-outlined text-[24px] mb-1 opacity-50">folder_open</span>
+                      <p className="text-[13px]">Chưa có tài liệu đính kèm.</p>
+                    </div>
                   ) : (
-                    availableMaterials.map((mat) => (
-                      <label key={mat.materialId || mat.id} className="flex items-center gap-3 p-2 hover:bg-surface-container-lowest rounded cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 text-primary border-outline-variant rounded focus:ring-primary"
-                          checked={form.materialIds.includes(mat.materialId || mat.id)}
-                          onChange={() => toggleMaterial(mat.materialId || mat.id)}
-                        />
-                        <span className="text-[14px] text-on-surface flex-1 truncate">{mat.materialName || mat.name}</span>
-                        <span className="text-[12px] text-on-surface-variant px-2 py-0.5 bg-surface-variant rounded">{(mat.fileType || mat.format || "FILE").toUpperCase()}</span>
-                      </label>
-                    ))
+                    attachedMaterials.map((mat) => {
+                      const id = mat.materialId || mat.id;
+                      return (
+                        <div key={id} className="flex items-center justify-between gap-3 p-2.5 bg-pure-surface border border-whisper-border hover:border-outline-variant rounded-lg transition-colors group">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <span className="material-symbols-outlined text-[#3b82f6] text-[20px]">
+                              {(mat.fileType || mat.format || "").toUpperCase().includes("PDF") ? "picture_as_pdf" : 
+                               (mat.fileType || mat.format || "").toUpperCase().includes("MP4") ? "movie" : "description"}
+                            </span>
+                            <span className="text-[14px] font-medium text-on-surface truncate">{mat.materialName || mat.name}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachedMaterial(id)}
+                            className="text-error hover:bg-error/10 p-1.5 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center"
+                            title="Xóa tài liệu đính kèm"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">close</span>
+                          </button>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
+                <p className="text-[12px] text-on-surface-variant flex items-center gap-1 mt-1">
+                  <span className="material-symbols-outlined text-[14px]">info</span>
+                  Tài liệu tải lên ở đây sẽ tự động được gán vào bài giảng và xuất hiện trong Kho tài liệu.
+                </p>
               </div>
 
               {/* Thumbnail Upload */}
