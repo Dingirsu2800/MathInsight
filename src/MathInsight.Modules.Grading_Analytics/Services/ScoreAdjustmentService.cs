@@ -281,7 +281,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
 
     private static QuestionSnapshotV2 DeserializeSnapshot(TestQuestion testQuestion)
     {
-        if (testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
+        if (testQuestion.QuestionVersion is null || testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
             throw new InvalidOperationException(
                 $"Unsupported snapshot schema for version '{testQuestion.QuestionVersionId}'.");
 

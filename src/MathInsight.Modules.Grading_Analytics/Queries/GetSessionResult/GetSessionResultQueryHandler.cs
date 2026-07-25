@@ -61,7 +61,8 @@ public sealed class GetSessionResultQueryHandler
                     QuestionNo = a.QuestionNo,
                     QuestionType = a.Question.QuestionType,
                     QuestionContent = a.Question.QuestionContent,
-                    DifficultyLevel = a.Question.DifficultyLevel,
+                    DifficultyId = a.Question.DifficultyId,
+                    DifficultyLevel = 1,
                     IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
                     PointsEarned = a.PointsEarned,
                     MaxPoints = maxPoints,

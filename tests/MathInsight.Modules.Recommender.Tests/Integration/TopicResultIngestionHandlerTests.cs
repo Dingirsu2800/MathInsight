@@ -87,9 +87,9 @@ public class TopicResultIngestionHandlerTests : IDisposable
             }],
             Answers = [new GradedAnswerDto
             {
-                QuestionId      = Guid.NewGuid(),
-                TagId           = tagId,
-                TagWeights      = [new TagWeightEntry { TagId = tagId, Weight = 1.0m, IsPrimary = true }],
+                QuestionId      = Guid.NewGuid().ToString(),
+                TagId           = tagId.ToString(),
+                TagWeights      = [new TagWeightEntry { TagId = tagId.ToString(), Weight = 1.0m, IsPrimary = true }],
                 NormalizedScore = isCorrect ? 10m : 0m,
                 IsCorrect       = isCorrect,
                 PointsEarned    = isCorrect ? 1m : 0m,

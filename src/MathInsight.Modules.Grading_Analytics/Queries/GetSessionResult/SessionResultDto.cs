@@ -45,7 +45,7 @@ public sealed record GradedAnswerDetailDto
     /// <summary>True when the question was invalidated due to a confirmed report.</summary>
     public bool IsScoreInvalidated { get; init; }
     /// <summary>The ReportID that caused invalidation, if any.</summary>
-    public Guid? InvalidatedByReportId { get; init; }
+    public string? InvalidatedByReportId { get; init; }
     /// <summary>For SINGLE_CHOICE / TRUE_FALSE.</summary>
     public string? SelectedOptionId { get; init; }
     /// <summary>For SHORT_ANSWER.</summary>
@@ -55,7 +55,6 @@ public sealed record GradedAnswerDetailDto
     public IReadOnlyList<AnswerOptionDetailDto> AnswerOptions { get; init; } = [];
     /// <summary>For COMPOSITE.</summary>
     public IReadOnlyList<AnswerPartDetailDto> AnswerParts { get; init; } = [];
-    public bool IsScoreInvalidated { get; init; }
     public string? ReportReason { get; init; }
     public DateTime? ScoreAdjustedTime { get; init; }
 }
