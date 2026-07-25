@@ -10,6 +10,8 @@ import { getQuestionTypeLabel, getStatusLabel, getStatusBadgeVariant } from "../
 import { getBlueprintActions } from "../../utils/blueprintAuth";
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { validateBlueprintForSubmit } from "../../utils/blueprintValidation";
+import { getAccountId } from "../../services/authStorage";
+import GenerateSharedTestDialog from "../../components/expert/GenerateSharedTestDialog";
 import { cn } from "../../utils/cn";
 
 export default function BlueprintDetailPage() {
@@ -33,12 +35,13 @@ export default function BlueprintDetailPage() {
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [isCloneOpen, setIsCloneOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
 
   // Review states
   const [rejectNote, setRejectNote] = useState("");
   const [rejectError, setRejectError] = useState("");
 
-  const currentAccountId = localStorage.getItem("AccountId");
+  const currentAccountId = getAccountId();
 
   // Read location state feedback once
   useEffect(() => {
@@ -257,6 +260,17 @@ export default function BlueprintDetailPage() {
             >
               Quay lại
             </Button>
+
+            {actions.canGenerate && (
+              <Button
+                variant="primary"
+                disabled={isMutating}
+                onClick={() => setIsGenerateOpen(true)}
+              >
+                <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">auto_awesome</span>
+                Sinh đề mới
+              </Button>
+            )}
 
             {actions.canEdit && (
               <Button
@@ -740,6 +754,13 @@ export default function BlueprintDetailPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+
+      {/* Generate Shared Test Dialog */}
+      <GenerateSharedTestDialog
+        isOpen={isGenerateOpen}
+        onClose={() => setIsGenerateOpen(false)}
+        blueprint={blueprint}
+      />
 
     </ExpertLayout>
   );
