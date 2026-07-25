@@ -3,16 +3,14 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// <summary>
 /// Cross-read entity — owned by Testing module (003).
 /// Stores scoring snapshot at Test generation time.
-/// Grading uses MaxPointsSnapshot, ScoringRuleSnapshot and IsScoreInvalidated
-/// instead of reading live Question.DefaultWeight for scoring.
 /// </summary>
 public class TestQuestion
 {
-    public Guid TestId { get; set; }
-    public Guid QuestionId { get; set; }
+    public string TestId { get; set; } = string.Empty;
+    public string QuestionId { get; set; } = string.Empty;
 
     /// <summary>The exact QuestionVersion used when this Test was generated.</summary>
-    public Guid? QuestionVersionId { get; set; }
+    public string? QuestionVersionId { get; set; }
 
     /// <summary>Question weight snapshot at generation time.</summary>
     public decimal WeightSnapshot { get; set; }
@@ -27,8 +25,9 @@ public class TestQuestion
     public bool IsScoreInvalidated { get; set; }
 
     /// <summary>The ReportID that caused score invalidation, if any.</summary>
-    public Guid? InvalidatedByReportId { get; set; }
+    public string? InvalidatedByReportId { get; set; }
 
     // Navigation
     public Question Question { get; set; } = null!;
+    public QuestionVersion? QuestionVersion { get; set; }
 }

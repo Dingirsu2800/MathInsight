@@ -25,6 +25,7 @@ public class RecommenderDbContext : DbContext
     public DbSet<LectureReadOnly> Lectures => Set<LectureReadOnly>();
     public DbSet<LectureMaterialReadOnly> LectureMaterials => Set<LectureMaterialReadOnly>();
     public DbSet<MaterialReadOnly> Materials => Set<MaterialReadOnly>();
+    public DbSet<TagDifficultyReadOnly> TagDifficulties => Set<TagDifficultyReadOnly>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
