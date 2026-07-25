@@ -36,6 +36,10 @@
   - [x] Create `TestSession` with `Status = InProgress`, `SubmissionType = NULL`, `StartTime = NOW`
   - [x] Create `TestAnswer` stub records for each `TestQuestion` in the test
   - [x] Return session with question list (randomized per blueprint)
+  - [x] Add excluded Student grade and Blueprint grade/status read contracts.
+  - [x] Lock Test row and revalidate personal/shared authorization inside the session transaction.
+  - [x] Return `TESTING_TEST_ACCESS_DENIED` / 403 without creating partial session data.
+  - [x] Permit existing InProgress sessions to finish after a shared Test is archived.
 
 - [x] **AutoSave Command**:
   - [x] Validate session `Status = InProgress` (reject if `Graded` or `Abandoned`)

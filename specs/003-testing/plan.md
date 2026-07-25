@@ -97,6 +97,15 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 - **QuestionBank module (002)**: `question_id` references in `TestAnswer`; question content queried for solution display.
 - **Recommender module (005)**: Reads session results after grading for competency updates.
 
+### Test Access Boundary
+
+- Extend Testing-owned excluded read models with `Student.CurrentGrade` and `Blueprint.Grade/Status`; Testing must not reference TestGen persistence classes.
+- StartSession opens a transaction and locks the Test row before access validation and session creation.
+- Personal Test access requires exact GeneratedForStudentID ownership.
+- Shared access requires null GeneratedForStudentID, `TestMode = BlueprintExam`, canonical `TestStatus = Active`, `Blueprint.Status = Active`, and matching Student/Blueprint grade.
+- Return stable `TESTING_TEST_ACCESS_DENIED` with HTTP 403 for ownership, grade, Blueprint lifecycle, or unsupported shared-mode failures.
+- Create TestSession and all empty TestAnswer rows atomically after authorization. Existing InProgress sessions continue after a Test is archived.
+
 ### Auto-Save Mechanics
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.

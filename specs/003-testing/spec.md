@@ -58,6 +58,8 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 - **BR-16**: `TestAnswer.points_earned` is populated during grading (module 004). For Practice mode, submit returns only after grading succeeds and `status = Graded`. For Exam mode, submit returns `202 Accepted` immediately while grading proceeds asynchronously.
 - **BR-16a**: `TestSession.submission_type` stores how the session was submitted: `StudentSubmit`, `TimeoutSubmit`, or `SystemSubmit`. It is required when `status = Graded` and must be null while `status = InProgress` or `Abandoned`.
 - **BR-17**: Exam mode submissions use MassTransit async grading via `TestSubmittedEvent` published to queue. Practice mode continues using MediatR in-process synchronous grading. Frontend uses SignalR push (primary) or polling `GET /sessions/{id}` (fallback) to detect when Exam grading completes.
+- **BR-15a Test access authorization**: discovery is not an authorization boundary. StartSession must reject a personal Test unless `GeneratedForStudentID` equals the authenticated Student. A shared Test is startable only when it is an `Active` BlueprintExam with null `GeneratedForStudentID`, an `Active` Blueprint, and `Blueprint.Grade = Student.CurrentGrade`.
+- **BR-15b Archive race**: StartSession and shared-Test archive serialize on the Test row. A session that acquires the lock before archive may be created and finish normally; after archive commits, no new session may start.
 - **BR-16b**: An answer is considered "unanswered/abandoned" (which determines `TestSession.num_abandoned` and `GradeCalculatedEvent.Answers.IsAbandoned`) based on its `QuestionType`:
   - `SINGLE_CHOICE`: `answer_id IS NULL`
   - `TRUE_FALSE`: `answer_id IS NULL`
@@ -68,7 +70,7 @@ Student selects test config → TestGen generates Test → Student starts TestSe
 
 ### Key Entities *(include if feature involves data)*
 
-- **Test**: `TestID` (PK), `BlueprintID` (FK → blueprints, nullable), `TestFormat` (**Practice** | **Exam**), `GeneratedForStudentID` (FK → students, nullable), `GeneratedBy` (default 'System'), `TestStatus` (**ACTIVE** | **ARCHIVED**), `TestName`, `TestCode` (nullable; unique when not null), `DurationMinutes`, `TotalQuestions`, `CreatedTime`
+- **Test**: `TestID` (PK), `BlueprintID` (FK → blueprints, nullable), `TestFormat` (**Practice** | **Exam**), `GeneratedForStudentID` (FK → students, nullable), `GeneratedBy` (default 'System'), `TestStatus` (**Active** | **Archived**), `TestName`, `TestCode` (nullable; unique when not null), `DurationMinutes`, `TotalQuestions`, `CreatedTime`
 - **TestQuestion**: `TestID` (FK, PK), `QuestionID` (FK, PK), `QuestionOrder` — composite PK
 - **TestSession**: `SessionID` (PK), `TestID` (FK), `StudentID` (FK), `TestFormat` (**Practice** | **Exam**), `Status` (**InProgress** | **Graded** | **Abandoned**), `SubmissionType` (**StudentSubmit** | **TimeoutSubmit** | **SystemSubmit**, nullable), `Duration`, `StartTime`, `EndTime`, `TotalQuestion`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
 - **TestAnswer**: `TestAnswerID` (PK), `SessionID` (FK), `QuestionID` (FK), `AnswerID` (FK, nullable for MultipleSelect/ShortAnswer), `QuestionNo`, `TimeSpent`, `FirstChoiceTime`, `UpdateChoiceTime`, `ShortAnswerText`, `IsCorrect` (nullable until graded), `PointsEarned` (0.00 until graded)
@@ -100,7 +102,7 @@ InProgress ──(student submit + grading succeeds)──▶ Graded
 | TestSession | status | `InProgress`, `Graded`, `Abandoned` |
 | TestSession | submission_type | `StudentSubmit`, `TimeoutSubmit`, `SystemSubmit` |
 | Test | test_format | `Practice`, `Exam` |
-| Test | test_status | `ACTIVE`, `ARCHIVED` |
+| Test | test_status | `Active`, `Archived` |
 | TestIncident | type | `TAB_SWITCH`, `FOCUS_LOSS` |
 
 
@@ -117,6 +119,7 @@ InProgress ──(student submit + grading succeeds)──▶ Graded
 ## Assumptions
 
 - Target database is SQL Server. Backend maps to current DB script tables (`Test`, `TestQuestion`, `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestIncidents`) instead of schema-prefixed tables.
+- Canonical Test status persistence values are `Active` and `Archived`. Legacy uppercase text in older documentation or in-memory fixtures is not the write contract.
 - **Dual-path grading**: Practice mode uses MediatR in-process (synchronous); Exam mode uses MassTransit async (TestSubmittedEvent published to RabbitMQ or InMemory queue). The Grading module's `TestSubmittedConsumer` handles Exam messages.
 - `TestSubmittedEvent` serves dual purpose: MediatR notification (Practice) and MassTransit message contract (Exam). It is not a persisted `Submitted` status.
 - Real-time timer sync may use SignalR or server-side session expiry check on every auto-save request.
