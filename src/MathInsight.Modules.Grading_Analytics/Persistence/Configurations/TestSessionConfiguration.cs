@@ -8,23 +8,24 @@ public class TestSessionConfiguration : IEntityTypeConfiguration<TestSession>
 {
     public void Configure(EntityTypeBuilder<TestSession> builder)
     {
-        builder.ToTable("TestSession");
+        builder.ToTable("TestSession", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.SessionId);
 
-        builder.Property(x => x.SessionId).HasColumnName("session_id");
-        builder.Property(x => x.TestId).HasColumnName("test_id");
-        builder.Property(x => x.StudentId).HasColumnName("student_id");
-        builder.Property(x => x.TestFormat).HasColumnName("test_format").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.SubmissionType).HasColumnName("submission_type").HasMaxLength(20);
-        builder.Property(x => x.Duration).HasColumnName("duration");
-        builder.Property(x => x.StartTime).HasColumnName("start_time");
-        builder.Property(x => x.EndTime).HasColumnName("end_time");
-        builder.Property(x => x.TotalQuestion).HasColumnName("total_question");
-        builder.Property(x => x.NumCorrect).HasColumnName("num_correct");
-        builder.Property(x => x.NumIncorrect).HasColumnName("num_incorrect");
-        builder.Property(x => x.NumAbandoned).HasColumnName("num_abandoned");
-        builder.Property(x => x.Score).HasColumnName("score").HasPrecision(5, 2);
+        builder.Property(x => x.SessionId).HasColumnName("SessionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.TestId).HasColumnName("TestID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.StudentId).HasColumnName("StudentID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.TestFormat).HasColumnName("TestFormat").HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Status).HasColumnName("Status").HasMaxLength(20).IsRequired();
+        builder.Property(x => x.SubmissionType).HasColumnName("SubmissionType").HasMaxLength(30);
+        builder.Property(x => x.Duration).HasColumnName("Duration");
+        builder.Property(x => x.StartTime).HasColumnName("StartTime");
+        builder.Property(x => x.EndTime).HasColumnName("EndTime");
+        builder.Property(x => x.TotalQuestion).HasColumnName("TotalQuestion");
+        builder.Property(x => x.NumCorrect).HasColumnName("NumCorrect");
+        builder.Property(x => x.NumIncorrect).HasColumnName("NumIncorrect");
+        builder.Property(x => x.NumAbandoned).HasColumnName("NumAbandoned");
+        builder.Property(x => x.Score).HasColumnName("Score").HasPrecision(5, 2);
+        builder.Property(x => x.GradeRevision).HasColumnName("GradeRevision");
 
         builder.HasMany(x => x.TestAnswers)
                .WithOne(a => a.Session)

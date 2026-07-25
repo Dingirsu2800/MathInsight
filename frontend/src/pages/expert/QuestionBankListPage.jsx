@@ -2,12 +2,14 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import ExpertLayout from "./ExpertLayout";
 import VersionHistoryDrawer from "./VersionHistoryDrawer";
+import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { cn } from "../../utils/cn";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import { CustomSelect } from "../../components/ui/custom-select";
 import { questionBankApi } from "../../services/questionBankApi";
+import { getAccountId } from "../../services/authStorage";
 import { mapQuestionListItemToViewModel, mapQuestionDetailToViewModel, flattenTopicTree } from "./questionMappers";
 import {
   getQuestionTypeLabel,
@@ -17,15 +19,17 @@ import {
   getQuestionStatusVariant
 } from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
+import QuestionExcelImportDialog from "../../components/expert/QuestionExcelImportDialog";
 
 export default function QuestionBankListPage() {
   const navigate = useNavigate();
 
   // Dialog / Drawer states
   const [selectedQuestion, setSelectedQuestion] = React.useState(null);
+  const [isImportExcelOpen, setIsImportExcelOpen] = React.useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
-  
+
   // Real detail states
   const [selectedQuestionDetails, setSelectedQuestionDetails] = React.useState(null);
   const [detailsLoading, setDetailsLoading] = React.useState(false);
@@ -54,6 +58,21 @@ export default function QuestionBankListPage() {
   const [error, setError] = React.useState(null);
   const [usingMockData, setUsingMockData] = React.useState(false);
 
+  const currentAccountId = getAccountId();
+
+  // Delete states
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [deleteError, setDeleteError] = React.useState("");
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+
+  // Report states
+  const [isReportDialogOpen, setIsReportDialogOpen] = React.useState(false);
+  const [reportTarget, setReportTarget] = React.useState(null);
+  const [reportReason, setReportReason] = React.useState("");
+  const [reportError, setReportError] = React.useState("");
+  const [reportLoading, setReportLoading] = React.useState(false);
+
   // Static mock questions fallback database (matching backend enum mapping)
   const mockQuestionsFallback = [
     {
@@ -65,7 +84,7 @@ export default function QuestionBankListPage() {
       difficultyLevel: "hard",
       type: "MULTIPLE_CHOICE",
       status: "APPROVED",
-      points: 10,
+      weight: 1,
       answers: {
         options: [
           { content: "y'(\\frac{\\pi}{4}) = 0", isCorrect: true },
@@ -85,7 +104,7 @@ export default function QuestionBankListPage() {
       difficultyLevel: "very_hard",
       type: "SINGLE_CHOICE",
       status: "REPORTED",
-      points: 20,
+      weight: 1,
       answers: {
         options: [
           { content: "V = \\frac{a^3 \\sqrt{3}}{3}", isCorrect: true },
@@ -105,7 +124,7 @@ export default function QuestionBankListPage() {
       difficultyLevel: "medium",
       type: "COMPOSITE",
       status: "DEACTIVATED",
-      points: 15,
+      weight: 1,
       answers: {
         explanation: "1. Tập xác định D = R. 2. Sự biến thiên: y' = 3x^2 - 3. y' = 0 <=> x = +-1.",
         parts: [
@@ -239,7 +258,7 @@ export default function QuestionBankListPage() {
         q.id.toString().includes(searchTerm) ||
         q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
         q.topic.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       // If we are using local fallback mock data, we also apply the selectors client-side:
       if (usingMockData) {
         const matchesGrade = selectedGrade === "" || q.grade === selectedGrade;
@@ -275,7 +294,7 @@ export default function QuestionBankListPage() {
             questionContent: q.content,
             questionType: q.type,
             grade: parseInt(q.grade),
-            defaultPoint: q.points,
+            defaultWeight: q.weight,
             status: q.status,
             difficultyName: q.difficulty,
             difficultyLevel: q.difficultyLevel,
@@ -298,28 +317,81 @@ export default function QuestionBankListPage() {
       });
   };
 
+  const handleProceedDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      await questionBankApi.deleteQuestion(deleteTarget.id);
+      setIsConfirmDeleteOpen(false);
+      setDeleteTarget(null);
+      fetchQuestions();
+    } catch (err) {
+      console.error(err);
+      if (err.response?.status === 409) {
+        setDeleteError("Câu hỏi đã được dùng trong bài kiểm tra nên không thể xóa.");
+      } else {
+        setDeleteError(err.response?.data?.message || err.message || "Xóa câu hỏi thất bại.");
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleProceedReport = async (e) => {
+    if (e) e.preventDefault();
+    if (!reportTarget) return;
+    if (!reportReason.trim()) {
+      setReportError("Vui lòng điền lý do báo cáo.");
+      return;
+    }
+    setReportLoading(true);
+    setReportError("");
+    try {
+      await questionBankApi.reportQuestion(reportTarget.id, { reportReason: reportReason.trim() });
+      setIsReportDialogOpen(false);
+      setReportTarget(null);
+      setReportReason("");
+      fetchQuestions();
+    } catch (err) {
+      console.error(err);
+      setReportError(err.response?.data?.message || err.message || "Báo cáo câu hỏi thất bại.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   return (
     <ExpertLayout>
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto">
-        
+
         {/* Page Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-on-background">Ngân hàng câu hỏi</h1>
-            <p className="text-sm text-on-surface-variant mt-1">Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học.</p>
+        <DashboardPageHeader
+          title="Ngân hàng câu hỏi"
+          subtitle="Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học."
+        >
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsImportExcelOpen(true)}
+              className="normal-case text-xs font-bold"
+            >
+              <span className="material-symbols-outlined text-[18px] mr-1.5">upload_file</span>
+              Nhập Excel
+            </Button>
+            <Button onClick={() => navigate("/expert/questions/new")}>
+              <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
+              Tạo câu hỏi mới
+            </Button>
           </div>
-          <Button onClick={() => navigate("/expert/questions/new")}>
-            <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
-            Tạo câu hỏi mới
-          </Button>
-        </div>
+        </DashboardPageHeader>
 
         {/* Error / Alert banner */}
         {error && (
           <div className={cn(
             "p-4 border rounded-xl flex items-center justify-between text-sm font-semibold shadow-sm",
-            usingMockData 
-              ? "bg-amber-warning/10 border-amber-warning/30 text-amber-warning" 
+            usingMockData
+              ? "bg-amber-warning/10 border-amber-warning/30 text-amber-warning"
               : "bg-error/10 border-error/20 text-error"
           )}>
             <div className="flex items-center gap-2">
@@ -327,7 +399,7 @@ export default function QuestionBankListPage() {
               <span>{error}</span>
             </div>
             {usingMockData && (
-              <button 
+              <button
                 onClick={fetchQuestions}
                 className="underline hover:no-underline cursor-pointer"
               >
@@ -338,9 +410,9 @@ export default function QuestionBankListPage() {
         )}
 
         {/* Filters & Search Layout */}
-        <div className="grid grid-cols-12 gap-4 bg-pure-surface border border-whisper-border p-4 rounded-xl shadow-sm">
+        <div className="grid grid-cols-1 gap-3 bg-pure-surface border border-whisper-border p-4 rounded-xl shadow-sm lg:grid-cols-5 2xl:grid-cols-[1fr_110px_125px_135px_155px_155px_42px] 2xl:items-center">
           {/* Search Box */}
-          <div className="col-span-12 lg:col-span-4 bg-surface-container-lowest border border-whisper-border rounded-lg flex items-center shadow-inner focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all">
+          <div className="bg-surface-container-lowest border border-whisper-border rounded-lg flex items-center shadow-inner focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all h-10 lg:row-start-1 lg:col-start-1 lg:col-span-4 2xl:row-start-1 2xl:col-start-1 2xl:col-span-1">
             <span className="material-symbols-outlined text-on-surface-variant px-3 select-none">search</span>
             <input
               value={searchTerm}
@@ -354,90 +426,88 @@ export default function QuestionBankListPage() {
             />
           </div>
 
-          {/* Filters Select Dropdowns */}
-          <div className="col-span-12 lg:col-span-8 flex flex-wrap gap-3 items-center">
-            {/* Khối lớp */}
-            <div className="w-[110px]">
-              <CustomSelect
-                value={selectedGrade || "ALL"}
-                onValueChange={(val) => { setSelectedGrade(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Khối lớp"
-                items={[
-                  { value: "ALL", label: "Tất cả khối" },
-                  { value: "10", label: "Lớp 10" },
-                  { value: "11", label: "Lớp 11" },
-                  { value: "12", label: "Lớp 12" }
-                ]}
-              />
-            </div>
+          {/* Reset Filters Button */}
+          <button
+            onClick={handleResetFilters}
+            className="w-10 h-10 p-0 inline-flex items-center justify-center text-on-surface-variant hover:text-error transition-colors rounded-lg border border-whisper-border bg-pure-surface hover:bg-surface-container-low cursor-pointer lg:row-start-1 lg:col-start-5 lg:col-span-1 lg:justify-self-end 2xl:row-start-1 2xl:col-start-7 2xl:col-span-1"
+            aria-label="Xóa bộ lọc"
+            title="Xóa bộ lọc"
+          >
+            <span className="material-symbols-outlined text-[20px]">filter_alt_off</span>
+          </button>
 
-            {/* Độ khó */}
-            <div className="w-[125px]">
-              <CustomSelect
-                value={selectedDifficulty || "ALL"}
-                onValueChange={(val) => { setSelectedDifficulty(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Độ khó"
-                items={[
-                  { value: "ALL", label: "Tất cả độ khó" },
-                  ...difficulties.map((d) => ({ value: d.difficultyId, label: d.difficultyName }))
-                ]}
-              />
-            </div>
+          {/* Khối lớp */}
+          <div className="w-full lg:row-start-2 lg:col-start-1 lg:col-span-1 2xl:row-start-1 2xl:col-start-2 2xl:col-span-1">
+            <CustomSelect
+              value={selectedGrade || "ALL"}
+              onValueChange={(val) => { setSelectedGrade(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Khối lớp"
+              items={[
+                { value: "ALL", label: "Tất cả khối" },
+                { value: "10", label: "Lớp 10" },
+                { value: "11", label: "Lớp 11" },
+                { value: "12", label: "Lớp 12" }
+              ]}
+            />
+          </div>
 
-            {/* Trạng thái */}
-            <div className="w-[135px]">
-              <CustomSelect
-                value={selectedStatus || "ALL"}
-                onValueChange={(val) => { setSelectedStatus(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Trạng thái"
-                items={[
-                  { value: "ALL", label: "Tất cả trạng thái" },
-                  { value: "APPROVED", label: "Đã duyệt" },
-                  { value: "REPORTED", label: "Bị báo cáo" },
-                  { value: "REJECTED", label: "Từ chối" },
-                  { value: "DEACTIVATED", label: "Ngừng sử dụng" }
-                ]}
-              />
-            </div>
+          {/* Độ khó */}
+          <div className="w-full lg:row-start-2 lg:col-start-2 lg:col-span-1 2xl:row-start-1 2xl:col-start-3 2xl:col-span-1">
+            <CustomSelect
+              value={selectedDifficulty || "ALL"}
+              onValueChange={(val) => { setSelectedDifficulty(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Độ khó"
+              items={[
+                { value: "ALL", label: "Tất cả độ khó" },
+                ...difficulties.map((d) => ({ value: d.difficultyId, label: d.difficultyName }))
+              ]}
+            />
+          </div>
 
-            {/* Loại câu hỏi */}
-            <div className="w-[155px]">
-              <CustomSelect
-                value={selectedType || "ALL"}
-                onValueChange={(val) => { setSelectedType(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Loại câu hỏi"
-                items={[
-                  { value: "ALL", label: "Tất cả loại" },
-                  { value: "SINGLE_CHOICE", label: "Trắc nghiệm một đáp án" },
-                  { value: "MULTIPLE_CHOICE", label: "Trắc nghiệm nhiều đáp án" },
-                  { value: "TRUE_FALSE", label: "Đúng / Sai" },
-                  { value: "SHORT_ANSWER", label: "Trả lời ngắn" },
-                  { value: "COMPOSITE", label: "Câu hỏi nhiều mệnh đề" }
-                ]}
-              />
-            </div>
+          {/* Trạng thái */}
+          <div className="w-full lg:row-start-2 lg:col-start-3 lg:col-span-1 2xl:row-start-1 2xl:col-start-4 2xl:col-span-1">
+            <CustomSelect
+              value={selectedStatus || "ALL"}
+              onValueChange={(val) => { setSelectedStatus(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Trạng thái"
+              items={[
+                { value: "ALL", label: "Tất cả trạng thái" },
+                { value: "APPROVED", label: "Đã duyệt" },
+                { value: "REPORTED", label: "Bị báo cáo" },
+                { value: "REJECTED", label: "Từ chối" },
+                { value: "DEACTIVATED", label: "Ngừng sử dụng" }
+              ]}
+            />
+          </div>
 
-            {/* Chủ đề (Hierarchical) */}
-            <div className="w-[155px]">
-              <CustomSelect
-                value={selectedTopic || "ALL"}
-                onValueChange={(val) => { setSelectedTopic(val === "ALL" ? "" : val); setPageIndex(1); }}
-                placeholder="Chủ đề"
-                items={[
-                  { value: "ALL", label: "Tất cả chủ đề" },
-                  ...topics.map((t) => ({ value: t.tagId, label: t.displayName }))
-                ]}
-              />
-            </div>
+          {/* Loại câu hỏi */}
+          <div className="w-full lg:row-start-2 lg:col-start-4 lg:col-span-1 2xl:row-start-1 2xl:col-start-5 2xl:col-span-1">
+            <CustomSelect
+              value={selectedType || "ALL"}
+              onValueChange={(val) => { setSelectedType(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Loại câu hỏi"
+              items={[
+                { value: "ALL", label: "Tất cả loại" },
+                { value: "SINGLE_CHOICE", label: "Trắc nghiệm một đáp án" },
+                { value: "MULTIPLE_CHOICE", label: "Trắc nghiệm nhiều đáp án" },
+                { value: "TRUE_FALSE", label: "Đúng / Sai" },
+                { value: "SHORT_ANSWER", label: "Trả lời ngắn" },
+                { value: "COMPOSITE", label: "Câu hỏi nhiều mệnh đề" }
+              ]}
+            />
+          </div>
 
-            {/* Reset Filters Button */}
-            <button
-              onClick={handleResetFilters}
-              className="ml-auto text-on-surface-variant hover:text-error text-xs font-bold flex items-center gap-1 transition-colors px-2.5 py-1.5 rounded-lg border border-whisper-border bg-pure-surface hover:bg-surface-container-low cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">filter_alt_off</span>
-              Xóa bộ lọc
-            </button>
+          {/* Chủ đề (Hierarchical) */}
+          <div className="w-full lg:row-start-2 lg:col-start-5 lg:col-span-1 2xl:row-start-1 2xl:col-start-6 2xl:col-span-1">
+            <CustomSelect
+              value={selectedTopic || "ALL"}
+              onValueChange={(val) => { setSelectedTopic(val === "ALL" ? "" : val); setPageIndex(1); }}
+              placeholder="Chủ đề"
+              items={[
+                { value: "ALL", label: "Tất cả chủ đề" },
+                ...topics.map((t) => ({ value: t.tagId, label: t.displayName }))
+              ]}
+            />
           </div>
         </div>
 
@@ -451,7 +521,7 @@ export default function QuestionBankListPage() {
                   <th className="py-3 px-4 w-48">Thuộc tính</th>
                   <th className="py-3 px-4 w-32">Loại</th>
                   <th className="py-3 px-4 w-36">Trạng thái</th>
-                  <th className="py-3 px-4 w-20 text-center">Điểm</th>
+                  <th className="py-3 px-4 w-20 text-center">Trọng số</th>
                   <th className="py-3 px-4 w-32 text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -519,7 +589,7 @@ export default function QuestionBankListPage() {
                         <Badge variant={getQuestionStatusVariant(q.status)}>{getQuestionStatusLabel(q.status)}</Badge>
                       </td>
                       <td className="py-4 px-4 font-bold text-center text-on-surface">
-                        {q.points}
+                        {q.weight}
                       </td>
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
@@ -531,25 +601,30 @@ export default function QuestionBankListPage() {
                           >
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                           </button>
-                          <button
-                            onClick={() => navigate(`/expert/questions/${q.id}/edit`)}
-                            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
-                            aria-label="Chỉnh sửa câu hỏi"
-                            title="Chỉnh sửa"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedQuestion(q);
-                              setIsHistoryOpen(true);
-                            }}
-                            className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
-                            aria-label="Xem lịch sử phiên bản"
-                            title="Lịch sử"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">history</span>
-                          </button>
+                          {q.expertId === currentAccountId && (
+                            <>
+                              <button
+                                onClick={() => navigate(`/expert/questions/${q.id}/edit`)}
+                                className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+                                aria-label="Chỉnh sửa câu hỏi"
+                                title="Chỉnh sửa"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteTarget(q);
+                                  setDeleteError("");
+                                  setIsConfirmDeleteOpen(true);
+                                }}
+                                className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/5 rounded transition-colors cursor-pointer"
+                                aria-label="Xóa câu hỏi"
+                                title="Xóa"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -636,17 +711,25 @@ export default function QuestionBankListPage() {
                       </p>
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm mặc định:</h4>
+                      <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số:</h4>
                       <p className="font-bold text-primary text-[14px]">
-                        {selectedQuestionDetails.points} điểm
+                        {selectedQuestionDetails.weight}
                       </p>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 border-t border-whisper-border pt-3 text-xs text-on-surface-variant sm:grid-cols-2">
+                    <span>
+                      Tạo lúc: <strong className="text-on-surface">{selectedQuestionDetails.createdTime ? new Date(selectedQuestionDetails.createdTime).toLocaleString("vi-VN") : "Chưa xác định"}</strong>
+                    </span>
+                    <span>
+                      Cập nhật: <strong className="text-on-surface">{selectedQuestionDetails.updatedTime ? new Date(selectedQuestionDetails.updatedTime).toLocaleString("vi-VN") : "Chưa xác định"}</strong>
+                    </span>
                   </div>
 
                   {/* Answers */}
                   <div>
                     <h4 className="text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Đáp án & Lời giải:</h4>
-                    
+
                     {/* Single / Multiple Choice / True False options */}
                     {(selectedQuestion.type === "SINGLE_CHOICE" || selectedQuestion.type === "MULTIPLE_CHOICE" || selectedQuestion.type === "TRUE_FALSE") && (
                       <div className="space-y-2 mb-4">
@@ -667,7 +750,9 @@ export default function QuestionBankListPage() {
                               )}>
                                 {String.fromCharCode(65 + idx)}
                               </div>
-                              <span className="font-mono">{opt.answerContent || opt.content}</span>
+                              <div className="min-w-0">
+                                <LatexPreview content={opt.answerContent || opt.content} />
+                              </div>
                             </div>
                             {selectedQuestion.type === "TRUE_FALSE" && (
                               <Badge variant={opt.isCorrect ? "approved" : "secondary"}>
@@ -682,7 +767,10 @@ export default function QuestionBankListPage() {
                     {/* Short Answer */}
                     {selectedQuestion.type === "SHORT_ANSWER" && (
                       <div className="p-3 bg-surface-container rounded-lg border border-whisper-border font-mono text-[13px] text-primary font-bold mb-4">
-                        Đáp án đúng: {selectedQuestionDetails.answers?.find(a => a.isCorrect)?.answerContent || selectedQuestionDetails.answers?.[0]?.answerContent || "Chưa thiết lập"}
+                        <span className="font-bold">Đáp án đúng:</span>{" "}
+                        <LatexPreview
+                          content={selectedQuestionDetails.answers?.find(a => a.isCorrect)?.answerContent || selectedQuestionDetails.answers?.[0]?.answerContent || "Chưa thiết lập"}
+                        />
                       </div>
                     )}
 
@@ -693,12 +781,12 @@ export default function QuestionBankListPage() {
                           <div key={idx} className="border border-whisper-border rounded-xl p-3 bg-canvas-white">
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[10px] font-black uppercase text-primary">Phần {part.partOrder || (idx + 1)}: {getQuestionPartTypeLabel(part.partType)}</span>
-                              <Badge variant="outline" className="scale-90">{part.defaultPoint} đ</Badge>
+                              <Badge variant="outline" className="scale-90">Trọng số {part.defaultWeight}</Badge>
                             </div>
                             <div className="mb-2">
                               <LatexPreview content={part.partContent} />
                             </div>
-                            
+
                             {part.partType === "TRUE_FALSE" && (
                               <div className="flex gap-2">
                                 <Badge variant={part.correctBoolean ? "approved" : "secondary"}>
@@ -708,16 +796,18 @@ export default function QuestionBankListPage() {
                             )}
 
                             {part.partType === "SHORT_ANSWER" && (
-                              <p className="text-[12px] text-emerald-success font-mono font-bold">
-                                Đáp án đúng: <span className="underline">{part.correctText}</span>
-                              </p>
+                              <div className="text-[12px] text-emerald-success font-mono font-bold">
+                                <span>Đáp án đúng:</span>
+                                <LatexPreview content={part.correctText} />
+                              </div>
                             )}
 
                             {part.partType === "NUMERIC_ANSWER" && (
                               <div className="space-y-0.5">
-                                <p className="text-[12px] text-emerald-success font-mono font-bold">
-                                  Số đúng: <span className="underline">{part.correctNumeric}</span>
-                                </p>
+                                <div className="text-[12px] text-emerald-success font-mono font-bold">
+                                  <span>Số đúng:</span>
+                                  <LatexPreview content={String(part.correctNumeric ?? "")} />
+                                </div>
                                 {part.numericTolerance > 0 && (
                                   <p className="text-[10px] text-on-surface-variant font-mono">
                                     Sai số cho phép: ±{part.numericTolerance}
@@ -754,24 +844,53 @@ export default function QuestionBankListPage() {
             </DialogContent>
 
             <DialogFooter>
+              {selectedQuestionDetails && selectedQuestionDetails.expertId !== currentAccountId && (
+                <Button
+                  variant="outline"
+                  className="border-error text-error hover:bg-error/5 normal-case h-9 text-xs mr-auto flex items-center gap-1.5"
+                  onClick={() => {
+                    setIsPreviewOpen(false);
+                    setReportTarget(selectedQuestion);
+                    setReportReason("");
+                    setReportError("");
+                    setIsReportDialogOpen(true);
+                  }}
+                >
+                  <span className="material-symbols-outlined text-[16px]">report</span>
+                  Báo cáo câu hỏi
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsPreviewOpen(false);
+                  setIsHistoryOpen(true);
+                }}
+                className="normal-case h-9 text-xs flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">history</span>
+                Lịch sử phiên bản
+              </Button>
               <Button variant="outline" onClick={() => setIsPreviewOpen(false)} className="normal-case h-9 text-xs">
                 Đóng
               </Button>
-              <Button 
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  navigate(`/expert/questions/${selectedQuestion.id}/edit`);
-                }} 
-                disabled={detailsLoading}
-                className="normal-case h-9 text-xs"
-              >
-                Chỉnh sửa
-              </Button>
+              {selectedQuestionDetails && selectedQuestionDetails.expertId === currentAccountId && (
+                <Button
+                  onClick={() => {
+                    setIsPreviewOpen(false);
+                    navigate(`/expert/questions/${selectedQuestion.id}/edit`);
+                  }}
+                  disabled={detailsLoading}
+                  className="normal-case h-9 text-xs"
+                >
+                  Chỉnh sửa
+                </Button>
+              )}
             </DialogFooter>
           </>
         )}
       </Dialog>
-      
+
       {/* VERSION HISTORY DRAWER */}
       {selectedQuestion && (
         <VersionHistoryDrawer
@@ -781,6 +900,94 @@ export default function QuestionBankListPage() {
           questionTitle={selectedQuestion.content}
         />
       )}
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      <Dialog isOpen={isConfirmDeleteOpen} onClose={() => setIsConfirmDeleteOpen(false)} variant="modal">
+        <DialogHeader>
+          <DialogTitle>Xóa câu hỏi?</DialogTitle>
+          <DialogDescription>
+            Bạn có chắc chắn muốn xóa câu hỏi này khỏi hệ thống? Thao tác này không thể hoàn tác.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent>
+          {deleteError && (
+            <div className="p-3 text-xs font-bold text-deep-rose bg-deep-rose/5 border border-deep-rose/15 rounded-xl leading-relaxed flex items-start gap-2 mb-4">
+              <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+              <span>{deleteError}</span>
+            </div>
+          )}
+          {deleteTarget && (
+            <div className="p-3 bg-surface-container rounded-xl text-xs text-on-surface-variant leading-relaxed border border-whisper-border">
+              <span className="font-bold block mb-1">Nội dung câu hỏi:</span>
+              <div className="italic break-words">
+                <LatexPreview content={deleteTarget.content} />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsConfirmDeleteOpen(false)} disabled={deleteLoading}>
+            Hủy
+          </Button>
+          <Button
+            className="bg-error hover:bg-deep-rose text-white"
+            onClick={handleProceedDelete}
+            disabled={deleteLoading}
+          >
+            {deleteLoading ? "Đang xóa..." : "Xóa câu hỏi"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* REPORT QUESTION DIALOG */}
+      <Dialog isOpen={isReportDialogOpen} onClose={() => setIsReportDialogOpen(false)} variant="modal">
+        <DialogHeader>
+          <DialogTitle>Báo cáo câu hỏi</DialogTitle>
+          <DialogDescription>
+            Vui lòng cung cấp lý do chi tiết để báo cáo lỗi nội dung hoặc cấu hình của câu hỏi này.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleProceedReport}>
+          <DialogContent className="space-y-4">
+            {reportError && (
+              <div className="p-3 text-xs font-bold text-deep-rose bg-deep-rose/5 border border-deep-rose/15 rounded-xl leading-relaxed flex items-start gap-2 mb-2">
+                <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+                <span>{reportError}</span>
+              </div>
+            )}
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Lý do báo cáo <span className="text-error">*</span></label>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Ví dụ: Công thức Toán học hiển thị lỗi, sai đáp án trắc nghiệm hoặc phân loại sai chủ đề..."
+                rows="4"
+                className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
+                required
+              />
+            </div>
+          </DialogContent>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsReportDialogOpen(false)} disabled={reportLoading}>
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              className="bg-error hover:bg-deep-rose text-white"
+              disabled={reportLoading}
+            >
+              {reportLoading ? "Đang gửi..." : "Gửi báo cáo"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      {/* Excel Import Dialog */}
+      <QuestionExcelImportDialog
+        isOpen={isImportExcelOpen}
+        onClose={() => setIsImportExcelOpen(false)}
+        onImportSuccess={() => fetchQuestions()}
+      />
     </ExpertLayout>
   );
 }

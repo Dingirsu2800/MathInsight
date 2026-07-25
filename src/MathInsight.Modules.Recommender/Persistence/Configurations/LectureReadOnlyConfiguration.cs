@@ -16,10 +16,10 @@ public class LectureReadOnlyConfiguration : IEntityTypeConfiguration<LectureRead
         builder.ToTable("Lecture");
         builder.HasKey(x => x.LectureId);
 
-        builder.Property(x => x.LectureId).HasColumnName("lecture_id");
-        builder.Property(x => x.Title).HasColumnName("title").HasMaxLength(200);
-        builder.Property(x => x.Description).HasColumnName("description").HasMaxLength(2000);
-        builder.Property(x => x.TagId).HasColumnName("tag_id");
-        builder.Property(x => x.IsActive).HasColumnName("is_active");
+        builder.Property(x => x.LectureId).HasColumnName("LectureID").HasMaxLength(36);
+        builder.Property(x => x.Title).HasColumnName("Title").HasMaxLength(100);
+        builder.Property(x => x.Description).HasColumnName("Content");
+        builder.Property(x => x.TagId).HasColumnName("TagID").HasMaxLength(36);
+        builder.Property(x => x.Status).HasColumnName("Status").HasMaxLength(20);
     }
 }

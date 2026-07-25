@@ -1,60 +1,63 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
-
-const fallbackCompetency = {
-  point: 0,
-  currentStreak: 0,
-  weakTags: ['Chưa có dữ liệu'],
-};
+import StudentLayout from '../../components/layout/StudentLayout';
+import WelcomeBanner from './dashboard/WelcomeBanner';
+import StatCards from './dashboard/StatCards';
+import WeakTopicsCard from './dashboard/WeakTopicsCard';
+import RecentActivityCard from './dashboard/RecentActivityCard';
+import RecommendedLecturesCard from './dashboard/RecommendedLecturesCard';
+import WeeklyTargetsCard from './dashboard/WeeklyTargetsCard';
+import StudyHeatmapCard from './dashboard/StudyHeatmapCard';
+import BadgeCarouselCard from './dashboard/BadgeCarouselCard';
 
 export default function StudentDashboard() {
-  const [competency, setCompetency] = useState(fallbackCompetency);
-  const [recommendations, setRecommendations] = useState([]);
   const [isApiAvailable, setIsApiAvailable] = useState(true);
 
   useEffect(() => {
+    // Pre-check API availability — individual cards handle their own data
     api.get('/reports/competency-summary')
-      .then((res) => setCompetency(res.data))
       .catch(() => setIsApiAvailable(false));
-
-    api.get('/recommender/practice-suggestions')
-      .then((res) => setRecommendations(res.data))
-      .catch(() => setRecommendations([]));
   }, []);
 
   return (
-    <main className="page">
-      <p className="eyebrow">Student</p>
-      <h1>Bảng điều khiển học tập</h1>
-      {!isApiAvailable && (
-        <p className="muted">
-          Backend chưa trả dữ liệu cho màn này, nên frontend đang hiển thị dữ liệu mẫu.
-        </p>
-      )}
+    <StudentLayout>
+      <div className="space-y-8">
+        {/* Hero welcome banner */}
+        <WelcomeBanner />
 
-      <section className="dashboard-grid">
-        <article className="card panel">
-          <h2>Năng lực hiện tại</h2>
-          <p>Điểm năng lực: {competency.point}</p>
-          <p>Streak học tập: {competency.currentStreak} ngày</p>
-          <p>Tag kiến thức yếu: {competency.weakTags?.join(', ')}</p>
-        </article>
+        {/* Metric stat cards row */}
+        <StatCards />
 
-        <article className="card panel">
-          <h2>Đề xuất học tập</h2>
-          {recommendations.length === 0 ? (
-            <p className="muted">Chưa có đề xuất từ hệ thống recommender.</p>
-          ) : (
-            <ul>
-              {recommendations.map((item) => (
-                <li key={item.id ?? item.title}>
-                  {item.title} - cải thiện {item.targetWeakTag}
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      </section>
-    </main>
+        {/* Two-column layout: weak topics + recent activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-5">
+            <WeakTopicsCard />
+          </div>
+          <div className="lg:col-span-7">
+            <RecentActivityCard />
+          </div>
+        </div>
+
+        {/* Two-column layout: recommended lectures + weekly targets */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7">
+            <RecommendedLecturesCard />
+          </div>
+          <div className="lg:col-span-5">
+            <WeeklyTargetsCard />
+          </div>
+        </div>
+
+        {/* Two-column layout: heatmap + badges */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7">
+            <StudyHeatmapCard />
+          </div>
+          <div className="lg:col-span-5">
+            <BadgeCarouselCard />
+          </div>
+        </div>
+      </div>
+    </StudentLayout>
   );
 }

@@ -1,5 +1,12 @@
 # Tasks Checklist: Grading & Analytics Module
 
+## Scoring Contract V2
+
+- [x] Grade immutable QuestionVersion data with TestQuestion scoring snapshots.
+- [x] Preserve machine points and calculate effective invalidated points.
+- [x] Recalculate version-wide affected sessions idempotently and increment GradeRevision.
+- [x] Publish revision-aware weighted topic results.
+
 **Branch**: `004-grading-analytics` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
@@ -8,7 +15,7 @@
 
 - [x] No owned tables — this module cross-reads current DB script tables owned by Testing and QuestionBank.
 - [x] Configure read access to `TestSession`, `TestAnswer`, `TestAnswerOption`.
-- [x] Configure read access to `Question` (`DefaultPoint`) and `Answer` (`IsCorrect`).
+- [x] Configure legacy fallback access to `Question.DefaultWeight`; normal grading reads immutable `QuestionVersion` and `TestQuestion` scoring snapshots.
 - [x] Configure read/write access to `TestAnswerPart` (`is_correct`, `points_earned`).
 - [x] Configure read access to `QuestionPart` (`part_type`, `answer_key`, `default_point`).
 - [x] Confirm shared `DbContext` strategy with Testing (003) and QuestionBank (002) modules
@@ -77,21 +84,62 @@
 
 ## Phase 4: Verification
 
-- [ ] `dotnet build` — zero compile errors
-- [ ] Integration tests (xUnit):
-  - [ ] Practice: 40-question session graded in < 2.0s
-  - [ ] Exam: session graded synchronously and persisted as `Graded`
-  - [ ] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
-  - [ ] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
-  - [ ] SHORT_ANSWER case-insensitive match → `is_correct = true`
-  - [ ] Abandoned answer (per BR-16b) → `is_correct = false`, counted in `num_abandoned`
-  - [ ] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × default_point` (BR-23)
-  - [ ] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
-  - [ ] COMPOSITE general (mixed parts) — parent score = sum of part points earned
-  - [ ] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
-  - [ ] UC-51: Chatbot returns explanation JSON within 10s (happy path)
-  - [ ] UC-51: Chatbot API times out after 10s → endpoint returns structured error (e.g. 503); student session is NOT affected (U1)
-  - [ ] UC-51: Second chatbot call same session → rate limited (429)
+- [x] `dotnet build` — zero compile errors
+- [x] Integration tests (xUnit):
+  - [x] Practice: 40-question session graded in < 2.0s
+  - [x] Exam: session graded synchronously and persisted as `Graded`
+  - [x] SINGLE_CHOICE correct → `is_correct = true`, `points_earned = default_point`
+  - [x] MULTIPLE_SELECT partial → `is_correct = false`, `points_earned = 0`
+  - [x] SHORT_ANSWER case-insensitive match → `is_correct = true`
+  - [x] Abandoned answer (per BR-16b) → `is_correct = false`, counted in `num_abandoned`
+  - [x] COMPOSITE all-TRUE_FALSE — 0 correct → `points_earned = 0` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 1/N correct → `points_earned = 0.10 × default_point` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 2/N correct → `points_earned = 0.25 × default_point` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — 3/N correct → `points_earned = 0.50 × default_point` (BR-23)
+  - [x] COMPOSITE all-TRUE_FALSE — N/N correct → `points_earned = default_point`; `is_correct = true` (BR-23)
+  - [x] COMPOSITE general (mixed parts) — parent score = sum of part points earned
+  - [x] DC-05: Simulated DB failure mid-grade → rollback, session stays `InProgress`
+  - [x] UC-51: Chatbot returns explanation JSON within 10s (happy path)
+  - [x] UC-51: Chatbot API times out after 10s → endpoint returns structured error (e.g. 503); student session is NOT affected (U1)
+  - [x] UC-51: Second chatbot call same session → rate limited (429)
+
+---
+
+## Phase 5: Query Endpoints (UC-55, UC-56) — 2026-07-14
+
+### 5.1 DTOs
+
+- [x] `SessionResultDto.cs` — `SessionResultDto`, `GradedAnswerDetailDto`, `AnswerPartDetailDto`
+- [x] `SessionHistoryDto.cs` — `SessionHistoryDto`, `StudentHistoryStatsDto`, `PagedResult<T>`
+
+### 5.2 Queries — UC-55 (View Session Result)
+
+- [x] `GetSessionResultQuery.cs` — MediatR query record `GetSessionResultQuery(Guid SessionId, Guid AuthenticatedStudentId)`
+- [x] `GetSessionResultQueryHandler.cs`:
+  - [x] Load `TestSession` + `TestAnswers` + nav props via EF
+  - [x] Guard: `StudentId != authenticatedStudentId` → throw `UnauthorizedAccessException` → controller maps to 403
+  - [x] Guard: session not found → return `null` → controller maps to 404
+  - [x] Map to `SessionResultDto` (answers ordered by `QuestionNo ASC`)
+
+### 5.3 Queries — UC-56 (View Test History + Stats)
+
+- [x] `GetSessionHistoryQuery.cs` — `GetSessionHistoryQuery(Guid StudentId, int Page, int PageSize, string? TestFormat, DateTime? FromDate, DateTime? ToDate)`
+- [x] `GetSessionHistoryQueryHandler.cs`:
+  - [x] Filter `Status == "Graded"`, `StudentId`, optional format/date filters
+  - [x] Order by `EndTime DESC`
+  - [x] Return `PagedResult<SessionHistoryDto>`
+- [x] `GetStudentHistoryStatsQuery.cs` — `GetStudentHistoryStatsQuery(Guid StudentId)`
+- [x] `GetStudentHistoryStatsQueryHandler.cs`:
+  - [x] Compute `totalSessions`, `sessionsLast30Days`, `averageScore`, `accuracyPercent`
+  - [x] Return `StudentHistoryStatsDto`
+
+### 5.4 Controller — `StudentGradingController`
+
+- [x] New controller `StudentGradingController` at route `api/v1/grading`
+- [x] `GET /api/v1/grading/sessions/{sessionId}` — UC-55
+- [x] `GET /api/v1/grading/student/history` — UC-56
+- [x] `GET /api/v1/grading/student/stats` — UC-56
+
+### 5.5 Verification
+
+- [x] `dotnet build` — zero compile errors

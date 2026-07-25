@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { getAccessToken } from './authStorage';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:5000/api/v1';
+  'http://localhost:8080/api/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -13,7 +14,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

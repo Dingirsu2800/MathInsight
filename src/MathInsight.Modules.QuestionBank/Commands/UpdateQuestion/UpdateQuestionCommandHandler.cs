@@ -1,11 +1,14 @@
-using System.Text.Json;
+using System.Data;
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
+using MathInsight.Modules.QuestionBank.Validation;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 
@@ -27,18 +30,19 @@ public sealed class UpdateQuestionCommandHandler
             return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionIdRequired);
 
         var request = command.Request;
-        var dbQuestionType = MapQuestionType(request.QuestionType);
-
-        if (dbQuestionType is null)
-            return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionInvalidType);
-
-        var validationError = ValidateRequest(request, dbQuestionType);
+        var validationError = QuestionRequestValidator.Validate(
+            ToCreateQuestionRequest(request),
+            out var dbQuestionType);
         if (validationError is not null)
             return Result<UpdateQuestionResponse>.Failure(validationError);
 
+        await using IDbContextTransaction? transaction = _context.Database.IsRelational()
+            ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
+
         var question = await _context.Questions
-            .Include(question => question.Answers)
-            .Include(question => question.Parts)
+            .Include(question => question.Answers.Where(answer => !answer.IsArchived))
+            .Include(question => question.Parts.Where(part => !part.IsArchived))
             .Include(question => question.QuestionTopics)
                 .ThenInclude(topic => topic.Tag)
             .FirstOrDefaultAsync(
@@ -55,34 +59,26 @@ public sealed class UpdateQuestionCommandHandler
         if (referenceValidationError is not null)
             return Result<UpdateQuestionResponse>.Failure(referenceValidationError);
 
-        var versionCreated = string.Equals(question.Status, "Approved", StringComparison.OrdinalIgnoreCase);
-
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-
-        if (versionCreated)
-            _context.QuestionVersions.Add(CreateSnapshot(question, command.ExpertId));
-
         var oldTopics = question.QuestionTopics.ToList();
         var oldAnswers = question.Answers.ToList();
         var oldParts = question.Parts.ToList();
 
         _context.QuestionTopics.RemoveRange(oldTopics);
-        _context.Answers.RemoveRange(oldAnswers);
-        _context.QuestionParts.RemoveRange(oldParts);
-
-        await _context.SaveChangesAsync(cancellationToken);
+        foreach (var answer in oldAnswers)
+            answer.IsArchived = true;
+        foreach (var part in oldParts)
+            part.IsArchived = true;
 
         question.QuestionTopics.Clear();
-        question.Answers.Clear();
-        question.Parts.Clear();
 
         question.QuestionContent = request.QuestionContent;
         question.SolutionContent = request.SolutionContent;
         question.PictureUrl = request.PictureUrl;
         question.DifficultyId = request.DifficultyId;
         question.Grade = request.Grade;
-        question.QuestionType = dbQuestionType;
-        question.DefaultPoint = request.DefaultPoint;
+        question.QuestionType = dbQuestionType!;
+        question.DefaultWeight = request.DefaultWeight;
+        question.UpdatedTime = DateTime.UtcNow;
 
         foreach (var topic in request.Topics)
         {
@@ -112,7 +108,8 @@ public sealed class UpdateQuestionCommandHandler
                     CorrectNumeric = part.CorrectNumeric,
                     NumericTolerance = part.NumericTolerance,
                     Explanation = part.Explanation,
-                    DefaultPoint = part.DefaultPoint
+                    DefaultWeight = part.DefaultWeight,
+                    IsArchived = false
                 });
             }
         }
@@ -125,73 +122,45 @@ public sealed class UpdateQuestionCommandHandler
                     AnswerId = Guid.NewGuid().ToString(),
                     QuestionId = question.QuestionId,
                     AnswerContent = answer.AnswerContent,
-                    IsCorrect = answer.IsCorrect
+                    IsCorrect = answer.IsCorrect,
+                    IsArchived = false
                 });
             }
         }
 
+        var nextVersionNumber = await _context.QuestionVersions
+            .Where(version => version.QuestionId == question.QuestionId)
+            .Select(version => (int?)version.VersionNumber)
+            .MaxAsync(cancellationToken) ?? 0;
+
+        _context.QuestionVersions.Add(
+            QuestionVersionSnapshotFactory.Create(
+                question,
+                command.ExpertId,
+                nextVersionNumber + 1,
+                question.UpdatedTime));
+
         await _context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
 
         return Result<UpdateQuestionResponse>.Success(
-            new UpdateQuestionResponse(question.QuestionId, question.Status, versionCreated));
+            new UpdateQuestionResponse(question.QuestionId, question.Status, true));
     }
 
-    private static QuestionVersion CreateSnapshot(Question question, string expertId)
+    private static CreateQuestionRequest ToCreateQuestionRequest(UpdateQuestionRequest request) => new()
     {
-        var answersSnapshot = JsonSerializer.Serialize(new
-        {
-            question.QuestionType,
-            question.DifficultyId,
-            question.Grade,
-            question.DefaultPoint,
-            Topics = question.QuestionTopics
-                .OrderByDescending(topic => topic.IsPrimary)
-                .ThenBy(topic => topic.TagId)
-                .Select(topic => new
-                {
-                    topic.TagId,
-                    TagName = topic.Tag.TagName,
-                    topic.IsPrimary
-                }),
-            Answers = question.Answers
-                .OrderBy(answer => answer.AnswerId)
-                .Select(answer => new
-                {
-                    answer.AnswerId,
-                    answer.AnswerContent,
-                    answer.IsCorrect
-                }),
-            Parts = question.Parts
-                .OrderBy(part => part.PartOrder)
-                .Select(part => new
-                {
-                    part.PartId,
-                    part.PartOrder,
-                    part.PartLabel,
-                    part.PartContent,
-                    part.PartType,
-                    part.CorrectBoolean,
-                    part.CorrectText,
-                    part.CorrectNumeric,
-                    part.NumericTolerance,
-                    part.Explanation,
-                    part.DefaultPoint
-                })
-        });
-
-        return new QuestionVersion
-        {
-            VersionId = Guid.NewGuid().ToString(),
-            QuestionId = question.QuestionId,
-            QuestionContent = question.QuestionContent,
-            QuestionAnswer = question.SolutionContent,
-            AnswersSnapshot = answersSnapshot,
-            PictureUrl = question.PictureUrl,
-            CreatedTime = DateTime.UtcNow,
-            ExpertId = expertId
-        };
-    }
+        QuestionContent = request.QuestionContent,
+        SolutionContent = request.SolutionContent,
+        PictureUrl = request.PictureUrl,
+        DifficultyId = request.DifficultyId,
+        Grade = request.Grade,
+        QuestionType = request.QuestionType,
+        DefaultWeight = request.DefaultWeight,
+        Topics = request.Topics,
+        Answers = request.Answers,
+        Parts = request.Parts
+    };
 
     private async Task<Error?> ValidateReferencesAsync(
         UpdateQuestionRequest request,
@@ -230,8 +199,8 @@ public sealed class UpdateQuestionCommandHandler
         if (request.Grade is not (10 or 11 or 12))
             return QuestionBankErrors.QuestionGradeInvalid;
 
-        if (request.DefaultPoint < 0m || request.DefaultPoint > 10m)
-            return QuestionBankErrors.QuestionDefaultPointInvalid;
+        if (request.DefaultWeight <= 0m || request.DefaultWeight > 100m)
+            return QuestionBankErrors.QuestionDefaultWeightInvalid;
 
         if (request.Topics is null || request.Topics.Count == 0)
             return QuestionBankErrors.QuestionTopicRequired;
@@ -267,8 +236,8 @@ public sealed class UpdateQuestionCommandHandler
                 return QuestionBankErrors.QuestionPartOrderDuplicate;
             }
 
-            if (request.Parts.Any(part => part.DefaultPoint < 0m || part.DefaultPoint > 10m))
-                return QuestionBankErrors.QuestionPartDefaultPointInvalid;
+            if (request.Parts.Any(part => part.DefaultWeight <= 0m || part.DefaultWeight > 100m))
+                return QuestionBankErrors.QuestionPartDefaultWeightInvalid;
 
             if (request.Parts.Any(part => part.NumericTolerance is < 0m))
                 return QuestionBankErrors.QuestionPartNumericToleranceInvalid;

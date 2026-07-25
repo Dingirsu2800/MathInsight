@@ -1,18 +1,20 @@
 # Implementation Plan: Testing Module
 
+> **Current checkpoint**: implement the Testing ownership items in [Scoring Contract V2](../scoring-contract-v2.md).
+
 **Branch**: `003-testing` | **Date**: 2026-06-23 | **Updated**: 2026-06-26
 **Spec**: [spec.md](spec.md)
 
 ## Summary
 
-Builds the `MathInsight.Modules.Testing` component managing student test sessions: starting sessions, answering questions, auto-save, incident tracking, and submission flow. Submit invokes the Grading module in-process for MVP and persists only durable session states.
+Builds the `MathInsight.Modules.Testing` component managing student test sessions: starting sessions, answering questions, auto-save, incident tracking, and submission flow. Submit uses **dual-path grading**: Practice mode invokes Grading in-process via MediatR (synchronous); Exam mode publishes `TestSubmittedEvent` to MassTransit queue for asynchronous grading by `TestSubmittedConsumer`.
 
 ## Technical Context
 
 | Property | Value |
 |----------|-------|
 | Language | C# / .NET 10.0 |
-| Primary Dependencies | MediatR, EF Core |
+| Primary Dependencies | MediatR, EF Core, MassTransit (Exam mode async grading) |
 | Storage | SQL Server; map to current DB script tables shared with TestGen |
 | Real-time | SignalR (optional — for timer sync and incident alert) |
 | Testing | xUnit / Integration tests |
@@ -58,12 +60,12 @@ src/MathInsight.Modules.Testing/
 
 | Table | Key Indexes |
 |-------|-------------|
-| `Test` | `TestCode` nullable with filtered unique index when not null; `BlueprintID` nullable FK; `TestFormat` (Practice | Exam); `GeneratedForStudentID` nullable FK; `GeneratedBy` |
+| `Test` | `TestID` PK; `TestCode` nullable with filtered unique index when not null; `BlueprintID` nullable FK; `TestFormat` (Practice | Exam); `GeneratedForStudentID` nullable FK; `GeneratedBy` |
 | `TestQuestion` | Composite PK `(TestID, QuestionID)` |
 | `TestSession` | `(StudentID, Status)` index; durable status values `InProgress`, `Graded`, `Abandoned`; `SubmissionType` captures submit reason |
 | `TestAnswer` | `SessionID`, `QuestionID`, grading fields |
 | `TestAnswerOption` | Composite PK `(TestAnswerID, AnswerID)` |
-| `TestAnswerPart` | `TestAnswerPartID` PK; `TestAnswerID` FK; `QuestionPartID` FK; `StudentAnswer` (nullable); `IsCorrect` (nullable); `PointsEarned` |
+| `TestAnswerPart` | Composite PK `(TestAnswerID, PartID)` (FKs to `TestAnswer` and `QuestionPart`); type-specific fields: `BooleanAnswer` (BIT), `TextAnswer` (NVARCHAR), `NumericAnswer` (DECIMAL); grading fields |
 | `TestIncidents` | `SessionID` FK |
 
 ### Service & API Gateway — REST Endpoints
@@ -75,29 +77,31 @@ GET    /api/v1/tests/sessions/{id}               # Get current session state + t
 GET    /api/v1/tests/sessions/{id}/answers       # Load saved answers (resume support)
 POST   /api/v1/tests/sessions/{id}/auto-save     # UC-47: save answer selections
 POST   /api/v1/tests/sessions/{id}/incident      # UC-47: log tab switch incident
-POST   /api/v1/tests/sessions/{id}/submit        # UC-49: normal submit
+POST   /api/v1/tests/sessions/{id}/submit        # UC-49: normal submit (Practice→200 Graded, Exam→202 Accepted)
 POST   /api/v1/tests/sessions/{id}/questions/{qId}/report  # UC-48: report question in session
 GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if Graded)
 ```
 
 ### Integration & Domain Events
 
-| Event | Publisher | Consumer | Purpose |
-|-------|-----------|----------|---------|
-| `GradeCalculatedEvent` | Grading module (004) | Recommender/Gamification/Notification | Trigger competency update, activity, and "test graded" notification |
+| Event | Publisher | Consumer | Transport | Purpose |
+|-------|-----------|----------|-----------|--------|
+| `TestSubmittedEvent` (Practice) | Testing module (003) | Grading handler (004) | MediatR in-process | Synchronous grading, response within HTTP request |
+| `TestSubmittedEvent` (Exam) | Testing module (003) | `TestSubmittedConsumer` (004) | MassTransit (RabbitMQ / InMemory) | Async grading, 202 Accepted |
+| `GradeCalculatedEvent` | Grading module (004) | Recommender/Gamification/Notification | MediatR in-process | Trigger competency update, activity, and "test graded" notification |
 
 ### Cross-Module Dependencies
 
 - **TestGen module (009)**: Creates `Test` + `TestQuestion` records before session start.
-- **Grading module (004)**: Called in-process during submit; populates `TestAnswer.is_correct`, `points_earned`, session score, and sets `TestSession.status = Graded`.
+- **Grading module (004)**: Two entry points — `GradeSubmittedSessionHandler` (MediatR, Practice) and `TestSubmittedConsumer` (MassTransit, Exam). Both delegate to shared `IGradingOrchestrator`. Populates `TestAnswer.is_correct`, `points_earned`, session score, and sets `TestSession.status = Graded`.
 - **QuestionBank module (002)**: `question_id` references in `TestAnswer`; question content queried for solution display.
 - **Recommender module (005)**: Reads session results after grading for competency updates.
 
 ### Auto-Save Mechanics
 
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
-- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ questionPartId, studentAnswer }] }] }`.
-- Handler validates `session_id` is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
+- Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ partId, booleanAnswer, textAnswer, numericAnswer }] }] }`.
+- Handler validates `SessionID` status is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
 
 ### Incident Force-Submit Logic

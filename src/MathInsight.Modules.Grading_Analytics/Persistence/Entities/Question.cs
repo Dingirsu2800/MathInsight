@@ -2,19 +2,19 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 
 /// <summary>
 /// Cross-read entity — owned by QuestionBank module (002).
-/// Grading reads DefaultPoint and question type for scoring.
+/// Legacy fallback model. V2 grading uses immutable QuestionVersion/TestQuestion snapshots.
 /// </summary>
 public class Question
 {
-    public Guid QuestionId { get; set; }
+    public string QuestionId { get; set; } = string.Empty;
 
     /// <summary>SINGLE_CHOICE | MULTIPLE_SELECT | TRUE_FALSE | SHORT_ANSWER | COMPOSITE</summary>
     public string QuestionType { get; set; } = string.Empty;
 
-    public decimal DefaultPoint { get; set; }
+    public decimal DefaultWeight { get; set; }
 
     /// <summary>Difficulty level value (1..4) from TagDifficulty, for GradeCalculatedEvent.</summary>
-    public byte DifficultyLevel { get; set; }
+    public string DifficultyId { get; set; } = string.Empty;
 
     /// <summary>
     /// Question text content — cross-read from QuestionBank.

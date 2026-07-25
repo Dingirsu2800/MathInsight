@@ -18,9 +18,6 @@ public class TagTopicReadOnlyConfiguration : IEntityTypeConfiguration<TagTopicRe
 
         builder.Property(x => x.TagId)
             .HasColumnName("TagID")
-            .HasConversion(
-                v => v.ToString(),
-                v => Guid.Parse(v))
             .HasMaxLength(36)
             .IsUnicode(false);
 

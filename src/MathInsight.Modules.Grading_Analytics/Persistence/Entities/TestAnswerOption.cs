@@ -6,8 +6,8 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class TestAnswerOption
 {
-    public Guid TestAnswerId { get; set; }
-    public Guid AnswerId { get; set; }
+    public string TestAnswerId { get; set; } = string.Empty;
+    public string AnswerId { get; set; } = string.Empty;
 
     // Navigation
     public TestAnswer TestAnswer { get; set; } = null!;

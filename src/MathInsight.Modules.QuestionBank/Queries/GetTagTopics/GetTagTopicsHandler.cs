@@ -31,7 +31,8 @@ public class GetTagTopicsHandler : IRequestHandler<GetTagTopics, IReadOnlyList<T
                 TagName = topic.TagName,
                 Description = topic.Description,
                 Grade = topic.Grade,
-                DisplayOrder = topic.DisplayOrder
+                DisplayOrder = topic.DisplayOrder,
+                IsActive = topic.IsActive
             })
             .ToListAsync(cancellationToken);
     }

@@ -13,6 +13,7 @@ public class QuestionPart
     public decimal? CorrectNumeric { get; set; }
     public decimal? NumericTolerance { get; set; }
     public string? Explanation { get; set; }
-    public decimal DefaultPoint { get; set; }
+    public decimal DefaultWeight { get; set; } = 1.00m;
+    public bool IsArchived { get; set; }
     public Question Question { get; set; } = default!;
 }

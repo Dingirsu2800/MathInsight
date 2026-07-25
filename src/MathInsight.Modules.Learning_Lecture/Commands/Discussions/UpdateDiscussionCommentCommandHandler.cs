@@ -1,0 +1,43 @@
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using MathInsight.Modules.Learning_Lecture.Persistence;
+
+namespace MathInsight.Modules.Learning_Lecture.Commands.Discussions;
+
+public class UpdateDiscussionCommentCommandHandler : IRequestHandler<UpdateDiscussionCommentCommand, bool>
+{
+    private readonly LearningDbContext _dbContext;
+
+    public UpdateDiscussionCommentCommandHandler(LearningDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public async Task<bool> Handle(UpdateDiscussionCommentCommand request, CancellationToken cancellationToken)
+    {
+        if (request.IsQuestion)
+        {
+            var question = await _dbContext.DiscussionQuestions.FirstOrDefaultAsync(x => x.DiscussionQuestionId == request.Id, cancellationToken);
+            if (question == null) throw new Exception("Question not found");
+            if (!request.IsTeacherOrAdmin && question.StudentId != request.AccountId) throw new Exception("Forbidden");
+            
+            question.Content = request.Content;
+            question.UpdatedTime = DateTime.UtcNow;
+        }
+        else
+        {
+            var answer = await _dbContext.DiscussionAnswers.FirstOrDefaultAsync(x => x.DiscussionAnswerId == request.Id, cancellationToken);
+            if (answer == null) throw new Exception("Answer not found");
+            if (!request.IsTeacherOrAdmin && answer.AccountId != request.AccountId) throw new Exception("Forbidden");
+
+            answer.Content = request.Content;
+            answer.UpdatedTime = DateTime.UtcNow;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+}

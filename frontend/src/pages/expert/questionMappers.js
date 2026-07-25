@@ -69,7 +69,9 @@ export function mapQuestionListItemToViewModel(item) {
     type: mapBackendTypeToUiType(item.questionType),
     expertId: item.expertId || "Hệ thống",
     expertName: item.expertName || "",
-    points: item.defaultPoint ?? 0.2,
+    weight: item.defaultWeight ?? 1,
+    createdTime: item.createdTime || null,
+    updatedTime: item.updatedTime || null,
     topics: item.topics || [],
     topic: primaryTopic?.tagName || primaryTopic?.name || "Chưa phân loại"
   };
@@ -89,7 +91,9 @@ export function mapQuestionDetailToViewModel(detail) {
     type: mapBackendTypeToUiType(detail.questionType),
     expertId: detail.expertId || "Hệ thống",
     expertName: detail.expertName || "",
-    points: detail.defaultPoint ?? 0.2,
+    weight: detail.defaultWeight ?? 1,
+    createdTime: detail.createdTime || null,
+    updatedTime: detail.updatedTime || null,
     topics: detail.topics || [],
     answers: detail.answers || [],
     solutionContent: detail.solutionContent || "",
@@ -127,7 +131,7 @@ export function mapQuestionDetailToEditorState(detail) {
     correctNumeric: p.correctNumeric !== undefined ? p.correctNumeric : null,
     numericTolerance: p.numericTolerance !== undefined ? p.numericTolerance : null,
     explanation: p.explanation || "",
-    defaultPoint: p.defaultPoint ?? 0.05
+    defaultWeight: p.defaultWeight ?? 1
   }));
 
   return {
@@ -137,7 +141,7 @@ export function mapQuestionDetailToEditorState(detail) {
     grade: detail.grade || 12,
     questionType: uiType,
     difficultyId: detail.difficultyId || "",
-    defaultPoint: detail.defaultPoint ?? 0.2,
+    defaultWeight: detail.defaultWeight ?? 1,
     topics: detail.topics || [],
     options: uiType === "TRUE_FALSE"
       ? normalizeTrueFalseOptions(uiOptions)
@@ -159,10 +163,18 @@ export function normalizeTrueFalseOptions(options = []) {
   const trueOption = options[0];
   const falseOption = options[1];
 
+  const isTrueCorrect = trueOption?.isCorrect === true;
   const isFalseCorrect = falseOption?.isCorrect === true;
 
+  if (!isTrueCorrect && !isFalseCorrect) {
+    return [
+      { content: "Đúng", isCorrect: false },
+      { content: "Sai", isCorrect: false }
+    ];
+  }
+
   return [
-    { content: "Đúng", isCorrect: !isFalseCorrect },
+    { content: "Đúng", isCorrect: isTrueCorrect && !isFalseCorrect },
     { content: "Sai", isCorrect: isFalseCorrect }
   ];
 }
@@ -183,7 +195,7 @@ export function mapEditorStateToCreateUpdateRequest(state) {
     difficultyId: state.difficultyId,
     grade: parseInt(state.grade) || 12,
     questionType: state.questionType, // SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER, COMPOSITE
-    defaultPoint: numberOrDefault(state.defaultPoint, 0.2),
+    defaultWeight: numberOrDefault(state.defaultWeight, 1),
     topics: topicsPayload
   };
 
@@ -198,12 +210,12 @@ export function mapEditorStateToCreateUpdateRequest(state) {
         partLabel: String.fromCharCode(97 + index), // a, b, c, ...
         partContent: p.partContent,
         partType: p.partType, // TRUE_FALSE, SHORT_ANSWER, NUMERIC_ANSWER
-        correctBoolean: p.partType === "TRUE_FALSE" ? (p.correctBoolean === true || p.correctBoolean === "true") : null,
+        correctBoolean: p.partType === "TRUE_FALSE" ? (p.correctBoolean === true || p.correctBoolean === "true" ? true : (p.correctBoolean === false || p.correctBoolean === "false" ? false : null)) : null,
         correctText: p.partType === "SHORT_ANSWER" ? p.correctText : null,
         correctNumeric: p.partType === "NUMERIC_ANSWER" ? (Number.isFinite(parsedNumeric) ? parsedNumeric : null) : null,
         numericTolerance: p.partType === "NUMERIC_ANSWER" ? (Number.isFinite(parsedTolerance) ? parsedTolerance : null) : null,
         explanation: p.explanation || "",
-        defaultPoint: numberOrDefault(p.defaultPoint, 0.05)
+        defaultWeight: numberOrDefault(p.defaultWeight, 1)
       };
       return mappedPart;
     });
@@ -226,4 +238,71 @@ export function mapEditorStateToCreateUpdateRequest(state) {
   }
 
   return payload;
+}
+
+export function mapOcrDraftToEditorStatePatch(draft) {
+  if (!draft) return null;
+
+  const questionType = mapBackendTypeToUiType(draft.suggestedQuestionType);
+
+  const patch = {
+    questionContent: draft.questionContent || "",
+    solutionContent: draft.solutionContent || "",
+  };
+
+  if (questionType !== "UNKNOWN") {
+    patch.questionType = questionType;
+  }
+
+  // Options mapping for SINGLE_CHOICE / MULTIPLE_CHOICE
+  if (questionType === "SINGLE_CHOICE" || questionType === "MULTIPLE_CHOICE") {
+    const rawAnswers = draft.answers || [];
+    patch.options = rawAnswers.map(ans => ({
+      content: ans.content || ans.answerContent || "",
+      isCorrect: false
+    }));
+    // Ensure at least two options exist as required by editor
+    if (patch.options.length === 0) {
+      patch.options = [
+        { content: "", isCorrect: false },
+        { content: "", isCorrect: false }
+      ];
+    }
+  } else if (questionType === "TRUE_FALSE") {
+    patch.options = [
+      { content: "Đúng", isCorrect: false },
+      { content: "Sai", isCorrect: false }
+    ];
+  } else if (questionType === "SHORT_ANSWER") {
+    patch.shortAnswer = "";
+  } else if (questionType === "COMPOSITE") {
+    const rawParts = draft.parts || [];
+    let ignoredCount = 0;
+    const validParts = [];
+
+    rawParts.forEach((part, index) => {
+      const pType = mapBackendPartTypeToUiType(part.partType);
+      if (pType === "UNKNOWN") {
+        ignoredCount++;
+        return;
+      }
+      validParts.push({
+        partOrder: validParts.length + 1,
+        partLabel: part.label || part.partLabel || String.fromCharCode(97 + index),
+        partContent: part.content || part.partContent || "",
+        partType: pType,
+        correctBoolean: null,
+        correctText: null,
+        correctNumeric: null,
+        numericTolerance: null,
+        explanation: part.explanation || "",
+        defaultWeight: 1
+      });
+    });
+
+    patch.parts = validParts;
+    patch.ignoredPartsCount = ignoredCount;
+  }
+
+  return patch;
 }

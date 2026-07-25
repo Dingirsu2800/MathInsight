@@ -1,6 +1,7 @@
+using MathInsight.Modules.TestGen.Persistence.Entities;
+using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using MathInsight.Modules.TestGen.Persistence.Entities;
 
 namespace MathInsight.Modules.TestGen.Persistence.Configurations;
 
@@ -8,49 +9,58 @@ public class BlueprintDetailConfiguration : IEntityTypeConfiguration<BlueprintDe
 {
     public void Configure(EntityTypeBuilder<BlueprintDetail> builder)
     {
-        builder.ToTable("BlueprintDetail");
-        builder.HasKey(x => x.BlueprintDetailId);
+        builder.ToTable("BlueprintDetail", table =>
+        {
+            table.HasCheckConstraint("CK_BlueprintDetail_Quantity", "[Quantity] >= 0");
+        });
+
+        builder.HasKey(x => x.BlueprintDetailId).HasName("PK_BlueprintDetail");
 
         builder.Property(x => x.BlueprintDetailId)
-            .HasColumnName("blueprint_detail_id");
-
+            .HasColumnName("BlueprintDetailID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
         builder.Property(x => x.BlueprintId)
-            .HasColumnName("blueprint_id")
-            .IsRequired();
-
+            .HasColumnName("BlueprintID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
         builder.Property(x => x.BlueprintSectionId)
-            .HasColumnName("blueprint_section_id")
-            .IsRequired();
-
+            .HasColumnName("BlueprintSectionID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
         builder.Property(x => x.TagId)
-            .HasColumnName("tag_id")
-            .IsRequired();
-
+            .HasColumnName("TagID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
         builder.Property(x => x.DifficultyId)
-            .HasColumnName("difficulty_id")
-            .IsRequired();
-
+            .HasColumnName("DifficultyID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
         builder.Property(x => x.Quantity)
-            .HasColumnName("quantity")
-            .IsRequired();
+            .HasColumnName("Quantity")
+            .HasDefaultValue(0);
 
-        // Relationships
         builder.HasOne(x => x.BlueprintSection)
             .WithMany(x => x.Details)
-            .HasForeignKey(x => x.BlueprintSectionId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(x => new { x.BlueprintSectionId, x.BlueprintId })
+            .HasPrincipalKey(x => new { x.BlueprintSectionId, x.BlueprintId })
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("FK_BlueprintDetail_BlueprintSection_BlueprintSectionID");
+        builder.HasOne<TagTopicReadModel>()
+            .WithMany()
+            .HasForeignKey(x => x.TagId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_BlueprintDetail_TagTopic_TagID");
+        builder.HasOne<TagDifficultyReadModel>()
+            .WithMany()
+            .HasForeignKey(x => x.DifficultyId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_BlueprintDetail_TagDifficulty_DifficultyID");
 
-        // Composite UNIQUE: (blueprint_section_id, tag_id, difficulty_id)
         builder.HasIndex(x => new { x.BlueprintSectionId, x.TagId, x.DifficultyId })
             .IsUnique()
             .HasDatabaseName("UQ_BlueprintDetail_Section_Tag_Difficulty");
-
-        // Check Constraint: quantity >= 1
-        builder.ToTable(t =>
-        {
-            t.HasCheckConstraint(
-                "CK_BlueprintDetail_Quantity",
-                "[quantity] >= 1");
-        });
+        builder.HasIndex(x => x.BlueprintSectionId)
+            .HasDatabaseName("IX_BlueprintDetail_BlueprintSectionID");
     }
 }

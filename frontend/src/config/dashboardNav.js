@@ -1,0 +1,100 @@
+export const expertNavItems = [
+  {
+    label: "Ngân hàng câu hỏi",
+    path: "/expert/questions",
+    icon: "database",
+    children: [
+      {
+        label: "Tất cả câu hỏi",
+        path: "/expert/questions",
+      },
+      {
+        label: "Câu hỏi bị báo cáo",
+        path: "/expert/questions/reported",
+      }
+    ]
+  },
+  {
+    label: "Cấu trúc đề",
+    path: "/expert/blueprints",
+    icon: "description"
+  },
+  {
+    label: "Quản lý Tag",
+    path: "/expert/tags",
+    icon: "category"
+  },
+  {
+    label: "Cài đặt hệ thống",
+    path: "/expert/settings",
+    icon: "settings",
+    disabled: true
+  }
+];
+
+export const adminNavItems = [
+  {
+    label: "Quản lý tài khoản",
+    path: "/admin/accounts",
+    icon: "group"
+  },
+  {
+    label: "Đơn đăng ký giáo viên",
+    path: "/admin/applications",
+    icon: "fact_check"
+  },
+  {
+    label: "Vai trò & Quyền",
+    path: "/admin/roles",
+    icon: "admin_panel_settings"
+  }
+];
+
+export const teacherNavItems = [
+  {
+    label: "Bài giảng",
+    path: "/teacher/lectures",
+    icon: "auto_stories"
+  },
+  {
+    label: "Tài liệu",
+    path: "/teacher/materials",
+    icon: "folder"
+  },
+  {
+    label: "Kiểm duyệt",
+    path: "/teacher/moderation",
+    icon: "verified_user"
+  },
+  {
+    label: "Cài đặt",
+    path: "/teacher/settings",
+    icon: "settings",
+    disabled: true
+  }
+];
+
+export const studentNavItems = [
+  {
+    label: "Bảng điều khiển",
+    path: "/student/dashboard",
+    icon: "dashboard"
+  },
+  {
+    label: "Học bài",
+    path: "/student/lectures",
+    icon: "menu_book"
+  },
+  {
+    label: "Kiểm tra",
+    path: "/student/test",
+    icon: "quiz",
+    disabled: true
+  },
+  {
+    // Role-agnostic profile page (UC-04); "/student/profile" is not a registered route.
+    label: "Hồ sơ của tôi",
+    path: "/profile",
+    icon: "person"
+  }
+];

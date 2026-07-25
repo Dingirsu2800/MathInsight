@@ -1,12 +1,14 @@
 # Feature Specification: Grading & Analytics Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) supersedes grading from current Question weight.
+
 **Feature Branch**: `004-grading-analytics`
 
-**Created**: 2026-06-23 | **Updated**: 2026-06-30
+**Created**: 2026-06-23 | **Updated**: 2026-07-14
 
 **Status**: Approved
 
-**Source Documents**: PRD §4 (FT-05), UCS UC-49, UC-50, UC-51, TDS §2.4, §4.7
+**Source Documents**: PRD §4 (FT-05), UCS UC-49, UC-50, UC-51, UC-55, UC-56, TDS §2.4, §4.7
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -17,6 +19,138 @@
 | UC-49 | Submit Test/Question (Auto-grading trigger) | System | Called by Testing submit flow |
 | UC-50 | View Detailed Solution | Student | After session `status = Graded` |
 | UC-51 | Ask Chatbot for Assistance | Student | Student requests AI explanation |
+| UC-55 | View Session Result | Student | Student navigates to result page after grading |
+| UC-56 | View Test History | Student | Student navigates to history page |
+
+---
+
+## UC-55: View Session Result
+
+**Endpoint**: `GET /api/v1/grading/sessions/{sessionId}`
+**Auth**: `[Authorize(Roles = "Student")]`  
+**Actor**: Student — only the session owner may access their own session result.
+
+### Request
+```
+GET /api/v1/grading/sessions/{sessionId:guid}
+Authorization: Bearer <jwt>
+```
+
+### Response — `SessionResultDto`
+
+| Field | Type | Source |
+|-------|------|--------|
+| `sessionId` | `Guid` | `TestSession.SessionId` |
+| `testId` | `Guid` | `TestSession.TestId` |
+| `testFormat` | `string` | `Practice \| Exam` |
+| `status` | `string` | `InProgress \| Graded \| Abandoned` |
+| `score` | `decimal` | 0.00–10.00 |
+| `numCorrect` | `int` | |
+| `numIncorrect` | `int` | |
+| `numAbandoned` | `int` | |
+| `totalQuestion` | `int` | |
+| `durationMinutes` | `int?` | `TestSession.Duration` |
+| `submittedAt` | `DateTime?` | `TestSession.EndTime` |
+| `answers` | `GradedAnswerDetailDto[]` | From `TestAnswer` join |
+
+**`GradedAnswerDetailDto`**:
+
+| Field | Type | Source |
+|-------|------|--------|
+| `questionId` | `Guid` | |
+| `questionNo` | `int` | |
+| `questionType` | `string` | |
+| `questionContent` | `string` | `Question.QuestionContent` |
+| `difficultyLevel` | `byte` | |
+| `isCorrect` | `bool?` | Null when not yet graded |
+| `pointsEarned` | `decimal` | |
+| `maxPoints` | `decimal` | `TestQuestion.MaxPointsSnapshot` |
+| `timeSpent` | `int?` | seconds |
+| `selectedOptionId` | `Guid?` | For SINGLE_CHOICE / TRUE_FALSE |
+| `shortAnswerText` | `string?` | For SHORT_ANSWER |
+| `selectedOptionIds` | `Guid[]` | For MULTIPLE_SELECT |
+| `answerParts` | `AnswerPartDetailDto[]` | For COMPOSITE |
+
+**`AnswerPartDetailDto`**:
+
+| Field | Type | Source |
+|-------|------|--------|
+| `questionPartId` | `Guid` | |
+| `partType` | `string` | |
+| `studentAnswer` | `string?` | |
+| `isCorrect` | `bool?` | |
+| `pointsEarned` | `decimal` | |
+
+### Business Rules
+- **BR-UC55-01**: Only the student who owns the session (`TestSession.StudentId == authenticatedStudentId`) may access it → `403 Forbidden` otherwise.
+- **BR-UC55-02**: Session not found → `404 Not Found`.
+- **BR-UC55-03**: Session status `InProgress` → return partial data (answers with `isCorrect = null`). Do not block the read.
+
+---
+
+## UC-56: View Test History
+
+**Endpoint**: `GET /api/v1/grading/student/history`
+**Auth**: `[Authorize(Roles = "Student")]`  
+**Actor**: Student — returns only the authenticated student's sessions.
+
+### Request — Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | `int` | No | Default `1` |
+| `pageSize` | `int` | No | Default `20`, max `100` |
+| `testFormat` | `string?` | No | Filter by `Practice` or `Exam` |
+| `fromDate` | `DateTime?` | No | Filter from date (inclusive, UTC) |
+| `toDate` | `DateTime?` | No | Filter to date (inclusive, UTC) |
+
+### Response — `PagedResult<SessionHistoryDto>`
+
+```json
+{
+  "page": 1,
+  "pageSize": 20,
+  "totalCount": 128,
+  "totalPages": 7,
+  "items": [ ... ]
+}
+```
+
+**`SessionHistoryDto`**:
+
+| Field | Type | Source |
+|-------|------|--------|
+| `sessionId` | `Guid` | |
+| `testId` | `Guid` | |
+| `testFormat` | `string` | `Practice \| Exam` |
+| `status` | `string` | `Graded \| Abandoned` |
+| `score` | `decimal` | 0.00–10.00 |
+| `numCorrect` | `int` | |
+| `numIncorrect` | `int` | |
+| `numAbandoned` | `int` | |
+| `totalQuestion` | `int` | |
+| `durationMinutes` | `int?` | |
+| `submittedAt` | `DateTime?` | `TestSession.EndTime` |
+| `submissionType` | `string?` | `StudentSubmit \| TimeoutSubmit \| SystemSubmit` |
+
+### Aggregate Stats Endpoint
+
+**Endpoint**: `GET /api/v1/grading/student/stats`  
+Returns aggregate statistics computed from the student's graded sessions.
+
+**Response — `StudentHistoryStatsDto`**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `totalSessions` | `int` | All graded sessions |
+| `sessionsLast30Days` | `int` | Sessions in the last 30 days |
+| `averageScore` | `decimal` | Average score across all graded sessions |
+| `accuracyPercent` | `decimal` | `SUM(numCorrect) / SUM(totalQuestion) × 100` |
+
+### Business Rules
+- **BR-UC56-01**: Only sessions with `Status = Graded` are returned (exclude `InProgress`, `Abandoned`).
+- **BR-UC56-02**: Results ordered by `EndTime DESC` (newest first).
+- **BR-UC56-03**: `pageSize` capped at `100` — larger values are clamped silently.
 
 ### Grading Modes
 
@@ -61,15 +195,23 @@
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
-  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per primary TagId: `(TagId, TopicScore, CorrectCount, TotalCount)`. **MVP rule**: group by `QuestionTopic.TagID WHERE IsPrimary = true` only. Multi-tag analytics deferred post-MVP. |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per distinct TagId (primary and secondary) covered in the session. `TopicScore` is calculated using the weighted contribution formula (Tầng 1–2, report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradedAt` | `DateTime` | UTC timestamp |
 
+  `TagWeightEntry` — represents a question's tag assignment with its weight:
+  - `TagId` (`Guid`) — topic tag ID from `QuestionTopic`
+  - `Weight` (`decimal`) — role-based weight `w_{iq}`: `1.0` for single-tag questions, `w_main ∈ [0.60, 0.70]` (default `0.65`) for Tag Chính, `(1 − w_main) / N_sub` for each Tag Phụ (BR-13/14/15)
+  - `IsPrimary` (`bool`) — true if `QuestionTopic.IsPrimary = true`
+
   `GradedAnswerDto` contains:
   - `QuestionId` (`Guid`)
-  - `TagId` (`Guid`) — **primary topic tag** of the question (`QuestionTopic.TagID WHERE IsPrimary = true`). MVP uses one tag per question for grading/recommender; multi-tag support is post-MVP.
+  - `TagId` (`Guid`) — **primary topic tag** of the question (backward-compatible; always the `IsPrimary = true` tag)
+  - `TagWeights` (`IReadOnlyList<TagWeightEntry>`) — **all tags** (primary + secondary) with their role-based weights. Sum of all weights = 1.0. For single-tag questions, this list has one entry with `Weight = 1.0`. Used by Recommender for multi-tag Elo delta distribution (Công thức 2, Bước 2).
+  - `NormalizedScore` (`decimal`) — `s_q = PointsEarned / MaxPoints × 10.0` — normalized question score on 0–10 scale, used for Tầng 1 contribution calculation `c_{q,i} = s_q × w_{iq}`
   - `IsCorrect` (`bool`)
   - `PointsEarned` (`decimal`)
+  - `MaxPoints` (`decimal`)
   - `TimeSpent` (`int`)
   - `DifficultyLevel` (`byte` - value 1..4)
   - `QuestionNo` (`int`)
@@ -106,8 +248,9 @@
 This module does **not own** additional tables. It reads and writes to:
 - `TestSession` — updates `Status`, `NumCorrect`, `NumIncorrect`, `NumAbandoned`, `Score`
 - `TestAnswer` — updates `IsCorrect`, `PointsEarned` per answer
-- `Question` — reads `DefaultPoint` for scoring
-- `Answer` — reads `IsCorrect` flag for reference key
+- `QuestionVersion` - reads immutable content, correct-answer, and part-weight snapshot
+- `TestQuestion` - reads `MaxPointsSnapshot`, `ScoringRuleSnapshot`, and invalidation state
+- `Question` / `Answer` - legacy fallback only for pre-V2 data
 
 Delegates competency updates to **Recommender module (005)** via `GradeCalculatedEvent`.
 

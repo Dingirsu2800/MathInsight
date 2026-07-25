@@ -1,19 +1,101 @@
 import * as React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { cn } from "../../utils/cn";
 import ExpertLayout from "./ExpertLayout";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { CustomSelect } from "../../components/ui/custom-select";
 import { questionBankApi } from "../../services/questionBankApi";
-import { mapQuestionDetailToEditorState, mapEditorStateToCreateUpdateRequest, flattenTopicTree, normalizeTrueFalseOptions } from "./questionMappers";
+import { mapQuestionDetailToEditorState, mapEditorStateToCreateUpdateRequest, flattenTopicTree, normalizeTrueFalseOptions, mapOcrDraftToEditorStatePatch } from "./questionMappers";
 import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/questionLabels";
+import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
+import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
-import { uploadQuestionImage } from "../../services/cloudinaryUploadApi";
+
+function getRoleLabel(role) {
+  if (role === "Student") return "Học sinh";
+  if (role === "Expert") return "Chuyên gia";
+  if (role === "Admin") return "Quản trị viên";
+  return role;
+}
+
+function createFileFromDataUrl(dataUrl, fileName) {
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(dataUrl || "");
+  if (!match) {
+    throw new Error("OCR did not return a valid extracted image.");
+  }
+
+  const binary = window.atob(match[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new File([bytes], fileName, { type: match[1] });
+}
+
+async function createCroppedImageFile(file, selection) {
+  if (!file || !selection) {
+    throw new Error("A source image and crop selection are required.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const sourceImage = new Image();
+      sourceImage.onload = () => resolve(sourceImage);
+      sourceImage.onerror = () => reject(new Error("Could not load the source image for cropping."));
+      sourceImage.src = sourceUrl;
+    });
+    const sourceX = Math.round(selection.x * image.naturalWidth);
+    const sourceY = Math.round(selection.y * image.naturalHeight);
+    const sourceWidth = Math.max(1, Math.min(image.naturalWidth - sourceX, Math.round(selection.width * image.naturalWidth)));
+    const sourceHeight = Math.max(1, Math.min(image.naturalHeight - sourceY, Math.round(selection.height * image.naturalHeight)));
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceWidth;
+    canvas.height = sourceHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Could not initialize the crop canvas.");
+    }
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      sourceWidth,
+      sourceHeight);
+
+    const outputType = ["image/jpeg", "image/png", "image/webp"].includes(file.type)
+      ? file.type
+      : "image/png";
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Could not create the cropped image.")), outputType, 0.95);
+    });
+    const extension = outputType === "image/jpeg" ? "jpg" : outputType.split("/")[1];
+    return new File([blob], `ocr-crop.${extension}`, { type: outputType });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
 
 export default function QuestionEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEditMode = !!id;
+
+  const searchParams = new URLSearchParams(location.search);
+  const fromReported = searchParams.get("from") === "reported";
+
+  const [hasSavedInSession, setHasSavedInSession] = React.useState(false);
+  const [pendingReports, setPendingReports] = React.useState([]);
+  const [reportsLoading, setReportsLoading] = React.useState(false);
+  const [updatingReportId, setUpdatingReportId] = React.useState(null);
+  const [reportsError, setReportsError] = React.useState("");
 
 
 
@@ -29,7 +111,7 @@ export default function QuestionEditorPage() {
     grade: 12,
     questionType: "SINGLE_CHOICE",
     difficultyId: "",
-    defaultPoint: 0.2,
+    defaultWeight: 1,
     topics: [], // Array of { tagId, isPrimary }
     options: [
       { content: "Đáp án A", isCorrect: true },
@@ -92,8 +174,20 @@ export default function QuestionEditorPage() {
   }, []);
 
   // OCR state helper
-  const [ocrImage, setOcrImage] = React.useState(null);
+  const [ocrFile, setOcrFile] = React.useState(null);
   const [ocrPreviewUrl, setOcrPreviewUrl] = React.useState("");
+  const [ocrScanning, setOcrScanning] = React.useState(false);
+  const [ocrScanError, setOcrScanError] = React.useState("");
+  const [ocrResult, setOcrResult] = React.useState(null);
+  const [reviewDraft, setReviewDraft] = React.useState(null);
+  const [isOcrReviewOpen, setIsOcrReviewOpen] = React.useState(false);
+  const [attachSourceImage, setAttachSourceImage] = React.useState(false);
+  const [selectedExtractedImageId, setSelectedExtractedImageId] = React.useState(null);
+  const [manualCropSelection, setManualCropSelection] = React.useState(null);
+  const [ocrImageUploading, setOcrImageUploading] = React.useState(false);
+  const [ocrImageUploadError, setOcrImageUploadError] = React.useState("");
+
+  const isOcrBusy = ocrScanning || ocrImageUploading;
 
   // Cleanup OCR object URL to prevent memory leaks
   React.useEffect(() => {
@@ -111,11 +205,12 @@ export default function QuestionEditorPage() {
   // Local UI states for helper panels
   const [isMathHelperOpen, setIsMathHelperOpen] = React.useState(false);
   const [isOcrPanelOpen, setIsOcrPanelOpen] = React.useState(false);
+  const [isImageUploadExpanded, setIsImageUploadExpanded] = React.useState(false);
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
+  const [isIllustrationDragging, setIsIllustrationDragging] = React.useState(false);
+
+  const uploadIllustrationFile = async (file) => {
     if (!file) return;
-
     setUploadError(null);
 
     // Validate size (max 5MB)
@@ -134,18 +229,64 @@ export default function QuestionEditorPage() {
 
     setUploading(true);
     try {
-      const data = await uploadQuestionImage(file);
-      if (data && data.secure_url) {
-        handleFieldChange("pictureUrl", data.secure_url);
+      const res = await questionBankApi.uploadQuestionImage(file);
+      const pictureUrl = res.data?.pictureUrl;
+      if (pictureUrl) {
+        handleFieldChange("pictureUrl", pictureUrl);
+        setIsImageUploadExpanded(true);
       } else {
-        throw new Error("Không lấy được link ảnh trả về từ Cloudinary.");
+        throw new Error("Không lấy được đường dẫn ảnh trả về từ máy chủ.");
       }
     } catch (err) {
       console.error("Upload error details:", err);
-      setUploadError(err.message || "Tải ảnh lên thất bại. Hãy thử lại.");
+      const status = err.response?.status;
+      const code = err.response?.data?.code;
+
+      let message = "Tải ảnh lên thất bại. Hãy thử lại.";
+      if (status === 413 || code === "IMAGE_TOO_LARGE") {
+        message = "Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng giảm dung lượng ảnh.";
+      } else if (code === "IMAGE_REQUIRED") {
+        message = "Vui lòng chọn một tệp ảnh để tải lên.";
+      } else if (code === "IMAGE_TYPE_NOT_SUPPORTED") {
+        message = "Định dạng ảnh không được hỗ trợ. Chỉ hỗ trợ các định dạng JPEG, PNG, và WebP.";
+      } else if (code === "IMAGE_STORAGE_UNAVAILABLE") {
+        message = "Hệ thống lưu trữ ảnh tạm thời không khả dụng. Vui lòng thử lại sau.";
+      } else if (code === "IMAGE_UPLOAD_FAILED") {
+        message = "Tải ảnh lên thất bại. Vui lòng thử lại.";
+      }
+
+      setUploadError(message);
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadIllustrationFile(file);
+    if (e.target) e.target.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleIllustrationDragOver = (e) => {
+    e.preventDefault();
+    if (!uploading) {
+      setIsIllustrationDragging(true);
+    }
+  };
+
+  const handleIllustrationDragLeave = () => {
+    setIsIllustrationDragging(false);
+  };
+
+  const handleIllustrationDrop = async (e) => {
+    e.preventDefault();
+    setIsIllustrationDragging(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await uploadIllustrationFile(file);
     }
   };
 
@@ -160,20 +301,102 @@ export default function QuestionEditorPage() {
       });
   }, []);
 
+  const fetchPendingReports = async () => {
+    if (!id) return { ok: false, reports: [] };
+    setReportsLoading(true);
+    setReportsError("");
+    try {
+      const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
+      const reports = res.data || [];
+      setPendingReports(reports);
+      return { ok: true, reports };
+    } catch (err) {
+      console.error("Failed to load pending reports:", err);
+      setReportsError("Không thể tải các báo cáo đang chờ xử lý từ máy chủ.");
+      return { ok: false, reports: [] };
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isEditMode && fromReported) {
+      fetchPendingReports();
+    }
+  }, [id, fromReported]);
+
+  const handleResolveReport = async (reportId, nextStatus, reporterRole) => {
+    setUpdatingReportId(reportId);
+    try {
+      await questionBankApi.updateQuestionReportStatus(reportId, {
+        status: nextStatus,
+        resolutionAction:
+          nextStatus === "Resolved" && reporterRole === "Student"
+            ? "InvalidateAndAwardFull"
+            : "NoScoreChange"
+      });
+      const refreshResult = await fetchPendingReports();
+      if (refreshResult.ok && refreshResult.reports.length === 0) {
+        navigate("/expert/questions/reported");
+      }
+    } catch (err) {
+      console.error(err);
+      const errorCode = err.response?.data?.code;
+      if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
+        showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
+        await fetchPendingReports();
+      } else if (errorCode === "QUESTION_FIX_REQUIRED_BEFORE_SCORE_ADJUSTMENT") {
+        showError("Hãy lưu một phiên bản câu hỏi đã sửa hoặc tắt câu hỏi trước khi cộng đủ điểm.");
+      } else if (errorCode === "REPORT_ACCESS_FORBIDDEN") {
+        showError("Bạn không còn quyền xử lý báo cáo này.");
+        await fetchPendingReports();
+      } else {
+        showError("Không thể cập nhật trạng thái báo cáo này. Vui lòng thử lại.");
+      }
+    } finally {
+      setUpdatingReportId(null);
+    }
+  };
+
+  const handleSubmitReview = async (reportId) => {
+    setUpdatingReportId(reportId);
+    try {
+      await questionBankApi.submitQuestionReportReview(reportId);
+      const refreshResult = await fetchPendingReports();
+      if (refreshResult.ok && refreshResult.reports.length === 0) {
+        navigate("/expert/questions/reported");
+      }
+    } catch (err) {
+      console.error(err);
+      const errorCode = err.response?.data?.code;
+      if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
+        showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
+        await fetchPendingReports();
+      } else if (errorCode === "REPORT_ACCESS_FORBIDDEN") {
+        showError("Bạn không còn quyền xử lý báo cáo này.");
+        await fetchPendingReports();
+      } else {
+        showError("Không thể gửi yêu cầu xét duyệt. Vui lòng thử lại.");
+      }
+    } finally {
+      setUpdatingReportId(null);
+    }
+  };
+
   // Fetch topics whenever grade changes
   React.useEffect(() => {
     questionBankApi.getTopicTags(form.grade)
       .then(res => {
         const flattened = flattenTopicTree(res.data || []);
         setTopicList(flattened);
-        
+
         // Auto-clean any parent topics or topics not matching this grade scope
         setForm(prev => {
           const validTopics = prev.topics.filter(topic => {
             const match = flattened.find(f => f.tagId === topic.tagId);
             return match && match.depth !== 0;
           });
-          
+
           let normalizedTopics = validTopics;
           if (validTopics.length > 0) {
             const hasPrimary = validTopics.some(t => t.isPrimary);
@@ -218,7 +441,7 @@ export default function QuestionEditorPage() {
               grade: 12,
               questionType: "SINGLE_CHOICE",
               difficultyId: "diff-3",
-              defaultPoint: 1.0,
+              defaultWeight: 1.0,
               topics: [{ tagId: "tag-1", isPrimary: true }],
               options: [
                 { content: "\\frac{1}{3}", isCorrect: true },
@@ -244,7 +467,7 @@ export default function QuestionEditorPage() {
   const handleFieldChange = (field, value) => {
     setForm(prev => {
       const updated = { ...prev, [field]: value };
-      
+
       // If questionType changes, initialize options with appropriate structures
       if (field === "questionType") {
         if (value === "TRUE_FALSE") {
@@ -268,7 +491,7 @@ export default function QuestionEditorPage() {
               correctNumeric: null,
               numericTolerance: null,
               explanation: "",
-              defaultPoint: 0.05
+              defaultWeight: 1
             }
           ];
         }
@@ -342,7 +565,7 @@ export default function QuestionEditorPage() {
             correctNumeric: null,
             numericTolerance: null,
             explanation: "",
-            defaultPoint: 0.05
+            defaultWeight: 1
           }
         ]
       };
@@ -410,13 +633,195 @@ export default function QuestionEditorPage() {
   };
 
 
-  // OCR file handler
-  const handleOcrImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setOcrImage(file);
-      setOcrPreviewUrl(URL.createObjectURL(file));
+  // OCR file handlers
+  const handleOcrFileSelect = (file) => {
+    if (!file) return;
+
+    setOcrScanError("");
+
+    // Validate type: JPEG, PNG, WebP only
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      setOcrScanError("Định dạng ảnh không được hỗ trợ. Vui lòng chọn ảnh JPEG, PNG, hoặc WebP.");
+      setOcrFile(null);
+      setManualCropSelection(null);
+      if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+      setOcrPreviewUrl("");
+      return;
     }
+
+    // Validate size: 5 MB limit
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
+      setOcrFile(null);
+      setManualCropSelection(null);
+      if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+      setOcrPreviewUrl("");
+      return;
+    }
+
+    setOcrFile(file);
+    setManualCropSelection(null);
+    if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+    setOcrPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleOcrFileClear = () => {
+    setOcrFile(null);
+    setManualCropSelection(null);
+    if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
+    setOcrPreviewUrl("");
+    setOcrScanError("");
+  };
+
+  const handleOcrScan = async () => {
+    if (!ocrFile) return;
+    setOcrScanning(true);
+    setOcrScanError("");
+    try {
+      const res = await questionBankApi.extractQuestionOcrDraft(ocrFile);
+      const data = res.data;
+      if (!data || !data.draft) {
+        throw new Error("Không nhận được dữ liệu bản nháp từ server.");
+      }
+      setOcrResult(data);
+      // Initialize editable state
+      setReviewDraft({
+        questionContent: data.draft.questionContent || "",
+        solutionContent: data.draft.solutionContent || "",
+        suggestedQuestionType: data.draft.suggestedQuestionType || "UNKNOWN",
+        answers: (data.draft.answers || []).map(a => ({ ...a })),
+        parts: (data.draft.parts || []).map(p => ({ ...p }))
+      });
+      setAttachSourceImage(false);
+      setSelectedExtractedImageId(null);
+      setManualCropSelection(null);
+      setOcrImageUploadError("");
+      setIsOcrPanelOpen(false);
+      setIsOcrReviewOpen(true);
+    } catch (err) {
+      console.error("OCR Scan error:", err);
+      const errorCode = err.response?.data?.code;
+      if (err.response?.status === 413 || errorCode === "IMAGE_TOO_LARGE") {
+        setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
+      } else if (errorCode === "IMAGE_REQUIRED" || errorCode === "IMAGE_TYPE_NOT_SUPPORTED") {
+        setOcrScanError("Định dạng ảnh không hợp lệ hoặc thiếu tệp ảnh.");
+      } else if (errorCode === "OCR_DRAFT_UNAVAILABLE") {
+        setOcrScanError("Ảnh chứa nhiều hơn một câu hỏi hoặc không đủ rõ nét. Vui lòng cắt/chụp lại duy nhất một câu hỏi hoàn chỉnh.");
+      } else if (errorCode === "OCR_RATE_LIMIT_EXCEEDED" || errorCode === "OCR_PROVIDER_RATE_LIMITED") {
+        setOcrScanError("Lượt quét giới hạn đã vượt quá. Vui lòng đợi một phút và thử lại.");
+      } else if (errorCode === "OCR_PROVIDER_UNAVAILABLE" || errorCode === "OCR_INVALID_RESPONSE") {
+        setOcrScanError("Dịch vụ nhận diện Mistral OCR gặp lỗi hoặc phản hồi không hợp lệ. Vui lòng thử lại sau.");
+      } else if (errorCode === "OCR_NOT_CONFIGURED") {
+        setOcrScanError("Tính năng Mistral OCR chưa được cấu hình trên server.");
+      } else if (errorCode === "OCR_TIMEOUT") {
+        setOcrScanError("Thời gian quét ảnh đề vượt quá giới hạn. Vui lòng thử lại.");
+      } else {
+        setOcrScanError(err.response?.data?.message || err.message || "Tải ảnh và quét bản nháp thất bại. Vui lòng thử lại.");
+      }
+    } finally {
+      setOcrScanning(false);
+    }
+  };
+
+  const handleApplyDraft = async (applyType) => {
+    let pictureUrl = null;
+    const selectedExtractedImage = ocrResult?.extractedImages?.find(
+      (image) => image.id === selectedExtractedImageId);
+
+    if (selectedExtractedImage || (manualCropSelection && ocrFile) || (attachSourceImage && ocrFile)) {
+      setOcrImageUploading(true);
+      setOcrImageUploadError("");
+      try {
+        const imageToUpload = selectedExtractedImage
+          ? createFileFromDataUrl(selectedExtractedImage.dataUrl, `${selectedExtractedImage.id}.png`)
+          : manualCropSelection
+            ? await createCroppedImageFile(ocrFile, manualCropSelection)
+            : ocrFile;
+        const uploadRes = await questionBankApi.uploadQuestionImage(imageToUpload);
+        pictureUrl = uploadRes.data?.pictureUrl;
+        if (!pictureUrl) {
+          throw new Error("Không nhận được URL ảnh từ server.");
+        }
+      } catch (err) {
+        console.error("OCR Image Upload failed:", err);
+        setOcrImageUploadError("Tải ảnh nguồn lên thất bại. Bạn có thể thử lại hoặc bỏ tích chọn đính kèm để áp dụng không ảnh.");
+        setOcrImageUploading(false);
+        return; // Stop apply so user can retry or uncheck
+      }
+      setOcrImageUploading(false);
+    }
+
+    // Close review dialog
+    setIsOcrReviewOpen(false);
+
+    if (applyType === "content") {
+      setForm(prev => {
+        const updated = {
+          ...prev,
+          questionContent: reviewDraft.questionContent,
+        };
+        if (reviewDraft.solutionContent && reviewDraft.solutionContent.trim()) {
+          updated.solutionContent = reviewDraft.solutionContent;
+        }
+        if (pictureUrl) {
+          updated.pictureUrl = pictureUrl;
+        }
+        return updated;
+      });
+      setInfoMessage("Đã áp dụng nội dung câu hỏi từ bản nháp OCR.");
+      setError(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      // Map full draft state
+      const mapped = mapOcrDraftToEditorStatePatch(reviewDraft);
+      if (!mapped) return;
+
+      setForm(prev => {
+        const updated = {
+          ...prev,
+          questionContent: mapped.questionContent,
+        };
+        if (mapped.solutionContent && mapped.solutionContent.trim()) {
+          updated.solutionContent = mapped.solutionContent;
+        }
+        if (mapped.questionType) {
+          updated.questionType = mapped.questionType;
+        }
+        if (mapped.options) {
+          updated.options = mapped.options;
+        }
+        if (mapped.shortAnswer !== undefined) {
+          updated.shortAnswer = mapped.shortAnswer;
+        }
+        if (mapped.parts) {
+          updated.parts = mapped.parts;
+        }
+        if (pictureUrl) {
+          updated.pictureUrl = pictureUrl;
+        }
+        return updated;
+      });
+
+      if (mapped.ignoredPartsCount > 0) {
+        setInfoMessage('Đã áp dụng bản nháp OCR. Bỏ qua ' + mapped.ignoredPartsCount + ' mệnh đề không xác định.');
+      } else {
+        setInfoMessage("Đã áp dụng toàn bộ bản nháp OCR thành công.");
+      }
+      setError(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    // Clean up OCR preview and file state
+    setOcrFile(null);
+    setSelectedExtractedImageId(null);
+    setManualCropSelection(null);
+    if (ocrPreviewUrl) {
+      URL.revokeObjectURL(ocrPreviewUrl);
+      setOcrPreviewUrl("");
+    }
+    setIsOcrPanelOpen(false);
   };
 
   // Insert LaTeX at active cursor position (and replace selection if any)
@@ -426,15 +831,15 @@ export default function QuestionEditorPage() {
       const startPos = textarea.selectionStart;
       const endPos = textarea.selectionEnd;
       const text = form.questionContent;
-      
+
       const newText = text.substring(0, startPos) + latex + text.substring(endPos, text.length);
-      
+
       // Update form state
       setForm(prev => ({
         ...prev,
         questionContent: newText
       }));
-      
+
       // Restore cursor position right after newly inserted text
       setTimeout(() => {
         textarea.focus();
@@ -519,6 +924,10 @@ export default function QuestionEditorPage() {
           showError(`Nội dung câu hỏi phụ phần (${part.partLabel}) không được để trống!`);
           return;
         }
+        if (part.partType === "TRUE_FALSE" && part.correctBoolean !== true && part.correctBoolean !== false) {
+          showError(`Vui lòng chọn đáp án Đúng hoặc Sai cho câu hỏi phụ phần (${part.partLabel})!`);
+          return;
+        }
         if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
           showError(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
           return;
@@ -531,7 +940,7 @@ export default function QuestionEditorPage() {
     }
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
-    
+
     setLoading(true);
     const saveRequest = isEditMode
       ? questionBankApi.updateQuestion(id, payload)
@@ -539,7 +948,14 @@ export default function QuestionEditorPage() {
 
     saveRequest
       .then(() => {
-        navigate("/expert/questions");
+        if (fromReported) {
+          setHasSavedInSession(true);
+          setInfoMessage("Đã lưu câu hỏi thành công. Bây giờ bạn có thể giải quyết hoặc không chấp nhận các báo cáo.");
+          setLoading(false);
+          fetchPendingReports();
+        } else {
+          navigate("/expert/questions");
+        }
       })
       .catch(err => {
         console.error("Failed to save question:", err);
@@ -562,14 +978,14 @@ export default function QuestionEditorPage() {
   return (
     <ExpertLayout>
       <div className="p-gutter bg-canvas-white relative min-h-screen">
-        
+
         {/* Error alert banner */}
         {error && (
-          <div 
+          <div
             ref={errorRef}
             tabIndex={-1}
-            role="alert" 
-            aria-live="assertive" 
+            role="alert"
+            aria-live="assertive"
             className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
           >
             <span className="material-symbols-outlined">error</span>
@@ -579,9 +995,9 @@ export default function QuestionEditorPage() {
 
         {/* Info/Notification banner */}
         {infoMessage && (
-          <div 
-            role="status" 
-            aria-live="polite" 
+          <div
+            role="status"
+            aria-live="polite"
             className="p-4 mb-6 bg-primary/10 border border-primary/20 text-primary rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
           >
             <span className="material-symbols-outlined">info</span>
@@ -615,8 +1031,8 @@ export default function QuestionEditorPage() {
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => navigate("/expert/questions")}>Hủy</Button>
-            <Button 
-              className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" 
+            <Button
+              className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
               onClick={handleSaveQuestion}
               disabled={loading}
             >
@@ -627,10 +1043,10 @@ export default function QuestionEditorPage() {
 
         {/* Bento Grid Layout */}
         <div className="grid grid-cols-12 gap-6 items-start">
-          
+
           {/* Left Column: Editor Form */}
           <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-            
+
             {/* Content Area Container */}
             <div className="bg-pure-surface rounded-xl border border-whisper-border p-6 lg:p-8 diffused-shadow min-h-[500px] flex flex-col gap-6">
               {loading && !form.questionContent && (
@@ -646,14 +1062,14 @@ export default function QuestionEditorPage() {
                   <span className="material-symbols-outlined text-[16px]">label</span>
                   Thông tin phân loại
                 </h3>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                   <div className="space-y-4">
                     {/* Grade Select */}
                     <div>
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp học</label>
-                      <CustomSelect 
-                        value={form.grade?.toString() || "12"} 
+                      <CustomSelect
+                        value={form.grade?.toString() || "12"}
                         onValueChange={(val) => {
                           setForm(prev => ({
                             ...prev,
@@ -674,8 +1090,8 @@ export default function QuestionEditorPage() {
                     {/* Difficulty Select */}
                     <div>
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Độ khó câu hỏi</label>
-                      <CustomSelect 
-                        value={form.difficultyId || "NONE"} 
+                      <CustomSelect
+                        value={form.difficultyId || "NONE"}
                         onValueChange={(val) => handleFieldChange("difficultyId", val === "NONE" ? "" : val)}
                         placeholder="Chọn độ khó"
                         items={[
@@ -689,14 +1105,15 @@ export default function QuestionEditorPage() {
                   <div className="space-y-4">
                     {/* Default Point Input */}
                     <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Điểm số mặc định</label>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Trọng số câu hỏi</label>
                       <input
-                        value={form.defaultPoint}
-                        onChange={(e) => handleFieldChange("defaultPoint", parseFloat(e.target.value) || 0)}
+                        value={form.defaultWeight}
+                        onChange={(e) => handleFieldChange("defaultWeight", parseFloat(e.target.value) || 0)}
                         className="w-full p-2.5 h-10 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-semibold outline-none"
                         type="number"
-                        step="0.05"
-                        min="0"
+                        step="0.01"
+                        min="0.01"
+                        max="100"
                       />
                     </div>
 
@@ -769,8 +1186,8 @@ export default function QuestionEditorPage() {
                         type="button"
                         onClick={() => handleFieldChange("questionType", type)}
                         className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150 active:scale-[0.98] cursor-pointer flex-1 text-center min-w-[120px] ${
-                          form.questionType === type 
-                            ? "bg-primary text-white shadow-sm" 
+                          form.questionType === type
+                            ? "bg-primary text-white shadow-sm"
                             : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
                         }`}
                       >
@@ -786,15 +1203,11 @@ export default function QuestionEditorPage() {
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">NỘI DUNG CÂU HỎI (Hỗ trợ LaTeX)</label>
                 <div className="border border-outline-variant rounded-xl overflow-hidden focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                   <div className="bg-surface-container-low border-b border-outline-variant p-2 flex gap-1.5 flex-wrap items-center">
-                    <button type="button" onClick={() => handleInsertLatex("**đậm**")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Bold"><span className="material-symbols-outlined text-[18px]">format_bold</span></button>
-                    <button type="button" onClick={() => handleInsertLatex("*nghiêng*")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Italic"><span className="material-symbols-outlined text-[18px]">format_italic</span></button>
-                    <button type="button" onClick={() => handleInsertLatex("$\\int_{a}^{b} f(x) dx$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Tích phân"><span className="material-symbols-outlined text-[18px]">functions</span></button>
+                    <button type="button" onClick={() => handleInsertLatex("**đậm**")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Chữ đậm" aria-label="Chữ đậm"><span className="material-symbols-outlined text-[18px]">format_bold</span></button>
+                    <button type="button" onClick={() => handleInsertLatex("*nghiêng*")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Chữ nghiêng" aria-label="Chữ nghiêng"><span className="material-symbols-outlined text-[18px]">format_italic</span></button>
+
                     <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
-                    <button type="button" onClick={() => handleInsertLatex("$\\sqrt{x^2 + y^2}$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Căn thức"><span className="material-symbols-outlined text-[18px]">image</span></button>
-                    <button type="button" onClick={() => handleInsertLatex("$\\frac{a}{b}$")} className="p-1.5 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer" title="Phân số"><span className="material-symbols-outlined text-[18px]">table_chart</span></button>
-                    
-                    <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
-                    
+
                     <button
                       type="button"
                       onClick={() => {
@@ -806,6 +1219,8 @@ export default function QuestionEditorPage() {
                           ? "bg-primary text-white shadow-sm scale-[1.01]"
                           : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
                       }`}
+                      title="Mở công cụ chèn công thức LaTeX"
+                      aria-label="Mở công cụ chèn công thức LaTeX"
                     >
                       <span className="material-symbols-outlined text-[16px]">calculate</span>
                       Mã toán
@@ -822,9 +1237,11 @@ export default function QuestionEditorPage() {
                           ? "bg-primary text-white shadow-sm scale-[1.01]"
                           : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
                       }`}
+                      title="Quét ảnh đề bằng OCR để tạo bản nháp"
+                      aria-label="Quét ảnh đề bằng OCR để tạo bản nháp"
                     >
-                      <span className="material-symbols-outlined text-[16px]">photo_camera</span>
-                      Quét công thức
+                      <span className="material-symbols-outlined text-[16px]">document_scanner</span>
+                      Tạo bản nháp từ ảnh đề
                     </button>
                   </div>
 
@@ -882,66 +1299,6 @@ export default function QuestionEditorPage() {
                     </div>
                   )}
 
-                  {/* OCR Scanner Panel */}
-                  {isOcrPanelOpen && (
-                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 mi-panel-down">
-                      <div className="p-3.5 bg-primary/5 border border-primary/10 rounded-lg space-y-1.5">
-                        <h4 className="text-[11px] font-bold text-primary flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[16px]">info</span>
-                          Quét công thức toán từ ảnh chụp (Mockup)
-                        </h4>
-                        <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                          Tải lên hình ảnh chứa công thức toán học để quét và tự động chuyển đổi thành mã LaTeX.
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col gap-3">
-                        <label className="border border-dashed border-outline-variant rounded-xl p-4 text-center hover:border-primary transition-colors flex flex-col items-center gap-1 cursor-pointer bg-pure-surface">
-                          <span className="material-symbols-outlined text-[24px] text-on-surface-variant">photo_camera</span>
-                          <span className="text-[11px] font-bold text-on-surface">Chọn ảnh công thức toán</span>
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={handleOcrImageUpload} 
-                            className="hidden" 
-                          />
-                        </label>
-
-                        {ocrPreviewUrl && (
-                          <div className="border border-whisper-border rounded-xl p-3 bg-pure-surface space-y-2 max-w-md">
-                            <p className="text-[10px] font-bold text-on-surface-variant">Ảnh xem trước:</p>
-                            <img src={ocrPreviewUrl} alt="OCR Preview" className="max-h-32 mx-auto object-contain rounded border border-whisper-border" />
-                            <div className="flex gap-2 justify-end pt-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  handleInsertLatex("$f(x) = x^2 - 2x + 1$");
-                                  showError("Mockup: Đã chuyển đổi công thức toán trong ảnh thành LaTeX $f(x) = x^2 - 2x + 1$");
-                                }}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer active:scale-[0.98] transition-all"
-                              >
-                                Chuyển sang LaTeX
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                  showError("Mockup: Tính năng upload ảnh thật đang chờ tích hợp API lưu trữ. Giao diện hiện tại giữ tệp này làm preview tạm thời.");
-                                }}
-                                className="normal-case h-7 text-[10px] px-2.5 font-bold cursor-pointer active:scale-[0.98] transition-all"
-                              >
-                                Lưu ảnh xem trước
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   <textarea
                     ref={questionTextareaRef}
                     value={form.questionContent}
@@ -950,6 +1307,180 @@ export default function QuestionEditorPage() {
                     placeholder="Nhập nội dung câu hỏi hoặc mã LaTeX... Ví dụ: \\int_{0}^{1} x^2 dx"
                   />
                 </div>
+              </div>
+
+              {/* 3. Hình ảnh minh họa */}
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Hình ảnh minh họa</label>
+
+                {!form.pictureUrl && !isImageUploadExpanded ? (
+                  /* Compact State */
+                  <div className="flex items-center justify-between p-3.5 border border-outline-variant bg-surface-container-lowest rounded-xl shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[24px] text-on-surface-variant">image</span>
+                      <div className="text-left">
+                        <p className="text-xs font-bold text-on-surface">Đính kèm hình ảnh minh họa cho câu hỏi</p>
+                        <p className="text-[10px] text-on-surface-variant font-medium">JPEG, PNG, WebP (Tối đa 5MB) • Ảnh sẽ hiển thị cùng đề bài.</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsImageUploadExpanded(true)}
+                      className="normal-case h-8 text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">add</span>
+                      Thêm ảnh
+                    </Button>
+                  </div>
+                ) : (
+                  /* Expanded/Active State */
+                  <div className="space-y-3 p-4 border border-outline-variant bg-surface-container-lowest rounded-xl shadow-sm animate-fade-in">
+                    <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-on-surface">Hình ảnh minh họa câu hỏi</h4>
+                        <p className="text-[10px] text-on-surface-variant font-medium mt-0.5">Ảnh sẽ hiển thị kèm theo đề bài.</p>
+                      </div>
+                      {!form.pictureUrl && !uploading && (
+                        <button
+                          type="button"
+                          onClick={() => setIsImageUploadExpanded(false)}
+                          className="text-[10px] font-bold text-on-surface-variant hover:text-on-surface hover:underline cursor-pointer"
+                        >
+                          Thu gọn
+                        </button>
+                      )}
+                    </div>
+
+                    {form.pictureUrl ? (
+                      <div className="relative group max-w-xs border border-whisper-border rounded-lg overflow-hidden bg-surface-container-low">
+                        <img
+                          src={form.pictureUrl}
+                          alt="Ảnh minh họa"
+                          className="max-h-40 w-full object-contain mx-auto"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleFieldChange("pictureUrl", "");
+                              setIsImageUploadExpanded(false);
+                            }}
+                            className="bg-deep-rose text-white p-1.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                            title="Xóa ảnh"
+                            aria-label="Xóa ảnh minh họa"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onDragOver={handleIllustrationDragOver}
+                        onDragLeave={handleIllustrationDragLeave}
+                        onDrop={handleIllustrationDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            fileInputRef.current?.click();
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label="Kéo thả ảnh minh họa câu hỏi tại đây hoặc nhấp chuột để tải lên"
+                        className={cn(
+                          "border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          isIllustrationDragging
+                            ? "border-primary bg-primary/5 scale-[1.01]"
+                            : "border-outline-variant hover:border-primary/50 bg-pure-surface"
+                        )}
+                      >
+                        <span className="material-symbols-outlined text-[28px] text-on-surface-variant mb-1">image</span>
+                        <p className="text-[11px] font-bold text-on-surface">Kéo thả ảnh minh họa vào đây</p>
+                        <p className="text-[9px] text-on-surface-variant mt-0.5">hoặc nhấp chuột để duyệt tìm tệp tin (JPEG, PNG, WebP tối đa 5MB)</p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="gap-1.5 cursor-pointer h-8 text-[11px] font-bold active:scale-[0.98] transition-all duration-150 flex items-center"
+                      >
+                        {uploading ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Đang tải lên...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[16px]">upload</span>
+                            {form.pictureUrl ? "Thay ảnh" : "Tải ảnh lên"}
+                          </>
+                        )}
+                      </Button>
+
+                      {form.pictureUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            handleFieldChange("pictureUrl", "");
+                            setIsImageUploadExpanded(false);
+                          }}
+                          className="text-deep-rose border-deep-rose hover:bg-deep-rose/5 h-8 text-[11px] font-bold cursor-pointer active:scale-[0.98] transition-all duration-150"
+                        >
+                          Xóa ảnh
+                        </Button>
+                      )}
+
+                      <span className="text-[10px] text-on-surface-variant font-medium">
+                        Hỗ trợ: JPEG, PNG, WEBP (Tối đa 5MB)
+                      </span>
+                    </div>
+
+                    {uploadError && (
+                      <p className="text-[11px] text-deep-rose font-semibold bg-deep-rose/5 p-2 rounded border border-deep-rose/15 leading-relaxed">
+                        {uploadError}
+                      </p>
+                    )}
+
+                    {/* Manual Entry */}
+                    <details className="mt-1">
+                      <summary className="text-[10px] text-on-surface-variant hover:text-primary cursor-pointer transition-colors select-none">
+                        Nhập URL ảnh thủ công
+                      </summary>
+                      <div className="mt-2">
+                        <input
+                          value={form.pictureUrl || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleFieldChange("pictureUrl", val);
+                            if (val) {
+                              setIsImageUploadExpanded(true);
+                            }
+                          }}
+                          className="w-full p-2.5 text-[12px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono outline-none"
+                          placeholder="https://example.com/image.png"
+                          type="url"
+                        />
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
 
               {/* 3. Cấu hình đáp án */}
@@ -969,8 +1500,8 @@ export default function QuestionEditorPage() {
                       <div
                         key={idx}
                         className={`flex items-center gap-4 p-4 border rounded-xl relative transition-all ${
-                          opt.isCorrect 
-                            ? "bg-emerald-success/5 border-emerald-success/30 shadow-sm" 
+                          opt.isCorrect
+                            ? "bg-emerald-success/5 border-emerald-success/30 shadow-sm"
                             : "border-whisper-border bg-surface-container-lowest"
                         }`}
                       >
@@ -986,7 +1517,7 @@ export default function QuestionEditorPage() {
                             placeholder={`Nhập phương án ${String.fromCharCode(65 + idx)}`}
                           />
                         </div>
-                        
+
                         <div className="flex items-center gap-3 shrink-0 mt-2">
                           <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none">
                             <input
@@ -1000,7 +1531,7 @@ export default function QuestionEditorPage() {
                             />
                             <span className={opt.isCorrect ? "text-emerald-success font-black" : "text-on-surface-variant"}>ĐÚNG</span>
                           </label>
-                          
+
                           {form.options.length > 2 && (
                             <button
                               type="button"
@@ -1014,7 +1545,7 @@ export default function QuestionEditorPage() {
                         </div>
                       </div>
                     ))}
-                    
+
                     <div className="flex justify-end pt-2">
                       <button
                         type="button"
@@ -1203,14 +1734,16 @@ export default function QuestionEditorPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm số cho phần này:</label>
+                            <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số phần:</label>
                             <input
-                              value={part.defaultPoint}
-                              onChange={(e) => handlePartFieldChange(pIdx, "defaultPoint", e.target.value)}
+                              value={part.defaultWeight}
+                              onChange={(e) => handlePartFieldChange(pIdx, "defaultWeight", e.target.value)}
                               className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-semibold outline-none"
-                              placeholder="Điểm phụ"
+                              placeholder="Ví dụ: 1"
                               type="number"
-                              step="0.05"
+                              step="0.01"
+                              min="0.01"
+                              max="100"
                             />
                           </div>
                         </div>
@@ -1243,122 +1776,194 @@ export default function QuestionEditorPage() {
                 </div>
               </div>
 
-              {/* 5. Hình ảnh minh họa */}
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Hình ảnh minh họa</label>
-                <div className="flex flex-col gap-3 p-4 border border-outline-variant bg-surface-container-lowest rounded-xl">
-                  
-                  {/* Image Preview */}
-                  {form.pictureUrl ? (
-                    <div className="relative group max-w-xs border border-whisper-border rounded-lg overflow-hidden bg-surface-container-low">
-                      <img
-                        src={form.pictureUrl}
-                        alt="Ảnh minh họa"
-                        className="max-h-40 w-full object-contain mx-auto"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleFieldChange("pictureUrl", "")}
-                          className="bg-deep-rose text-white p-1.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                          title="Xóa ảnh"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border border-dashed border-outline-variant rounded-lg p-5 flex flex-col items-center justify-center bg-pure-surface text-center">
-                      <span className="material-symbols-outlined text-[28px] text-on-surface-variant mb-1">image</span>
-                      <p className="text-[11px] text-on-surface-variant">Chưa có ảnh minh họa câu hỏi</p>
-                    </div>
-                  )}
 
-                  {/* Controls */}
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      disabled={uploading}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="gap-1.5 cursor-pointer h-8 text-[11px] font-bold active:scale-[0.98] transition-all duration-150"
-                    >
-                      {uploading ? (
-                        <>
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Đang tải lên...
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[16px]">upload</span>
-                          Tải ảnh lên
-                        </>
-                      )}
-                    </Button>
-                    
-                    {form.pictureUrl && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleFieldChange("pictureUrl", "")}
-                        className="text-deep-rose border-deep-rose hover:bg-deep-rose/5 h-8 text-[11px] font-bold cursor-pointer active:scale-[0.98] transition-all duration-150"
-                      >
-                        Xóa ảnh
-                      </Button>
-                    )}
-                    
-                    <span className="text-[10px] text-on-surface-variant font-medium">
-                      Hỗ trợ: JPEG, PNG, WEBP (Tối đa 5MB)
-                    </span>
-                  </div>
-
-                  {/* Error Message */}
-                  {uploadError && (
-                    <p className="text-[11px] text-deep-rose font-semibold bg-deep-rose/5 p-2 rounded border border-deep-rose/15 leading-relaxed">
-                      {uploadError}
-                    </p>
-                  )}
-
-                  {/* Manual Entry */}
-                  <details className="mt-1">
-                    <summary className="text-[10px] text-on-surface-variant hover:text-primary cursor-pointer transition-colors select-none">
-                      Nhập URL ảnh thủ công
-                    </summary>
-                    <div className="mt-2">
-                      <input
-                        value={form.pictureUrl}
-                        onChange={(e) => handleFieldChange("pictureUrl", e.target.value)}
-                        className="w-full p-2.5 text-[12px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono outline-none"
-                        placeholder="https://example.com/image.png"
-                        type="url"
-                      />
-                    </div>
-                  </details>
-
-                </div>
-              </div>
             </div>
           </div>
 
           {/* Right Column: Properties Summary & Live Preview */}
           <div className="col-span-12 lg:col-span-4 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto flex flex-col gap-6">
-            
+
+            {/* Pending Reports Panel */}
+            {fromReported && (
+              <div className="bg-pure-surface rounded-xl border border-error/20 p-5 lg:p-6 diffused-shadow shadow-sm">
+                <h3 className="text-xs font-bold text-error mb-4 tracking-wider flex items-center gap-1.5 border-b border-error/10 pb-2.5 uppercase">
+                  <span className="material-symbols-outlined text-[16px]">report</span>
+                  BÁO CÁO ĐANG CHỜ XỬ LÝ ({pendingReports.length})
+                </h3>
+
+                {reportsError ? (
+                  <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg text-center font-semibold">
+                    <p className="mb-2">{reportsError}</p>
+                    <Button variant="outline" size="sm" onClick={fetchPendingReports} className="text-[10px] h-7">Thử lại</Button>
+                  </div>
+                ) : reportsLoading && pendingReports.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-on-surface-variant flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <span>Đang tải các báo cáo...</span>
+                  </div>
+                ) : pendingReports.length === 0 ? (
+                  <div className="p-3 text-xs text-emerald-success bg-emerald-success/5 border border-emerald-success/15 rounded-lg text-center font-bold">
+                    Không còn báo cáo nào đang chờ xử lý.
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+                    {pendingReports.map((rep) => {
+                      const reportIdVal = rep.reportId || rep.id;
+                      const time = rep.createdTime ? new Date(rep.createdTime).toLocaleString("vi-VN") : "Chưa rõ thời gian";
+                      const isUpdatingThisReport = updatingReportId === reportIdVal;
+
+                      const isStudentOrExpert = rep.reporterRole === "Student" || rep.reporterRole === "Expert";
+                      const isPending = rep.status === "Pending";
+                      const isAdmin = rep.reporterRole === "Admin";
+                      const isPendingFix = rep.status === "PendingFix";
+                      const isPendingReview = rep.status === "PendingReview";
+
+                      if (isStudentOrExpert && isPending) {
+                        return (
+                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
+                                {getRoleLabel(rep.reporterRole || rep.role)}
+                              </span>
+                              <span>{time}</span>
+                            </div>
+                            <p className="text-on-surface font-medium leading-relaxed italic">
+                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                            </p>
+                            <div className="flex justify-end gap-2 pt-1 border-t border-error/10">
+                              <button
+                                type="button"
+                                disabled={!hasSavedInSession || isUpdatingThisReport}
+                                onClick={() => handleResolveReport(reportIdVal, "Resolved", rep.reporterRole)}
+                                className={cn(
+                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                                  hasSavedInSession && !isUpdatingThisReport
+                                    ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
+                                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                                )}
+                                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
+                              >
+                                {isUpdatingThisReport ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  "Đã khắc phục"
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!hasSavedInSession || isUpdatingThisReport}
+                                onClick={() => handleResolveReport(reportIdVal, "Dismissed", rep.reporterRole)}
+                                className={cn(
+                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                                  hasSavedInSession && !isUpdatingThisReport
+                                    ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
+                                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                                )}
+                                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
+                              >
+                                {isUpdatingThisReport ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  "Không chấp nhận"
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (isAdmin && isPendingFix) {
+                        return (
+                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded">
+                                Admin yêu cầu chỉnh sửa
+                              </span>
+                              <span>{time}</span>
+                            </div>
+                            <p className="text-on-surface font-medium leading-relaxed italic">
+                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                            </p>
+                            {rep.reviewNote && (
+                              <div className="p-2 bg-error/10 border border-error/20 rounded text-on-surface-variant leading-relaxed text-[11px]">
+                                <span className="font-bold text-error">Phản hồi của Admin: </span>
+                                {rep.reviewNote}
+                              </div>
+                            )}
+                            <div className="flex justify-end pt-1 border-t border-error/10">
+                              <button
+                                type="button"
+                                disabled={isUpdatingThisReport}
+                                onClick={() => handleSubmitReview(reportIdVal)}
+                                className={cn(
+                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95"
+                                )}
+                                title="Gửi yêu cầu kiểm tra tới Admin"
+                              >
+                                {isUpdatingThisReport ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  "Gửi Admin xét duyệt"
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (isAdmin && isPendingReview) {
+                        const submittedTimeStr = rep.submittedTime ? new Date(rep.submittedTime).toLocaleString("vi-VN") : "";
+                        return (
+                          <div key={reportIdVal} className="p-3 bg-surface-container-low border border-whisper-border rounded-lg text-xs space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                              <span className="font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                Đang chờ Admin xét duyệt
+                              </span>
+                              <span>{time}</span>
+                            </div>
+                            <p className="text-on-surface-variant font-medium leading-relaxed italic">
+                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                            </p>
+                            {submittedTimeStr && (
+                              <div className="text-[10px] text-on-surface-variant/80 font-mono font-medium">
+                                Gửi duyệt lúc: {submittedTimeStr}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={reportIdVal} className="p-3 bg-surface-container-low border border-whisper-border rounded-lg text-xs space-y-2">
+                          <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                            <span className="font-bold text-on-surface-variant bg-surface px-1.5 py-0.5 rounded uppercase">
+                              {getRoleLabel(rep.reporterRole || rep.role)} ({rep.status})
+                            </span>
+                            <span>{time}</span>
+                          </div>
+                          <p className="text-on-surface-variant font-medium leading-relaxed italic">
+                            &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {!hasSavedInSession && !reportsError && pendingReports.some(rep => (rep.reporterRole === "Student" || rep.reporterRole === "Expert") && rep.status === "Pending") && (
+                  <p className="text-[10px] text-on-surface-variant/75 mt-3 italic leading-relaxed text-center">
+                    * Các nút xử lý báo cáo sẽ hoạt động sau khi bạn ấn &ldquo;Lưu câu hỏi&rdquo; thành công ít nhất một lần.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Meta Properties Summary Card */}
             <div className="bg-pure-surface rounded-xl border border-whisper-border p-5 lg:p-6 diffused-shadow">
               <h3 className="text-xs font-bold text-on-surface-variant mb-4 tracking-wider flex items-center gap-1.5 border-b border-whisper-border pb-2.5 uppercase">
                 <span className="material-symbols-outlined text-[16px]">tune</span>
                 THUỘC TÍNH CÂU HỎI
               </h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Loại câu hỏi:</label>
@@ -1383,8 +1988,8 @@ export default function QuestionEditorPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Điểm mặc định:</label>
-                  <p className="font-bold text-[14px] text-on-surface font-mono">{form.defaultPoint} điểm</p>
+                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Trọng số:</label>
+                  <p className="font-bold text-[14px] text-on-surface font-mono">{form.defaultWeight}</p>
                 </div>
               </div>
             </div>
@@ -1392,12 +1997,12 @@ export default function QuestionEditorPage() {
             {/* Live Preview Panel */}
             <div className="glass-panel rounded-xl p-5 lg:p-6 relative overflow-hidden flex flex-col h-[400px]">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-              
+
               <h3 className="text-xs font-bold text-primary mb-4 tracking-wider flex items-center gap-1.5 relative z-10 uppercase">
                 <span className="material-symbols-outlined text-[16px]">visibility</span>
                 XEM TRƯỚC (LIVE PREVIEW)
               </h3>
-              
+
               <div className="flex-1 bg-pure-surface rounded-xl border border-whisper-border p-4 overflow-y-auto relative z-10 diffused-shadow">
                 <div className="text-[13px] text-on-surface space-y-4 leading-relaxed font-medium">
                   <div>
@@ -1416,7 +2021,7 @@ export default function QuestionEditorPage() {
                   {/* Preview based on Question Type */}
                   <div>
                     <span className="font-bold text-primary">Các lựa chọn trả lời:</span>
-                    
+
                     {/* SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE */}
                     {(form.questionType === "SINGLE_CHOICE" || form.questionType === "MULTIPLE_CHOICE" || form.questionType === "TRUE_FALSE") && (
                       <div className="space-y-2 mt-1.5">
@@ -1435,7 +2040,9 @@ export default function QuestionEditorPage() {
                               }`}>
                                 {String.fromCharCode(65 + oIdx)}
                               </div>
-                              <span className="font-mono">{opt.content}</span>
+                              <div className="min-w-0">
+                                <LatexPreview content={opt.content} />
+                              </div>
                             </div>
                             {form.questionType === "TRUE_FALSE" && (
                               <Badge variant={opt.isCorrect ? "approved" : "secondary"} className="scale-90 origin-right">
@@ -1450,7 +2057,12 @@ export default function QuestionEditorPage() {
                     {/* SHORT_ANSWER */}
                     {form.questionType === "SHORT_ANSWER" && (
                       <div className="p-2 bg-surface-container rounded-lg border border-whisper-border font-mono text-[12px] text-primary font-bold mt-1.5 text-center">
-                        Đáp án đúng: {form.shortAnswer || <span className="italic text-on-surface-variant font-body">Trống</span>}
+                        <span className="font-bold text-primary">Đáp án đúng:</span>{" "}
+                        {form.shortAnswer ? (
+                          <LatexPreview content={form.shortAnswer} />
+                        ) : (
+                          <span className="italic text-on-surface-variant font-body">Trống</span>
+                        )}
                       </div>
                     )}
 
@@ -1461,7 +2073,7 @@ export default function QuestionEditorPage() {
                           <div key={pIdx} className="p-2 border border-whisper-border bg-surface-container-low rounded-lg text-[12px] space-y-1">
                             <div className="flex justify-between items-center">
                               <span className="font-black text-[9px] uppercase text-primary">Phần {part.partLabel}: {getQuestionPartTypeLabel(part.partType)}</span>
-                              <span className="text-[9px] font-bold text-on-surface-variant">{part.defaultPoint} đ</span>
+                              <span className="text-[9px] font-bold text-on-surface-variant">Trọng số {part.defaultWeight}</span>
                             </div>
                             <div className="text-[12px] mt-1">
                               <LatexPreview content={part.partContent} />
@@ -1472,20 +2084,23 @@ export default function QuestionEditorPage() {
                               </p>
                             )}
                             {part.partType === "SHORT_ANSWER" && (
-                              <p className="text-[10px] text-emerald-success font-bold font-mono">
-                                Đáp án: {part.correctText}
-                              </p>
+                              <div className="text-[10px] text-emerald-success font-bold font-mono">
+                                <span>Đáp án:</span>
+                                <LatexPreview content={part.correctText} />
+                              </div>
                             )}
                             {part.partType === "NUMERIC_ANSWER" && (
-                              <p className="text-[10px] text-emerald-success font-bold font-mono">
-                                Số đúng: {part.correctNumeric} (±{part.numericTolerance})
-                              </p>
+                              <div className="text-[10px] text-emerald-success font-bold font-mono">
+                                <span>Số đúng:</span>
+                                <LatexPreview content={String(part.correctNumeric ?? "")} />
+                                <span>(±{part.numericTolerance})</span>
+                              </div>
                             )}
                           </div>
                         ))}
                       </div>
                     )}
-                    
+
                     {form.solutionContent && (
                       <div className="mt-4 border-t border-dashed border-whisper-border pt-3">
                         <span className="font-bold text-primary mr-1">Lời giải chi tiết:</span>
@@ -1505,6 +2120,58 @@ export default function QuestionEditorPage() {
 
       </div>
 
+      {/* OCR Upload Drawer */}
+      <QuestionOcrUploadDrawer
+        isOpen={isOcrPanelOpen}
+        onClose={() => setIsOcrPanelOpen(false)}
+        ocrFile={ocrFile}
+        ocrPreviewUrl={ocrPreviewUrl}
+        ocrScanning={ocrScanning}
+        ocrScanError={ocrScanError}
+        onFileSelect={handleOcrFileSelect}
+        onFileClear={handleOcrFileClear}
+        onScan={handleOcrScan}
+        isOcrBusy={isOcrBusy}
+      />
+
+      {/* OCR Draft Review Dialog */}
+      <QuestionOcrDraftReviewDialog
+        isOpen={isOcrReviewOpen}
+        onClose={() => setIsOcrReviewOpen(false)}
+        ocrResult={ocrResult}
+        reviewDraft={reviewDraft}
+        setReviewDraft={setReviewDraft}
+        attachSourceImage={attachSourceImage}
+        setAttachSourceImage={(isAttached) => {
+          setAttachSourceImage(isAttached);
+          if (isAttached) {
+            setSelectedExtractedImageId(null);
+            setManualCropSelection(null);
+          }
+        }}
+        selectedExtractedImageId={selectedExtractedImageId}
+        setSelectedExtractedImageId={(imageId) => {
+          setSelectedExtractedImageId(imageId);
+          if (imageId) {
+            setAttachSourceImage(false);
+            setManualCropSelection(null);
+          }
+        }}
+        manualCropSelection={manualCropSelection}
+        setManualCropSelection={(selection) => {
+          setManualCropSelection(selection);
+          if (selection) {
+            setAttachSourceImage(false);
+            setSelectedExtractedImageId(null);
+          }
+        }}
+        ocrImageUploading={ocrImageUploading}
+        ocrImageUploadError={ocrImageUploadError}
+        onApplyDraft={handleApplyDraft}
+        ocrPreviewUrl={ocrPreviewUrl}
+        isOcrBusy={isOcrBusy}
+      />
+
       {/* Right-side Slide-over Panel */}
       {isTopicPanelOpen && (
         <div className={`fixed inset-0 z-50 flex justify-end ${isTopicPanelClosing ? "mi-backdrop-out" : "mi-backdrop-in"}`}>
@@ -1515,7 +2182,7 @@ export default function QuestionEditorPage() {
             onClick={closeTopicPanel}
           />
 
-          <section 
+          <section
             id="topic-drawer-section"
             className={`relative z-10 h-full w-full max-w-xl bg-pure-surface border-l border-whisper-border diffused-shadow flex flex-col ${isTopicPanelClosing ? "mi-drawer-out" : "mi-drawer-in"}`}
           >
@@ -1546,11 +2213,11 @@ export default function QuestionEditorPage() {
             {/* Error banner inside Drawer */}
             {error && (
               <div className="px-5 pt-3">
-                <div 
+                <div
                   ref={drawerErrorRef}
                   tabIndex={-1}
-                  role="alert" 
-                  aria-live="assertive" 
+                  role="alert"
+                  aria-live="assertive"
                   className="p-3 bg-error/10 border border-error/20 text-error rounded-xl text-xs font-semibold flex items-center gap-2 outline-none"
                 >
                   <span className="material-symbols-outlined text-[14px]">error</span>

@@ -9,7 +9,7 @@ namespace MathInsight.Modules.Recommender.Contracts;
 /// <c>SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = @RecommendedDifficultyLevel</c>
 /// </summary>
 public sealed record WeakTagAdviceDto(
-    Guid TagId,
+    string TagId,
     string TagName,
     decimal OfficialPoint,
     bool IsWeak,

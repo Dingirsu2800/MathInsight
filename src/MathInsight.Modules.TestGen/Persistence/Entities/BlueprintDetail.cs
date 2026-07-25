@@ -1,5 +1,3 @@
-using System;
-
 namespace MathInsight.Modules.TestGen.Persistence.Entities;
 
 /// <summary>
@@ -8,13 +6,13 @@ namespace MathInsight.Modules.TestGen.Persistence.Entities;
 /// </summary>
 public class BlueprintDetail
 {
-    public Guid BlueprintDetailId { get; set; }
-    public Guid BlueprintId { get; set; }
-    public Guid BlueprintSectionId { get; set; }
-    public Guid TagId { get; set; }
-    public Guid DifficultyId { get; set; }
+    public string BlueprintDetailId { get; set; } = string.Empty;
+    public string BlueprintId { get; set; } = string.Empty;
+    public string BlueprintSectionId { get; set; } = string.Empty;
+    public string TagId { get; set; } = string.Empty;
+    public string DifficultyId { get; set; } = string.Empty;
     public int Quantity { get; set; }
 
-    // Navigation
     public BlueprintSection? BlueprintSection { get; set; }
+    public ICollection<TestQuestion> TestQuestions { get; set; } = new List<TestQuestion>();
 }

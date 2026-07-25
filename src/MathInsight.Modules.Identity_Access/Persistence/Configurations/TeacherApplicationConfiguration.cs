@@ -8,7 +8,13 @@ namespace MathInsight.Modules.Identity_Access.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<TeacherApplication> builder)
         {
-            builder.ToTable(nameof(TeacherApplication));
+            // Status is constrained to PENDING/APPROVED/REJECTED. The DB stores these as
+            // title case ('Pending'/'Approved'/'Rejected') — the check constraint name and
+            // values mirror CK_TeacherApplication_Status in the SQL schema, unchanged.
+            builder.ToTable(nameof(TeacherApplication), table =>
+                table.HasCheckConstraint(
+                    "CK_TeacherApplication_Status",
+                    "[Status] IN ('Pending', 'Approved', 'Rejected')"));
 
             builder.HasKey(application => application.ApplicationId);
 

@@ -16,9 +16,14 @@ public class GetTagDifficultiesQueryHandler : IRequestHandler<GetTagDifficulties
 
     public async Task<IReadOnlyList<TagDifficultyResponse>> Handle(GetTagDifficultiesQuery request, CancellationToken cancellationToken)
     {
-        return await _context.TagDifficulties
-            .AsNoTracking()
-            .Where(tag => tag.IsActive)
+        var query = _context.TagDifficulties.AsNoTracking();
+
+        if (!request.IncludeInactive)
+        {
+            query = query.Where(tag => tag.IsActive);
+        }
+
+        return await query
             .OrderBy(tag => tag.DisplayOrder)
             .Select(tag => new TagDifficultyResponse
             (
@@ -26,7 +31,8 @@ public class GetTagDifficultiesQueryHandler : IRequestHandler<GetTagDifficulties
                 tag.DifficultyName,
                 tag.Description,
                 tag.LevelValue,
-                tag.DisplayOrder
+                tag.DisplayOrder,
+                tag.IsActive
             ))
             .ToListAsync(cancellationToken);
     }

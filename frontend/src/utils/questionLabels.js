@@ -1,3 +1,16 @@
+export function normalizeQuestionType(type) {
+  if (!type) return "";
+  const cleaned = String(type).trim().replace(/[\s_-]+/g, "").toUpperCase();
+
+  if (cleaned === "SINGLECHOICE" || cleaned === "SINGLE") return "SINGLE_CHOICE";
+  if (cleaned === "MULTIPLECHOICE" || cleaned === "MULTIPLESELECT" || cleaned === "MULTIPLE") return "MULTIPLE_CHOICE";
+  if (cleaned === "TRUEFALSE" || cleaned === "YESNO") return "TRUE_FALSE";
+  if (cleaned === "SHORTANSWER" || cleaned === "SHORT") return "SHORT_ANSWER";
+  if (cleaned === "COMPOSITE") return "COMPOSITE";
+
+  return type;
+}
+
 export const QUESTION_TYPE_LABELS = {
   SINGLE_CHOICE: "Trắc nghiệm một đáp án",
   MULTIPLE_CHOICE: "Trắc nghiệm nhiều đáp án",
@@ -6,6 +19,17 @@ export const QUESTION_TYPE_LABELS = {
   COMPOSITE: "Câu hỏi nhiều mệnh đề",
 };
 
+export function normalizeQuestionPartType(type) {
+  if (!type) return "";
+  const cleaned = String(type).trim().replace(/[\s_-]+/g, "").toUpperCase();
+
+  if (cleaned === "TRUEFALSE" || cleaned === "YESNO") return "TRUE_FALSE";
+  if (cleaned === "SHORTANSWER" || cleaned === "SHORT") return "SHORT_ANSWER";
+  if (cleaned === "NUMERICANSWER" || cleaned === "NUMERIC") return "NUMERIC_ANSWER";
+
+  return type;
+}
+
 export const QUESTION_PART_TYPE_LABELS = {
   TRUE_FALSE: "Đúng / Sai",
   SHORT_ANSWER: "Trả lời ngắn",
@@ -13,11 +37,13 @@ export const QUESTION_PART_TYPE_LABELS = {
 };
 
 export function getQuestionTypeLabel(type) {
-  return QUESTION_TYPE_LABELS[type] || type || "Chưa xác định";
+  const norm = normalizeQuestionType(type);
+  return QUESTION_TYPE_LABELS[norm] || type || "Chưa xác định";
 }
 
 export function getQuestionPartTypeLabel(type) {
-  return QUESTION_PART_TYPE_LABELS[type] || type || "Chưa xác định";
+  const norm = normalizeQuestionPartType(type);
+  return QUESTION_PART_TYPE_LABELS[norm] || type || "Chưa xác định";
 }
 
 export const QUESTION_STATUS_LABELS = {
@@ -51,5 +77,6 @@ export const QUESTION_TYPE_SHORT_LABELS = {
 };
 
 export function getQuestionTypeShortLabel(type) {
-  return QUESTION_TYPE_SHORT_LABELS[type] || getQuestionTypeLabel(type);
+  const norm = normalizeQuestionType(type);
+  return QUESTION_TYPE_SHORT_LABELS[norm] || getQuestionTypeLabel(norm);
 }

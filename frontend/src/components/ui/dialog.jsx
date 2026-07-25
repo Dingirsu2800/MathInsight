@@ -2,19 +2,64 @@ import * as React from "react";
 import { cn } from "../../utils/cn";
 
 export function Dialog({ isOpen, onClose, children, className, variant = "modal" }) {
+  const dialogRef = React.useRef(null);
+  const previouslyFocusedElementRef = React.useRef(null);
+  const previousBodyOverflowRef = React.useRef("");
+
   React.useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      window.addEventListener("keydown", handleEscape);
-    }
+    if (!isOpen) return undefined;
+
+    previouslyFocusedElementRef.current = document.activeElement;
+    previousBodyOverflowRef.current = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const frameId = window.requestAnimationFrame(() => {
+      dialogRef.current?.focus();
+    });
+
     return () => {
-      document.body.style.overflow = "unset";
-      window.removeEventListener("keydown", handleEscape);
+      window.cancelAnimationFrame(frameId);
+      document.body.style.overflow = previousBodyOverflowRef.current;
+
+      const trigger = previouslyFocusedElementRef.current;
+      if (trigger instanceof HTMLElement && document.contains(trigger)) {
+        window.requestAnimationFrame(() => trigger.focus());
+      }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+
+    if (event.key !== "Tab") return;
+
+    const focusableElements = dialogRef.current?.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    const focusable = Array.from(focusableElements ?? []);
+
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialogRef.current?.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const activeElement = document.activeElement;
+
+    if (event.shiftKey && (activeElement === first || activeElement === dialogRef.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (activeElement === last || activeElement === dialogRef.current)) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -27,9 +72,16 @@ export function Dialog({ isOpen, onClose, children, className, variant = "modal"
       <div
         className="fixed inset-0 bg-charcoal-ink/30 backdrop-blur-[2px] transition-opacity duration-300"
         onClick={onClose}
+        aria-hidden="true"
       />
       {/* Dialog container */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Hộp thoại"
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
         className={cn(
           "relative z-50 bg-pure-surface border border-whisper-border p-6 flex flex-col shadow-2xl",
           {
@@ -42,7 +94,10 @@ export function Dialog({ isOpen, onClose, children, className, variant = "modal"
         {children}
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
+          aria-label="Đóng hộp thoại"
+          title="Đóng"
           className="absolute top-4 right-4 p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-[20px]">close</span>

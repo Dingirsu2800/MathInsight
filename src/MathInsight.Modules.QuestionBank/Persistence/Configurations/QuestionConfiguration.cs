@@ -63,10 +63,10 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
             .IsUnicode(false)
             .IsRequired();
 
-        builder.Property(question => question.DefaultPoint)
-            .HasColumnName("DefaultPoint")
-            .HasColumnType("decimal(4,2)")
-            .HasDefaultValue(0.20m)
+        builder.Property(question => question.DefaultWeight)
+            .HasColumnName("DefaultWeight")
+            .HasColumnType("decimal(5,2)")
+            .HasDefaultValue(1.00m)
             .IsRequired();
 
         builder.Property(question => question.IsActive)
@@ -74,11 +74,26 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
             .HasDefaultValue(true)
             .IsRequired();
 
+        builder.Property(question => question.CreatedTime)
+            .HasColumnName("CreatedTime")
+            .HasColumnType("datetime2(0)")
+            .HasDefaultValueSql("SYSUTCDATETIME()")
+            .IsRequired();
+
+        builder.Property(question => question.UpdatedTime)
+            .HasColumnName("UpdatedTime")
+            .HasColumnType("datetime2(0)")
+            .HasDefaultValueSql("SYSUTCDATETIME()")
+            .IsRequired();
+
         builder.HasIndex(question => new { question.Status, question.IsActive })
             .HasDatabaseName("IX_Question_Status_IsActive");
 
         builder.HasIndex(question => question.ExpertId)
             .HasDatabaseName("IX_Question_ExpertID");
+
+        builder.HasIndex(question => new { question.ExpertId, question.CreatedTime })
+            .HasDatabaseName("IX_Question_ExpertID_CreatedTime");
 
         builder.HasOne(question => question.Difficulty)
             .WithMany(difficulty => difficulty.Questions)

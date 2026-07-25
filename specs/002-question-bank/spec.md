@@ -1,8 +1,10 @@
 # Feature Specification: Question Bank Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) supersedes legacy point/version behavior in this document.
+
 **Feature Branch**: `002-question-bank`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-03
+**Created**: 2026-06-23 | **Updated**: 2026-07-12
 
 **Status**: Approved
 
@@ -18,8 +20,8 @@
 | UC-19 | View Question List | Expert |
 | UC-20 | Input Single Question | Expert |
 | UC-21 | Manual Input | Expert |
-| UC-22 | Input by Image | Expert |
-| UC-23 | Input by Excel/Word File | Expert |
+| UC-22 | Upload/Attach Question Image | Expert |
+| UC-23 | Input by Excel File | Expert |
 | UC-24 | View Question Version Control | Expert |
 | UC-25 | Update Question | Expert |
 | UC-26 | Activate/Deactivate Question | Expert |
@@ -35,39 +37,48 @@
 | UC-36 | Create Tag for Difficulty | Expert |
 | UC-37 | Update Tag | Expert |
 | UC-38 | Delete Tag | Expert |
+| UC-39 | Create OCR Question Draft | Expert |
 
 ### Edge Cases
 
 - **Duplicate question**: System detects near-match via content hash → HTTP 409 with link to existing question.
 - **Empty answers list**: SingleChoice / MultipleSelect must have at least one correct answer → HTTP 400.
 - **Tag not found**: Assigning a non-existent `tag_id` → HTTP 422.
-- **Question in active test**: Cannot hard-delete or deactivate a question used in existing `TestQuestion` records → HTTP 409.
+- **Question in test history**: Cannot hard-delete or deactivate a question used in any existing `TestQuestion` record → HTTP 409 (`QUESTION_IN_USE`).
 - **Unsupported content format**: If `question_content` contains unsafe HTML, unsupported embedded content, or malformed rich-text payload → reject with HTTP 422 (frontend pre-validates; backend sanitizes/logs).
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **DC-02**: Entities cannot be hard-deleted if referenced in test sessions or blueprints. Soft delete enforced via `is_active = false` or `status = REJECTED/ARCHIVED`.
+- **DC-02**: Referential history is protected. Taxonomy tags are soft-disabled through `IsActive = false` to preserve QuestionBank/TestGen/Recommender references. A Question with any existing `TestQuestion` reference cannot be hard-deleted or manually deactivated and returns HTTP 409 (`QUESTION_IN_USE`); an unreferenced Question may be hard-deleted. Report moderation may still move a referenced Question to `Reported` without changing `IsActive`.
 - **BR-04**: Mathematical questions and solutions must be entered through a user-friendly rich-text/WYSIWYG editor. Experts are not required to know or type technical markup syntax. The editor may provide toolbar-based math symbols, superscript/subscript, fractions, tables, and optional image upload for diagrams or complex formulas.
 - **BR-05**: A newly created question must be assigned at least one **Topic** tag and one **Difficulty** tag before saving.
 - **BR-50**: Each `SINGLE_CHOICE` question must have **exactly one** correct answer. `MULTIPLE_SELECT` must have **at least one** correct answer.
 - **BR-61**: The correct answer for a `SHORT_ANSWER` question must be plain text or numeric (max 100 chars), without rich-text formatting or images.
 - **BR-62**: `TRUE_FALSE` questions must have **exactly 2** options (True / False) with **exactly 1** correct answer.
 - **BR-52**: Topic tags are cascading: selecting a parent tag automatically filters child subtopics only.
-- **BR-54**: Changes to `APPROVED` questions must capture a `QuestionVersion` snapshot **before** applying the update.
+- **BR-54**: Changes to `APPROVED` or `REPORTED` questions must capture a `QuestionVersion` snapshot **before** applying the update.
 - **BR-55**: Expert-created questions are **published/approved by default** (`status = APPROVED`) and do not enter an Admin approval queue.
-- **BR-56**: UC-31 (Approve) and UC-32 (Reject) apply only to the Admin-initiated question rejection/re-review flow. If Admin rejects, the original Expert must fix and re-submit (sets `status = PENDING`); Admin reviews again before it becomes `APPROVED`.
+- **BR-56**: Admin review applies only to an Admin-initiated report. The original Expert fixes and submits the Admin report for review; the Question remains `REPORTED` while waiting for review. Admin approval returns the Question to `APPROVED`; Admin rejection sets it to `REJECTED` and returns the report to `PENDING_FIX`.
 - **BR-57**: Question status semantics:
   - `APPROVED` — published and visible in test generation.
+  - `REPORTED` — excluded from newly generated tests while retained for existing tests and history; `IsActive` remains unchanged.
   - `REJECTED` — Admin-rejected; hidden until Expert handles.
-  - `PENDING` — Expert re-submitted after Admin rejection; awaiting Admin re-review. **Not used for normal Expert creation.**
 - **BR-58**: When a Student reports a question (UC-28), system creates a `QuestionReport` record but **must not hide, deactivate, or change the `status` of the Question**.
 - **BR-59**: Teacher accounts are **not allowed** to report questions. Attempts → HTTP 403.
 - **BR-60**: When an Expert reports another Expert's question (UC-29), after the original Expert resolves it (UC-33), the question becomes visible again **automatically** without requiring additional Admin approval.
-- **BR-53**: File import (Excel/Word) must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows.
+- **BR-67**: Student reports create a `PENDING` `QuestionReport` only and may be submitted for any existing Question, including inactive or historical Questions. Expert reports require an active Question in `APPROVED` or `REPORTED` status; an Expert cannot report their own Question and creates a `PENDING` report. Admin reports require the same Question state, create `PENDING_FIX`, and move an `APPROVED` Question to `REPORTED`.
+- **BR-68**: Resolving or dismissing the final pending Expert report restores a `REPORTED` Question to `APPROVED`. Pending Student reports do not prevent restoration. An Admin workflow is resolved only by its original Admin reporter.
+- **BR-69**: A Question with an active report (`PENDING`, `PENDING_FIX`, or `PENDING_REVIEW`), or a Question in `REPORTED` or `REJECTED` status with an active Admin workflow, cannot be hard-deleted. The API returns HTTP 409 (`QUESTION_HAS_PENDING_REPORTS`) and preserves the report audit trail.
+- **BR-71**: Only one active Admin report workflow (`PENDING_FIX` or `PENDING_REVIEW`) may exist for a Question. The owning Expert may submit only a `PENDING_FIX` Admin report for review. Only the Admin account that created that report may approve or reject it. Reject requires a non-empty review note of at most 2000 characters.
+- **BR-53**: Excel import must validate: question stem present, at least one Topic tag assigned, and answer structure valid for the question type. Option-based types need answer rows; `COMPOSITE` needs valid `QuestionPart` rows instead of normal `Answer` rows. Word import is post-MVP.
 - **BR-63**: `TagDifficulty.LevelValue` is the stable cross-module difficulty contract. Values should be unique and normally map to Recommender v2 `RecommendedDifficultyLevel` values `1..4`. Question Bank owns `Question.DifficultyID`; Recommender v2 owns only student-topic mastery and does not store Ptag per difficulty.
 - **BR-64**: `COMPOSITE` questions must have at least one `QuestionPart`. For THPT statement-style questions, MVP should model the parent question as `COMPOSITE` and create child parts with labels such as `a`, `b`, `c`, `d`. Part answer keys are stored on `QuestionPart` but must not be exposed in student-facing test APIs before grading.
+- **BR-65**: Tag list APIs return only active records by default. Expert tag management may request inactive records with `includeInactive=true`; each response retains its `IsActive` state.
+- **BR-66**: A topic cannot be soft-disabled while it has an active descendant at any depth. The operation returns HTTP 409 (`TAG_TOPIC_HAS_ACTIVE_DESCENDANTS`) and leaves the topic unchanged.
+- **BR-72**: UC-39 creates an in-memory OCR draft from exactly one complete question image through `POST /api/question-bank/questions/ocr-draft` as `multipart/form-data` field `file`. Only Experts may call it. It applies the same JPEG/PNG/WebP magic-byte validation and 5 MB file limit as UC-22, limits each Expert to 10 requests per minute with no queue, and calls Mistral OCR only from the backend. The response may contain `questionContent`, `solutionContent`, a suggested question type, options/parts, raw markdown, confidence, warnings, and up to three detected image candidates. For option/composite questions, `questionContent` must exclude option/statement text that belongs in `answers` or `parts`. It never creates or updates Question Bank records. Suggested answers and detected images are untrusted suggestions: the Expert must choose an image explicitly, and only the selected image is uploaded through UC-22 to become `PictureUrl`. When OCR does not return an image candidate for a scan/photo, the Expert may manually select a rectangular crop from the source image in the review UI; the browser creates that crop locally and uploads it only on apply. Full-page/multi-question images, PDFs, automatic topic/difficulty/grade assignment, automatic publication, and retries are outside this MVP.
+- **BR-70**: UC-22 uploads one optional question image through `POST /api/question-bank/questions/image-upload` as `multipart/form-data` field `file`. Only Experts may use the endpoint. The backend accepts JPEG, PNG, and WebP up to 5 MB, validates the declared MIME type and file magic bytes, then performs an authenticated Cloudinary upload using server-side HTTP Basic authentication. The API returns only `{ pictureUrl }`; Cloudinary credentials, authorization headers, raw provider responses, and internal exceptions must never be exposed to the client. GIF, SVG, PDF, multiple images, and bulk import from images are outside this use case.
 
 ### Accepted Question Types
 
@@ -81,11 +92,11 @@
 
 ### Key Entities *(include if feature involves data)*
 
-- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK to `TagDifficulty`), `grade` (10/11/12), `status` (**PENDING** | **APPROVED** | **REJECTED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER** | **COMPOSITE**, mapped to DB values above), `expert_id` (FK to `Expert`), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
+- **Question**: `question_id`, `question_content` (TEXT, sanitized rich-text/plain-text content), `picture_url`, `difficulty_id` (FK to `TagDifficulty`), `grade` (10/11/12), `status` (**APPROVED** | **REPORTED** | **REJECTED** | **DEACTIVATED**), `question_type` (**SINGLE_CHOICE** | **MULTIPLE_SELECT** | **TRUE_FALSE** | **SHORT_ANSWER** | **COMPOSITE**, mapped to DB values above), `expert_id` (FK to `Expert`), `default_point` (DECIMAL 3,2), `is_active` (BOOLEAN)
 - **Answer**: `answer_id`, `question_id` (FK), `answer_content` (TEXT), `is_correct` (BOOLEAN)
 - **QuestionPart**: `part_id`, `question_id` (FK), `part_order`, `part_label` (nullable, e.g. `a`, `b`, `c`, `d`), `part_content`, `part_type` (**TRUE_FALSE** | **SHORT_ANSWER** | **NUMERIC_ANSWER**, mapped to DB values `TrueFalse`, `ShortAnswer`, `NumericAnswer`), `correct_boolean`, `correct_text`, `correct_numeric`, `numeric_tolerance`, `explanation` (nullable), `default_point`. The `correct_*` fields are answer keys and must be hidden from student-facing APIs before grading.
 - **QuestionVersion**: `version_id`, `question_id` (FK), `question_content`, `question_answer`, `answers_snapshot` (JSON), `picture_url`, `created_time`, `expert_id` (FK)
-- **QuestionReport**: `report_id`, `question_id` (FK), `reporter_account_id` (FK), `reporter_role` (**STUDENT** | **EXPERT** | **ADMIN**), `report_reason`, `status` (**PENDING** | **RESOLVED** | **DISMISSED**), `created_time`, `resolved_time`, `resolved_by` (FK → experts)
+- **QuestionReport**: `report_id`, `question_id` (FK), `reporter_account_id` (FK), `reporter_role` (**STUDENT** | **EXPERT** | **ADMIN**), `report_reason`, `status` (**PENDING** | **PENDING_FIX** | **PENDING_REVIEW** | **RESOLVED** | **DISMISSED**), `created_time`, `resolved_time`, `resolved_by`, `review_note`, `submitted_time`, `reviewed_time`, `reviewed_by` (FK → Account)
 - **TagTopic**: `tag_id`, `parent_tag_id` (self-FK, nullable), `tag_name` (UNIQUE), `description`, `grade`, `is_active`, `display_order`
 - **TagDifficulty**: `difficulty_id`, `difficulty_name` (UNIQUE), `description`, `level_value` (UNIQUE, stable `1..4` mapping for Recommender/TestGen), `display_order`, `is_active`
 - **QuestionTopic**: `question_topic_id`, `question_id` (FK), `tag_id` (FK), `is_primary` (BOOLEAN) — supports Many-to-Many
@@ -126,15 +137,21 @@ Question.Status = 'Approved'
 Question.IsActive = 1
 ```
 
-> Schema alignment note: the current DB script must allow `Pending` in `Question.Status` before implementing the Admin rejection/re-review flow in BR-56. If the DB keeps only `Approved/Rejected/Reported/Deactivated`, handlers must not persist `Pending` until the constraint is updated.
+> Schema alignment note: Admin re-review state is stored on `QuestionReport`, not `Question`. The current Question status constraint remains `Approved/Rejected/Reported/Deactivated`.
 
 ### File Import Rules (UC-23)
 
 | Format | Accepted | Max Size | Notes |
 |--------|----------|----------|-------|
 | Excel (.xlsx) | Yes | 20 MB | Template with predefined columns |
-| Word (.docx) | Yes | 20 MB | Structured format per spec |
+| Word (.docx) | Post-MVP | N/A | Deferred; no parser or endpoint in the MVP |
 | PDF | No | — | Not supported |
+
+For the MVP, Excel import is an Expert-only synchronous `Preview -> Confirm` flow. Preview never writes to the database. Confirm revalidates every selected normalized draft and creates all questions in one transaction; if any selected item is invalid, no question is created. The workbook supports at most 100 questions, must use template version `1`, and is rejected before parsing when the archive entry count, uncompressed size, or an input sheet row count exceeds the import safety limits. RabbitMQ, Redis, MassTransit, background queues, Word parsing, embedded images, and OCR batch import are outside UC-23 MVP scope.
+
+Import parsing is locale-safe and fail-closed. Decimal values may use either `.` or `,` as the decimal separator but must not use thousands separators. Topic names resolve within the question grade; an ambiguous active topic name in the same grade is rejected. Empty or malformed workbooks, orphan child rows, formulas, duplicate keys, and values that exceed database length/precision constraints are returned as stable validation issues rather than unhandled server errors.
+
+The system exposes `GET /api/question-bank/questions/import-template`, `POST /api/question-bank/questions/import-preview` (`multipart/form-data`, field `file`), and `POST /api/question-bank/questions/import-confirm`. The template contains `_Meta`, `Instructions`, `Questions`, `Answers`, `Parts`, `Topics`, and `Catalogs` sheets. Topic and difficulty references must resolve to active taxonomy records. Formula cells in import input sheets are rejected. `PictureUrl` is optional and must be an HTTPS URL; embedded workbook images are not supported.
 
 ## Success Criteria *(mandatory)*
 
@@ -149,6 +166,7 @@ Question.IsActive = 1
 ## Assumptions
 
 - Target database is SQL Server. Backend maps to current DB script tables (`Question`, `Answer`, `QuestionVersion`, `QuestionReport`, `TagTopic`, `TagDifficulty`, `QuestionTopic`) instead of schema-prefixed tables.
-- Cloudinary is used for image upload (picture_url from UC-22).
+- Cloudinary is used for authenticated backend image upload (`picture_url` from UC-22). The `Cloudinary` section is supplied through user-secrets, Docker/Azure environment variables, or equivalent secret configuration; it is never committed to frontend code.
+- Mistral OCR is used only for UC-39 draft extraction. `MistralOcr:ApiKey` is supplied through user-secrets, Docker/Azure environment variables, or equivalent secret configuration; it is never committed to frontend code or `VITE_*` variables.
 - MediatR domain events handle async version snapshot creation.
 - Question and solution authoring is handled by a rich-text/WYSIWYG editor so non-technical Experts can input math content without technical markup syntax. Backend stores sanitized content and associated media URLs; frontend renders the stored rich text directly.

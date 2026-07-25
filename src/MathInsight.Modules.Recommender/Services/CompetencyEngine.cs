@@ -23,7 +23,7 @@ public sealed class CompetencyEngine : ICompetencyEngine
     }
 
     /// <inheritdoc />
-    public async Task RecalculateAsync(Guid studentId, int grade, CancellationToken cancellationToken = default)
+    public async Task RecalculateAsync(string studentId, int grade, CancellationToken cancellationToken = default)
     {
         // Query average official_point across all TagsMastery rows for this student.
         // For MVP: we average all tags for the student without filtering by grade,
@@ -46,7 +46,7 @@ public sealed class CompetencyEngine : ICompetencyEngine
         {
             _db.CompetencyPoints.Add(new Persistence.Entities.CompetencyPoint
             {
-                CompetencyId = Guid.NewGuid(),
+                CompetencyId = Guid.NewGuid().ToString(),
                 StudentId = studentId,
                 Grade = grade,
                 Point = point
