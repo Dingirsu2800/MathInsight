@@ -133,6 +133,9 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             mastery.OfficialPoint = Math.Clamp(
                 0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
                 0.00m, 10.00m);
+
+            // ── BR-09b: Reset practice_point ← official_point after Blending on Exam submission ──
+            mastery.PracticePoint = mastery.OfficialPoint;
         }
         else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
         {
@@ -145,8 +148,19 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
 
             foreach (var ans in tagAnswers)
             {
-                if (existingResult is not null && !ans.IsScoreInvalidated)
+                var tidStr = tid.ToString();
+
+                // Reuse the already lazy-created mastery entity from the outer scope
+                // to avoid duplicate creation (the entity may not yet be visible to DB queries
+                // before SaveChangesAsync is called)
+                if (tid == tagResult.TagId && mastery is not null)
+                {
+                    masteryMap[tid] = mastery;
                     continue;
+                }
+
+                var m = await _db.TagsMasteries
+                    .FirstOrDefaultAsync(tm => tm.StudentId == evt.StudentId.ToString() && tm.TagId == tidStr, ct);
 
                 decimal delta;
                 if (existingResult is not null &&
@@ -156,7 +170,19 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
                     delta = -CalculatePracticeDelta(machineIsCorrect, ans);
                     mastery.SeriesAnswerCount = Math.Max(0, mastery.SeriesAnswerCount - 1);
                 }
-                else
+                masteryMap[tid] = m;
+            }
+
+            foreach (var ans in allAnswers)
+            {
+                // Skip invalidated questions — they don't affect student mastery.
+                // When IsScoreInvalidated=true, IsCorrect is false (cast from null)
+                // which would incorrectly penalize the student's PracticePoint.
+                if (ans.IsScoreInvalidated)
+                    continue;
+
+                // Bước 1: Compute Δ_total
+                decimal wD = ans.DifficultyLevel switch
                 {
                     delta = CalculatePracticeDelta(ans.IsCorrect, ans);
                     mastery.SeriesAnswerCount++;

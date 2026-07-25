@@ -19,6 +19,8 @@ public class GradingDbContext : DbContext
     public DbSet<TestAnswer> TestAnswers => Set<TestAnswer>();
     public DbSet<TestAnswerOption> TestAnswerOptions => Set<TestAnswerOption>();
     public DbSet<TestAnswerPart> TestAnswerParts => Set<TestAnswerPart>();
+    public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
+    public DbSet<Test> Tests => Set<Test>();
 
     // Cross-read from QuestionBank module (002) — read-only
     public DbSet<Question> Questions => Set<Question>();
