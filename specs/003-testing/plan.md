@@ -73,11 +73,11 @@ src/MathInsight.Modules.Testing/
 **Student (StudentOnly policy)**
 ```
 POST   /api/v1/tests/sessions/start              # UC-47: create TestSession
-GET    /api/v1/tests/sessions/{id}               # Get current session state + time remaining
-GET    /api/v1/tests/sessions/{id}/answers       # Load saved answers (resume support)
+GET    /api/v1/tests/sessions/{id}               # Content + saved answers + authoritative remaining time
 POST   /api/v1/tests/sessions/{id}/auto-save     # UC-47: save answer selections
 POST   /api/v1/tests/sessions/{id}/incident      # UC-47: log tab switch incident
 POST   /api/v1/tests/sessions/{id}/submit        # UC-49: normal submit (Practice→200 Graded, Exam→202 Accepted)
+POST   /api/v1/tests/sessions/{id}/timeout-submit # Server verifies deadline, then records TimeoutSubmit
 POST   /api/v1/tests/sessions/{id}/questions/{qId}/report  # UC-48: report question in session
 GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if Graded)
 ```
@@ -105,6 +105,7 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 - Shared access requires null GeneratedForStudentID, `TestMode = BlueprintExam`, canonical `TestStatus = Active`, `Blueprint.Status = Active`, and matching Student/Blueprint grade.
 - Return stable `TESTING_TEST_ACCESS_DENIED` with HTTP 403 for ownership, grade, Blueprint lifecycle, or unsupported shared-mode failures.
 - Create TestSession and all empty TestAnswer rows atomically after authorization. Existing InProgress sessions continue after a Test is archived.
+- Duplicate start returns 409 with `existingSessionId`; session content returns saved answers so the client can safely hydrate resume state.
 
 ### Auto-Save Mechanics
 
@@ -112,6 +113,8 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 - Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ partId, booleanAnswer, textAnswer, numericAnswer }] }] }`.
 - Handler validates `SessionID` status is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
 - Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
+- Session content also returns authoritative `remainingSeconds` and all persisted answer/option/part values; an empty auto-save heartbeat is unnecessary.
+- Auto-save rejects changes after the server deadline. Normal submit rechecks that deadline and delegates to force-submit with `TimeoutSubmit` when expired.
 
 ### Incident Force-Submit Logic
 

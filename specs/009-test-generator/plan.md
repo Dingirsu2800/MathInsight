@@ -141,6 +141,7 @@ MathInsight.Modules.TestGen/
 - Generate a cryptographically random eight-character TestCode. A 2601/2627 collision on the TestCode unique index rolls back, clears tracking, creates a new code, and reruns the entire transaction up to five times.
 - Persist shared Tests with null GeneratedForStudentID and GeneratedBy System. Transition Approved to Active atomically on first successful use.
 - Add owner-only immutable Expert preview and owner-only Active-to-Archived status transition. Existing sessions may finish after archive.
+- Add owner-only paged generated-Test listing per Blueprint so Active and Archived variants remain reachable after reload.
 - Add paged Student shared-Test discovery and generic, rate-limited TestCode resolution filtered by exact Student grade and active Blueprint state.
 - Keep authorization and transaction orchestration separate for Student and Expert flows. Extract only pure requirement, selection, ordering, score-allocation, and TestQuestion-construction logic after characterization coverage exists.
 - Do not add durable HTTP idempotency, a Draft Test status, schema changes, Adaptive generation, TopicPractice, Diagnostic, or Recommender integration.
@@ -174,6 +175,7 @@ Phase 9 adds Expert and shared-discovery routes without replacing these endpoint
 
 ```text
 POST  /api/test-generator/blueprints/{blueprintId}/tests
+GET   /api/test-generator/blueprints/{blueprintId}/tests
 GET   /api/test-generator/tests/{testId}/expert-preview
 PATCH /api/test-generator/tests/{testId}/status
 GET   /api/test-generator/tests/shared-blueprint-exams

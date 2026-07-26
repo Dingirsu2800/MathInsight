@@ -244,6 +244,7 @@ This checkpoint is additive. The Student personal BlueprintExam endpoints and Ph
 | Method | Route | Behavior |
 |---|---|---|
 | `POST` | `/api/test-generator/blueprints/{blueprintId}/tests` | Generate a shared BlueprintExam owned through the Blueprint |
+| `GET` | `/api/test-generator/blueprints/{blueprintId}/tests` | Return the owner's paged Active and Archived shared-Test variants |
 | `GET` | `/api/test-generator/tests/{testId}/expert-preview` | Return immutable content, answer keys, solutions, and scoring to the Blueprint owner |
 | `PATCH` | `/api/test-generator/tests/{testId}/status` | Archive one shared BlueprintExam; reactivation is outside this checkpoint |
 
@@ -256,6 +257,8 @@ Only the owning Expert may generate. Both `Approved` and `Active` Blueprints may
 The SQL execution strategy generates TestID and CreatedTime once per HTTP request and verifies the complete persisted Test aggregate after an ambiguous commit. This protects a single request from unknown commit results; it is not durable idempotency across separate HTTP requests. A future durable design requires a persisted generation-request record.
 
 Shared Tests publish immediately because the canonical Test lifecycle has only `Active` and `Archived`. The owner may archive an individual shared Test without deleting history. Archived Tests disappear from discovery and code resolution and cannot start new sessions; existing InProgress sessions may finish.
+
+The owner list is ordered by `CreatedTime DESC`, then `TestID`, and includes both Active and Archived variants so preview/archive actions remain reachable after navigation or reload. It never exposes another Expert's Tests.
 
 ### Student Discovery API
 
