@@ -4,8 +4,15 @@ using MathInsight.Shared.Scoring;
 
 namespace MathInsight.Modules.Grading_Analytics.Services;
 
+/// <summary>
+/// Per-question-type grading logic.
+/// Grades all answers for a session synchronously by mutating IsCorrect and PointsEarned
+/// on TestAnswer (and TestAnswerPart for COMPOSITE) entities in-place.
+/// </summary>
 public class GradingEngine : IGradingEngine
 {
+    private static readonly decimal[] CompositeAllTfScoreTable = [0.00m, 0.10m, 0.25m, 0.50m, 1.00m];
+
     public GradingResult Grade(TestSession session)
     {
         var correct = 0;
@@ -16,36 +23,47 @@ public class GradingEngine : IGradingEngine
 
         foreach (var answer in session.TestAnswers)
         {
-            var snapshot = answer.Snapshot;
-            var questionType = snapshot?.QuestionType ?? answer.Question.QuestionType;
-            var maxPoints = snapshot is null ? answer.Question.DefaultWeight : answer.MaxPointsSnapshot;
+            var question = answer.Question;
+            var testQuestion = answer.TestQuestion;
+
+            decimal maxPoints = testQuestion?.MaxPointsSnapshot ?? question.DefaultWeight;
             totalMax += maxPoints;
 
-            var isAbandoned = IsAbandoned(answer, questionType);
+            // ── Score invalidation ─────────────────────────────────────────
+            if (testQuestion?.IsScoreInvalidated == true)
+            {
+                answer.IsCorrect = null;
+                answer.PointsEarned = maxPoints;
+                effectiveEarned += maxPoints;
+                continue;
+            }
+
+            bool isAbandoned = IsAbandoned(answer, question.QuestionType);
+
             if (isAbandoned)
             {
                 answer.IsCorrect = false;
                 answer.PointsEarned = 0m;
+                abandoned++;
+                incorrect++;
+                continue;
             }
-            else if (snapshot is not null)
+
+            // ── Determine grading strategy ─────────────────────────────────
+            var scoringRule = testQuestion?.ScoringRuleSnapshot;
+
+            if (!string.IsNullOrEmpty(scoringRule))
             {
-                GradeSnapshot(answer, snapshot, maxPoints);
+                GradeByScoringRule(answer, question, maxPoints, scoringRule);
             }
             else
             {
-                GradeLegacy(answer, answer.Question, maxPoints);
+                GradeByQuestionType(answer, question, maxPoints);
             }
 
-            effectiveEarned += answer.IsScoreInvalidated ? maxPoints : answer.PointsEarned;
-            if (answer.IsScoreInvalidated)
-                continue;
+            effectiveEarned += answer.PointsEarned;
 
-            if (isAbandoned)
-            {
-                abandoned++;
-                incorrect++;
-            }
-            else if (answer.IsCorrect == true)
+            if (answer.IsCorrect == true)
             {
                 correct++;
             }
@@ -68,7 +86,62 @@ public class GradingEngine : IGradingEngine
         };
     }
 
-    internal static bool IsAbandoned(TestAnswer answer, string questionType)
+    private static void GradeByScoringRule(TestAnswer answer, Question question, decimal maxPoints, string scoringRule)
+    {
+        var ruleNormalized = scoringRule.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+
+        switch (ruleNormalized)
+        {
+            case "ALLORNOTHING":
+                GradeAllOrNothing(answer, question, maxPoints);
+                break;
+
+            case "TIEREDTRUEFALSE":
+                GradeCompositeAllTrueFalse(answer, question, maxPoints);
+                break;
+
+            case "WEIGHTEDPARTS":
+                GradeCompositeGeneral(answer, question, maxPoints);
+                break;
+
+            default:
+                GradeByQuestionType(answer, question, maxPoints);
+                break;
+        }
+    }
+
+    private static void GradeByQuestionType(TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var typeNormalized = NormalizeType(question.QuestionType);
+
+        switch (typeNormalized)
+        {
+            case "SINGLECHOICE":
+            case "TRUEFALSE":
+                GradeSingleChoice(answer, question, maxPoints);
+                break;
+
+            case "MULTIPLESELECT":
+            case "MULTIPLECHOICE":
+                GradeMultipleSelect(answer, question, maxPoints);
+                break;
+
+            case "SHORTANSWER":
+                GradeShortAnswer(answer, question, maxPoints);
+                break;
+
+            case "COMPOSITE":
+                GradeComposite(answer, question, maxPoints);
+                break;
+
+            default:
+                answer.IsCorrect = false;
+                answer.PointsEarned = 0m;
+                break;
+        }
+    }
+
+    private static bool IsAbandoned(TestAnswer answer, string questionType)
     {
         var type = NormalizeType(questionType);
         return type switch
@@ -82,135 +155,230 @@ public class GradingEngine : IGradingEngine
         };
     }
 
-    private static void GradeSnapshot(TestAnswer answer, QuestionSnapshotV2 snapshot, decimal maxPoints)
+    private static void GradeAllOrNothing(TestAnswer answer, Question question, decimal maxPoints)
     {
-        switch (NormalizeType(snapshot.QuestionType))
+        var typeNormalized = NormalizeType(question.QuestionType);
+
+        switch (typeNormalized)
         {
             case "SINGLECHOICE":
             case "TRUEFALSE":
-                var correctAnswer = snapshot.Answers.FirstOrDefault(option => option.IsCorrect);
-                answer.IsCorrect = correctAnswer is not null && answer.AnswerId == correctAnswer.AnswerId;
-                answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
-                return;
+                GradeSingleChoice(answer, question, maxPoints);
+                break;
 
             case "MULTIPLESELECT":
             case "MULTIPLECHOICE":
-                var expected = snapshot.Answers.Where(option => option.IsCorrect).Select(option => option.AnswerId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var selected = answer.SelectedOptions.Select(option => option.AnswerId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                answer.IsCorrect = expected.SetEquals(selected);
-                answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
-                return;
+                GradeMultipleSelect(answer, question, maxPoints);
+                break;
 
             case "SHORTANSWER":
-                var expectedText = snapshot.Answers.FirstOrDefault(option => option.IsCorrect)?.AnswerContent;
-                answer.IsCorrect = !string.IsNullOrWhiteSpace(expectedText) &&
-                    string.Equals(answer.ShortAnswerText?.Trim(), expectedText.Trim(), StringComparison.OrdinalIgnoreCase);
-                answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
-                return;
-
-            case "COMPOSITE":
-                GradeCompositeSnapshot(answer, snapshot.Parts, maxPoints);
-                return;
+                GradeShortAnswer(answer, question, maxPoints);
+                break;
 
             default:
-                answer.IsCorrect = false;
-                answer.PointsEarned = 0m;
-                return;
+                GradeCompositeAllOrNothing(answer, question, maxPoints);
+                break;
         }
     }
 
-    private static void GradeCompositeSnapshot(
-        TestAnswer answer,
-        IReadOnlyList<QuestionPartSnapshot> parts,
-        decimal maxPoints)
+    private static void GradeSingleChoice(TestAnswer answer, Question question, decimal maxPoints)
     {
-        var ordered = parts.OrderBy(part => part.PartOrder).ToList();
-        var correctCount = 0;
-        foreach (var part in ordered)
-        {
-            var submitted = answer.AnswerParts.FirstOrDefault(item => item.PartId == part.PartId);
-            if (submitted is null)
-                continue;
-            submitted.IsCorrect = IsPartCorrect(submitted, part);
-            if (submitted.IsCorrect == true)
-                correctCount++;
-        }
-
-        answer.IsCorrect = ordered.Count > 0 && correctCount == ordered.Count;
-        if (answer.ScoringRuleSnapshot == ScoringRules.TieredTrueFalse)
-        {
-            if (ordered.Count != 4 || ordered.Any(part => NormalizeType(part.PartType) != "TRUEFALSE"))
-                throw new InvalidOperationException(
-                    "TieredTrueFalse scoring requires exactly four TrueFalse parts.");
-
-            var fractions = new[] { 0m, 0.10m, 0.25m, 0.50m, 1m };
-            answer.PointsEarned = Math.Round(maxPoints * fractions[correctCount], 2);
-            foreach (var submitted in answer.AnswerParts)
-                submitted.PointsEarned = 0m;
-            return;
-        }
-
-        if (answer.ScoringRuleSnapshot != ScoringRules.WeightedParts)
-            throw new InvalidOperationException(
-                $"Unsupported composite scoring rule '{answer.ScoringRuleSnapshot}'.");
-
-        var allocations = ScoringAllocator.Allocate(
-            maxPoints,
-            ordered.Select(part => new WeightedScoreItem(part.PartId, part.DefaultWeight, part.PartOrder)).ToList());
-        foreach (var submitted in answer.AnswerParts)
-            submitted.PointsEarned = submitted.IsCorrect == true && allocations.TryGetValue(submitted.PartId, out var points) ? points : 0m;
-        answer.PointsEarned = Math.Min(maxPoints, answer.AnswerParts.Sum(part => part.PointsEarned));
-    }
-
-    private static bool IsPartCorrect(TestAnswerPart submitted, QuestionPartSnapshot part)
-        => NormalizeType(part.PartType) switch
-        {
-            "TRUEFALSE" => submitted.BooleanAnswer is not null && submitted.BooleanAnswer == part.CorrectBoolean,
-            "SHORTANSWER" => !string.IsNullOrWhiteSpace(submitted.TextAnswer) &&
-                             !string.IsNullOrWhiteSpace(part.CorrectText) &&
-                             string.Equals(submitted.TextAnswer.Trim(), part.CorrectText.Trim(), StringComparison.OrdinalIgnoreCase),
-            "NUMERICANSWER" => submitted.NumericAnswer is not null && part.CorrectNumeric is not null &&
-                               Math.Abs(submitted.NumericAnswer.Value - part.CorrectNumeric.Value) <= (part.NumericTolerance ?? 0m),
-            _ => false
-        };
-
-    private static void GradeLegacy(TestAnswer answer, Question question, decimal maxPoints)
-    {
-        switch (NormalizeType(question.QuestionType))
-        {
-            case "SINGLECHOICE":
-            case "TRUEFALSE":
-                answer.IsCorrect = answer.AnswerId == question.Answers.FirstOrDefault(option => option.IsCorrect)?.AnswerId;
-                break;
-            case "MULTIPLESELECT":
-            case "MULTIPLECHOICE":
-                answer.IsCorrect = question.Answers.Where(option => option.IsCorrect).Select(option => option.AnswerId).ToHashSet()
-                    .SetEquals(answer.SelectedOptions.Select(option => option.AnswerId));
-                break;
-            case "SHORTANSWER":
-                var expected = question.Answers.FirstOrDefault(option => option.IsCorrect)?.AnswerContent;
-                answer.IsCorrect = !string.IsNullOrWhiteSpace(expected) &&
-                    string.Equals(answer.ShortAnswerText?.Trim(), expected.Trim(), StringComparison.OrdinalIgnoreCase);
-                break;
-            case "COMPOSITE":
-                var snapshot = new QuestionSnapshotV2(
-                    question.QuestionId, question.QuestionType, question.DifficultyId, 0, question.DefaultWeight, [], [],
-                    question.Parts.Select(part => new QuestionPartSnapshot(
-                        part.QuestionPartId, part.PartOrder, part.PartLabel, part.Content, part.PartType,
-                        part.CorrectBoolean, part.CorrectText, part.CorrectNumeric, part.NumericTolerance,
-                        part.Explanation, part.DefaultWeight)).ToList());
-                answer.ScoringRuleSnapshot = question.Parts.All(part => NormalizeType(part.PartType) == "TRUEFALSE") && question.Parts.Count == 4
-                    ? ScoringRules.TieredTrueFalse
-                    : ScoringRules.WeightedParts;
-                GradeCompositeSnapshot(answer, snapshot.Parts, maxPoints);
-                return;
-            default:
-                answer.IsCorrect = false;
-                break;
-        }
+        var correctAnswer = question.Answers.FirstOrDefault(a => a.IsCorrect);
+        answer.IsCorrect = correctAnswer is not null && string.Equals(answer.AnswerId, correctAnswer.AnswerId, StringComparison.OrdinalIgnoreCase);
         answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
     }
 
-    private static string NormalizeType(string value)
-        => value.Replace("_", string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+    private static void GradeMultipleSelect(TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var correctAnswerIds = question.Answers
+            .Where(a => a.IsCorrect)
+            .Select(a => a.AnswerId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var selectedAnswerIds = answer.SelectedOptions
+            .Select(o => o.AnswerId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        answer.IsCorrect = correctAnswerIds.Count > 0 && correctAnswerIds.SetEquals(selectedAnswerIds);
+        answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
+    }
+
+    private static void GradeShortAnswer(TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var correctAnswer = question.Answers.FirstOrDefault(a => a.IsCorrect);
+        if (correctAnswer is null || string.IsNullOrWhiteSpace(answer.ShortAnswerText))
+        {
+            answer.IsCorrect = false;
+            answer.PointsEarned = 0m;
+            return;
+        }
+
+        answer.IsCorrect = string.Equals(
+            answer.ShortAnswerText.Trim(),
+            correctAnswer.AnswerContent?.Trim(),
+            StringComparison.OrdinalIgnoreCase);
+
+        answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
+    }
+
+    private static void GradeComposite(TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
+        bool allTrueFalse = parts.Count > 0 &&
+            parts.All(p => string.Equals(NormalizeType(p.PartType), "TRUEFALSE", StringComparison.OrdinalIgnoreCase));
+
+        if (allTrueFalse)
+        {
+            GradeCompositeAllTrueFalse(answer, question, maxPoints);
+        }
+        else
+        {
+            GradeCompositeGeneral(answer, question, maxPoints);
+        }
+    }
+
+    private static void GradeCompositeAllTrueFalse(
+        TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
+        if (parts.Count != 4 || parts.Any(p => NormalizeType(p.PartType) != "TRUEFALSE"))
+        {
+            throw new InvalidOperationException("TieredTrueFalse scoring requires exactly four TrueFalse parts.");
+        }
+
+        int correctCount = 0;
+        int totalParts = parts.Count;
+
+        foreach (var part in parts)
+        {
+            var answerPart = answer.AnswerParts
+                .FirstOrDefault(ap => string.Equals(ap.PartId, part.QuestionPartId, StringComparison.OrdinalIgnoreCase));
+
+            if (answerPart is null) continue;
+
+            bool partCorrect = answerPart.BooleanAnswer != null && answerPart.BooleanAnswer == part.CorrectBoolean;
+            answerPart.IsCorrect = partCorrect;
+            answerPart.PointsEarned = 0m;
+
+            if (partCorrect) correctCount++;
+        }
+
+        answer.IsCorrect = correctCount == totalParts && totalParts > 0;
+
+        decimal fraction = correctCount < CompositeAllTfScoreTable.Length
+            ? CompositeAllTfScoreTable[correctCount]
+            : 1.00m;
+
+        answer.PointsEarned = Math.Round(fraction * maxPoints, 2);
+    }
+
+    private static void GradeCompositeGeneral(
+        TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
+        decimal totalPartWeight = parts.Sum(p => p.DefaultWeight);
+        decimal totalPartPoints = 0m;
+        int correctPartCount = 0;
+
+        foreach (var part in parts)
+        {
+            var answerPart = answer.AnswerParts
+                .FirstOrDefault(ap => string.Equals(ap.PartId, part.QuestionPartId, StringComparison.OrdinalIgnoreCase));
+
+            if (answerPart is null) continue;
+
+            bool partCorrect = false;
+            var partTypeNormalized = NormalizeType(part.PartType);
+
+            if (partTypeNormalized == "TRUEFALSE")
+            {
+                partCorrect = answerPart.BooleanAnswer != null && answerPart.BooleanAnswer == part.CorrectBoolean;
+            }
+            else if (partTypeNormalized == "SHORTANSWER")
+            {
+                if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
+                {
+                    partCorrect = string.Equals(
+                        answerPart.TextAnswer.Trim(),
+                        part.CorrectText.Trim(),
+                        StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            else if (partTypeNormalized == "NUMERICANSWER")
+            {
+                if (answerPart.NumericAnswer != null && part.CorrectNumeric != null)
+                {
+                    decimal diff = Math.Abs(answerPart.NumericAnswer.Value - part.CorrectNumeric.Value);
+                    decimal tolerance = part.NumericTolerance ?? 0m;
+                    partCorrect = diff <= tolerance;
+                }
+            }
+
+            answerPart.IsCorrect = partCorrect;
+
+            decimal partMaxPoints = totalPartWeight > 0
+                ? Math.Round(part.DefaultWeight / totalPartWeight * maxPoints, 2)
+                : 0m;
+            answerPart.PointsEarned = partCorrect ? partMaxPoints : 0m;
+
+            totalPartPoints += answerPart.PointsEarned;
+            if (partCorrect) correctPartCount++;
+        }
+
+        answer.PointsEarned = Math.Min(totalPartPoints, maxPoints);
+        answer.IsCorrect = correctPartCount == parts.Count && parts.Count > 0;
+    }
+
+    private static void GradeCompositeAllOrNothing(
+        TestAnswer answer, Question question, decimal maxPoints)
+    {
+        var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
+        int correctPartCount = 0;
+
+        foreach (var part in parts)
+        {
+            var answerPart = answer.AnswerParts
+                .FirstOrDefault(ap => string.Equals(ap.PartId, part.QuestionPartId, StringComparison.OrdinalIgnoreCase));
+
+            if (answerPart is null) continue;
+
+            bool partCorrect = false;
+            var partTypeNormalized = NormalizeType(part.PartType);
+
+            if (partTypeNormalized == "TRUEFALSE")
+            {
+                partCorrect = answerPart.BooleanAnswer != null && answerPart.BooleanAnswer == part.CorrectBoolean;
+            }
+            else if (partTypeNormalized == "SHORTANSWER")
+            {
+                if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
+                {
+                    partCorrect = string.Equals(
+                        answerPart.TextAnswer.Trim(),
+                        part.CorrectText.Trim(),
+                        StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            else if (partTypeNormalized == "NUMERICANSWER")
+            {
+                if (answerPart.NumericAnswer != null && part.CorrectNumeric != null)
+                {
+                    decimal diff = Math.Abs(answerPart.NumericAnswer.Value - part.CorrectNumeric.Value);
+                    decimal tolerance = part.NumericTolerance ?? 0m;
+                    partCorrect = diff <= tolerance;
+                }
+            }
+
+            answerPart.IsCorrect = partCorrect;
+            answerPart.PointsEarned = 0m;
+
+            if (partCorrect) correctPartCount++;
+        }
+
+        answer.IsCorrect = correctPartCount == parts.Count && parts.Count > 0;
+        answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
+    }
+
+    private static string NormalizeType(string type)
+        => type.Replace("_", "").Replace(" ", "").ToUpperInvariant();
 }

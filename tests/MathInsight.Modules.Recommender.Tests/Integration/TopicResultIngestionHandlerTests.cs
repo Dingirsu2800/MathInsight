@@ -89,6 +89,8 @@ public class TopicResultIngestionHandlerTests : IDisposable
             {
                 QuestionId      = Guid.NewGuid().ToString(),
                 TagId           = tagId.ToString(),
+                TagWeights      = [new TagWeightEntry { TagId = tagId.ToString(), Weight = 1.0m, IsPrimary = true }],
+                NormalizedScore = isCorrect ? 10m : 0m,
                 IsCorrect       = isCorrect,
                 PointsEarned    = isCorrect ? 1m : 0m,
                 MaxPoints       = 1m,
@@ -380,5 +382,24 @@ public class TopicResultIngestionHandlerTests : IDisposable
 
         Assert.Equal(1, mastery.RecommendedDifficultyLevel);
         Assert.True(mastery.OfficialPoint < 5.00m);
+    }
+
+    // ── Test: Exam event resets PracticePoint to OfficialPoint per BR-09b ─────
+
+    [Fact]
+    public async Task Handle_ExamEvent_ResetsPracticePointToOfficialPoint_PerBR09b()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+
+        await _handler.Handle(
+            MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 9.00m), default);
+
+        var mastery = await _db.TagsMasteries
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
+
+        // OfficialPoint = 0.7*9 + 0.3*5 = 7.80. PracticePoint must be reset to OfficialPoint (7.80)
+        Assert.Equal(7.80m, mastery.OfficialPoint);
+        Assert.Equal(mastery.OfficialPoint, mastery.PracticePoint);
     }
 }

@@ -39,5 +39,10 @@ public class TestAnswerConfiguration : IEntityTypeConfiguration<TestAnswer>
         builder.HasMany(x => x.AnswerParts)
                .WithOne(p => p.TestAnswer)
                .HasForeignKey(p => p.TestAnswerId);
+
+        // TestQuestion navigation is resolved manually in GradingOrchestrator
+        // because TestQuestion PK is (TestId, QuestionId) and TestAnswer only has QuestionId.
+        // TestId comes from the parent TestSession.TestId.
+        builder.Ignore(x => x.TestQuestion);
     }
 }

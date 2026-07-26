@@ -122,7 +122,7 @@ InProgress ──(student submit + grading succeeds)──▶ Graded
 
 - Target database is SQL Server. Backend maps to current DB script tables (`Test`, `TestQuestion`, `TestSession`, `TestAnswer`, `TestAnswerOption`, `TestIncidents`) instead of schema-prefixed tables.
 - Canonical Test status persistence values are `Active` and `Archived`. Legacy uppercase text in older documentation or in-memory fixtures is not the write contract.
-- **Dual-path grading**: Practice mode uses MediatR in-process (synchronous); Exam mode uses MassTransit async (TestSubmittedEvent published to RabbitMQ or InMemory queue). The Grading module's `TestSubmittedConsumer` handles Exam messages.
-- `TestSubmittedEvent` serves dual purpose: MediatR notification (Practice) and MassTransit message contract (Exam). It is not a persisted `Submitted` status.
+- **Dual-path grading**: Practice mode uses MediatR in-process (synchronous); Exam mode uses MassTransit async (TestSubmittedEvent published to RabbitMQ or InMemory queue). The Grading module's `TestSubmittedConsumer` handles Exam messages. In current code, both submit handlers publish through MediatR; module 004 owns the infrastructure routing instead of Testing calling MassTransit directly.
+- `TestSubmittedEvent` serves dual purpose: MediatR notification (Practice) and MassTransit message contract (Exam). It is defined in `MathInsight.Shared.Events` and is not a persisted `Submitted` status.
 - Real-time timer sync may use SignalR or server-side session expiry check on every auto-save request.
 - `TestGen` module (009) is responsible for creating the `Test` and `TestQuestion` records before session start.

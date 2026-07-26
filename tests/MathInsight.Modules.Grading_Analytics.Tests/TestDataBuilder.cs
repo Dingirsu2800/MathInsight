@@ -1,4 +1,4 @@
-﻿using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
+using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 
 namespace MathInsight.Modules.Grading_Analytics.Tests;
 
@@ -46,6 +46,7 @@ internal static class TestDataBuilder
             QuestionId = questionId,
             QuestionType = questionType,
             DefaultWeight = defaultPoint,
+            DifficultyId = Guid.NewGuid().ToString("D"),
             QuestionContent = "Test question",
             Answers = new List<Answer>
             {
@@ -127,6 +128,7 @@ internal static class TestDataBuilder
             QuestionId = questionId,
             QuestionType = "MULTIPLE_SELECT",
             DefaultWeight = defaultPoint,
+            DifficultyId = Guid.NewGuid().ToString("D"),
             QuestionContent = "Test multiple select",
             Answers = answers,
             Parts = new List<QuestionPart>(),
@@ -183,6 +185,7 @@ internal static class TestDataBuilder
             QuestionId = questionId,
             QuestionType = "SHORT_ANSWER",
             DefaultWeight = defaultPoint,
+            DifficultyId = Guid.NewGuid().ToString("D"),
             QuestionContent = "Test short answer",
             Answers = new List<Answer>
             {
@@ -238,7 +241,7 @@ internal static class TestDataBuilder
                 PartOrder = i + 1,
                 Content = $"Part {i + 1}",
                 CorrectBoolean = bool.TryParse(parts[i].answerKey, out var bVal) ? bVal : (bool?)null,
-                DefaultWeight = 1m,
+                DefaultWeight = 0, // Not used for all-TF scoring
                 PartType = "TRUE_FALSE"
             });
         }
@@ -248,6 +251,7 @@ internal static class TestDataBuilder
             QuestionId = questionId,
             QuestionType = "COMPOSITE",
             DefaultWeight = defaultPoint,
+            DifficultyId = Guid.NewGuid().ToString("D"),
             QuestionContent = "Test composite",
             Answers = new List<Answer>(),
             Parts = questionParts,
@@ -331,6 +335,7 @@ internal static class TestDataBuilder
             QuestionId = questionId,
             QuestionType = "COMPOSITE",
             DefaultWeight = defaultPoint,
+            DifficultyId = Guid.NewGuid().ToString("D"),
             QuestionContent = "Test composite general",
             Answers = new List<Answer>(),
             Parts = questionParts,

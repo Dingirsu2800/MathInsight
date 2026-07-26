@@ -8,7 +8,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MathInsight.Modules.Grading_Analytics.Services;
 
-public sealed class GradingOrchestrator : IGradingOrchestrator
+/// <summary>
+/// Core grading orchestration logic shared by MediatR handler (Practice) and
+/// MassTransit consumer (Exam).
+/// </summary>
+public class GradingOrchestrator : IGradingOrchestrator
 {
     private const decimal PrimaryTagWeight = 0.65m;
 
@@ -43,11 +47,8 @@ public sealed class GradingOrchestrator : IGradingOrchestrator
         }
         catch (Exception exception)
         {
-            _logger.LogError(
-                exception,
-                "Grading failed for session {SessionId}; the transaction was rolled back.",
-                sessionId);
-            throw;
+            _logger.LogError(exception, "Grading failed for session {SessionId}", sessionId);
+            return null;
         }
 
         return gradeEvent;
@@ -82,41 +83,38 @@ public sealed class GradingOrchestrator : IGradingOrchestrator
         }
 
         if (!string.Equals(session.Status, "InProgress", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Session {SessionId} is not InProgress (Status={Status}). Skipping grading.", sessionId, session.Status);
             return null;
+        }
 
+        // ── Load TestQuestion scoring snapshots ───────────────────────────────
         var testQuestions = await _db.TestQuestions
             .AsNoTracking()
-            .Include(item => item.QuestionVersion)
-            .Where(item => item.TestId == session.TestId)
-            .ToDictionaryAsync(
-                item => item.QuestionId,
-                StringComparer.OrdinalIgnoreCase,
-                cancellationToken);
+            .Where(tq => tq.TestId == session.TestId)
+            .ToDictionaryAsync(tq => tq.QuestionId, cancellationToken);
 
         foreach (var answer in session.TestAnswers)
         {
-            if (!testQuestions.TryGetValue(answer.QuestionId, out var testQuestion))
+            if (testQuestions.TryGetValue(answer.QuestionId, out var tq))
             {
-                if (_db.Database.IsRelational())
-                    throw new InvalidOperationException(
-                        $"Missing TestQuestion snapshot for question '{answer.QuestionId}'.");
-                continue;
+                answer.TestQuestion = tq;
             }
-
-            if (testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
-                throw new InvalidOperationException(
-                    $"Unsupported snapshot schema for version '{testQuestion.QuestionVersionId}'.");
-
-            answer.Snapshot = JsonSerializer.Deserialize<QuestionSnapshotV2>(
-                testQuestion.QuestionVersion.AnswersSnapshot)
-                ?? throw new InvalidOperationException(
-                    $"Invalid snapshot JSON for version '{testQuestion.QuestionVersionId}'.");
-            answer.MaxPointsSnapshot = testQuestion.MaxPointsSnapshot;
-            answer.ScoringRuleSnapshot = testQuestion.ScoringRuleSnapshot;
-            answer.IsScoreInvalidated = testQuestion.IsScoreInvalidated;
         }
 
+        // ── Load Test for MaxScore ────────────────────────────────────────────
+        var test = await _db.Tests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TestId == session.TestId, cancellationToken);
+
+        // ── Load TagDifficulty lookup map ─────────────────────────────────────
+        var difficultyLevels = await _db.TagDifficulties
+            .AsNoTracking()
+            .ToDictionaryAsync(td => td.DifficultyId, td => td.LevelValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        // ── Run grading engine synchronously ──────────────────────────────────
         var gradingResult = _gradingEngine.Grade(session);
+
         await using var transaction = _db.Database.IsRelational()
             ? await _db.Database.BeginTransactionAsync(cancellationToken)
             : null;
@@ -135,66 +133,114 @@ public sealed class GradingOrchestrator : IGradingOrchestrator
                 (session.StartTime ?? notification.SubmittedTime)).TotalSeconds));
 
         await _db.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
 
-        return BuildGradeCalculatedEvent(session, gradingResult);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        // ── Build and return GradeCalculatedEvent ─────────────────────────────
+        return BuildGradeCalculatedEvent(session, gradingResult, notification, testQuestions, test, difficultyLevels);
     }
 
     private static GradeCalculatedEvent BuildGradeCalculatedEvent(
         TestSession session,
-        GradingResult gradingResult)
+        GradingResult gradingResult,
+        TestSubmittedEvent notification,
+        Dictionary<string, TestQuestion> testQuestions,
+        Test? test,
+        Dictionary<string, byte> difficultyLevels)
     {
-        var answers = new List<GradedAnswerDto>();
-        var tagStats = new Dictionary<string, TagStat>(StringComparer.OrdinalIgnoreCase);
+        var gradedAnswers = new List<GradedAnswerDto>();
+
+        var tagContributions = new Dictionary<string, List<decimal>>();
+        var tagStats = new Dictionary<string, (int Correct, int Total)>();
 
         foreach (var answer in session.TestAnswers)
         {
-            var snapshot = answer.Snapshot;
-            var questionType = snapshot?.QuestionType ?? answer.Question.QuestionType;
-            var maxPoints = snapshot is null
-                ? answer.Question.DefaultWeight
-                : answer.MaxPointsSnapshot;
-            var effectivePoints = answer.IsScoreInvalidated ? maxPoints : answer.PointsEarned;
-            var tagWeights = BuildTagWeights(snapshot, answer.Question);
-            var primaryTagId = tagWeights.FirstOrDefault(item => item.IsPrimary)?.TagId
-                ?? tagWeights.FirstOrDefault()?.TagId
-                ?? string.Empty;
+            var questionTopics = answer.Question.QuestionTopics;
+            var primaryTopic = questionTopics.FirstOrDefault(qt => qt.IsPrimary);
+            var primaryTagId = primaryTopic?.TagId ?? string.Empty;
 
-            answers.Add(new GradedAnswerDto
+            var tagWeights = BuildTagWeights(questionTopics);
+
+            decimal maxPoints = testQuestions.TryGetValue(answer.QuestionId, out var tq)
+                ? tq.MaxPointsSnapshot
+                : answer.Question.DefaultWeight;
+
+            decimal normalizedScore = maxPoints > 0
+                ? Math.Round(answer.PointsEarned / maxPoints * 10.0m, 2)
+                : 0m;
+
+            bool isAbandoned = IsAbandoned(answer, answer.Question.QuestionType);
+            bool isInvalidated = tq?.IsScoreInvalidated ?? false;
+
+            byte difficultyLevel = 1;
+            if (!string.IsNullOrEmpty(answer.Question.DifficultyId) &&
+                difficultyLevels.TryGetValue(answer.Question.DifficultyId, out var level))
+            {
+                difficultyLevel = level;
+            }
+
+            gradedAnswers.Add(new GradedAnswerDto
             {
                 QuestionId = answer.QuestionId,
                 TagId = primaryTagId,
                 TagWeights = tagWeights,
-                NormalizedScore = maxPoints > 0m
-                    ? Math.Round(effectivePoints / maxPoints * 10m, 2)
-                    : 0m,
-                IsCorrect = answer.IsScoreInvalidated || answer.IsCorrect == true,
-                MachineIsCorrect = answer.IsCorrect,
-                IsScoreInvalidated = answer.IsScoreInvalidated,
-                PointsEarned = effectivePoints,
+                NormalizedScore = normalizedScore,
+                IsCorrect = answer.IsCorrect == true,
+                PointsEarned = answer.PointsEarned,
                 MaxPoints = maxPoints,
                 TimeSpent = answer.TimeSpent ?? 0,
-                DifficultyLevel = 1,
+                DifficultyLevel = difficultyLevel,
                 QuestionNo = answer.QuestionNo,
-                IsAbandoned = !answer.IsScoreInvalidated &&
-                    GradingEngine.IsAbandoned(answer, questionType)
+                IsAbandoned = isAbandoned,
+                IsScoreInvalidated = isInvalidated
             });
 
-            foreach (var tagWeight in tagWeights)
+            if (!isInvalidated)
             {
-                tagStats.TryGetValue(tagWeight.TagId, out var stat);
-                if (!answer.IsScoreInvalidated)
+                foreach (var tw in tagWeights)
                 {
-                    stat.TotalItems++;
+                    if (string.IsNullOrWhiteSpace(tw.TagId)) continue;
+
+                    decimal contribution = normalizedScore * tw.Weight;
+
+                    if (!tagContributions.TryGetValue(tw.TagId, out var contributions))
+                    {
+                        contributions = [];
+                        tagContributions[tw.TagId] = contributions;
+                    }
+                    contributions.Add(contribution);
+
+                    if (!tagStats.TryGetValue(tw.TagId, out var stats))
+                        stats = (0, 0);
+                    stats.Total++;
                     if (answer.IsCorrect == true)
-                        stat.CorrectItems++;
-                    stat.EarnedPoints += answer.PointsEarned * tagWeight.Weight;
-                    stat.MaxPoints += maxPoints * tagWeight.Weight;
+                        stats.Correct++;
+                    tagStats[tw.TagId] = stats;
                 }
-                tagStats[tagWeight.TagId] = stat;
             }
         }
+
+        var perTagResults = tagContributions
+            .Select(kv =>
+            {
+                decimal topicScore = kv.Value.Count > 0
+                    ? Math.Round(kv.Value.Average(), 2)
+                    : 0m;
+
+                var (correct, total) = tagStats.TryGetValue(kv.Key, out var s) ? s : (0, 0);
+
+                return new TopicGradeResult
+                {
+                    TagId = kv.Key,
+                    TopicScore = Math.Clamp(topicScore, 0.00m, 10.00m),
+                    CorrectItems = correct,
+                    TotalItems = total
+                };
+            })
+            .ToList();
 
         return new GradeCalculatedEvent
         {
@@ -207,61 +253,72 @@ public sealed class GradingOrchestrator : IGradingOrchestrator
             NumCorrect = gradingResult.NumCorrect,
             NumIncorrect = gradingResult.NumIncorrect,
             NumAbandoned = gradingResult.NumAbandoned,
-            Answers = answers,
-            PerTagResults = tagStats.Select(item => new TopicGradeResult
-            {
-                TagId = item.Key,
-                TotalItems = item.Value.TotalItems,
-                CorrectItems = item.Value.CorrectItems,
-                EarnedPoints = item.Value.EarnedPoints,
-                MaxPoints = item.Value.MaxPoints,
-                TopicScore = item.Value.MaxPoints > 0m
-                    ? Math.Round(item.Value.EarnedPoints / item.Value.MaxPoints * 10m, 2)
-                    : 0m
-            }).ToList(),
+            PerTagResults = perTagResults,
+            Answers = gradedAnswers,
             GradedAt = DateTime.UtcNow
         };
     }
 
-    private static IReadOnlyList<TagWeightEntry> BuildTagWeights(
-        QuestionSnapshotV2? snapshot,
-        Question question)
+    private static List<TagWeightEntry> BuildTagWeights(ICollection<QuestionTopic> questionTopics)
     {
-        var topics = snapshot?.Topics
-            .Select(item => (item.TagId, item.IsPrimary))
-            .ToList()
-            ?? question.QuestionTopics
-                .Select(item => (item.TagId, item.IsPrimary))
-                .ToList();
-
-        if (topics.Count == 0)
+        if (questionTopics.Count == 0)
             return [];
-        if (topics.Count == 1)
+
+        if (questionTopics.Count == 1)
+        {
+            var qt = questionTopics.First();
             return [new TagWeightEntry
             {
-                TagId = topics[0].TagId,
-                Weight = 1m,
-                IsPrimary = true
+                TagId = qt.TagId,
+                Weight = 1.0m,
+                IsPrimary = qt.IsPrimary
             }];
+        }
 
-        var primaryIndex = topics.FindIndex(item => item.IsPrimary);
-        if (primaryIndex < 0)
-            primaryIndex = 0;
-        var secondaryWeight = (1m - PrimaryTagWeight) / (topics.Count - 1);
+        var primary = questionTopics.FirstOrDefault(qt => qt.IsPrimary);
+        var secondaries = questionTopics.Where(qt => !qt.IsPrimary).ToList();
 
-        return topics.Select((topic, index) => new TagWeightEntry
+        decimal wMain = PrimaryTagWeight;
+        decimal wSub = secondaries.Count > 0
+            ? (1.0m - wMain) / secondaries.Count
+            : 0m;
+
+        var weights = new List<TagWeightEntry>();
+
+        if (primary is not null)
         {
-            TagId = topic.TagId,
-            Weight = index == primaryIndex ? PrimaryTagWeight : secondaryWeight,
-            IsPrimary = index == primaryIndex
-        }).ToList();
+            weights.Add(new TagWeightEntry
+            {
+                TagId = primary.TagId,
+                Weight = wMain,
+                IsPrimary = true
+            });
+        }
+
+        foreach (var sec in secondaries)
+        {
+            weights.Add(new TagWeightEntry
+            {
+                TagId = sec.TagId,
+                Weight = wSub,
+                IsPrimary = false
+            });
+        }
+
+        return weights;
     }
 
-    private struct TagStat
+    private static bool IsAbandoned(TestAnswer answer, string questionType)
     {
-        public decimal TotalItems;
-        public decimal CorrectItems;
-        public decimal EarnedPoints;
-        public decimal MaxPoints;
+        var typeNormalized = questionType.Replace("_", "").Replace(" ", "").ToUpperInvariant();
+        return typeNormalized switch
+        {
+            "SINGLECHOICE" or "TRUEFALSE" => answer.AnswerId is null,
+            "MULTIPLESELECT" or "MULTIPLECHOICE" => answer.SelectedOptions.Count == 0,
+            "SHORTANSWER" => string.IsNullOrWhiteSpace(answer.ShortAnswerText),
+            "COMPOSITE" => answer.AnswerParts.Count == 0 || answer.AnswerParts.All(p =>
+                p.BooleanAnswer is null && string.IsNullOrWhiteSpace(p.TextAnswer) && p.NumericAnswer is null),
+            _ => true
+        };
     }
 }

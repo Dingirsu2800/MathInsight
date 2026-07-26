@@ -25,13 +25,22 @@ public sealed class CompetencyEngine : ICompetencyEngine
     /// <inheritdoc />
     public async Task RecalculateAsync(string studentId, int grade, CancellationToken cancellationToken = default)
     {
-        // Query average official_point across all TagsMastery rows for this student.
-        // For MVP: we average all tags for the student without filtering by grade,
-        // because Tag.Grade cross-schema read is deferred to a later phase.
-        // This is safe — each student is enrolled in one grade at a time.
-        var averagePoint = await _db.TagsMasteries
-            .Where(tm => tm.StudentId == studentId)
-            .AverageAsync(tm => (double?)tm.OfficialPoint, cancellationToken);
+        // RCM-12: Query average official_point across TagsMastery rows for this student
+        // where the TagTopic belongs to the specified grade level (10, 11, or 12).
+        var averagePoint = await (
+            from tm in _db.TagsMasteries.AsNoTracking()
+            join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
+            where tm.StudentId == studentId && tt.Grade == grade
+            select (double?)tm.OfficialPoint
+        ).AverageAsync(cancellationToken);
+
+        // Fallback if no grade-matching tag topics exist: average all TagsMastery rows for student
+        if (averagePoint is null)
+        {
+            averagePoint = await _db.TagsMasteries
+                .Where(tm => tm.StudentId == studentId)
+                .AverageAsync(tm => (double?)tm.OfficialPoint, cancellationToken);
+        }
 
         if (averagePoint is null)
             return; // No TagsMastery rows yet; nothing to recalculate.

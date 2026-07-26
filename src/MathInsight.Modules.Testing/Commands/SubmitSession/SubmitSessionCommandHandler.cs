@@ -1,3 +1,4 @@
+using MassTransit;
 using MathInsight.Modules.Testing.Contracts;
 using MathInsight.Modules.Testing.Commands.ForceSubmitSession;
 using MathInsight.Modules.Testing.Entities;
@@ -15,11 +16,16 @@ public sealed class SubmitSessionCommandHandler
 {
     private readonly TestingDbContext _db;
     private readonly IMediator _mediator;
+    private readonly IPublishEndpoint? _publishEndpoint;
 
-    public SubmitSessionCommandHandler(TestingDbContext db, IMediator mediator)
+    public SubmitSessionCommandHandler(
+        TestingDbContext db,
+        IMediator mediator,
+        IPublishEndpoint? publishEndpoint = null)
     {
         _db = db;
         _mediator = mediator;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<Result<SubmitSessionResponse>> Handle(
@@ -98,10 +104,7 @@ public sealed class SubmitSessionCommandHandler
         else
         {
             // BR-17: Exam mode — publish TestSubmittedEvent to MassTransit queue
-            // Grading proceeds asynchronously
-            // For now, save InProgress → the MassTransit consumer will grade later
-            // We set a temporary status until grading completes
-            // The consumer will set Status = Graded
+            // Grading proceeds asynchronously via TestSubmittedConsumer
             session.Status = "InProgress"; // remains until grading consumer processes it
 
             var submissionEvent = new TestSubmittedEvent
@@ -114,8 +117,11 @@ public sealed class SubmitSessionCommandHandler
                 SubmittedTime = now
             };
 
-            // Publish as MediatR notification — in production, MassTransit integration
-            // would intercept and route to the queue
+            if (_publishEndpoint is not null)
+            {
+                await _publishEndpoint.Publish(submissionEvent, cancellationToken);
+            }
+
             await _mediator.Publish(submissionEvent, cancellationToken);
         }
 
