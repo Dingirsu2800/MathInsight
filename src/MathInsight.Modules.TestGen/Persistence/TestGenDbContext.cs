@@ -24,6 +24,8 @@ public class TestGenDbContext : DbContext
     public DbSet<QuestionReadModel> Questions => Set<QuestionReadModel>();
     public DbSet<QuestionTopicReadModel> QuestionTopics => Set<QuestionTopicReadModel>();
     public DbSet<QuestionVersionReadModel> QuestionVersions => Set<QuestionVersionReadModel>();
+    public DbSet<AnswerReadModel> Answers => Set<AnswerReadModel>();
+    public DbSet<QuestionPartReadModel> QuestionParts => Set<QuestionPartReadModel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

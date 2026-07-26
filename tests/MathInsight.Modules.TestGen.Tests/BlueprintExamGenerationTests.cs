@@ -374,7 +374,9 @@ public sealed class BlueprintExamGenerationTests
                 difficultyId,
                 grade,
                 1m,
-                [new QuestionTopicSnapshot(firstTag, true)],
+                secondTag is null
+                    ? [new QuestionTopicSnapshot(firstTag, true)]
+                    : [new QuestionTopicSnapshot(firstTag, true), new QuestionTopicSnapshot(secondTag, false)],
                 questionType == BlueprintQuestionTypes.Composite
                     ? []
                     : [new QuestionAnswerSnapshot($"{questionId}-answer", "Answer", true)],
@@ -384,7 +386,9 @@ public sealed class BlueprintExamGenerationTests
                             $"{questionId}-part-{order}", order, ((char)(96 + order)).ToString(),
                             $"Part {order}", "TrueFalse", true, null, null, null, null, 1m))
                         .ToList()
-                    : [])),
+                    : [],
+                $"Question content for {questionId}",
+                $"Solution content for {questionId}")),
             CreatedTime = DateTime.UtcNow
         });
         testContext.Context.QuestionTopics.Add(new QuestionTopicReadModel
@@ -394,6 +398,33 @@ public sealed class BlueprintExamGenerationTests
             TagId = firstTag,
             IsPrimary = true
         });
+
+        if (questionType != BlueprintQuestionTypes.Composite)
+        {
+            testContext.Context.Answers.Add(new AnswerReadModel
+            {
+                AnswerId = $"{questionId}-answer",
+                QuestionId = questionId,
+                IsCorrect = true,
+                IsArchived = false
+            });
+        }
+        else
+        {
+            for (var order = 1; order <= 4; order++)
+            {
+                testContext.Context.QuestionParts.Add(new QuestionPartReadModel
+                {
+                    PartId = $"{questionId}-part-{order}",
+                    QuestionId = questionId,
+                    PartOrder = order,
+                    PartType = "TrueFalse",
+                    CorrectBoolean = true,
+                    DefaultWeight = 1m,
+                    IsArchived = false
+                });
+            }
+        }
 
         if (secondTag is not null)
         {

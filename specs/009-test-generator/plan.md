@@ -133,6 +133,19 @@ MathInsight.Modules.TestGen/
 - Generate exactly 10 questions for one selected WeakTag using `TestMode = TopicPractice`.
 - Keep BlueprintID null and hand the generated Test to Testing for a Practice TestSession.
 
+### Phase 9: Expert Shared BlueprintExam
+
+- Preserve the completed Student personal BlueprintExam API and characterization tests.
+- Add owner-only shared generation from Approved or Active Blueprints at `POST /api/test-generator/blueprints/{blueprintId}/tests`.
+- Generate TestID server-side once outside the SQL execution strategy. Reuse TestID and CreatedTime through transient retry and ambiguous-commit verification.
+- Generate a cryptographically random eight-character TestCode. A 2601/2627 collision on the TestCode unique index rolls back, clears tracking, creates a new code, and reruns the entire transaction up to five times.
+- Persist shared Tests with null GeneratedForStudentID and GeneratedBy System. Transition Approved to Active atomically on first successful use.
+- Add owner-only immutable Expert preview and owner-only Active-to-Archived status transition. Existing sessions may finish after archive.
+- Add owner-only paged generated-Test listing per Blueprint so Active and Archived variants remain reachable after reload.
+- Add paged Student shared-Test discovery and generic, rate-limited TestCode resolution filtered by exact Student grade and active Blueprint state.
+- Keep authorization and transaction orchestration separate for Student and Expert flows. Extract only pure requirement, selection, ordering, score-allocation, and TestQuestion-construction logic after characterization coverage exists.
+- Do not add durable HTTP idempotency, a Draft Test status, schema changes, Adaptive generation, TopicPractice, Diagnostic, or Recommender integration.
+
 ## API Design
 
 `BlueprintsController` uses `[Authorize(Roles = "Expert")]` and route `api/test-generator/blueprints`.
@@ -156,6 +169,17 @@ Checkpoint 6A adds a separate Student-only controller because blueprint visibili
 ```text
 GET  /api/test-generator/tests/blueprint-options
 POST /api/test-generator/tests/blueprint-exams
+```
+
+Phase 9 adds Expert and shared-discovery routes without replacing these endpoints:
+
+```text
+POST  /api/test-generator/blueprints/{blueprintId}/tests
+GET   /api/test-generator/blueprints/{blueprintId}/tests
+GET   /api/test-generator/tests/{testId}/expert-preview
+PATCH /api/test-generator/tests/{testId}/status
+GET   /api/test-generator/tests/shared-blueprint-exams
+POST  /api/test-generator/tests/resolve-code
 ```
 
 The Student ID comes from `account_id`, falling back to `ClaimTypes.NameIdentifier`. The POST request contains only `blueprintId`.

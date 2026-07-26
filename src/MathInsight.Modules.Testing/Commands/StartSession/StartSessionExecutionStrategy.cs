@@ -1,0 +1,37 @@
+using MathInsight.Modules.Testing.Persistence;
+using Microsoft.EntityFrameworkCore.Storage;
+
+namespace MathInsight.Modules.Testing.Commands.StartSession;
+
+internal static class StartSessionExecutionStrategy
+{
+    public static Task<TResult> ExecuteAsync<TResult>(
+        TestingDbContext context,
+        Func<Task<TResult>> operation,
+        Func<Task<(bool IsSuccessful, TResult Result)>> verifySucceeded,
+        CancellationToken cancellationToken)
+    {
+        if (!TestSqlServerLock.IsSupported(context))
+            return operation();
+
+        var strategy = context.Database.CreateExecutionStrategy();
+        var attempt = 0;
+        var state = (Operation: operation, VerifySucceeded: verifySucceeded);
+        return strategy.ExecuteAsync(
+            state,
+            async (_, currentState, _) =>
+            {
+                if (attempt++ > 0)
+                    context.ChangeTracker.Clear();
+
+                return await currentState.Operation();
+            },
+            async (_, currentState, _) =>
+            {
+                context.ChangeTracker.Clear();
+                var verification = await currentState.VerifySucceeded();
+                return new ExecutionResult<TResult>(verification.IsSuccessful, verification.Result);
+            },
+            cancellationToken);
+    }
+}

@@ -4,7 +4,7 @@ namespace MathInsight.Modules.TestGen.Generation;
 
 public interface IBlueprintExamCandidateProvider
 {
-    Task<IReadOnlyList<BlueprintExamCandidate>> GetCandidatesAsync(
+    Task<BlueprintExamCandidatePool> GetCandidatesAsync(
         Blueprint blueprint,
         CancellationToken cancellationToken);
 }
