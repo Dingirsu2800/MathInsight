@@ -1,6 +1,6 @@
 /**
  * Centralized API client for the Testing module (003).
- * Backend: /api/v1/testing/*
+ * Backend: /api/v1/tests/sessions/*
  * Covers UC-47 (session lifecycle), UC-49 (submit), UC-50 (solution).
  * Requires: Bearer token (Student role) in Authorization header (handled by api.js interceptor).
  */
@@ -16,7 +16,12 @@ import api from './api';
  *   questions: { questionId, questionNo, questionContent, questionType, options[], parts[] }
  */
 export async function startSession(testId) {
-  const response = await api.post('/testing/sessions/start', { testId });
+  const response = await api.post('/tests/sessions/start', { testId });
+  return response.data;
+}
+
+export async function getSessionContent(sessionId) {
+  const response = await api.get(`/tests/sessions/${sessionId}`);
   return response.data;
 }
 
@@ -28,7 +33,7 @@ export async function startSession(testId) {
  * @returns {Promise<AutoSaveResponse>} { savedAt, remainingSeconds }
  */
 export async function autoSaveAnswers(sessionId, answers) {
-  const response = await api.post(`/testing/sessions/${sessionId}/auto-save`, { answers });
+  const response = await api.post(`/tests/sessions/${sessionId}/auto-save`, { answers });
   return response.data;
 }
 
@@ -40,7 +45,7 @@ export async function autoSaveAnswers(sessionId, answers) {
  * @returns {Promise<RecordIncidentResponse>} { totalIncidents, forceSubmitted }
  */
 export async function recordIncident(sessionId, incidentType) {
-  const response = await api.post(`/testing/sessions/${sessionId}/incidents`, { incidentType });
+  const response = await api.post(`/tests/sessions/${sessionId}/incident`, { type: incidentType });
   return response.data;
 }
 
@@ -52,7 +57,12 @@ export async function recordIncident(sessionId, incidentType) {
  *   { sessionId, status, submissionType, score, numCorrect, numIncorrect, numAbandoned }
  */
 export async function submitSession(sessionId) {
-  const response = await api.post(`/testing/sessions/${sessionId}/submit`);
+  const response = await api.post(`/tests/sessions/${sessionId}/submit`);
+  return response.data;
+}
+
+export async function timeoutSubmitSession(sessionId) {
+  const response = await api.post(`/tests/sessions/${sessionId}/timeout-submit`);
   return response.data;
 }
 
@@ -65,6 +75,6 @@ export async function submitSession(sessionId) {
  *   questions: { questionId, questionNo, questionContent, selectedAnswerId, isCorrect, ... }
  */
 export async function getDetailedSolution(sessionId) {
-  const response = await api.get(`/testing/sessions/${sessionId}/solution`);
+  const response = await api.get(`/tests/sessions/${sessionId}/solution`);
   return response.data;
 }

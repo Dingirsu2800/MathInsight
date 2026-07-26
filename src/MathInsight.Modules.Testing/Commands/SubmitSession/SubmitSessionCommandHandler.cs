@@ -1,4 +1,6 @@
+using MassTransit;
 using MathInsight.Modules.Testing.Contracts;
+using MathInsight.Modules.Testing.Commands.ForceSubmitSession;
 using MathInsight.Modules.Testing.Entities;
 using MathInsight.Modules.Testing.Errors;
 using MathInsight.Modules.Testing.Persistence;
@@ -14,11 +16,16 @@ public sealed class SubmitSessionCommandHandler
 {
     private readonly TestingDbContext _db;
     private readonly IMediator _mediator;
+    private readonly IPublishEndpoint? _publishEndpoint;
 
-    public SubmitSessionCommandHandler(TestingDbContext db, IMediator mediator)
+    public SubmitSessionCommandHandler(
+        TestingDbContext db,
+        IMediator mediator,
+        IPublishEndpoint? publishEndpoint = null)
     {
         _db = db;
         _mediator = mediator;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<Result<SubmitSessionResponse>> Handle(
@@ -40,6 +47,15 @@ public sealed class SubmitSessionCommandHandler
         if (session.Status != "InProgress")
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionAlreadyCompleted);
 
+        var now = DateTime.UtcNow;
+        if (session.Test is not null &&
+            now >= session.StartTime.AddMinutes(session.Test.DurationMinutes))
+        {
+            return await _mediator.Send(
+                new ForceSubmitSessionCommand(session.SessionId, "TimeoutSubmit"),
+                cancellationToken);
+        }
+
         var savedAnswers = await _db.TestAnswers
             .Include(answer => answer.Options)
             .Include(answer => answer.Parts)
@@ -57,8 +73,6 @@ public sealed class SubmitSessionCommandHandler
         }
 
         // Submission timestamps and type are persisted atomically by Grading.
-        var now = DateTime.UtcNow;
-
         // 4. Count abandoned questions (BR-16b)
         session.NumAbandoned = await CountAbandonedAnswers(request.SessionId, cancellationToken);
 
@@ -90,10 +104,7 @@ public sealed class SubmitSessionCommandHandler
         else
         {
             // BR-17: Exam mode — publish TestSubmittedEvent to MassTransit queue
-            // Grading proceeds asynchronously
-            // For now, save InProgress → the MassTransit consumer will grade later
-            // We set a temporary status until grading completes
-            // The consumer will set Status = Graded
+            // Grading proceeds asynchronously via TestSubmittedConsumer
             session.Status = "InProgress"; // remains until grading consumer processes it
 
             var submissionEvent = new TestSubmittedEvent
@@ -106,8 +117,11 @@ public sealed class SubmitSessionCommandHandler
                 SubmittedTime = now
             };
 
-            // Publish as MediatR notification — in production, MassTransit integration
-            // would intercept and route to the queue
+            if (_publishEndpoint is not null)
+            {
+                await _publishEndpoint.Publish(submissionEvent, cancellationToken);
+            }
+
             await _mediator.Publish(submissionEvent, cancellationToken);
         }
 

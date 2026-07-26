@@ -149,6 +149,8 @@ public sealed class TestGenModelMetadataTests
     [InlineData(typeof(QuestionReadModel), "Question")]
     [InlineData(typeof(QuestionTopicReadModel), "QuestionTopic")]
     [InlineData(typeof(QuestionVersionReadModel), "QuestionVersion")]
+    [InlineData(typeof(AnswerReadModel), "Answer")]
+    [InlineData(typeof(QuestionPartReadModel), "QuestionPart")]
     public void ExternalReadModels_AreExcludedFromMigrations(Type clrType, string tableName)
     {
         var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(clrType));

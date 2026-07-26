@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import ExpertLayout from "./ExpertLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
@@ -10,6 +10,8 @@ import { getQuestionTypeLabel, getStatusLabel, getStatusBadgeVariant } from "../
 import { getBlueprintActions } from "../../utils/blueprintAuth";
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { validateBlueprintForSubmit } from "../../utils/blueprintValidation";
+import { getAccountId } from "../../services/authStorage";
+import GenerateSharedTestDialog from "../../components/expert/GenerateSharedTestDialog";
 import { cn } from "../../utils/cn";
 
 export default function BlueprintDetailPage() {
@@ -33,12 +35,27 @@ export default function BlueprintDetailPage() {
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [isCloneOpen, setIsCloneOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
 
   // Review states
   const [rejectNote, setRejectNote] = useState("");
   const [rejectError, setRejectError] = useState("");
 
-  const currentAccountId = localStorage.getItem("AccountId");
+  // Generated Tests List states
+  const [generatedTests, setGeneratedTests] = useState([]);
+  const [testsLoading, setTestsLoading] = useState(false);
+  const [testsError, setTestsError] = useState("");
+  const [testsPageIndex, setTestsPageIndex] = useState(1);
+  const [testsTotalPages, setTestsTotalPages] = useState(1);
+  const [testsTotalCount, setTestsTotalCount] = useState(0);
+
+  // Archive Test modal states
+  const [selectedArchiveTest, setSelectedArchiveTest] = useState(null);
+  const [isArchiveTestOpen, setIsArchiveTestOpen] = useState(false);
+  const [archiveTestLoading, setArchiveTestLoading] = useState(false);
+  const [archiveTestError, setArchiveTestError] = useState("");
+
+  const currentAccountId = getAccountId();
 
   // Read location state feedback once
   useEffect(() => {
@@ -56,15 +73,62 @@ export default function BlueprintDetailPage() {
       const res = await testGeneratorApi.getBlueprintDetail(blueprintId);
       setBlueprint(res.data);
     } catch (err) {
-      setPageError(getBlueprintErrorMessage(err, "Không thể tải chi tiết cấu trúc đề. Vui lòng thử lại."));
+      const msg = getBlueprintErrorMessage(err, "Không thể tải chi tiết cấu trúc đề thi.");
+      setPageError(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch generated tests list
+  const fetchGeneratedTests = useCallback(async () => {
+    if (!blueprintId) return;
+    setTestsLoading(true);
+    setTestsError("");
+    try {
+      const res = await testGeneratorApi.getBlueprintGeneratedTests(blueprintId, {
+        pageIndex: testsPageIndex,
+        pageSize: 20
+      });
+      const data = res.data || {};
+      setGeneratedTests(data.items || []);
+      setTestsTotalCount(data.totalCount || 0);
+      const calculatedPages = Math.ceil((data.totalCount || 0) / 20) || 1;
+      setTestsTotalPages(data.totalPages || calculatedPages);
+    } catch (err) {
+      setTestsError(getBlueprintErrorMessage(err, "Không thể tải danh sách đề thi đã sinh."));
+    } finally {
+      setTestsLoading(false);
+    }
+  }, [blueprintId, testsPageIndex]);
+
+  const handleArchiveGeneratedTest = async () => {
+    if (!selectedArchiveTest?.testId) return;
+    setArchiveTestLoading(true);
+    setArchiveTestError("");
+    try {
+      await testGeneratorApi.archiveSharedBlueprintExam(selectedArchiveTest.testId);
+      setIsArchiveTestOpen(false);
+      setSelectedArchiveTest(null);
+      fetchGeneratedTests();
+    } catch (err) {
+      setArchiveTestError(getBlueprintErrorMessage(err, "Không thể lưu trữ đề thi."));
+    } finally {
+      setArchiveTestLoading(false);
+    }
+  };
+
+  const isOwner = blueprint && currentAccountId && blueprint.expertId?.toLowerCase() === currentAccountId?.toLowerCase();
+
   useEffect(() => {
     fetchDetail();
   }, [blueprintId]);
+
+  useEffect(() => {
+    if (blueprint && isOwner) {
+      fetchGeneratedTests();
+    }
+  }, [blueprint, isOwner, fetchGeneratedTests]);
 
   if (loading) {
     return (
@@ -257,6 +321,17 @@ export default function BlueprintDetailPage() {
             >
               Quay lại
             </Button>
+
+            {actions.canGenerate && (
+              <Button
+                variant="primary"
+                disabled={isMutating}
+                onClick={() => setIsGenerateOpen(true)}
+              >
+                <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">auto_awesome</span>
+                Sinh đề mới
+              </Button>
+            )}
 
             {actions.canEdit && (
               <Button
@@ -540,6 +615,138 @@ export default function BlueprintDetailPage() {
 
         </div>
 
+        {/* Section: Đề đã sinh (Only for Owner) */}
+        {isOwner && (
+          <div className="flex flex-col gap-4 mt-2 select-none">
+            <div className="flex items-center justify-between border-b border-whisper-border pb-3">
+              <div>
+                <h2 className="text-base font-bold text-on-surface">Đề đã sinh</h2>
+                <p className="text-xs text-on-surface-variant">Các biến thể đề thi dùng chung cố định được sinh từ cấu trúc đề này.</p>
+              </div>
+              {testsTotalCount > 0 && (
+                <span className="text-xs font-bold text-on-surface-variant font-mono">
+                  Tổng số: {testsTotalCount} đề thi
+                </span>
+              )}
+            </div>
+
+            {testsError && (
+              <div role="alert" className="p-3.5 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center justify-between gap-3 select-text">
+                <span>{testsError}</span>
+                <Button variant="outline" size="sm" onClick={fetchGeneratedTests} className="h-8 text-xs font-bold">Thử lại</Button>
+              </div>
+            )}
+
+            {testsLoading ? (
+              <div className="p-8 flex items-center justify-center bg-pure-surface border border-whisper-border rounded-xl">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <span className="ml-3 text-xs text-on-surface-variant font-semibold">Đang tải danh sách đề thi...</span>
+              </div>
+            ) : generatedTests.length === 0 && !testsError ? (
+              <div className="p-8 text-center text-xs text-on-surface-variant bg-surface-container-low/50 rounded-xl border border-dashed">
+                Chưa có biến thể đề thi nào được sinh từ cấu trúc này.
+              </div>
+            ) : (
+              <div className="bg-pure-surface border border-whisper-border rounded-xl shadow-sm overflow-hidden select-text">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-surface-container-low border-b border-whisper-border font-bold text-on-surface-variant">
+                      <tr>
+                        <th className="p-3.5">Tên đề thi</th>
+                        <th className="p-3.5">Mã đề</th>
+                        <th className="p-3.5">Trạng thái</th>
+                        <th className="p-3.5">Thời gian</th>
+                        <th className="p-3.5">Số câu</th>
+                        <th className="p-3.5">Điểm tối đa</th>
+                        <th className="p-3.5">Ngày tạo</th>
+                        <th className="p-3.5 text-right">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-whisper-border/60 font-medium">
+                      {generatedTests.map((t) => {
+                        const isArchived = t.testStatus === "Archived";
+                        return (
+                          <tr key={t.testId} className="hover:bg-surface-container-low/40 transition-colors">
+                            <td className="p-3.5 font-bold text-on-surface">{t.testName}</td>
+                            <td className="p-3.5 font-mono text-primary font-bold">{t.testCode}</td>
+                            <td className="p-3.5">
+                              <Badge variant={isArchived ? "secondary" : "success"}>
+                                {isArchived ? "Đã lưu trữ" : "Đang hoạt động"}
+                              </Badge>
+                            </td>
+                            <td className="p-3.5">{t.durationMinutes} phút</td>
+                            <td className="p-3.5 font-mono">{t.totalQuestions} câu</td>
+                            <td className="p-3.5 font-mono font-bold text-primary">{t.maxScore} đ</td>
+                            <td className="p-3.5 text-on-surface-variant">
+                              {t.createdTime ? new Date(t.createdTime).toLocaleDateString("vi-VN") : "N/A"}
+                            </td>
+                            <td className="p-3.5 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => navigate(`/expert/tests/${t.testId}/preview`)}
+                                  className="h-8 text-xs font-bold"
+                                >
+                                  <span className="material-symbols-outlined text-[16px] mr-1">visibility</span>
+                                  Xem bản đề thi
+                                </Button>
+                                {!isArchived && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedArchiveTest(t);
+                                      setArchiveTestError("");
+                                      setIsArchiveTestOpen(true);
+                                    }}
+                                    className="h-8 text-xs font-bold"
+                                  >
+                                    Lưu trữ
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Bar */}
+                {testsTotalPages > 1 && (
+                  <div className="p-3 bg-surface-container-low border-t border-whisper-border flex items-center justify-between text-xs">
+                    <span className="text-on-surface-variant font-semibold">
+                      Trang {testsPageIndex} / {testsTotalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={testsPageIndex <= 1 || testsLoading}
+                        onClick={() => setTestsPageIndex((p) => Math.max(1, p - 1))}
+                        className="h-8 px-2.5 font-bold"
+                      >
+                        Trước
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={testsPageIndex >= testsTotalPages || testsLoading}
+                        onClick={() => setTestsPageIndex((p) => Math.min(testsTotalPages, p + 1))}
+                        className="h-8 px-2.5 font-bold"
+                      >
+                        Sau
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       {/* Submit Confirmation Dialog */}
@@ -737,6 +944,47 @@ export default function BlueprintDetailPage() {
               : actions.canDeactivate
                 ? "Ngừng sử dụng"
                 : "Xác nhận Xóa"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Generate Shared Test Dialog */}
+      <GenerateSharedTestDialog
+        isOpen={isGenerateOpen}
+        onClose={() => {
+          setIsGenerateOpen(false);
+          fetchGeneratedTests();
+        }}
+        blueprint={blueprint}
+      />
+
+      {/* Archive Generated Test Dialog */}
+      <Dialog isOpen={isArchiveTestOpen} onClose={() => !archiveTestLoading && setIsArchiveTestOpen(false)} isCloseDisabled={archiveTestLoading}>
+        <DialogHeader>
+          <DialogTitle className="text-error flex items-center gap-2">
+            <span className="material-symbols-outlined text-[22px]">archive</span>
+            Xác nhận lưu trữ đề thi
+          </DialogTitle>
+          <DialogDescription>
+            Lưu trữ biến thể đề thi <span className="font-bold text-on-surface">"{selectedArchiveTest?.testName}"</span> (Mã: {selectedArchiveTest?.testCode}).
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-xs text-on-surface-variant leading-relaxed select-text">
+            Mã đề sẽ không thể dùng để bắt đầu phiên mới; các phiên đang làm vẫn có thể tiếp tục. Phiên bản này không thể kích hoạt lại.
+          </p>
+          {archiveTestError && (
+            <div role="alert" className="mt-3 p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold select-text">
+              {archiveTestError}
+            </div>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" disabled={archiveTestLoading} onClick={() => setIsArchiveTestOpen(false)}>
+            Hủy
+          </Button>
+          <Button variant="destructive" disabled={archiveTestLoading} onClick={handleArchiveGeneratedTest}>
+            {archiveTestLoading ? "Đang lưu trữ..." : "Xác nhận Lưu trữ"}
           </Button>
         </DialogFooter>
       </Dialog>

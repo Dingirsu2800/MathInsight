@@ -24,12 +24,34 @@ public sealed class TestingModelMetadataTests
     [InlineData(typeof(Test), "Test")]
     [InlineData(typeof(TestQuestion), "TestQuestion")]
     [InlineData(typeof(QuestionVersion), "QuestionVersion")]
+    [InlineData(typeof(Blueprint), "Blueprint")]
+    [InlineData(typeof(Student), "Student")]
     public void CrossModuleReadTables_AreExcludedFromTestingMigrations(Type clrType, string tableName)
     {
         var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(clrType));
 
         Assert.Equal(tableName, entity.GetTableName());
         Assert.True(entity.IsTableExcludedFromMigrations());
+    }
+
+    [Fact]
+    public void StudentReadModel_MapsCanonicalColumns()
+    {
+        var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(Student)));
+        var table = StoreObjectIdentifier.Table("Student", null);
+
+        Assert.Equal("StudentID", entity.FindProperty(nameof(Student.StudentId))!.GetColumnName(table));
+        Assert.Equal("CurrentGrade", entity.FindProperty(nameof(Student.CurrentGrade))!.GetColumnName(table));
+    }
+
+    [Fact]
+    public void BlueprintReadModel_MapsGradeAndStatus()
+    {
+        var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(Blueprint)));
+        var table = StoreObjectIdentifier.Table("Blueprint", null);
+
+        Assert.Equal("Grade", entity.FindProperty(nameof(Blueprint.Grade))!.GetColumnName(table));
+        Assert.Equal("Status", entity.FindProperty(nameof(Blueprint.Status))!.GetColumnName(table));
     }
 
     [Fact]

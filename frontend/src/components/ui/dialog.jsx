@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "../../utils/cn";
 
-export function Dialog({ isOpen, onClose, children, className, variant = "modal" }) {
+export function Dialog({ isOpen, onClose, children, className, variant = "modal", isCloseDisabled = false }) {
   const dialogRef = React.useRef(null);
   const previouslyFocusedElementRef = React.useRef(null);
   const previousBodyOverflowRef = React.useRef("");
@@ -31,7 +31,9 @@ export function Dialog({ isOpen, onClose, children, className, variant = "modal"
   const handleKeyDown = (event) => {
     if (event.key === "Escape") {
       event.stopPropagation();
-      onClose();
+      if (!isCloseDisabled) {
+        onClose();
+      }
       return;
     }
 
@@ -71,7 +73,9 @@ export function Dialog({ isOpen, onClose, children, className, variant = "modal"
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-charcoal-ink/30 backdrop-blur-[2px] transition-opacity duration-300"
-        onClick={onClose}
+        onClick={() => {
+          if (!isCloseDisabled) onClose();
+        }}
         aria-hidden="true"
       />
       {/* Dialog container */}
@@ -95,10 +99,19 @@ export function Dialog({ isOpen, onClose, children, className, variant = "modal"
         {/* Close Button */}
         <button
           type="button"
-          onClick={onClose}
+          disabled={isCloseDisabled}
+          aria-disabled={isCloseDisabled ? "true" : undefined}
+          onClick={() => {
+            if (!isCloseDisabled) onClose();
+          }}
           aria-label="Đóng hộp thoại"
           title="Đóng"
-          className="absolute top-4 right-4 p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
+          className={cn(
+            "absolute top-4 right-4 p-1.5 rounded-full text-on-surface-variant transition-colors",
+            isCloseDisabled
+              ? "opacity-30 cursor-not-allowed pointer-events-none"
+              : "hover:bg-surface-container cursor-pointer"
+          )}
         >
           <span className="material-symbols-outlined text-[20px]">close</span>
         </button>

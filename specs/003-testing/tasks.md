@@ -36,12 +36,18 @@
   - [x] Create `TestSession` with `Status = InProgress`, `SubmissionType = NULL`, `StartTime = NOW`
   - [x] Create `TestAnswer` stub records for each `TestQuestion` in the test
   - [x] Return session with question list (randomized per blueprint)
+  - [x] Add excluded Student grade and Blueprint grade/status read contracts.
+  - [x] Lock Test row and revalidate personal/shared authorization inside the session transaction.
+  - [x] Return `TESTING_TEST_ACCESS_DENIED` / 403 without creating partial session data.
+  - [x] Permit existing InProgress sessions to finish after a shared Test is archived.
 
 - [x] **AutoSave Command**:
   - [x] Validate session `Status = InProgress` (reject if `Graded` or `Abandoned`)
   - [x] Batch update `TestAnswer` (`AnswerID`, `ShortAnswerText`, `TimeSpent`) and `TestAnswerPart` (`BooleanAnswer`, `TextAnswer`, `NumericAnswer` based on part type)
   - [x] Update `UpdateChoiceTime`; set `FirstChoiceTime` if null
   - [x] Return `{ savedAt, remainingSeconds }` — remaining time from `StartTime + DurationMinutes`
+  - [x] Return persisted single/multiple/short/composite answers from session content for reload/resume.
+  - [x] Return authoritative `remainingSeconds` from session content without requiring an empty auto-save heartbeat.
 
 - [x] **RecordIncident Command**:
   - [x] Insert `TestIncident` record with `Type = TAB_SWITCH | FOCUS_LOSS`
@@ -63,6 +69,8 @@
   - [x] Save current auto-save state
   - [x] **Practice mode**: Invoke Grading via MediatR in-process; commit only after grading updates `status = Graded`
   - [x] **Exam mode**: Publish `TestSubmittedEvent` to MassTransit queue; grading proceeds asynchronously
+  - [x] Add Student timeout-submit endpoint that verifies the server-side deadline before using `TimeoutSubmit`.
+  - [x] Reject answer changes after the deadline and convert late normal-submit requests to `TimeoutSubmit`.
 
 - [x] **ReportSessionQuestion Command** (UC-48):
   - [x] Delegates to QuestionBank module's `ReportQuestionCommand`
@@ -77,7 +85,7 @@
 
 ## Phase 3: Controller and Routing
 
-- [x] `TestSessionsController` — StudentOnly: start, auto-save, incident, submit
+- [x] `TestSessionsController` — StudentOnly: start, resume contract, auto-save, incident, submit, timeout-submit
 - [x] `SolutionController` — StudentOnly: GET solution (validates `Graded` status)
 - [x] Register all services inside `TestingModuleExtensions.cs`
 
@@ -89,6 +97,8 @@
 - [x] Integration tests (xUnit):
   - [x] UC-47: Start session → `InProgress`, correct question count
   - [x] UC-47: Start duplicate `InProgress` session → 409 (BR-15)
+  - [x] UC-47: Duplicate 409 includes `existingSessionId`; resumed content includes saved options and parts.
+  - [x] UC-49: Early timeout-submit → 409; expired timeout-submit uses `TimeoutSubmit`.
   - [x] UC-47: Auto-save 5 answers → persisted, `update_choice_time` set
   - [x] UC-47: 4 incidents → no force-submit; 5th incident → `Graded` with `SubmissionType = SystemSubmit`
   - [x] UC-49: Normal submit → `Graded`, `SubmissionType = StudentSubmit`, grading fields populated

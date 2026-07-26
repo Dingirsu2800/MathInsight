@@ -25,7 +25,7 @@ public class TestSessionIntegrationTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task StartSession_ActiveTest_ReturnsInProgressWithCorrectQuestionCount()
+    public async Task StartSession_PersonalOwner_ReturnsInProgressWithCorrectQuestionCount()
     {
         // Arrange
         await using var ctx = TestingInMemoryContext.Create();
