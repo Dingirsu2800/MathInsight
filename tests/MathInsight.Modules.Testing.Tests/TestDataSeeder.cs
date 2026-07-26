@@ -14,6 +14,8 @@ internal static class TestDataSeeder
     // ─── Well-known IDs ─────────────────────────────────────────────────────
     public static readonly string ActiveTestId = "00000000-0000-0000-0000-000000000001";
     public static readonly string ArchivedTestId = "00000000-0000-0000-0000-000000000002";
+    public static readonly string SharedTestId = "00000000-0000-0000-0000-000000000003";
+    public static readonly string BlueprintId = "00000000-0000-0000-0000-000000000004";
     public static readonly string StudentId = "00000000-0000-0000-0000-000000000010";
     public static readonly string OtherStudentId = "00000000-0000-0000-0000-000000000020";
     public static readonly string Question1Id = "00000000-0000-0000-0000-000000000101";
@@ -24,15 +26,20 @@ internal static class TestDataSeeder
     public static readonly string Answer1Id = "00000000-0000-0000-0000-000000000201";
 
     /// <summary>
-    /// Seeds a minimal dataset: one ACTIVE practice test with 5 questions and one ARCHIVED test.
+    /// Seeds a minimal dataset: one Active personal practice test with 5 questions and one Archived test.
     /// </summary>
     public static async Task SeedActiveTestWithQuestions(TestingDbContext db)
     {
+        db.Students.AddRange(
+            new Student { StudentId = StudentId, CurrentGrade = 10 },
+            new Student { StudentId = OtherStudentId, CurrentGrade = 10 });
+
         var activeTest = new Test
         {
             TestId = ActiveTestId,
-            TestStatus = "ACTIVE",
+            TestStatus = "Active",
             TestMode = "AdaptivePractice", // maps to Practice format
+            GeneratedForStudentId = StudentId,
             TestName = "Practice Test 1",
             DurationMinutes = 60,
             TotalQuestions = 5,
@@ -74,8 +81,9 @@ internal static class TestDataSeeder
         var archivedTest = new Test
         {
             TestId = ArchivedTestId,
-            TestStatus = "ARCHIVED",
-            TestMode = "BlueprintExam",
+            TestStatus = "Archived",
+            TestMode = "AdaptivePractice",
+            GeneratedForStudentId = StudentId,
             TestName = "Archived Test",
             DurationMinutes = 90,
             TotalQuestions = 3,
@@ -84,6 +92,53 @@ internal static class TestDataSeeder
         };
 
         db.Tests.Add(archivedTest);
+
+        await db.SaveChangesAsync();
+    }
+
+    public static async Task SeedSharedBlueprintExam(
+        TestingDbContext db,
+        int blueprintGrade = 10,
+        string blueprintStatus = "Active",
+        string testMode = "BlueprintExam")
+    {
+        await SeedActiveTestWithQuestions(db);
+
+        db.Blueprints.Add(new Blueprint
+        {
+            BlueprintId = BlueprintId,
+            BlueprintName = "Shared Grade 10 Exam",
+            Grade = blueprintGrade,
+            Status = blueprintStatus
+        });
+
+        db.Tests.Add(new Test
+        {
+            TestId = SharedTestId,
+            BlueprintId = BlueprintId,
+            TestStatus = "Active",
+            TestMode = testMode,
+            GeneratedForStudentId = null,
+            GeneratedBy = "System",
+            TestName = "Shared Blueprint Exam",
+            DurationMinutes = 45,
+            TotalQuestions = 1,
+            MaxScore = 10m,
+            ScoringPolicy = "NormalizedWeight",
+            CreatedTime = DateTime.UtcNow
+        });
+
+        db.TestQuestions.Add(new TestQuestion
+        {
+            TestId = SharedTestId,
+            QuestionId = Question1Id,
+            QuestionOrder = 1,
+            SelectionReason = "BlueprintNormal",
+            QuestionVersionId = "version-1",
+            WeightSnapshot = 1m,
+            MaxPointsSnapshot = 10m,
+            ScoringRuleSnapshot = "AllOrNothing"
+        });
 
         await db.SaveChangesAsync();
     }

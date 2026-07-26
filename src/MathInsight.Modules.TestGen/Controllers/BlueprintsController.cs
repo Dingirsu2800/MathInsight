@@ -5,10 +5,13 @@ using MathInsight.Modules.TestGen.Commands.DeleteBlueprint;
 using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
 using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
 using MathInsight.Modules.TestGen.Commands.UpdateBlueprint;
+using MathInsight.Modules.TestGen.Commands.GenerateSharedBlueprintExam;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
+using MathInsight.Modules.TestGen.Contracts.Tests;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintDetail;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintList;
+using MathInsight.Modules.TestGen.Queries.GetBlueprintGeneratedTests;
 using MathInsight.Modules.TestGen.Queries.GetPendingBlueprints;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -200,6 +203,54 @@ public sealed class BlueprintsController : ControllerBase
         return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
     }
 
+    [HttpPost("{blueprintId}/tests")]
+    public async Task<IActionResult> GenerateSharedBlueprintExam(
+        string blueprintId,
+        [FromBody] GenerateSharedBlueprintExamRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(TestGenerationErrors.RequestInvalid));
+
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new GenerateSharedBlueprintExamCommand(
+                blueprintId,
+                currentExpertId,
+                request.TestName,
+                request.DurationMinutes),
+            cancellationToken);
+
+        return result.IsFailure
+            ? ToErrorResult(result.Error!)
+            : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpGet("{blueprintId}/tests")]
+    public async Task<IActionResult> GetGeneratedTests(
+        string blueprintId,
+        [FromQuery] int pageIndex,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new GetBlueprintGeneratedTestsQuery(
+                blueprintId,
+                currentExpertId,
+                pageIndex,
+                pageSize),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
+    }
+
     private string? GetCurrentExpertId()
         => User.FindFirst("account_id")?.Value
             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -227,6 +278,18 @@ public sealed class BlueprintsController : ControllerBase
 
         if (error == BlueprintErrors.InUse)
             return Conflict(new ApiErrorResponse(error));
+
+        if (error == TestGenerationErrors.QuestionPoolInsufficient ||
+            error == TestGenerationErrors.GenerationConflict)
+        {
+            return Conflict(new ApiErrorResponse(error));
+        }
+
+        if (error == TestGenerationErrors.ScoreBudgetMismatch ||
+            error == TestGenerationErrors.QuestionVersionMissing)
+        {
+            return UnprocessableEntity(new ApiErrorResponse(error));
+        }
 
         return BadRequest(new ApiErrorResponse(error));
     }

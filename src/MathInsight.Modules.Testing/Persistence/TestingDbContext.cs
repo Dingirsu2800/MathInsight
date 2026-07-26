@@ -7,6 +7,7 @@ public class TestingDbContext : DbContext
 {
     public TestingDbContext(DbContextOptions<TestingDbContext> options) : base(options) { }
 
+    public DbSet<Student> Students => Set<Student>();
     public DbSet<Blueprint> Blueprints => Set<Blueprint>();
     public DbSet<Test> Tests => Set<Test>();
     public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
