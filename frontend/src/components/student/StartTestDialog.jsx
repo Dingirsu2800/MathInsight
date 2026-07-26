@@ -54,16 +54,13 @@ export default function StartTestDialog({ isOpen, onClose, test }) {
       setSubmitting(false);
 
       const errCode = err.response?.data?.code;
-      const existingSessionId = err.response?.data?.sessionId || err.response?.data?.existingSessionId;
-
-      if (existingSessionId && typeof existingSessionId === "string") {
-        setResumeSessionId(existingSessionId);
-        setErrorMessage("Bạn đang có một phiên làm bài chưa hoàn thành cho đề thi này.");
-        return;
-      }
 
       if (errCode === "TESTING_SESSION_ALREADY_IN_PROGRESS") {
-        setErrorMessage("Bạn đang có một phiên làm bài chưa hoàn thành cho đề thi này. Vui lòng hoàn thành hoặc nộp bài thi hiện tại trước khi bắt đầu phiên mới.");
+        const existingSessionId = err.response?.data?.existingSessionId;
+        if (existingSessionId && typeof existingSessionId === "string") {
+          setResumeSessionId(existingSessionId);
+        }
+        setErrorMessage("Bạn đang có một phiên làm bài chưa hoàn thành cho đề thi này.");
         return;
       }
 

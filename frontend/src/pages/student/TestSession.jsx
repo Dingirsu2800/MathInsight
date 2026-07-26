@@ -113,11 +113,21 @@ export default function TestSession({ sessionId: propSessionId }) {
 
     const payload = buildAutoSavePayload(answersMap, sessionData?.questions || []);
     const request = autoSaveQueueRef.current.catch(() => undefined).then(async () => {
-      const res = await testGeneratorApi.autoSaveSession(activeSessionId, payload);
-      if (res.data?.remainingSeconds !== undefined) {
-        setRemainingSeconds(res.data.remainingSeconds);
+      try {
+        const res = await testGeneratorApi.autoSaveSession(activeSessionId, payload);
+        if (res.data?.remainingSeconds !== undefined) {
+          setRemainingSeconds(res.data.remainingSeconds);
+        }
+        setLastSavedTime(new Date());
+      } catch (err) {
+        const code = err.response?.data?.code;
+        if (code === "TESTING_SESSION_EXPIRED") {
+          // Session expired -> handle timeout submit
+          handleTimeoutSubmit();
+        } else {
+          throw err;
+        }
       }
-      setLastSavedTime(new Date());
     });
 
     autoSaveQueueRef.current = request;
@@ -142,7 +152,7 @@ export default function TestSession({ sessionId: propSessionId }) {
     }, 1200);
   }, [clearScheduledAutoSave, executeAutoSave]);
 
-  // 1. Fetch Session Content
+  // 1. Fetch Session Content & Hydrate Saved Answers
   const fetchSession = async () => {
     if (!activeSessionId) {
       setPageError("Mã phiên làm bài không hợp lệ.");
@@ -157,14 +167,39 @@ export default function TestSession({ sessionId: propSessionId }) {
       const data = res.data;
       setSessionData(data);
 
-      // An empty auto-save is a safe heartbeat that returns authoritative remaining time.
-      if (data.status === "InProgress" && data.durationMinutes) {
-        try {
-          const timerRes = await testGeneratorApi.autoSaveSession(activeSessionId, []);
-          setRemainingSeconds(timerRes.data?.remainingSeconds ?? data.durationMinutes * 60);
-        } catch {
-          setRemainingSeconds(data.durationMinutes * 60);
-        }
+      // Hydrate userAnswers from savedAnswers directly
+      const initialAnswers = {};
+      if (data.savedAnswers && Array.isArray(data.savedAnswers)) {
+        data.savedAnswers.forEach((sa) => {
+          const partsMap = {};
+          if (sa.parts && Array.isArray(sa.parts)) {
+            sa.parts.forEach((p) => {
+              partsMap[p.partId] = {
+                booleanAnswer: p.booleanAnswer,
+                textAnswer: p.textAnswer,
+                numericAnswer: p.numericAnswer
+              };
+            });
+          }
+
+          initialAnswers[sa.questionId] = {
+            selectedAnswerId: sa.answerId || null,
+            shortAnswerText: sa.shortAnswerText || "",
+            selectedOptions: sa.selectedOptions ? sa.selectedOptions.map((opt) => opt.answerId) : [],
+            timeSpent: sa.timeSpent || 0,
+            parts: partsMap
+          };
+        });
+      }
+
+      setUserAnswers(initialAnswers);
+      userAnswersRef.current = initialAnswers;
+
+      // Use remainingSeconds directly from GET session response
+      if (data.remainingSeconds !== undefined && data.remainingSeconds !== null) {
+        setRemainingSeconds(data.remainingSeconds);
+      } else if (data.durationMinutes) {
+        setRemainingSeconds(data.durationMinutes * 60);
       }
     } catch (err) {
       setPageError(getTestGenErrorMessage(err, "Không thể tải phiên làm bài thi. Vui lòng kiểm tra lại."));
@@ -179,13 +214,12 @@ export default function TestSession({ sessionId: propSessionId }) {
 
   useEffect(() => clearScheduledAutoSave, [clearScheduledAutoSave]);
 
-  // 2. Countdown Timer
+  // 2. Countdown Timer & Server-Authoritative Timeout
   useEffect(() => {
     if (sessionData?.status !== "InProgress" || remainingSeconds === null) return;
 
     if (remainingSeconds <= 0) {
-      // Time is up -> Auto submit
-      handleTimeoutAutoSubmit();
+      handleTimeoutSubmit();
       return;
     }
 
@@ -196,8 +230,8 @@ export default function TestSession({ sessionId: propSessionId }) {
     return () => clearInterval(timerId);
   }, [remainingSeconds, sessionData?.status]);
 
-  // Handle Timeout Auto-Submit
-  const handleTimeoutAutoSubmit = async () => {
+  // Handle Timeout Submit (Server-authoritative POST /timeout-submit)
+  const handleTimeoutSubmit = async () => {
     if (submitInFlightRef.current) return;
     submitInFlightRef.current = true;
     setSubmitting(true);
@@ -210,12 +244,20 @@ export default function TestSession({ sessionId: propSessionId }) {
         console.error("Timeout auto-save error:", err);
       }
 
-      await testGeneratorApi.submitSession(activeSessionId);
+      await testGeneratorApi.timeoutSubmitSession(activeSessionId);
       alert("Thời gian làm bài đã hết! Hệ thống đã tự động nộp bài thi của bạn.");
       navigate(`/student/test-result/${activeSessionId}`);
     } catch (err) {
+      const code = err.response?.data?.code;
+      if (code === "TESTING_SESSION_NOT_EXPIRED") {
+        // HTTP 409 TESTING_SESSION_NOT_EXPIRED: refetch session content & resync timer
+        submitInFlightRef.current = false;
+        setSubmitting(false);
+        await fetchSession();
+        return;
+      }
       console.error("Timeout submit error:", err);
-      alert("Không thể tự động nộp bài do lỗi kết nối. Vui lòng thử nộp bài lại.");
+      alert(getTestGenErrorMessage(err, "Đã xảy ra lỗi khi nộp bài hết giờ."));
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
@@ -364,6 +406,13 @@ export default function TestSession({ sessionId: propSessionId }) {
       setIsSubmitOpen(false);
       navigate(`/student/test-result/${activeSessionId}`);
     } catch (err) {
+      const code = err.response?.data?.code;
+      if (code === "TESTING_SESSION_EXPIRED") {
+        setIsSubmitOpen(false);
+        submitInFlightRef.current = false;
+        await handleTimeoutSubmit();
+        return;
+      }
       setSubmitError(getTestGenErrorMessage(err, "Không thể nộp bài thi. Vui lòng kiểm tra lại kết nối và thử lại."));
       submitInFlightRef.current = false;
       setSubmitting(false);

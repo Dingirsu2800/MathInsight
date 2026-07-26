@@ -99,5 +99,21 @@ export const testGeneratorApi = {
 
   autoSaveSession(sessionId, answers) {
     return client.post(`/api/v1/tests/sessions/${sessionId}/auto-save`, { answers });
+  },
+
+  timeoutSubmitSession(sessionId) {
+    return client.post(`/api/v1/tests/sessions/${sessionId}/timeout-submit`);
+  },
+
+  getBlueprintGeneratedTests(blueprintId, params) {
+    const queryParams = {};
+    if (params) {
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== "") {
+          queryParams[key] = params[key];
+        }
+      });
+    }
+    return client.get(`/api/test-generator/blueprints/${blueprintId}/tests`, { params: queryParams });
   }
 };

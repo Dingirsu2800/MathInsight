@@ -10,7 +10,10 @@ export const TEST_GENERATION_ERROR_MAP = {
   TEST_CODE_NOT_AVAILABLE: "Mã đề không khả dụng.",
   GENERATED_TEST_NOT_FOUND: "Không tìm thấy đề đã sinh.",
   TESTING_TEST_ACCESS_DENIED: "Bạn không thể bắt đầu đề này.",
-  RATE_LIMIT_EXCEEDED: "Bạn thao tác quá nhanh, vui lòng thử lại sau."
+  RATE_LIMIT_EXCEEDED: "Bạn thao tác quá nhanh, vui lòng thử lại sau.",
+  TESTING_SESSION_EXPIRED: "Phiên làm bài thi đã hết thời gian làm bài.",
+  TESTING_SESSION_NOT_EXPIRED: "Phiên làm bài thi chưa hết giờ làm bài.",
+  TESTING_SESSION_ALREADY_IN_PROGRESS: "Bạn đang có một phiên làm bài chưa hoàn thành."
 };
 
 export function getTestGenErrorMessage(err, defaultMessage = "Thao tác thất bại. Vui lòng thử lại sau.") {
