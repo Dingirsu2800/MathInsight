@@ -105,7 +105,9 @@ public sealed class SubmitSessionCommandHandler
         {
             // BR-17: Exam mode — publish TestSubmittedEvent to MassTransit queue
             // Grading proceeds asynchronously via TestSubmittedConsumer
-            session.Status = "InProgress"; // remains until grading consumer processes it
+            session.Status = "Submitted"; // Immediately mark as Submitted to prevent duplicate submission/autosave
+            session.SubmissionType = "StudentSubmit";
+            session.EndTime = now;
 
             var submissionEvent = new TestSubmittedEvent
             {
@@ -121,8 +123,10 @@ public sealed class SubmitSessionCommandHandler
             {
                 await _publishEndpoint.Publish(submissionEvent, cancellationToken);
             }
-
-            await _mediator.Publish(submissionEvent, cancellationToken);
+            else
+            {
+                await _mediator.Publish(submissionEvent, cancellationToken);
+            }
         }
 
         await _db.SaveChangesAsync(cancellationToken);
