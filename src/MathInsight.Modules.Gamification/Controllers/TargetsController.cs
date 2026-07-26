@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MathInsight.Modules.Gamification.Commands.TargetScores;
 using MathInsight.Modules.Gamification.Queries.TargetScores;
 using MediatR;
@@ -8,7 +9,7 @@ namespace MathInsight.Modules.Gamification.Controllers;
 
 [ApiController]
 [Route("api/v1/gamification/targets")]
-// [Authorize] - Assuming auth is handled via API gateway or global filters for this snippet
+[Authorize(Roles = "Student")]
 public sealed class TargetsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -21,38 +22,45 @@ public sealed class TargetsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<TargetProgressDto>>> GetMyTargets(CancellationToken cancellationToken)
     {
-        // In a real app, retrieve StudentId from User Claims
-        // var studentId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        // Using a dummy value for demonstration
-        var studentId = "student-123"; 
-        
+        var studentId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(studentId))
+        {
+            return Unauthorized(new { error = "Invalid or missing student identity." });
+        }
+
         var query = new GetTargetProgressQuery(studentId);
         var result = await _mediator.Send(query, cancellationToken);
-        
+
         return Ok(result);
     }
 
     [HttpPost]
     public async Task<ActionResult<string>> CreateTarget([FromBody] CreateTargetRequest request, CancellationToken cancellationToken)
     {
-        // var studentId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var studentId = "student-123"; 
+        var studentId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(studentId))
+        {
+            return Unauthorized(new { error = "Invalid or missing student identity." });
+        }
 
         var command = new SetTargetScoreCommand(studentId, request.TagId, request.TargetPoint);
         var targetId = await _mediator.Send(command, cancellationToken);
-        
+
         return Ok(new { TargetId = targetId });
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateTarget(string id, [FromBody] UpdateTargetRequest request, CancellationToken cancellationToken)
     {
-        // var studentId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var studentId = "student-123"; 
+        var studentId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(studentId))
+        {
+            return Unauthorized(new { error = "Invalid or missing student identity." });
+        }
 
         var command = new UpdateTargetScoreCommand(id, studentId, request.TargetPoint);
         await _mediator.Send(command, cancellationToken);
-        
+
         return NoContent();
     }
 }

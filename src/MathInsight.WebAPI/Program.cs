@@ -17,6 +17,7 @@ using MathInsight.Modules.Recommender;
 using MathInsight.Modules.Learning_Lecture;
 using MathInsight.Modules.Gamification;
 using MathInsight.Modules.Notification_Report;
+using MathInsight.Modules.Notification_Report.Hubs;
 // using MathInsight.Modules.Grading_Analytics.Consumers;
 // using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
@@ -94,7 +95,9 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            // Required for SignalR's negotiate handshake against /hubs/notification.
+            .AllowCredentials();
     });
 });
 // 4. Register Domain Modules (Composition Root)
@@ -291,6 +294,23 @@ builder.Services
         };
         options.Events = new JwtBearerEvents
         {
+            // SignalR's browser client cannot set an Authorization header on the WebSocket
+            // handshake, so it sends the access token via the "access_token" query string
+            // parameter instead (per Microsoft's documented SignalR-with-JWT pattern). Only
+            // honored for the notification hub path — normal REST calls keep using the header.
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
+
             // Diagnostics only — neither handler below changes whether a token is accepted.
             // Fires when token validation throws: bad signature, expired, wrong issuer/audience.
             OnAuthenticationFailed = context =>
@@ -385,7 +405,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Map SignalR Hub for realtime notifications
-// app.MapHub<NotificationHub>("/hubs/notifications");
+// Map SignalR Hub for realtime notifications (BR-20).
+app.MapHub<NotificationHub>("/hubs/notification").RequireAuthorization();
 
 app.Run();
