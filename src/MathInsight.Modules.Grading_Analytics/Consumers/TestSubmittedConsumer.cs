@@ -52,9 +52,10 @@ public class TestSubmittedConsumer : IConsumer<TestSubmittedEvent>
         var gradeEvent = await _orchestrator.GradeSessionAsync(
             notification.SessionId, notification, context.CancellationToken);
 
-        // ── G3: Publish GradeCalculatedEvent via MediatR for in-process consumers ──
+        // ── G3: Publish GradeCalculatedEvent via MassTransit Bus and MediatR ──
         if (gradeEvent is not null)
         {
+            await context.Publish(gradeEvent, context.CancellationToken);
             await _publisher.Publish(gradeEvent, context.CancellationToken);
 
             _logger.LogInformation(
