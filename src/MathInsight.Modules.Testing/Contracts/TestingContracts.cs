@@ -23,6 +23,7 @@ public sealed record TestSessionViewResponse(
     string TestId,
     string TestName,
     string Status,
+    string TestFormat,
     int DurationMinutes,
     decimal MaxScore,
     int RemainingSeconds,

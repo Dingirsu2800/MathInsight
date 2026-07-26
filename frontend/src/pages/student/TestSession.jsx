@@ -99,7 +99,7 @@ export default function TestSession() {
     try {
       const data = await getSessionContent(sessionId);
       const questions = (data.questions || []).map(adaptQuestion);
-      const view = { ...data, questions, testFormat: data.testFormat || 'Exam' };
+      const view = { ...data, questions };
       const persistedAnswers = hydrateAnswers(data.savedAnswers);
       setSession(view);
       setAnswers(persistedAnswers);

@@ -54,6 +54,7 @@ public sealed class SessionResumeAndTimeoutTests
 
         Assert.True(saved.IsSuccess);
         Assert.True(result.IsSuccess);
+        Assert.Equal("Practice", result.Value!.TestFormat);
         Assert.InRange(result.Value!.RemainingSeconds, 1, 3600);
         var multipleChoice = Assert.Single(
             result.Value.SavedAnswers,

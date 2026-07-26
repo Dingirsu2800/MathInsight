@@ -1,10 +1,19 @@
 import axios from 'axios';
 import { getAccessToken } from './authStorage';
 
-const API_BASE_URL =
+const RAW_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:8080/api/v1';
+  'http://localhost:8080';
+
+function normalizeApiBaseUrl(value) {
+  const baseUrl = value.replace(/\/+$/, '');
+  if (baseUrl.endsWith('/api/v1')) return baseUrl;
+  if (baseUrl.endsWith('/api')) return `${baseUrl}/v1`;
+  return `${baseUrl}/api/v1`;
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(RAW_API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,

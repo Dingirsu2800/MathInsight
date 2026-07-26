@@ -92,6 +92,7 @@ public sealed class GetSessionContentQueryHandler
             session.TestId,
             test.TestName,
             session.Status,
+            session.TestFormat,
             test.DurationMinutes,
             test.MaxScore,
             remainingSeconds,
