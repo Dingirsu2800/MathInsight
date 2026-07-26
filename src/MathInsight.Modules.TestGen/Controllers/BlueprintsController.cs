@@ -11,6 +11,7 @@ using MathInsight.Modules.TestGen.Contracts.Tests;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintDetail;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintList;
+using MathInsight.Modules.TestGen.Queries.GetBlueprintGeneratedTests;
 using MathInsight.Modules.TestGen.Queries.GetPendingBlueprints;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -226,6 +227,28 @@ public sealed class BlueprintsController : ControllerBase
         return result.IsFailure
             ? ToErrorResult(result.Error!)
             : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpGet("{blueprintId}/tests")]
+    public async Task<IActionResult> GetGeneratedTests(
+        string blueprintId,
+        [FromQuery] int pageIndex,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new GetBlueprintGeneratedTestsQuery(
+                blueprintId,
+                currentExpertId,
+                pageIndex,
+                pageSize),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
     }
 
     private string? GetCurrentExpertId()

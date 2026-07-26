@@ -7,6 +7,7 @@ using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Modules.TestGen.Queries.GetExpertTestPreview;
+using MathInsight.Modules.TestGen.Queries.GetBlueprintGeneratedTests;
 using MathInsight.Modules.TestGen.Queries.GetSharedBlueprintExams;
 using MathInsight.Modules.TestGen.Queries.ResolveSharedTestCode;
 using MathInsight.Shared.Questions;
@@ -39,6 +40,45 @@ public sealed class SharedBlueprintExamTests
             Assert.Equal(8, code.Length);
             Assert.All(code, character => Assert.Contains(character, alphabet));
         });
+    }
+
+    [Fact]
+    public async Task GetBlueprintGeneratedTests_OwnerReceivesActiveAndArchivedVariants()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        var blueprint = AddBlueprint(testContext, BlueprintId, BlueprintStatuses.Active, OwnerExpertId);
+        AddGeneratedTest(testContext, "active-test", blueprint, "ACTIVE23");
+        AddGeneratedTest(
+            testContext,
+            "archived-test",
+            blueprint,
+            "ARCHIVE2",
+            GeneratedTestValues.ArchivedStatus);
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new GetBlueprintGeneratedTestsQueryHandler(testContext.Context).Handle(
+            new GetBlueprintGeneratedTestsQuery(BlueprintId, OwnerExpertId, 1, 20),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.Value!.TotalCount);
+        Assert.Contains(result.Value.Items, item => item.TestStatus == GeneratedTestValues.ActiveStatus);
+        Assert.Contains(result.Value.Items, item => item.TestStatus == GeneratedTestValues.ArchivedStatus);
+    }
+
+    [Fact]
+    public async Task GetBlueprintGeneratedTests_NonOwner_ReturnsMutationForbidden()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddBlueprint(testContext, BlueprintId, BlueprintStatuses.Active, OwnerExpertId);
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new GetBlueprintGeneratedTestsQueryHandler(testContext.Context).Handle(
+            new GetBlueprintGeneratedTestsQuery(BlueprintId, OtherExpertId, 1, 20),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.MutationForbidden, result.Error);
     }
 
     [Fact]

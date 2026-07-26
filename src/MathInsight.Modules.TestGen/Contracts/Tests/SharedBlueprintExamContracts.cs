@@ -62,6 +62,23 @@ public sealed record PagedSharedBlueprintExamResponse(
     int TotalCount,
     IReadOnlyList<SharedBlueprintExamResponse> Items);
 
+public sealed record ExpertGeneratedTestListItemResponse(
+    string TestId,
+    string BlueprintId,
+    string TestName,
+    string TestCode,
+    string TestStatus,
+    int DurationMinutes,
+    int TotalQuestions,
+    decimal MaxScore,
+    DateTime CreatedTime);
+
+public sealed record PagedExpertGeneratedTestResponse(
+    int PageIndex,
+    int PageSize,
+    int TotalCount,
+    IReadOnlyList<ExpertGeneratedTestListItemResponse> Items);
+
 public sealed record ExpertTestPreviewResponse(
     string TestId,
     string BlueprintId,
