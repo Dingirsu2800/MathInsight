@@ -25,7 +25,22 @@ public sealed record TestSessionViewResponse(
     string Status,
     int DurationMinutes,
     decimal MaxScore,
-    IReadOnlyList<StudentQuestionResponse> Questions);
+    int RemainingSeconds,
+    IReadOnlyList<StudentQuestionResponse> Questions,
+    IReadOnlyList<SavedTestAnswerResponse> SavedAnswers);
+
+public sealed record SavedTestAnswerResponse(
+    string QuestionId,
+    string? AnswerId,
+    string? ShortAnswerText,
+    int? TimeSpent,
+    IReadOnlyList<AutoSaveOptionDto> SelectedOptions,
+    IReadOnlyList<AutoSavePartDto> Parts);
+
+public sealed record SessionAlreadyInProgressResponse(
+    string Code,
+    string Message,
+    string ExistingSessionId);
 
 public sealed record StudentQuestionResponse(
     string QuestionId,

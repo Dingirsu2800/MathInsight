@@ -4,7 +4,9 @@ using MathInsight.Modules.Testing.Commands.RecordIncident;
 using MathInsight.Modules.Testing.Commands.StartSession;
 using MathInsight.Modules.Testing.Commands.SubmitSession;
 using MathInsight.Modules.Testing.Commands.ReportSessionQuestion;
+using MathInsight.Modules.Testing.Commands.TimeoutSubmitSession;
 using MathInsight.Modules.Testing.Contracts;
+using MathInsight.Modules.Testing.Queries.GetInProgressSession;
 using MathInsight.Modules.Testing.Queries.GetSessionContent;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -74,7 +76,20 @@ public class TestSessionsController : ControllerBase
         if (result.IsFailure)
         {
             if (result.Error!.Code == "TESTING_SESSION_ALREADY_IN_PROGRESS")
+            {
+                var existing = await _mediator.Send(
+                    new GetInProgressSessionQuery(request.TestId, studentId),
+                    cancellationToken);
+                if (existing.IsSuccess)
+                {
+                    return Conflict(new SessionAlreadyInProgressResponse(
+                        result.Error.Code,
+                        result.Error.Message,
+                        existing.Value!));
+                }
+
                 return Conflict(new ApiErrorResponse(result.Error));
+            }
 
             if (result.Error.Code == "TESTING_TEST_NOT_FOUND")
                 return NotFound(new ApiErrorResponse(result.Error));
@@ -114,6 +129,9 @@ public class TestSessionsController : ControllerBase
                 return NotFound(new ApiErrorResponse(result.Error));
 
             if (result.Error.Code == "TESTING_SESSION_NOT_IN_PROGRESS")
+                return Conflict(new ApiErrorResponse(result.Error));
+
+            if (result.Error.Code == "TESTING_SESSION_EXPIRED")
                 return Conflict(new ApiErrorResponse(result.Error));
 
             return BadRequest(new ApiErrorResponse(result.Error));
@@ -195,6 +213,42 @@ public class TestSessionsController : ControllerBase
             return Ok(result.Value);
 
         return Accepted(result.Value);
+    }
+
+    /// <summary>
+    /// Force-submits an expired session using the server clock and records TimeoutSubmit.
+    /// </summary>
+    [HttpPost("{id}/timeout-submit")]
+    public async Task<IActionResult> TimeoutSubmitSession(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var studentId = GetStudentId();
+        if (string.IsNullOrWhiteSpace(studentId))
+            return Unauthorized();
+
+        var result = await _mediator.Send(
+            new TimeoutSubmitSessionCommand(id, studentId),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            if (result.Error!.Code == "TESTING_SESSION_NOT_FOUND")
+                return NotFound(new ApiErrorResponse(result.Error));
+
+            if (result.Error.Code is "TESTING_SESSION_NOT_EXPIRED"
+                                     or "TESTING_SESSION_ALREADY_COMPLETED"
+                                     or "TESTING_SESSION_NOT_IN_PROGRESS")
+            {
+                return Conflict(new ApiErrorResponse(result.Error));
+            }
+
+            return BadRequest(new ApiErrorResponse(result.Error));
+        }
+
+        return result.Value!.Status == "Graded"
+            ? Ok(result.Value)
+            : Accepted(result.Value);
     }
 
     /// <summary>

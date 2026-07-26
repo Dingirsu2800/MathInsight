@@ -32,6 +32,14 @@ public static class TestingErrors
         "TESTING_SESSION_ALREADY_COMPLETED",
         "The session has already been graded or abandoned (DC-03).");
 
+    public static readonly Error SessionNotExpired = new(
+        "TESTING_SESSION_NOT_EXPIRED",
+        "The session duration has not expired.");
+
+    public static readonly Error SessionExpired = new(
+        "TESTING_SESSION_EXPIRED",
+        "The session duration has expired and no longer accepts answer changes.");
+
     public static readonly Error SessionNotGraded = new(
         "TESTING_SESSION_NOT_GRADED",
         "The session must be in Graded status to view solutions.");

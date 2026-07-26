@@ -34,6 +34,30 @@ public sealed class GetSessionContentQueryHandler
             return Result<TestSessionViewResponse>.Failure(TestingErrors.TestNotFound);
 
         var rows = await QuestionSnapshotReader.LoadAsync(_db, session.TestId, cancellationToken);
+        var savedAnswers = await _db.TestAnswers
+            .AsNoTracking()
+            .Include(answer => answer.Options)
+            .Include(answer => answer.Parts)
+            .Where(answer => answer.SessionId == session.SessionId)
+            .OrderBy(answer => answer.QuestionNo)
+            .Select(answer => new SavedTestAnswerResponse(
+                answer.QuestionId,
+                answer.AnswerId,
+                answer.ShortAnswerText,
+                answer.TimeSpent,
+                answer.Options
+                    .OrderBy(option => option.AnswerId)
+                    .Select(option => new AutoSaveOptionDto(option.AnswerId))
+                    .ToList(),
+                answer.Parts
+                    .OrderBy(part => part.PartId)
+                    .Select(part => new AutoSavePartDto(
+                        part.PartId,
+                        part.BooleanAnswer,
+                        part.TextAnswer,
+                        part.NumericAnswer))
+                    .ToList()))
+            .ToListAsync(cancellationToken);
         var questions = rows.Values
             .OrderBy(row => row.TestQuestion.QuestionOrder)
             .Select(row => new StudentQuestionResponse(
@@ -58,6 +82,11 @@ public sealed class GetSessionContentQueryHandler
                     .ToList()))
             .ToList();
 
+        var elapsedSeconds = (DateTime.UtcNow - session.StartTime).TotalSeconds;
+        var remainingSeconds = Math.Max(
+            0,
+            (int)Math.Ceiling(test.DurationMinutes * 60 - elapsedSeconds));
+
         return Result<TestSessionViewResponse>.Success(new TestSessionViewResponse(
             session.SessionId,
             session.TestId,
@@ -65,6 +94,8 @@ public sealed class GetSessionContentQueryHandler
             session.Status,
             test.DurationMinutes,
             test.MaxScore,
-            questions));
+            remainingSeconds,
+            questions,
+            savedAnswers));
     }
 }
