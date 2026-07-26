@@ -77,6 +77,44 @@ public sealed class StartSessionAccessIntegrationTests
         Assert.Empty(await db.TestSessions.ToListAsync());
     }
 
+    [Theory]
+    [InlineData("BlueprintExam", "Exam")]
+    [InlineData("Diagnostic", "Exam")]
+    [InlineData("MockTest", "Exam")]
+    [InlineData("AdaptivePractice", "Practice")]
+    [InlineData("TopicPractice", "Practice")]
+    [InlineData("Practice", "Practice")]
+    public async Task StartSession_ValidTestMode_MapsToExpectedTestFormat(string testMode, string expectedFormat)
+    {
+        await using var context = TestingInMemoryContext.Create();
+        var db = context.Context;
+        await TestDataSeeder.SeedActiveTestWithQuestions(db);
+
+        var test = await db.Tests.SingleAsync(item => item.TestId == TestDataSeeder.ActiveTestId);
+        test.TestMode = testMode;
+        await db.SaveChangesAsync();
+
+        var result = await StartAsync(db, TestDataSeeder.ActiveTestId, TestDataSeeder.StudentId);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(expectedFormat, result.Value!.TestFormat);
+    }
+
+    [Fact]
+    public async Task StartSession_UnknownTestMode_ThrowsInvalidOperationException()
+    {
+        await using var context = TestingInMemoryContext.Create();
+        var db = context.Context;
+        await TestDataSeeder.SeedActiveTestWithQuestions(db);
+
+        var test = await db.Tests.SingleAsync(item => item.TestId == TestDataSeeder.ActiveTestId);
+        test.TestMode = "InvalidUnknownMode";
+        await db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => StartAsync(db, TestDataSeeder.ActiveTestId, TestDataSeeder.StudentId));
+    }
+
     [Fact]
     public async Task StartSession_UnusableStudent_Denied()
     {

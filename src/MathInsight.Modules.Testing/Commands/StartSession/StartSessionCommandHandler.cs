@@ -104,11 +104,9 @@ public sealed class StartSessionCommandHandler
             StudentId = request.StudentId,
             TestFormat = test.TestMode switch
             {
-                "BlueprintExam" => "Exam",
-                "Diagnostic" => "Exam",
-                "AdaptivePractice" => "Practice",
-                "TopicPractice" => "Practice",
-                _ => "Practice"
+                "BlueprintExam" or "Diagnostic" or "MockTest" => "Exam",
+                "AdaptivePractice" or "TopicPractice" or "Practice" => "Practice",
+                _ => throw new InvalidOperationException($"Unsupported TestMode '{test.TestMode}' for TestFormat mapping.")
             },
             Status = "InProgress",
             SubmissionType = null,
