@@ -119,6 +119,10 @@ public sealed class SubmitSessionCommandHandler
                 SubmittedTime = now
             };
 
+            // Persist before publishing so a fast consumer cannot grade the session
+            // and then have this DbContext overwrite Graded with Submitted.
+            await _db.SaveChangesAsync(cancellationToken);
+
             if (_publishEndpoint is not null)
             {
                 await _publishEndpoint.Publish(submissionEvent, cancellationToken);
