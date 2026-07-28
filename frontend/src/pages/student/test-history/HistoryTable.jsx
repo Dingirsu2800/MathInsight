@@ -53,7 +53,7 @@ export default function HistoryTable({ filters = {}, onViewDetail }) {
       setError(false);
       try {
         const data = await getSessionHistory({
-          page,
+          pageIndex: page,
           pageSize: PAGE_SIZE,
           testFormat: filters.testFormat || undefined,
           fromDate: filters.fromDate || undefined,
