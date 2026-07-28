@@ -159,7 +159,7 @@ public class GradeSubmittedSessionHandlerTests
         Assert.Equal("Graded", session.Status);
         Assert.Equal(Math.Round(3.0m / 7.0m * 10.0m, 2), result.Score);
         Assert.Equal(2, result.NumCorrect);
-        Assert.Equal(2, result.NumIncorrect); // 1 incorrect + 1 abandoned (counts as both)
+        Assert.Equal(1, result.NumIncorrect); // 1 incorrect (abandoned is counted in NumAbandoned, not NumIncorrect)
         Assert.Equal(1, result.NumAbandoned);
     }
 

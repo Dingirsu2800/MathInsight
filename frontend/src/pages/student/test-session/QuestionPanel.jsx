@@ -101,7 +101,11 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       <span className="w-2 h-2 rounded-full bg-white" />
                     )}
                   </span>
-                  <span className="text-sm text-on-surface">{opt.content}</span>
+                  <div className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {opt.content || ''}
+                    </ReactMarkdown>
+                  </div>
                 </button>
               );
             })}
@@ -132,7 +136,11 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       <span className="material-symbols-outlined text-white text-sm">check</span>
                     )}
                   </span>
-                  <span className="text-sm text-on-surface">{opt.content}</span>
+                  <div className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {opt.content || ''}
+                    </ReactMarkdown>
+                  </div>
                 </button>
               );
             })}
@@ -159,9 +167,14 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
               const partAnswer = (answer?.parts || []).find((p) => p.partId === part.partId);
               return (
                 <div key={part.partId} className="p-4 bg-surface-container-low rounded-xl border border-whisper-border">
-                  <p className="text-sm text-on-surface mb-3 font-medium">
-                    Phần {idx + 1}: {part.content || ''}
-                  </p>
+                  <div className="text-sm text-on-surface mb-3 font-medium flex items-baseline gap-1">
+                    <span>Phần {idx + 1}:</span>
+                    <div className="prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {part.content || ''}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
                   {part.answerType === 'BOOLEAN' ? (
                     <div className="flex gap-3">
                       {[{ label: 'Đúng', val: true }, { label: 'Sai', val: false }].map((opt) => (

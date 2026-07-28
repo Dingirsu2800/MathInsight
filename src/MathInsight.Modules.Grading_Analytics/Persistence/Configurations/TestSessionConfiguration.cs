@@ -29,5 +29,8 @@ public class TestSessionConfiguration : IEntityTypeConfiguration<TestSession>
         builder.HasMany(x => x.TestAnswers)
                .WithOne(a => a.Session)
                .HasForeignKey(a => a.SessionId);
+        builder.HasOne(x => x.Test)
+               .WithMany()
+               .HasForeignKey(x => x.TestId);
     }
 }

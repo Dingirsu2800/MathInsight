@@ -7,6 +7,7 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 public class Test
 {
     public string TestId { get; set; } = string.Empty;
+    public string TestName { get; set; } = string.Empty;
 
     /// <summary>Total score for this test, e.g. 10.00.</summary>
     public decimal MaxScore { get; set; }

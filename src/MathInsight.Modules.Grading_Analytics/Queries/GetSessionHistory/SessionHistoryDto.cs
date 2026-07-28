@@ -7,6 +7,7 @@ public sealed record SessionHistoryDto
 {
     public string SessionId { get; init; } = string.Empty;
     public string TestId { get; init; } = string.Empty;
+    public string TestName { get; init; } = string.Empty;
     /// <summary>Practice | Exam</summary>
     public string TestFormat { get; init; } = string.Empty;
     /// <summary>Graded | Abandoned</summary>

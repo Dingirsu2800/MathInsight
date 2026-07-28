@@ -35,6 +35,8 @@ public sealed record GradedAnswerDetailDto
     public string SolutionContent { get; init; } = string.Empty;
     public string DifficultyId { get; init; } = string.Empty;
     public byte DifficultyLevel { get; init; }
+    public string TagId { get; init; } = string.Empty;
+    public string TopicName { get; init; } = string.Empty;
     /// <summary>Null when session is not yet graded (InProgress).</summary>
     public bool? IsCorrect { get; init; }
     public decimal PointsEarned { get; init; }

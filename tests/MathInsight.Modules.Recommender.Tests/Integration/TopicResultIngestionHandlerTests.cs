@@ -155,8 +155,8 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Assert.NotNull(mastery);
         // ExamAnchor after one exam result = T1 = 9.00
         Assert.Equal(9.00m, mastery.ExamAnchor);
-        // OfficialPoint = 0.7×9 + 0.3×5 (initial practice) = 6.3 + 1.5 = 7.8
-        Assert.Equal(7.80m, mastery.OfficialPoint);
+        // OfficialPoint = 0.7×9 + 0.3×0 (initial practice) = 6.30
+        Assert.Equal(6.30m, mastery.OfficialPoint);
     }
 
     // ── Test: TagsMastery unique key is (student_id, tag_id) only ──────────────
@@ -314,8 +314,8 @@ public class TopicResultIngestionHandlerTests : IDisposable
         var mastery = await _db.TagsMasteries
             .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
-        // PracticePoint started at 5.00 (lazy-create), Δ=+0.05 → 5.05
-        Assert.Equal(5.05m, mastery.PracticePoint);
+        // PracticePoint started at 0.00 (lazy-create), Δ=+0.05 → 0.05
+        Assert.Equal(0.05m, mastery.PracticePoint);
     }
 
     [Fact]
@@ -325,13 +325,13 @@ public class TopicResultIngestionHandlerTests : IDisposable
         var tagId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var original = MakePracticeEvent(
-            studentId, sessionId, tagId, isCorrect: false, difficultyLevel: 2);
+            studentId, sessionId, tagId, isCorrect: true, difficultyLevel: 2);
         await _handler.Handle(original, default);
 
         var revisedAnswers = original.Answers.Select(answer => answer with
         {
             IsCorrect = true,
-            MachineIsCorrect = false,
+            MachineIsCorrect = true,
             IsScoreInvalidated = true,
             PointsEarned = 1m
         }).ToList();
@@ -358,7 +358,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
         }, default);
 
         var mastery = await _db.TagsMasteries.SingleAsync();
-        Assert.Equal(5.00m, mastery.PracticePoint);
+        Assert.Equal(0.00m, mastery.PracticePoint);
         Assert.Equal(0, mastery.NumberDone);
         Assert.Equal(0, mastery.NumCorrect);
         Assert.Equal(0m, mastery.AccuracyRate);
@@ -398,8 +398,8 @@ public class TopicResultIngestionHandlerTests : IDisposable
         var mastery = await _db.TagsMasteries
             .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
-        // OfficialPoint = 0.7*9 + 0.3*5 = 7.80. PracticePoint must be reset to OfficialPoint (7.80)
-        Assert.Equal(7.80m, mastery.OfficialPoint);
+        // OfficialPoint = 0.7*9 + 0.3*0 = 6.30. PracticePoint must be reset to OfficialPoint (6.30)
+        Assert.Equal(6.30m, mastery.OfficialPoint);
         Assert.Equal(mastery.OfficialPoint, mastery.PracticePoint);
     }
 }

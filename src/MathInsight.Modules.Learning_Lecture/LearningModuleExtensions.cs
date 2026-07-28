@@ -10,7 +10,12 @@ public static class LearningModuleExtensions
     public static IServiceCollection AddLearningModule(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<LearningDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(
+                configuration.GetConnectionString("DefaultConnection"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null)));
 
         services.AddMediatR(config =>
         {

@@ -111,7 +111,7 @@ public sealed class BadgeService : IBadgeService
         try
         {
             await using var command = _dbContext.Database.GetDbConnection().CreateCommand();
-            command.CommandText = "SELECT COUNT(*) FROM [TestAnswer] WHERE StudentID = @studentId AND IsCorrect = 1";
+            command.CommandText = "SELECT COUNT(*) FROM [TestAnswer] ta INNER JOIN [TestSession] ts ON ta.SessionID = ts.SessionID WHERE ts.StudentID = @studentId AND ta.IsCorrect = 1";
             
             var param = command.CreateParameter();
             param.ParameterName = "@studentId";

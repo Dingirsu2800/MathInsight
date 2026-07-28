@@ -34,7 +34,8 @@ public sealed class RecommenderService : IRecommenderService
             select new WeakTagDto(
                 tm.TagId,
                 tt.TagName,
-                tm.OfficialPoint)
+                tm.OfficialPoint,
+                tm.NumberDone)
         ).ToListAsync(cancellationToken);
 
         return weakTags;
