@@ -37,5 +37,12 @@ public class LectureConfiguration : IEntityTypeConfiguration<Lecture>
         builder.HasMany(x => x.DiscussionQuestions)
             .WithOne(x => x.Lecture)
             .HasForeignKey(x => x.LectureId);
+
+        builder.Property(x => x.NextLectureId).IsUnicode(false).HasMaxLength(36);
+
+        builder.HasOne(x => x.NextLecture)
+            .WithMany()
+            .HasForeignKey(x => x.NextLectureId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

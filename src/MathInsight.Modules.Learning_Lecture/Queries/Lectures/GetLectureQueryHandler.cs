@@ -27,6 +27,7 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
             .AsNoTracking()
             .Include(x => x.LectureMaterials)
                 .ThenInclude(lm => lm.Material)
+            .Include(x => x.NextLecture)
             .FirstOrDefaultAsync(x => x.LectureId == request.LectureId, cancellationToken);
 
         if (lecture == null) throw new Exception("Lecture not found");
@@ -76,7 +77,10 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
                     TeacherId = lm.Material.TeacherId,
                     Status = lm.Material.Status,
                     UploadedTime = lm.Material.UploadedTime
-                }).ToList()
+                }).ToList(),
+            NextLectureId = lecture.NextLectureId,
+            NextLectureTitle = lecture.NextLecture?.Title,
+            NextLectureThumbnailUrl = lecture.NextLecture?.ThumbnailUrl
         };
     }
 }

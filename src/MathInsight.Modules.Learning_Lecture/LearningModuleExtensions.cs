@@ -22,6 +22,9 @@ public static class LearningModuleExtensions
             config.RegisterServicesFromAssembly(typeof(LearningModuleExtensions).Assembly);
         });
 
+        services.Configure<Configuration.MistralOcrOptions>(configuration.GetSection("MistralOcr"));
+        services.AddHttpClient<Ocr.ILectureOcrService, Ocr.MistralLectureOcrService>();
+        
         return services;
     }
 }
