@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import StudentLayout from "./StudentLayout";
+import StudentLayout from "../../components/layout/StudentLayout";
 import { getLectures, getTopics } from "../../services/learningApi";
 
 export default function StudentLectureListPage() {
