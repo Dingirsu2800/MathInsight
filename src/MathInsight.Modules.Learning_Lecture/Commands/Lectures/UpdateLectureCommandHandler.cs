@@ -31,6 +31,7 @@ public class UpdateLectureCommandHandler : IRequestHandler<UpdateLectureCommand,
         lecture.VideoUrl = request.VideoUrl;
         lecture.ThumbnailUrl = request.ThumbnailUrl;
         lecture.TagId = request.TagId;
+        lecture.NextLectureId = request.NextLectureId;
         lecture.UpdatedTime = DateTime.UtcNow;
 
         if (request.MaterialIds != null)

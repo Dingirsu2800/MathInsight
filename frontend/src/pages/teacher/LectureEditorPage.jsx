@@ -2,8 +2,10 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { createLecture, getLecture, updateLecture, getTopics, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
+import { getLectures, createLecture, getLecture, updateLecture, getTopics, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
+import MathTextArea from "../../components/common/MathTextArea";
+import { toast } from "../../components/common/Toast";
 
 export default function LectureEditorPage() {
   const navigate = useNavigate();
@@ -18,35 +20,20 @@ export default function LectureEditorPage() {
     thumbnailFile: null,
     thumbnailUrl: "",
     materialIds: [],
+    nextLectureId: "",
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [topics, setTopics] = useState([]);
+  const [availableLectures, setAvailableLectures] = useState([]);
   const [attachedMaterials, setAttachedMaterials] = useState([]);
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
+  const [isExtractingOcr, setIsExtractingOcr] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState("12");
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
-  const [isMathHelperOpen, setIsMathHelperOpen] = useState(false);
-  const contentTextareaRef = useRef(null);
   const materialInputRef = useRef(null);
-
-  const handleInsertLatex = (latex) => {
-    const textarea = contentTextareaRef.current;
-    if (textarea) {
-      const startPos = textarea.selectionStart;
-      const endPos = textarea.selectionEnd;
-      const text = form.content;
-      const newText = text.substring(0, startPos) + latex + text.substring(endPos, text.length);
-      setForm(prev => ({ ...prev, content: newText }));
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(startPos + latex.length, startPos + latex.length);
-      }, 0);
-    } else {
-      setForm(prev => ({ ...prev, content: prev.content + " " + latex }));
-    }
-  };
+  const ocrInputRef = useRef(null);
 
   useEffect(() => {
     const flattenTopics = (nodes, parentPath = "") => {
@@ -73,6 +60,15 @@ export default function LectureEditorPage() {
   }, [selectedGrade]);
 
   useEffect(() => {
+    // Fetch available lectures for Next Lecture dropdown
+    getLectures({ pageSize: 200 })
+      .then((res) => {
+        // Exclude current lecture from the list to avoid self-referencing
+        const filtered = (res.data?.items || []).filter(l => l.lectureId !== id);
+        setAvailableLectures(filtered);
+      })
+      .catch((err) => console.error("Lỗi khi tải danh sách bài giảng:", err));
+
     if (!isEdit) return;
     getLecture(id)
       .then((res) => {
@@ -84,7 +80,8 @@ export default function LectureEditorPage() {
           videoUrl: data.videoUrl || "",
           thumbnailFile: null,
           thumbnailUrl: data.thumbnailUrl || "",
-          materialIds: (data.materials || []).map(m => m.id || m.materialId)
+          materialIds: (data.materials || []).map(m => m.id || m.materialId),
+          nextLectureId: data.nextLectureId || "",
         });
         setAttachedMaterials(data.materials || []);
         if (data.thumbnailUrl) {
@@ -112,6 +109,10 @@ export default function LectureEditorPage() {
     try {
       let currentLectureId = id;
       let finalForm = { ...form };
+      // Convert empty string to null for nextLectureId
+      if (finalForm.nextLectureId === "") {
+        finalForm.nextLectureId = null;
+      }
 
       if (form.thumbnailFile) {
         const formData = new FormData();
@@ -129,15 +130,15 @@ export default function LectureEditorPage() {
 
       if (isPublish && currentLectureId) {
         await publishLecture(currentLectureId);
-        alert("Xuất bản bài giảng thành công!");
+        toast.success("Xuất bản bài giảng thành công!");
       } else {
-        alert(isEdit ? "Cập nhật bài giảng thành công!" : "Tạo bài giảng thành công!");
+        toast.success(isEdit ? "Cập nhật bài giảng thành công!" : "Tạo bài giảng thành công!");
       }
 
-      navigate("/teacher/lectures");
+      setTimeout(() => navigate("/teacher/lectures"), 1200);
     } catch (err) {
       console.error("Lưu bài giảng thất bại:", err);
-      alert("Đã xảy ra lỗi khi lưu bài giảng!");
+      toast.error("Đã xảy ra lỗi khi lưu bài giảng!");
     } finally {
       setSaving(false);
       setPublishing(false);
@@ -193,6 +194,45 @@ export default function LectureEditorPage() {
       ...prev,
       materialIds: prev.materialIds.filter(id => id !== matId)
     }));
+  };
+
+  const handleExtractOcr = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 20 * 1024 * 1024) {
+      alert("Kích thước tệp vượt quá 20MB!");
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
+      return;
+    }
+
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      alert("Chỉ hỗ trợ file PDF hoặc ảnh (JPG, PNG)!");
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
+      return;
+    }
+
+    setIsExtractingOcr(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const { extractLectureOcr } = await import('../../services/learningApi');
+      const res = await extractLectureOcr(formData);
+      
+      const newText = res.data.markdown;
+      setForm(prev => ({
+        ...prev,
+        content: prev.content ? prev.content + "\n\n" + newText : newText
+      }));
+      alert("Đã nhận diện thành công nội dung từ ảnh!");
+    } catch (err) {
+      console.error("Lỗi OCR ảnh", err);
+      alert(err.response?.data?.message || "Đã xảy ra lỗi khi quét ảnh OCR");
+    } finally {
+      setIsExtractingOcr(false);
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -320,6 +360,28 @@ export default function LectureEditorPage() {
                       </div>
                     </div>
                   </div>
+
+                  <div className="space-y-4 lg:col-span-2">
+                    {/* Next Lecture Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Bài giảng tiếp theo (Gợi ý cho học sinh)</label>
+                      <div className="relative">
+                        <select
+                          className={`appearance-none ${fieldClass("")} pr-10`}
+                          value={form.nextLectureId || ""}
+                          onChange={(e) => setForm((f) => ({ ...f, nextLectureId: e.target.value }))}
+                        >
+                          <option value="">Không thiết lập (Kết thúc)</option>
+                          {availableLectures.map((l) => (
+                            <option key={l.lectureId} value={l.lectureId}>{l.title}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
+                          <span className="material-symbols-outlined">expand_more</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -330,94 +392,49 @@ export default function LectureEditorPage() {
                 </label>
                 <div className="border border-outline-variant rounded-lg overflow-hidden bg-pure-surface focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
                   {/* Toolbar */}
-                  <div className="bg-surface-container-low border-b border-outline-variant px-3 py-2 flex items-center gap-2">
-                    {["format_bold", "format_italic", "format_underlined"].map((icon) => (
-                      <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
-                        <span className="material-symbols-outlined text-[18px]">{icon}</span>
-                      </button>
-                    ))}
-                    <div className="w-[1px] h-4 bg-outline-variant mx-1" />
-                    {["format_list_bulleted", "format_list_numbered"].map((icon) => (
-                      <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
-                        <span className="material-symbols-outlined text-[18px]">{icon}</span>
-                      </button>
-                    ))}
-                    <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
-                    <button
-                      type="button"
-                      onClick={() => setIsMathHelperOpen(!isMathHelperOpen)}
-                      className={`px-2 py-1 rounded text-xs font-bold transition-all duration-150 flex items-center gap-1 cursor-pointer active:scale-[0.97] ${
-                        isMathHelperOpen
-                          ? "bg-primary text-white shadow-sm scale-[1.01]"
-                          : "hover:bg-surface-container hover:-translate-y-0.5 text-primary bg-primary/5"
-                      }`}
-                      title="Mở công cụ chèn công thức LaTeX"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">calculate</span>
-                      Mã toán
-                    </button>
-                  </div>
-
-                  {/* Math Helper Panel */}
-                  {isMathHelperOpen && (
-                    <div className="bg-surface-container-lowest border-b border-outline-variant p-4 space-y-4 mi-panel-down">
-                      <div>
-                        <h5 className="text-[10px] font-black text-on-surface-variant mb-2 uppercase tracking-wider">Mã toán nhanh:</h5>
-                        <div className="flex flex-wrap gap-2">
-                          {[
-                            { label: "Tích phân", code: "\\int_{a}^{b} f(x) dx" },
-                            { label: "Nguyên hàm", code: "\\int f(x) dx" },
-                            { label: "Đạo hàm", code: "f'(x) = \\lim_{\\Delta x \\to 0} \\frac{\\Delta y}{\\Delta x}" },
-                            { label: "Giới hạn", code: "\\lim_{x \\to x_0} f(x)" },
-                            { label: "Phân số", code: "\\frac{a}{b}" },
-                            { label: "Căn thức", code: "\\sqrt{x^2 + 1}" }
-                          ].map((sym, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => handleInsertLatex(`$${sym.code}$`)}
-                              className="flex items-center gap-2 bg-pure-surface hover:bg-surface-container border border-whisper-border px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 active:scale-[0.96] cursor-pointer"
-                            >
-                              <div className="scale-90 select-none">
-                                <LatexPreview content={`$${sym.code}$`} />
-                              </div>
-                              <span className="text-[10px] text-on-surface-variant font-mono bg-surface-container-low px-1.5 py-0.5 rounded">
-                                {sym.code}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h5 className="text-[10px] font-black text-on-surface-variant mb-2 uppercase tracking-wider">Ký tự Hy Lạp:</h5>
-                        <div className="flex flex-wrap gap-1.5">
-                          {["\\alpha", "\\beta", "\\gamma", "\\delta", "\\theta", "\\lambda", "\\pi", "\\omega", "\\Delta"].map((sym, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => handleInsertLatex(`$${sym}$`)}
-                              className="flex flex-col items-center justify-center bg-pure-surface hover:bg-surface-container border border-whisper-border min-w-[50px] py-1 rounded-lg text-xs transition-all duration-150 active:scale-[0.96] cursor-pointer text-center"
-                            >
-                              <div className="scale-100 select-none h-6 flex items-center justify-center">
-                                <LatexPreview content={`$${sym}$`} />
-                              </div>
-                              <span className="text-[9px] text-on-surface-variant font-mono mt-0.5">
-                                {sym}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                  <div className="bg-surface-container-low border-b border-outline-variant px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {["format_bold", "format_italic", "format_underlined"].map((icon) => (
+                        <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                        </button>
+                      ))}
+                      <div className="w-[1px] h-4 bg-outline-variant mx-1" />
+                      {["format_list_bulleted", "format_list_numbered"].map((icon) => (
+                        <button key={icon} type="button" className="p-1 rounded text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                        </button>
+                      ))}
+                      <div className="w-px h-6 bg-outline-variant mx-1 self-center"></div>
                     </div>
-                  )}
-                  <textarea
-                    ref={contentTextareaRef}
-                    className="w-full min-h-[200px] bg-pure-surface px-4 py-3 text-[14px] text-on-surface placeholder:text-outline border-none focus:ring-0 resize-y"
-                    id="content"
-                    placeholder="Nhập nội dung chi tiết... Hỗ trợ mã LaTeX bọc trong dấu $ hoặc $$"
+                    
+                    <div>
+                      <input
+                        type="file"
+                        accept=".pdf, image/png, image/jpeg, image/jpg"
+                        className="hidden"
+                        ref={ocrInputRef}
+                        onChange={handleExtractOcr}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => ocrInputRef.current?.click()}
+                        disabled={isExtractingOcr}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-primary text-white rounded-md text-[13px] font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {isExtractingOcr ? "sync" : "document_scanner"}
+                        </span>
+                        {isExtractingOcr ? "Đang xử lý..." : "Nhập PDF/Ảnh (OCR)"}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <MathTextArea
                     value={form.content}
                     onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                    minHeight="min-h-[200px]"
+                    className="border-none rounded-none focus-within:ring-0 focus-within:border-none"
                   />
                 </div>
                 {/* Preview Box */}
