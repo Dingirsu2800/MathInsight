@@ -7,7 +7,12 @@ public sealed record BlueprintExamCandidate(
     string DifficultyId,
     string QuestionType,
     IReadOnlySet<string> TagIds,
-    IReadOnlySet<string> SupportedScoringRules);
+    IReadOnlySet<string> SupportedScoringRules,
+    int PartCount = 0);
+
+public sealed record BlueprintExamCandidatePool(
+    IReadOnlyList<BlueprintExamCandidate> Candidates,
+    IReadOnlyList<BlueprintExamCandidate> InvalidVersionCandidates);
 
 public sealed record BlueprintExamRequirement(
     string BlueprintDetailId,
@@ -17,7 +22,8 @@ public sealed record BlueprintExamRequirement(
     string DifficultyId,
     string QuestionType,
     string ScoringRule,
-    int Quantity);
+    int Quantity,
+    int? PartCountPerQuestion = null);
 
 public sealed record BlueprintExamAssignment(
     string QuestionId,
@@ -29,3 +35,10 @@ public sealed record BlueprintExamAssignment(
 public sealed record BlueprintExamSelection(
     bool IsComplete,
     IReadOnlyList<BlueprintExamAssignment> Assignments);
+
+public sealed record PreparedBlueprintExamQuestion(
+    BlueprintExamAssignment Assignment,
+    BlueprintExamCandidate Candidate,
+    string ScoringRule,
+    int QuestionOrder,
+    decimal MaxPoints);

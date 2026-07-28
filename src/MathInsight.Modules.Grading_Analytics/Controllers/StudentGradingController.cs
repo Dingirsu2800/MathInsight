@@ -74,6 +74,7 @@ public class StudentGradingController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] int page = 1,
+        [FromQuery] int pageIndex = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? testFormat = null,
         [FromQuery] DateTime? fromDate = null,
@@ -84,10 +85,12 @@ public class StudentGradingController : ControllerBase
         if (studentId is null)
             return Unauthorized(new { error = "Invalid or missing student identity." });
 
+        var actualPage = page > 1 ? page : pageIndex;
+
         var result = await _mediator.Send(
             new GetSessionHistoryQuery(
                 studentId,
-                page,
+                actualPage,
                 pageSize,
                 testFormat,
                 fromDate,

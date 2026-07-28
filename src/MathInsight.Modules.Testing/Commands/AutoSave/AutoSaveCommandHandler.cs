@@ -36,6 +36,13 @@ public sealed class AutoSaveCommandHandler
         if (session.Status != "InProgress")
             return Result<AutoSaveResponse>.Failure(TestingErrors.SessionNotInProgress);
 
+        var now = DateTime.UtcNow;
+        if (session.Test is not null &&
+            now >= session.StartTime.AddMinutes(session.Test.DurationMinutes))
+        {
+            return Result<AutoSaveResponse>.Failure(TestingErrors.SessionExpired);
+        }
+
         // 2. Load existing answers for this session
         var existingAnswers = await _db.TestAnswers
             .Include(a => a.Options)
@@ -48,8 +55,6 @@ public sealed class AutoSaveCommandHandler
             _db,
             session.TestId,
             cancellationToken);
-        var now = DateTime.UtcNow;
-
         // 3. Batch update answers
         foreach (var dto in request.Answers)
         {
@@ -121,7 +126,9 @@ public sealed class AutoSaveCommandHandler
         // 4. Calculate remaining time
         var durationMinutes = session.Test?.DurationMinutes ?? 0;
         var elapsed = (now - session.StartTime).TotalSeconds;
-        var remainingSeconds = Math.Max(0, (int)(durationMinutes * 60 - elapsed));
+        var remainingSeconds = Math.Max(
+            0,
+            (int)Math.Ceiling(durationMinutes * 60 - elapsed));
 
         return Result<AutoSaveResponse>.Success(
             new AutoSaveResponse(SavedAt: now, RemainingSeconds: remainingSeconds));

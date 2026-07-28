@@ -29,9 +29,7 @@ public class TestSession
     public decimal Score { get; set; }
     public int GradeRevision { get; set; }
 
-    /// <summary>Current grading revision. Incremented when score is recalculated (e.g., after report invalidation).</summary>
-    public int GradeRevision { get; set; }
-
     // Navigation (read-only for Grading)
+    public Test? Test { get; set; }
     public ICollection<TestAnswer> TestAnswers { get; set; } = new List<TestAnswer>();
 }

@@ -10,7 +10,11 @@ public static class TestingErrors
 
     public static readonly Error TestNotActive = new(
         "TESTING_TEST_NOT_ACTIVE",
-        "The test is not in ACTIVE status and cannot be started.");
+        "The test is not in Active status and cannot be started.");
+
+    public static readonly Error TestAccessDenied = new(
+        "TESTING_TEST_ACCESS_DENIED",
+        "The student is not allowed to start this test.");
 
     public static readonly Error SessionNotFound = new(
         "TESTING_SESSION_NOT_FOUND",
@@ -27,6 +31,14 @@ public static class TestingErrors
     public static readonly Error SessionAlreadyCompleted = new(
         "TESTING_SESSION_ALREADY_COMPLETED",
         "The session has already been graded or abandoned (DC-03).");
+
+    public static readonly Error SessionNotExpired = new(
+        "TESTING_SESSION_NOT_EXPIRED",
+        "The session duration has not expired.");
+
+    public static readonly Error SessionExpired = new(
+        "TESTING_SESSION_EXPIRED",
+        "The session duration has expired and no longer accepts answer changes.");
 
     public static readonly Error SessionNotGraded = new(
         "TESTING_SESSION_NOT_GRADED",

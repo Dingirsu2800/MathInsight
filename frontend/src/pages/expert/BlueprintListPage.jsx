@@ -12,6 +12,8 @@ import { getBlueprintActions } from "../../utils/blueprintAuth";
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { cn } from "../../utils/cn";
 
+import { getAccountId } from "../../services/authStorage";
+
 function getPaginationItems(totalPages, currentPage) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -63,7 +65,7 @@ export default function BlueprintListPage() {
   const [cloneLoading, setCloneLoading] = useState(false);
   const [cloneError, setCloneError] = useState("");
 
-  const currentAccountId = localStorage.getItem("AccountId");
+  const currentAccountId = getAccountId();
   const menuRef = useRef(null);
 
   // Read navigate state feedback once on mount or location change

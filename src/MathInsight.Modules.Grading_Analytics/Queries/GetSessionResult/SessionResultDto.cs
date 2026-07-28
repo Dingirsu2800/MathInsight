@@ -35,6 +35,8 @@ public sealed record GradedAnswerDetailDto
     public string SolutionContent { get; init; } = string.Empty;
     public string DifficultyId { get; init; } = string.Empty;
     public byte DifficultyLevel { get; init; }
+    public string TagId { get; init; } = string.Empty;
+    public string TopicName { get; init; } = string.Empty;
     /// <summary>Null when session is not yet graded (InProgress).</summary>
     public bool? IsCorrect { get; init; }
     public decimal PointsEarned { get; init; }
@@ -45,7 +47,7 @@ public sealed record GradedAnswerDetailDto
     /// <summary>True when the question was invalidated due to a confirmed report.</summary>
     public bool IsScoreInvalidated { get; init; }
     /// <summary>The ReportID that caused invalidation, if any.</summary>
-    public Guid? InvalidatedByReportId { get; init; }
+    public string? InvalidatedByReportId { get; init; }
     /// <summary>For SINGLE_CHOICE / TRUE_FALSE.</summary>
     public string? SelectedOptionId { get; init; }
     /// <summary>For SHORT_ANSWER.</summary>
@@ -55,7 +57,6 @@ public sealed record GradedAnswerDetailDto
     public IReadOnlyList<AnswerOptionDetailDto> AnswerOptions { get; init; } = [];
     /// <summary>For COMPOSITE.</summary>
     public IReadOnlyList<AnswerPartDetailDto> AnswerParts { get; init; } = [];
-    public bool IsScoreInvalidated { get; init; }
     public string? ReportReason { get; init; }
     public DateTime? ScoreAdjustedTime { get; init; }
 }

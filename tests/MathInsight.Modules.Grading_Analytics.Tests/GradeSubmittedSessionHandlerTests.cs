@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Grading_Analytics.Services;
 
 namespace MathInsight.Modules.Grading_Analytics.Tests;
@@ -154,11 +155,98 @@ public class GradeSubmittedSessionHandlerTests
         session.NumIncorrect = result.NumIncorrect;
         session.NumAbandoned = result.NumAbandoned;
 
-        // Assert: 2 + 0 + 0 + 1 = 3 earned, 2 + 2 + 2 + 1 = 7 max â†’ 3/7 * 10 â‰ˆ 4.29
+        // Assert: 2 + 0 + 0 + 1 = 3 earned, 2 + 2 + 2 + 1 = 7 max → 3/7 * 10 ≈ 4.29
         Assert.Equal("Graded", session.Status);
         Assert.Equal(Math.Round(3.0m / 7.0m * 10.0m, 2), result.Score);
         Assert.Equal(2, result.NumCorrect);
-        Assert.Equal(2, result.NumIncorrect); // 1 incorrect + 1 abandoned (counts as both)
+        Assert.Equal(1, result.NumIncorrect); // 1 incorrect (abandoned is counted in NumAbandoned, not NumIncorrect)
         Assert.Equal(1, result.NumAbandoned);
+    }
+
+    [Fact]
+    public async Task GradeSessionAsync_MapsDifficultyLevel_FromTagDifficulty()
+    {
+        // Arrange
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<MathInsight.Modules.Grading_Analytics.Persistence.GradingDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var db = new MathInsight.Modules.Grading_Analytics.Persistence.GradingDbContext(options);
+
+        var difficulty1 = new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TagDifficultyReadOnly { DifficultyId = "diff-easy", LevelValue = 1 };
+        var difficulty3 = new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TagDifficultyReadOnly { DifficultyId = "diff-hard", LevelValue = 3 };
+        db.TagDifficulties.AddRange(difficulty1, difficulty3);
+
+        var testId = Guid.NewGuid().ToString("D");
+        var sessionId = Guid.NewGuid().ToString("D");
+        var studentId = Guid.NewGuid().ToString("D");
+
+        var q1 = new MathInsight.Modules.Grading_Analytics.Persistence.Entities.Question
+        {
+            QuestionId = "q1",
+            QuestionType = "SINGLE_CHOICE",
+            DefaultWeight = 1.0m,
+            DifficultyId = "diff-easy",
+            QuestionContent = "Q1",
+            Answers = [new MathInsight.Modules.Grading_Analytics.Persistence.Entities.Answer { AnswerId = "a1", QuestionId = "q1", IsCorrect = true }]
+        };
+        var q2 = new MathInsight.Modules.Grading_Analytics.Persistence.Entities.Question
+        {
+            QuestionId = "q2",
+            QuestionType = "SINGLE_CHOICE",
+            DefaultWeight = 2.0m,
+            DifficultyId = "diff-hard",
+            QuestionContent = "Q2",
+            Answers = [new MathInsight.Modules.Grading_Analytics.Persistence.Entities.Answer { AnswerId = "a2", QuestionId = "q2", IsCorrect = true }]
+        };
+        db.Questions.AddRange(q1, q2);
+
+        db.TestQuestions.AddRange(
+            new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TestQuestion { TestId = testId, QuestionId = "q1", MaxPointsSnapshot = 1.0m },
+            new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TestQuestion { TestId = testId, QuestionId = "q2", MaxPointsSnapshot = 2.0m }
+        );
+
+        var session = new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TestSession
+        {
+            SessionId = sessionId,
+            TestId = testId,
+            StudentId = studentId,
+            TestFormat = "Practice",
+            Status = "InProgress",
+            StartTime = DateTime.UtcNow.AddMinutes(-10),
+            TestAnswers =
+            [
+                new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TestAnswer { TestAnswerId = "ta1", SessionId = sessionId, QuestionId = "q1", AnswerId = "a1", Question = q1 },
+                new MathInsight.Modules.Grading_Analytics.Persistence.Entities.TestAnswer { TestAnswerId = "ta2", SessionId = sessionId, QuestionId = "q2", AnswerId = "a2", Question = q2 }
+            ]
+        };
+        db.TestSessions.Add(session);
+        await db.SaveChangesAsync();
+
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<GradingOrchestrator>.Instance;
+        var orchestrator = new GradingOrchestrator(db, new GradingEngine(), logger);
+
+        var notification = new MathInsight.Shared.Events.TestSubmittedEvent
+        {
+            SessionId = sessionId,
+            StudentId = studentId,
+            TestId = testId,
+            TestFormat = "Practice",
+            SubmissionType = "StudentSubmit",
+            SubmittedTime = DateTime.UtcNow
+        };
+
+        // Act
+        var gradeEvent = await orchestrator.GradeSessionAsync(sessionId, notification);
+
+        // Assert
+        Assert.NotNull(gradeEvent);
+        Assert.Equal(2, gradeEvent.Answers.Count);
+
+        var ans1 = gradeEvent.Answers.Single(a => a.QuestionId == "q1");
+        var ans2 = gradeEvent.Answers.Single(a => a.QuestionId == "q2");
+
+        Assert.Equal(1, ans1.DifficultyLevel);
+        Assert.Equal(3, ans2.DifficultyLevel);
     }
 }

@@ -7,4 +7,5 @@ namespace MathInsight.Modules.Recommender.Contracts;
 public sealed record WeakTagDto(
     string TagId,
     string TagName,
-    decimal OfficialPoint);
+    decimal OfficialPoint,
+    int NumberDone = 0);

@@ -28,6 +28,7 @@ public static class TestGenModuleExtensions
         services.AddScoped<IBlueprintExamCandidateProvider, BlueprintExamCandidateProvider>();
         services.AddScoped<IBlueprintExamQuestionSelector, CapacityAwareQuestionSelector>();
         services.AddSingleton<IGenerationRandomizer, SystemGenerationRandomizer>();
+        services.AddSingleton<ITestCodeGenerator, SecureTestCodeGenerator>();
 
         return services;
     }

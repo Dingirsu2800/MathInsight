@@ -1,25 +1,83 @@
+import { useEffect, useState } from 'react';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
-
-// TODO: Replace with real API data.
-// Needs multiple endpoints (not yet implemented in backend):
-//   - Điểm năng lực: GET /api/v1/reports/competency-summary → competencyPoint
-//   - Bài đã làm: GET /api/v1/reports/student-stats → totalSessionsCompleted
-//   - Chuỗi ngày: GET /api/v1/gamification/streak → currentStreak
-//   - Huy hiệu: GET /api/v1/gamification/badges → badgeCount
-const MOCK_STATS = [
-  { label: 'Điểm năng lực', value: '6.8 / 10', icon: 'insights', colorClass: 'text-primary', hoverBg: 'group-hover:bg-primary' },
-  { label: 'Bài đã làm', value: '1,248', icon: 'history_edu', colorClass: 'text-primary', hoverBg: 'group-hover:bg-primary' },
-  { label: 'Chuỗi ngày 🔥', value: '12 Ngày', icon: 'local_fire_department', colorClass: 'text-deep-rose', hoverBg: 'group-hover:bg-deep-rose' },
-  { label: 'Huy hiệu 🏅', value: '24', icon: 'workspace_premium', colorClass: 'text-emerald-success', hoverBg: 'group-hover:bg-emerald-success' },
-];
+import { getStudentHistoryStats } from '../../../services/gradingApi';
+import { getWeakTags } from '../../../services/recommenderApi';
 
 export default function StatCards() {
+  const [stats, setStats] = useState(null);
+  const [competencyScore, setCompetencyScore] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    Promise.allSettled([
+      getStudentHistoryStats(),
+      getWeakTags()
+    ]).then(([historyRes, weakTagsRes]) => {
+      if (cancelled) return;
+
+      if (historyRes.status === 'fulfilled' && historyRes.value) {
+        setStats(historyRes.value);
+      }
+
+      if (weakTagsRes.status === 'fulfilled' && Array.isArray(weakTagsRes.value) && weakTagsRes.value.length > 0) {
+        const tags = weakTagsRes.value;
+        const avg = tags.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / tags.length;
+        setCompetencyScore(Math.round(avg * 10) / 10);
+      } else if (historyRes.status === 'fulfilled' && historyRes.value?.averageScore != null) {
+        setCompetencyScore(Math.round(Number(historyRes.value.averageScore) * 10) / 10);
+      }
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const totalSessions = stats?.totalSessions ?? 0;
+  const sessionsLast30Days = stats?.sessionsLast30Days ?? 0;
+  const accuracyPercent = stats?.accuracyPercent ?? 0;
+  const compDisplay = competencyScore != null ? `${competencyScore} / 10` : '—';
+
+  const cards = [
+    {
+      label: 'Điểm năng lực',
+      value: compDisplay,
+      icon: 'insights',
+      colorClass: 'text-primary',
+      hoverBg: 'group-hover:bg-primary'
+    },
+    {
+      label: 'Bài đã làm',
+      value: loading ? '—' : String(totalSessions),
+      icon: 'history_edu',
+      colorClass: 'text-primary',
+      hoverBg: 'group-hover:bg-primary'
+    },
+    {
+      label: 'Tỉ lệ chính xác',
+      value: loading ? '—' : `${accuracyPercent.toFixed(1)}%`,
+      icon: 'check_circle',
+      colorClass: 'text-tertiary',
+      hoverBg: 'group-hover:bg-tertiary'
+    },
+    {
+      label: 'Bài làm (30 ngày)',
+      value: loading ? '—' : `${sessionsLast30Days} bài`,
+      icon: 'date_range',
+      colorClass: 'text-emerald-success',
+      hoverBg: 'group-hover:bg-emerald-success'
+    },
+  ];
+
   return (
     <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {MOCK_STATS.map((stat) => (
+      {cards.map((stat) => (
         <div
           key={stat.label}
-          className="bg-pure-surface border border-whisper-border p-5 rounded-2xl flex items-center gap-4 group hover:border-primary/30 transition-all cursor-default"
+          className="bg-pure-surface border border-whisper-border p-5 rounded-2xl flex items-center gap-4 group hover:border-primary/30 transition-all cursor-default shadow-sm"
         >
           <div
             className={`w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center ${stat.colorClass} ${stat.hoverBg} group-hover:text-white transition-colors`}
@@ -28,7 +86,9 @@ export default function StatCards() {
           </div>
           <div>
             <p className="text-outline text-xs font-medium">{stat.label}</p>
-            <h3 className="text-xl font-semibold text-on-surface">{stat.value}</h3>
+            <h3 className={`text-xl font-semibold text-on-surface ${loading ? 'animate-pulse' : ''}`}>
+              {stat.value}
+            </h3>
           </div>
         </div>
       ))}

@@ -1,4 +1,4 @@
-﻿using MathInsight.Modules.Grading_Analytics.Services;
+using MathInsight.Modules.Grading_Analytics.Services;
 
 using MathInsight.Shared.Questions;
 using MathInsight.Shared.Scoring;
@@ -210,7 +210,7 @@ public class GradingEngineTests
         Assert.False(answer.IsCorrect);
         Assert.Equal(0m, answer.PointsEarned);
         Assert.Equal(1, result.NumAbandoned);
-        Assert.Equal(1, result.NumIncorrect); // Abandoned counts as incorrect too
+        Assert.Equal(0, result.NumIncorrect); // Abandoned counts in NumAbandoned, not NumIncorrect
         Assert.Equal(0, result.NumCorrect);
     }
 

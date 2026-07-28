@@ -46,9 +46,6 @@ public sealed record GradeCalculatedEvent : MediatR.INotification
     /// </summary>
     public IReadOnlyList<GradedAnswerDto> Answers { get; init; } = [];
 
-    /// <summary>Current grading revision. Increases on re-grade (e.g., after report invalidation).</summary>
-    public int GradeRevision { get; init; }
-
     public DateTime GradedAt { get; init; }
 }
 
@@ -92,12 +89,6 @@ public sealed record GradedAnswerDto
     /// True if the student did not submit any answer for this question (abandoned per BR-16b).
     /// </summary>
     public bool IsAbandoned { get; init; }
-
-    /// <summary>
-    /// True when the question was invalidated due to a confirmed report.
-    /// Effective points = MaxPoints when invalidated.
-    /// </summary>
-    public bool IsScoreInvalidated { get; init; }
 }
 
 /// <summary>

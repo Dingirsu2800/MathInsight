@@ -41,15 +41,41 @@ export default function TestResultPage() {
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
+    let pollTimer = null;
+    let pollCount = 0;
+    const MAX_POLLS = 15;
+    const POLL_INTERVAL_MS = 2000;
+
+    const fetchResult = async () => {
+      try {
+        const data = await getSessionResult(sessionId);
+        if (cancelled) return;
+
+        // If grading is still in progress, poll until Graded
+        if (data.status !== 'Graded' && pollCount < MAX_POLLS) {
+          pollCount++;
+          pollTimer = setTimeout(fetchResult, POLL_INTERVAL_MS);
+          return;
+        }
+
+        setResult(data);
+        setLoading(false);
+      } catch {
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
+      }
+    };
+
     setLoading(true);
     setError(false);
+    fetchResult();
 
-    getSessionResult(sessionId)
-      .then((data) => { if (!cancelled) setResult(data); })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, [sessionId]);
 
   const filteredAnswers = useMemo(() => {

@@ -29,6 +29,7 @@ public sealed class GetSessionResultQueryHandler
             .AsNoTracking()
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.Question)
+                    .ThenInclude(q => q.QuestionTopics)
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.SelectedOptions)
             .Include(s => s.TestAnswers)
@@ -48,6 +49,14 @@ public sealed class GetSessionResultQueryHandler
             .Where(tq => tq.TestId == session.TestId)
             .ToDictionaryAsync(tq => tq.QuestionId, cancellationToken);
 
+        var difficultyLevels = await _db.TagDifficulties
+            .AsNoTracking()
+            .ToDictionaryAsync(td => td.DifficultyId, td => td.LevelValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        var tagTopics = await _db.TagTopics
+            .AsNoTracking()
+            .ToDictionaryAsync(tt => tt.TagId, tt => tt.TagName, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
         var answers = session.TestAnswers
             .OrderBy(a => a.QuestionNo)
             .Select(a =>
@@ -55,13 +64,30 @@ public sealed class GetSessionResultQueryHandler
                 var tq = testQuestions.GetValueOrDefault(a.QuestionId);
                 decimal maxPoints = tq?.MaxPointsSnapshot ?? a.Question.DefaultWeight;
 
+                byte difficultyLevel = 1;
+                if (!string.IsNullOrEmpty(a.Question.DifficultyId) &&
+                    difficultyLevels.TryGetValue(a.Question.DifficultyId, out var level))
+                {
+                    difficultyLevel = (byte)level;
+                }
+
+                var primaryTopic = a.Question.QuestionTopics.FirstOrDefault(qt => qt.IsPrimary)
+                    ?? a.Question.QuestionTopics.FirstOrDefault();
+                string tagId = primaryTopic?.TagId ?? string.Empty;
+                string topicName = !string.IsNullOrEmpty(tagId) && tagTopics.TryGetValue(tagId, out var tName)
+                    ? tName
+                    : string.Empty;
+
                 return new GradedAnswerDetailDto
                 {
                     QuestionId = a.QuestionId,
                     QuestionNo = a.QuestionNo,
                     QuestionType = a.Question.QuestionType,
                     QuestionContent = a.Question.QuestionContent,
-                    DifficultyLevel = a.Question.DifficultyLevel,
+                    DifficultyId = a.Question.DifficultyId,
+                    DifficultyLevel = difficultyLevel,
+                    TagId = tagId,
+                    TopicName = topicName,
                     IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
                     PointsEarned = a.PointsEarned,
                     MaxPoints = maxPoints,

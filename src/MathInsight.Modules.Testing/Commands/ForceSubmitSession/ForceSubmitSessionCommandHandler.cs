@@ -1,3 +1,4 @@
+using MassTransit;
 using MathInsight.Modules.Testing.Contracts;
 using MathInsight.Modules.Testing.Errors;
 using MathInsight.Modules.Testing.Persistence;
@@ -13,11 +14,16 @@ public sealed class ForceSubmitSessionCommandHandler
 {
     private readonly TestingDbContext _db;
     private readonly IMediator _mediator;
+    private readonly IPublishEndpoint? _publishEndpoint;
 
-    public ForceSubmitSessionCommandHandler(TestingDbContext db, IMediator mediator)
+    public ForceSubmitSessionCommandHandler(
+        TestingDbContext db,
+        IMediator mediator,
+        IPublishEndpoint? publishEndpoint = null)
     {
         _db = db;
         _mediator = mediator;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<Result<SubmitSessionResponse>> Handle(
@@ -32,20 +38,26 @@ public sealed class ForceSubmitSessionCommandHandler
         if (session is null)
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotFound);
 
-        // 2. Validate Status = InProgress
-        if (session.Status != "InProgress")
+        // 2. Validate Status = InProgress or already Graded (idempotent retry)
+        if (session.Status is not "InProgress" and not "Graded")
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotInProgress);
 
-        // 3. Set EndTime and SubmissionType
+        // 2b. If already Graded, return success directly (idempotent retry)
+        if (session.Status == "Graded")
+        {
+            return Result<SubmitSessionResponse>.Success(
+                new SubmitSessionResponse(
+                    SessionId: session.SessionId,
+                    Status: session.Status,
+                    SubmissionType: session.SubmissionType ?? request.SubmissionType,
+                    NumAbandoned: session.NumAbandoned,
+                    Score: null));
+        }
+
+        // 3. Prepare timestamps for the event
         var now = DateTime.UtcNow;
-        session.EndTime = now;
-        session.SubmissionType = request.SubmissionType; // TimeoutSubmit or SystemSubmit
-        session.Duration = (int)(now - session.StartTime).TotalSeconds;
 
-        // 4. Count abandoned answers (BR-16b)
-        session.NumAbandoned = await CountAbandonedAnswers(request.SessionId, cancellationToken);
-
-        // 5. Grading based on test format
+        // 4. Grading based on test format
         var isPractice = string.Equals(session.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase);
 
         var submissionEvent = new TestSubmittedEvent
@@ -60,23 +72,36 @@ public sealed class ForceSubmitSessionCommandHandler
 
         if (isPractice)
         {
-            // Practice mode: invoke Grading via MediatR in-process
+            // Practice mode: invoke Grading via MediatR in-process (synchronous).
+            // GradingOrchestrator will set Status=Graded, SubmissionType, EndTime, Score
+            // atomically within a transaction, satisfying all check constraints.
             await _mediator.Publish(submissionEvent, cancellationToken);
             await _db.Entry(session).ReloadAsync(cancellationToken);
         }
         else
         {
-            // Exam mode: publish to MassTransit queue for async grading
-            await _mediator.Publish(submissionEvent, cancellationToken);
-        }
+            // Exam mode: publish event for async grading, return immediately.
+            // DB constraints (CK_TestSession_Status, CK_TestSession_SubmissionType_Status)
+            // prevent saving SubmissionType while Status='InProgress', so we delegate
+            // ALL state changes to GradingOrchestrator which sets them atomically.
+            // Discard any tracked changes to prevent accidental save.
+            _db.Entry(session).State = EntityState.Unchanged;
 
-        await _db.SaveChangesAsync(cancellationToken);
+            if (_publishEndpoint is not null)
+            {
+                await _publishEndpoint.Publish(submissionEvent, cancellationToken);
+            }
+            else
+            {
+                await _mediator.Publish(submissionEvent, cancellationToken);
+            }
+        }
 
         return Result<SubmitSessionResponse>.Success(
             new SubmitSessionResponse(
                 SessionId: session.SessionId,
                 Status: session.Status,
-                SubmissionType: session.SubmissionType,
+                SubmissionType: session.SubmissionType ?? request.SubmissionType,
                 NumAbandoned: session.NumAbandoned,
                 Score: isPractice ? session.Score : null));
     }

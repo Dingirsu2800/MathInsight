@@ -17,8 +17,19 @@ const ICON_POOL = [
   { name: 'schema', bg: 'bg-emerald-success/20', color: 'text-emerald-success' },
 ];
 
-/** Derive visual style from officialPoint (0–10) */
-function getTopicStyle(score) {
+/** Derive visual style from officialPoint (0–10) and numberDone */
+function getTopicStyle(score, numberDone = 0) {
+  if (numberDone === 0) {
+    return {
+      status: 'Chưa làm',
+      statusClass: 'bg-surface-container-high text-on-surface-variant',
+      barColor: 'bg-surface-container-highest',
+      badgeBorder: 'border-outline/30',
+      badgeText: 'text-on-surface-variant',
+      flagged: false,
+      isUnpracticed: true,
+    };
+  }
   if (score < 5) {
     return {
       status: 'Cần cải thiện',
@@ -27,6 +38,7 @@ function getTopicStyle(score) {
       badgeBorder: 'border-error',
       badgeText: 'text-error',
       flagged: true,
+      isUnpracticed: false,
     };
   }
   if (score < 7.5) {
@@ -37,6 +49,7 @@ function getTopicStyle(score) {
       badgeBorder: 'border-amber-warning',
       badgeText: 'text-amber-warning',
       flagged: false,
+      isUnpracticed: false,
     };
   }
   return {
@@ -46,6 +59,7 @@ function getTopicStyle(score) {
     badgeBorder: 'border-emerald-success',
     badgeText: 'text-emerald-success',
     flagged: false,
+    isUnpracticed: false,
   };
 }
 
@@ -139,7 +153,8 @@ export default function TopicMasteryGrid() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {sorted.map((topic, idx) => {
             const score = Number(topic.officialPoint || 0);
-            const style = getTopicStyle(score);
+            const numberDone = Number(topic.numberDone ?? 0);
+            const style = getTopicStyle(score, numberDone);
             const icon = ICON_POOL[idx % ICON_POOL.length];
 
             return (
@@ -160,6 +175,14 @@ export default function TopicMasteryGrid() {
                     </div>
                   </div>
                 )}
+                {style.isUnpracticed && (
+                  <div className="absolute top-0 right-0">
+                    <div className="bg-surface-container-highest text-on-surface-variant text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1">
+                      <MaterialIcon name="info" size={12} />
+                      CHƯA BẮT ĐẦU
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-between items-start mb-4">
                   <div className={`p-2 rounded-lg ${icon.bg}`}>
@@ -171,7 +194,9 @@ export default function TopicMasteryGrid() {
                 </div>
 
                 <h4 className="text-base font-bold mb-1 text-on-surface">{topic.tagName}</h4>
-                <p className="text-on-surface-variant text-sm mb-4">Năng lực chuyên đề</p>
+                <p className="text-on-surface-variant text-sm mb-4">
+                  {style.isUnpracticed ? 'Chưa làm bài tập/bài thi' : 'Năng lực chuyên đề'}
+                </p>
 
                 <div className="flex items-center gap-4 mt-auto">
                   <div className="flex-1">

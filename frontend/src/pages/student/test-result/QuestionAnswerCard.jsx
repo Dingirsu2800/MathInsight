@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
 /**
@@ -54,7 +57,11 @@ export default function QuestionAnswerCard({
             )}
           </div>
         )}
-        <p className="text-base mb-4 text-on-surface">{question}</p>
+        <div className="text-base mb-4 text-on-surface prose prose-sm max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {question || ''}
+          </ReactMarkdown>
+        </div>
 
         {/* Options grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -82,7 +89,14 @@ export default function QuestionAnswerCard({
                 key={opt.label}
                 className={`p-4 border rounded-lg flex items-center justify-between text-sm ${borderClass} ${bgClass}`}
               >
-                <span>{opt.label}. {opt.text}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">{opt.label}.</span>
+                  <div className="prose prose-sm max-w-none inline-block">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {opt.text || ''}
+                    </ReactMarkdown>
+                  </div>
+                </div>
                 {iconEl}
               </div>
             );
@@ -113,7 +127,11 @@ export default function QuestionAnswerCard({
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết:</h4>
               <div className="space-y-3 text-sm text-on-surface-variant">
                 {solution.map((step, i) => (
-                  <p key={i}>{step}</p>
+                  <div key={i} className="prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {step}
+                    </ReactMarkdown>
+                  </div>
                 ))}
               </div>
               <button className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm">

@@ -9,21 +9,31 @@ import { useEffect, useRef, useState } from 'react';
 export default function SessionTimer({ remainingSeconds, onTimeUp }) {
   const [seconds, setSeconds] = useState(Math.max(0, Math.floor(remainingSeconds)));
   const onTimeUpRef = useRef(onTimeUp);
+  const timeoutTriggeredRef = useRef(false);
   onTimeUpRef.current = onTimeUp;
 
   // Sync when server gives a new remainingSeconds (e.g. after auto-save response)
   useEffect(() => {
-    setSeconds(Math.max(0, Math.floor(remainingSeconds)));
+    const nextSeconds = Math.max(0, Math.floor(remainingSeconds));
+    if (nextSeconds > 0) timeoutTriggeredRef.current = false;
+    setSeconds(nextSeconds);
   }, [remainingSeconds]);
 
   // Tick every second
   useEffect(() => {
-    if (seconds <= 0) return;
+    if (seconds <= 0) {
+      if (!timeoutTriggeredRef.current) {
+        timeoutTriggeredRef.current = true;
+        onTimeUpRef.current?.();
+      }
+      return undefined;
+    }
 
     const interval = setInterval(() => {
       setSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+          timeoutTriggeredRef.current = true;
           onTimeUpRef.current?.();
           return 0;
         }

@@ -69,6 +69,14 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
           </ReactMarkdown>
         </div>
 
+        {q.pictureUrl && (
+          <img
+            src={q.pictureUrl}
+            alt={`Minh họa câu ${q.questionNo}`}
+            className="max-h-80 w-auto max-w-full object-contain rounded-lg border border-whisper-border mb-6"
+          />
+        )}
+
         {/* SINGLE_CHOICE / TRUE_FALSE */}
         {(type === 'SINGLE_CHOICE' || type === 'SINGLECHOICE' || type === 'TRUE_FALSE' || type === 'TRUEFALSE') && (
           <div className="space-y-3">
@@ -93,7 +101,11 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       <span className="w-2 h-2 rounded-full bg-white" />
                     )}
                   </span>
-                  <span className="text-sm text-on-surface">{opt.content}</span>
+                  <div className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {opt.content || ''}
+                    </ReactMarkdown>
+                  </div>
                 </button>
               );
             })}
@@ -101,7 +113,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
         )}
 
         {/* MULTIPLE_SELECT */}
-        {(type === 'MULTIPLE_SELECT' || type === 'MULTIPLESELECT') && (
+        {(type === 'MULTIPLE_SELECT' || type === 'MULTIPLESELECT' || type === 'MULTIPLECHOICE') && (
           <div className="space-y-3">
             {(q.options || []).map((opt) => {
               const isSelected = (answer?.selectedOptions || []).includes(opt.optionId);
@@ -124,7 +136,11 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       <span className="material-symbols-outlined text-white text-sm">check</span>
                     )}
                   </span>
-                  <span className="text-sm text-on-surface">{opt.content}</span>
+                  <div className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {opt.content || ''}
+                    </ReactMarkdown>
+                  </div>
                 </button>
               );
             })}
@@ -151,9 +167,14 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
               const partAnswer = (answer?.parts || []).find((p) => p.partId === part.partId);
               return (
                 <div key={part.partId} className="p-4 bg-surface-container-low rounded-xl border border-whisper-border">
-                  <p className="text-sm text-on-surface mb-3 font-medium">
-                    Phần {idx + 1}: {part.content || ''}
-                  </p>
+                  <div className="text-sm text-on-surface mb-3 font-medium flex items-baseline gap-1">
+                    <span>Phần {idx + 1}:</span>
+                    <div className="prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {part.content || ''}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
                   {part.answerType === 'BOOLEAN' ? (
                     <div className="flex gap-3">
                       {[{ label: 'Đúng', val: true }, { label: 'Sai', val: false }].map((opt) => (
@@ -170,6 +191,15 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                         </button>
                       ))}
                     </div>
+                  ) : part.answerType === 'NUMERIC' || part.answerType === 'NUMBER' ? (
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      className="w-full border border-whisper-border rounded-lg px-3 py-2 text-sm text-on-surface bg-pure-surface focus:border-primary outline-none transition-colors"
+                      placeholder="Nhập kết quả..."
+                      value={partAnswer?.numericAnswer ?? ''}
+                      onChange={(e) => handlePartAnswer(part.partId, 'numericAnswer', e.target.value)}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -197,6 +227,7 @@ function formatType(type) {
     TRUEFALSE: 'Đúng / Sai',
     MULTIPLE_SELECT: 'Chọn nhiều',
     MULTIPLESELECT: 'Chọn nhiều',
+    MULTIPLECHOICE: 'Chọn nhiều',
     SHORT_ANSWER: 'Tự luận',
     SHORTANSWER: 'Tự luận',
     COMPOSITE: 'Tổng hợp',

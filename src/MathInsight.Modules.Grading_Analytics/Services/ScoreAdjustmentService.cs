@@ -98,6 +98,10 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                     .Include(item => item.QuestionVersion)
                     .ToListAsync(ct);
 
+                var difficultyLevels = await _db.TagDifficulties
+                    .AsNoTracking()
+                    .ToDictionaryAsync(td => td.DifficultyId, td => td.LevelValue, StringComparer.OrdinalIgnoreCase, ct);
+
                 foreach (var session in sessions)
                 {
                     var byQuestion = allTestQuestions
@@ -107,7 +111,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                     RecalculateSession(session, byQuestion);
                     if (testsNeedingRevision.Contains(session.TestId))
                         session.GradeRevision = Math.Max(1, session.GradeRevision + 1);
-                    events.Add(BuildGradeEvent(session, byQuestion));
+                    events.Add(BuildGradeEvent(session, byQuestion, difficultyLevels));
                 }
             }
 
@@ -172,7 +176,8 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
 
     private static GradeCalculatedEvent BuildGradeEvent(
         TestSession session,
-        IReadOnlyDictionary<string, TestQuestion> testQuestions)
+        IReadOnlyDictionary<string, TestQuestion> testQuestions,
+        IReadOnlyDictionary<string, int> difficultyLevels)
     {
         var answers = new List<GradedAnswerDto>();
         var tagStats = new Dictionary<string, (decimal Correct, decimal Total, decimal Earned, decimal Max)>(
@@ -190,6 +195,13 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
             var earned = invalidated ? testQuestion.MaxPointsSnapshot : answer.PointsEarned;
             var isAbandoned = !invalidated && IsAbandoned(answer, snapshot.QuestionType);
 
+            byte difficultyLevel = 1;
+            if (!string.IsNullOrEmpty(answer.Question?.DifficultyId) &&
+                difficultyLevels.TryGetValue(answer.Question.DifficultyId, out var level))
+            {
+                difficultyLevel = (byte)level;
+            }
+
             answers.Add(new GradedAnswerDto
             {
                 QuestionId = answer.QuestionId,
@@ -204,7 +216,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                 PointsEarned = earned,
                 MaxPoints = testQuestion.MaxPointsSnapshot,
                 TimeSpent = answer.TimeSpent ?? 0,
-                DifficultyLevel = 1,
+                DifficultyLevel = difficultyLevel,
                 QuestionNo = answer.QuestionNo,
                 IsAbandoned = isAbandoned
             });
@@ -281,7 +293,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
 
     private static QuestionSnapshotV2 DeserializeSnapshot(TestQuestion testQuestion)
     {
-        if (testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
+        if (testQuestion.QuestionVersion is null || testQuestion.QuestionVersion.SnapshotSchemaVersion != 2)
             throw new InvalidOperationException(
                 $"Unsupported snapshot schema for version '{testQuestion.QuestionVersionId}'.");
 

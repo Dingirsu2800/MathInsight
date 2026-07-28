@@ -13,7 +13,12 @@ public static class QuestionBankModuleExtensions
     public static IServiceCollection AddQuestionBankModule(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<QuestionBankDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(
+                configuration.GetConnectionString("DefaultConnection"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null)));
 
         services
             .AddOptions<MistralOcrOptions>()

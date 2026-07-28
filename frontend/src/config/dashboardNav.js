@@ -88,8 +88,7 @@ export const studentNavItems = [
   {
     label: "Kiểm tra",
     path: "/student/test",
-    icon: "quiz",
-    disabled: true
+    icon: "quiz"
   },
   {
     // Role-agnostic profile page (UC-04); "/student/profile" is not a registered route.

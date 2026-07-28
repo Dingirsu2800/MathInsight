@@ -50,7 +50,7 @@ export default function HistoricalProgressChart() {
     setLoading(true);
 
     // Fetch enough data to aggregate — up to 200 most recent sessions
-    getSessionHistory({ page: 1, pageSize: 200 })
+    getSessionHistory({ pageIndex: 1, pageSize: 200 })
       .then((data) => {
         if (cancelled) return;
         const items = data.items || [];

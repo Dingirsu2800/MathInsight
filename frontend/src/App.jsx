@@ -16,6 +16,8 @@ import LandingPage from './pages/LandingPage.jsx';
 import BlueprintListPage from './pages/expert/BlueprintListPage.jsx';
 import BlueprintEditorPage from './pages/expert/BlueprintEditorPage.jsx';
 import BlueprintDetailPage from './pages/expert/BlueprintDetailPage.jsx';
+import GeneratedTestPreviewPage from './pages/expert/GeneratedTestPreviewPage.jsx';
+import SharedBlueprintExamDiscoveryPage from './pages/student/SharedBlueprintExamDiscoveryPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterStudentPage from './pages/RegisterStudentPage.jsx';
 import RegisterTeacherPage from './pages/RegisterTeacherPage.jsx';
@@ -72,7 +74,8 @@ export default function App() {
         <Route path="/student/competency" element={<CompetencyPage />} />
         <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
         <Route path="/student/test-result" element={<TestResultPage />} />
-        <Route path="/student/test/:testId" element={<TestSession />} />
+        <Route path="/student/test" element={<SharedBlueprintExamDiscoveryPage />} />
+        <Route path="/student/test/:sessionId" element={<TestSession />} />
         <Route path="/student/lectures" element={<StudentLectureListPage />} />
         <Route path="/student/lectures/:id" element={<StudentLectureDetailPage />} />
       </Route>
@@ -97,6 +100,7 @@ export default function App() {
         <Route path="/expert/blueprints/new" element={<BlueprintEditorPage />} />
         <Route path="/expert/blueprints/:blueprintId" element={<BlueprintDetailPage />} />
         <Route path="/expert/blueprints/:blueprintId/edit" element={<BlueprintEditorPage />} />
+        <Route path="/expert/tests/:testId/preview" element={<GeneratedTestPreviewPage />} />
 
         {/* Teacher Routes */}
         <Route path="/teacher/lectures" element={<LectureListPage />} />
