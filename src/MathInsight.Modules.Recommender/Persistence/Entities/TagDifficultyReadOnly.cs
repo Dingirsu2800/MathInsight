@@ -7,6 +7,6 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 public class TagDifficultyReadOnly
 {
     public string DifficultyId { get; set; } = string.Empty;
-    public byte LevelValue { get; set; }
+    public int LevelValue { get; set; }
     public string DifficultyName { get; set; } = string.Empty;
 }

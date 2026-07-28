@@ -177,7 +177,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
     private static GradeCalculatedEvent BuildGradeEvent(
         TestSession session,
         IReadOnlyDictionary<string, TestQuestion> testQuestions,
-        IReadOnlyDictionary<string, byte> difficultyLevels)
+        IReadOnlyDictionary<string, int> difficultyLevels)
     {
         var answers = new List<GradedAnswerDto>();
         var tagStats = new Dictionary<string, (decimal Correct, decimal Total, decimal Earned, decimal Max)>(
@@ -199,7 +199,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
             if (!string.IsNullOrEmpty(answer.Question?.DifficultyId) &&
                 difficultyLevels.TryGetValue(answer.Question.DifficultyId, out var level))
             {
-                difficultyLevel = level;
+                difficultyLevel = (byte)level;
             }
 
             answers.Add(new GradedAnswerDto

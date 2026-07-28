@@ -150,7 +150,7 @@ public class GradingOrchestrator : IGradingOrchestrator
         TestSubmittedEvent notification,
         Dictionary<string, TestQuestion> testQuestions,
         Test? test,
-        Dictionary<string, byte> difficultyLevels)
+        Dictionary<string, int> difficultyLevels)
     {
         var gradedAnswers = new List<GradedAnswerDto>();
 
@@ -180,7 +180,7 @@ public class GradingOrchestrator : IGradingOrchestrator
             if (!string.IsNullOrEmpty(answer.Question.DifficultyId) &&
                 difficultyLevels.TryGetValue(answer.Question.DifficultyId, out var level))
             {
-                difficultyLevel = level;
+                difficultyLevel = (byte)level;
             }
 
             gradedAnswers.Add(new GradedAnswerDto

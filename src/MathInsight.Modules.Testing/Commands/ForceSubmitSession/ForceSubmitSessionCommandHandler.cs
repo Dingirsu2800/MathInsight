@@ -78,9 +78,18 @@ public sealed class ForceSubmitSessionCommandHandler
                 await _publishEndpoint.Publish(submissionEvent, cancellationToken);
             }
             await _mediator.Publish(submissionEvent, cancellationToken);
+            await _db.Entry(session).ReloadAsync(cancellationToken);
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        if (session.Status == "Graded")
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            return Result<SubmitSessionResponse>.Failure(
+                new Error("TESTING_GRADING_FAILED", "Hệ thống chưa hoàn tất chấm điểm phiên làm bài."));
+        }
 
         return Result<SubmitSessionResponse>.Success(
             new SubmitSessionResponse(

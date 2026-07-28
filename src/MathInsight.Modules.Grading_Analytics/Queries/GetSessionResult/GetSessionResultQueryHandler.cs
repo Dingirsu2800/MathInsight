@@ -63,7 +63,7 @@ public sealed class GetSessionResultQueryHandler
                 if (!string.IsNullOrEmpty(a.Question.DifficultyId) &&
                     difficultyLevels.TryGetValue(a.Question.DifficultyId, out var level))
                 {
-                    difficultyLevel = level;
+                    difficultyLevel = (byte)level;
                 }
 
                 return new GradedAnswerDetailDto
