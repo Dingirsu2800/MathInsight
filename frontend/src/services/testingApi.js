@@ -78,3 +78,15 @@ export async function getDetailedSolution(sessionId) {
   const response = await api.get(`/tests/sessions/${sessionId}/solution`);
   return response.data;
 }
+
+/**
+ * UC-Practice: Tạo phiên luyện tập theo chủ đề (tag) và mức độ gợi ý.
+ * Backend: POST /api/v1/tests/sessions/start-practice
+ * @param {string} tagId - UUID của tag chủ đề
+ * @param {string} [difficulty] - 'Easy' | 'Medium' | 'Hard' | 'Expert'
+ * @returns {Promise<{ sessionId: string }>}
+ */
+export async function startPracticeSession(tagId, difficulty) {
+  const response = await api.post('/tests/sessions/start-practice', { tagId, difficulty });
+  return response.data;
+}

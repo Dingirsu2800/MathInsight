@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import StudentLayout from '../../components/layout/StudentLayout';
+import ExamLayout from '../../components/layout/ExamLayout';
 import QuestionPanel from './test-session/QuestionPanel';
 import QuestionNav from './test-session/QuestionNav';
 import SessionTimer from './test-session/SessionTimer';
@@ -271,12 +271,12 @@ export default function TestSession() {
   }, [handleTimeoutSubmit]);
 
   if (loading) {
-    return <StudentLayout><div className="flex items-center justify-center py-24"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div></StudentLayout>;
+    return <ExamLayout><div className="flex items-center justify-center py-24"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div></ExamLayout>;
   }
 
   if (error || !session) {
     return (
-      <StudentLayout>
+      <ExamLayout>
         <div className="flex items-center justify-center py-24">
           <div className="bg-pure-surface border border-whisper-border rounded-xl p-8 max-w-md text-center shadow-sm">
             <span className="material-symbols-outlined text-4xl text-deep-rose mb-3">error</span>
@@ -301,13 +301,13 @@ export default function TestSession() {
             </div>
           </div>
         </div>
-      </StudentLayout>
+      </ExamLayout>
     );
   }
 
   return (
-    <StudentLayout>
-      <div className="space-y-6">
+    <ExamLayout>
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-on-surface">{session.testName}</h2>
@@ -336,6 +336,6 @@ export default function TestSession() {
       </div>
 
       <SubmitConfirmModal isOpen={showSubmitModal} unansweredCount={unansweredCount} totalQuestions={questions.length} onConfirm={handleConfirmSubmit} onCancel={() => setShowSubmitModal(false)} submitting={submitting} />
-    </StudentLayout>
+    </ExamLayout>
   );
 }
