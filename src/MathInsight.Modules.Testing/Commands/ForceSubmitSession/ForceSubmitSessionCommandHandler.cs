@@ -38,9 +38,21 @@ public sealed class ForceSubmitSessionCommandHandler
         if (session is null)
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotFound);
 
-        // 2. Validate Status = InProgress
-        if (session.Status != "InProgress")
+        // 2. Validate Status = InProgress or already Submitted/Graded (idempotent)
+        if (session.Status is not "InProgress" and not "Submitted" and not "Graded")
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotInProgress);
+
+        // 2b. If already Graded, return success directly (idempotent retry)
+        if (session.Status == "Graded")
+        {
+            return Result<SubmitSessionResponse>.Success(
+                new SubmitSessionResponse(
+                    SessionId: session.SessionId,
+                    Status: session.Status,
+                    SubmissionType: session.SubmissionType ?? request.SubmissionType,
+                    NumAbandoned: session.NumAbandoned,
+                    Score: null));
+        }
 
         // 3. Set EndTime and SubmissionType
         var now = DateTime.UtcNow;
@@ -66,29 +78,26 @@ public sealed class ForceSubmitSessionCommandHandler
 
         if (isPractice)
         {
-            // Practice mode: invoke Grading via MediatR in-process
+            // Practice mode: invoke Grading via MediatR in-process (synchronous)
             await _mediator.Publish(submissionEvent, cancellationToken);
             await _db.Entry(session).ReloadAsync(cancellationToken);
-        }
-        else
-        {
-            // Exam mode: publish to MassTransit queue for async grading when available
-            if (_publishEndpoint is not null)
-            {
-                await _publishEndpoint.Publish(submissionEvent, cancellationToken);
-            }
-            await _mediator.Publish(submissionEvent, cancellationToken);
-            await _db.Entry(session).ReloadAsync(cancellationToken);
-        }
-
-        if (session.Status == "Graded")
-        {
             await _db.SaveChangesAsync(cancellationToken);
         }
         else
         {
-            return Result<SubmitSessionResponse>.Failure(
-                new Error("TESTING_GRADING_FAILED", "Hệ thống chưa hoàn tất chấm điểm phiên làm bài."));
+            // Exam mode: save Status = "Submitted" FIRST to prevent race conditions
+            // and check constraint violations, then publish for async grading.
+            session.Status = "Submitted";
+            await _db.SaveChangesAsync(cancellationToken);
+
+            if (_publishEndpoint is not null)
+            {
+                await _publishEndpoint.Publish(submissionEvent, cancellationToken);
+            }
+            else
+            {
+                await _mediator.Publish(submissionEvent, cancellationToken);
+            }
         }
 
         return Result<SubmitSessionResponse>.Success(

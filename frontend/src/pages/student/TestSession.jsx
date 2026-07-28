@@ -151,10 +151,16 @@ export default function TestSession() {
       await timeoutSubmitSession(sessionId);
       navigate(`/student/test-result/${sessionId}`);
     } catch (requestError) {
-      if (requestError.response?.data?.code === 'TESTING_SESSION_NOT_EXPIRED') {
+      const code = requestError.response?.data?.code;
+      if (code === 'TESTING_SESSION_NOT_EXPIRED') {
         submitInFlightRef.current = false;
         setSubmitting(false);
         await loadSession();
+        return;
+      }
+      // Session already completed (Submitted/Graded by another path) → go to result
+      if (code === 'TESTING_SESSION_ALREADY_COMPLETED') {
+        navigate(`/student/test-result/${sessionId}`);
         return;
       }
       setError('Không thể tự động nộp bài hết giờ. Vui lòng thử lại.');

@@ -35,7 +35,7 @@ public sealed class TimeoutSubmitSessionCommandHandler
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotFound);
         }
 
-        if (session.Status != "InProgress")
+        if (session.Status is not "InProgress" and not "Submitted")
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionAlreadyCompleted);
 
         if (session.Test is null)
