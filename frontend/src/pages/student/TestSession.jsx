@@ -258,6 +258,12 @@ export default function TestSession() {
     }
   };
 
+  const handleRetrySubmit = useCallback(async () => {
+    setError(null);
+    submitInFlightRef.current = false;
+    await handleTimeoutSubmit();
+  }, [handleTimeoutSubmit]);
+
   if (loading) {
     return <StudentLayout><div className="flex items-center justify-center py-24"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div></StudentLayout>;
   }
@@ -270,7 +276,23 @@ export default function TestSession() {
             <span className="material-symbols-outlined text-4xl text-deep-rose mb-3">error</span>
             <h3 className="text-lg font-bold text-on-surface mb-2">Không thể tiếp tục</h3>
             <p className="text-sm text-on-surface-variant mb-4">{error || 'Lỗi không xác định.'}</p>
-            <button onClick={() => navigate('/student/test')} className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold">Quay lại chọn đề</button>
+            <div className="flex items-center justify-center gap-3">
+              {session && (
+                <button
+                  onClick={handleRetrySubmit}
+                  disabled={submitting}
+                  className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                >
+                  {submitting ? 'Đang gửi...' : 'Thử lại'}
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/student/test')}
+                className="px-6 py-2 border border-whisper-border text-on-surface rounded-lg text-sm font-bold hover:bg-surface-container-low"
+              >
+                Quay lại chọn đề
+              </button>
+            </div>
           </div>
         </div>
       </StudentLayout>
