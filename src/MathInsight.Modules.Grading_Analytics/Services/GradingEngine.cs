@@ -45,7 +45,6 @@ public class GradingEngine : IGradingEngine
                 answer.IsCorrect = false;
                 answer.PointsEarned = 0m;
                 abandoned++;
-                incorrect++;
                 continue;
             }
 

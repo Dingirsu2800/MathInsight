@@ -51,8 +51,8 @@ export default function TestResultPage() {
         const data = await getSessionResult(sessionId);
         if (cancelled) return;
 
-        // If grading is still in progress (Submitted), poll until Graded
-        if (data.status === 'Submitted' && pollCount < MAX_POLLS) {
+        // If grading is still in progress, poll until Graded
+        if (data.status !== 'Graded' && pollCount < MAX_POLLS) {
           pollCount++;
           pollTimer = setTimeout(fetchResult, POLL_INTERVAL_MS);
           return;

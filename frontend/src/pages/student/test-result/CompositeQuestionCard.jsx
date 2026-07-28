@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
 /**
@@ -62,7 +65,11 @@ export default function CompositeQuestionCard({
         )}
         {/* Stem */}
         <div className="mb-6 p-4 bg-surface-container-low rounded-lg border-l-4 border-primary">
-          <p className="text-base text-on-surface">{stem}</p>
+          <div className="text-base text-on-surface prose prose-sm max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {stem || ''}
+            </ReactMarkdown>
+          </div>
         </div>
 
         {/* Table */}
@@ -81,7 +88,13 @@ export default function CompositeQuestionCard({
                 const isCorrectAnswer = stmt.isCorrect === true;
                 return (
                   <tr key={i}>
-                    <td className="px-6 py-4 italic">{stmt.text}</td>
+                    <td className="px-6 py-4 italic">
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {stmt.text || ''}
+                        </ReactMarkdown>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-center">
                       <RadioDot filled={stmt.studentAnswer === true} />
                     </td>
@@ -139,7 +152,11 @@ export default function CompositeQuestionCard({
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết từng ý:</h4>
               <div className="space-y-4 text-sm text-on-surface-variant">
                 {solution.map((step, i) => (
-                  <p key={i} dangerouslySetInnerHTML={{ __html: step }} />
+                  <div key={i} className="prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {step}
+                    </ReactMarkdown>
+                  </div>
                 ))}
               </div>
               <button className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm">

@@ -12,6 +12,7 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
         builder.HasKey(x => x.TestId);
 
         builder.Property(x => x.TestId).HasColumnName("TestID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.TestName).HasColumnName("TestName");
         builder.Property(x => x.MaxScore).HasColumnName("MaxScore").HasPrecision(5, 2);
         builder.Property(x => x.ScoringPolicy).HasColumnName("ScoringPolicy").HasMaxLength(30);
     }

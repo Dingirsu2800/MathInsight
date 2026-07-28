@@ -103,11 +103,11 @@ public sealed class SubmitSessionCommandHandler
         }
         else
         {
-            // BR-17: Exam mode — publish TestSubmittedEvent to MassTransit queue
-            // Grading proceeds asynchronously via TestSubmittedConsumer
-            session.Status = "Submitted"; // Immediately mark as Submitted to prevent duplicate submission/autosave
-            session.SubmissionType = "StudentSubmit";
-            session.EndTime = now;
+            // BR-17: Exam mode — publish TestSubmittedEvent for async grading.
+            // DB constraints prevent setting SubmissionType while Status='InProgress',
+            // so we delegate ALL state changes to GradingOrchestrator which sets
+            // Status=Graded, SubmissionType, EndTime, Score atomically.
+            _db.Entry(session).State = EntityState.Unchanged;
 
             var submissionEvent = new TestSubmittedEvent
             {
@@ -129,7 +129,9 @@ public sealed class SubmitSessionCommandHandler
             }
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        // Only save if there are tracked changes (Practice mode after grading)
+        if (_db.ChangeTracker.HasChanges())
+            await _db.SaveChangesAsync(cancellationToken);
 
         return Result<SubmitSessionResponse>.Success(
             new SubmitSessionResponse(

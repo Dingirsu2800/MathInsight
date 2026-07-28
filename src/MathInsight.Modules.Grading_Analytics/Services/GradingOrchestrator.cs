@@ -82,10 +82,9 @@ public class GradingOrchestrator : IGradingOrchestrator
             return null;
         }
 
-        if (!string.Equals(session.Status, "InProgress", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(session.Status, "Submitted", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(session.Status, "InProgress", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogWarning("Session {SessionId} is not InProgress or Submitted (Status={Status}). Skipping grading.", sessionId, session.Status);
+            _logger.LogWarning("Session {SessionId} is not InProgress (Status={Status}). Skipping grading.", sessionId, session.Status);
             return null;
         }
 

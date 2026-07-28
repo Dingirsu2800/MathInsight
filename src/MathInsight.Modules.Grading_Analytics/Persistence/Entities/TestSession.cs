@@ -30,5 +30,6 @@ public class TestSession
     public int GradeRevision { get; set; }
 
     // Navigation (read-only for Grading)
+    public Test? Test { get; set; }
     public ICollection<TestAnswer> TestAnswers { get; set; } = new List<TestAnswer>();
 }

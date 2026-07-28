@@ -38,8 +38,8 @@ public sealed class ForceSubmitSessionCommandHandler
         if (session is null)
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotFound);
 
-        // 2. Validate Status = InProgress or already Submitted/Graded (idempotent)
-        if (session.Status is not "InProgress" and not "Submitted" and not "Graded")
+        // 2. Validate Status = InProgress or already Graded (idempotent retry)
+        if (session.Status is not "InProgress" and not "Graded")
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotInProgress);
 
         // 2b. If already Graded, return success directly (idempotent retry)
@@ -54,16 +54,10 @@ public sealed class ForceSubmitSessionCommandHandler
                     Score: null));
         }
 
-        // 3. Set EndTime and SubmissionType
+        // 3. Prepare timestamps for the event
         var now = DateTime.UtcNow;
-        session.EndTime = now;
-        session.SubmissionType = request.SubmissionType; // TimeoutSubmit or SystemSubmit
-        session.Duration = (int)(now - session.StartTime).TotalSeconds;
 
-        // 4. Count abandoned answers (BR-16b)
-        session.NumAbandoned = await CountAbandonedAnswers(request.SessionId, cancellationToken);
-
-        // 5. Grading based on test format
+        // 4. Grading based on test format
         var isPractice = string.Equals(session.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase);
 
         var submissionEvent = new TestSubmittedEvent
@@ -78,17 +72,20 @@ public sealed class ForceSubmitSessionCommandHandler
 
         if (isPractice)
         {
-            // Practice mode: invoke Grading via MediatR in-process (synchronous)
+            // Practice mode: invoke Grading via MediatR in-process (synchronous).
+            // GradingOrchestrator will set Status=Graded, SubmissionType, EndTime, Score
+            // atomically within a transaction, satisfying all check constraints.
             await _mediator.Publish(submissionEvent, cancellationToken);
             await _db.Entry(session).ReloadAsync(cancellationToken);
-            await _db.SaveChangesAsync(cancellationToken);
         }
         else
         {
-            // Exam mode: save Status = "Submitted" FIRST to prevent race conditions
-            // and check constraint violations, then publish for async grading.
-            session.Status = "Submitted";
-            await _db.SaveChangesAsync(cancellationToken);
+            // Exam mode: publish event for async grading, return immediately.
+            // DB constraints (CK_TestSession_Status, CK_TestSession_SubmissionType_Status)
+            // prevent saving SubmissionType while Status='InProgress', so we delegate
+            // ALL state changes to GradingOrchestrator which sets them atomically.
+            // Discard any tracked changes to prevent accidental save.
+            _db.Entry(session).State = EntityState.Unchanged;
 
             if (_publishEndpoint is not null)
             {
@@ -104,7 +101,7 @@ public sealed class ForceSubmitSessionCommandHandler
             new SubmitSessionResponse(
                 SessionId: session.SessionId,
                 Status: session.Status,
-                SubmissionType: session.SubmissionType,
+                SubmissionType: session.SubmissionType ?? request.SubmissionType,
                 NumAbandoned: session.NumAbandoned,
                 Score: isPractice ? session.Score : null));
     }

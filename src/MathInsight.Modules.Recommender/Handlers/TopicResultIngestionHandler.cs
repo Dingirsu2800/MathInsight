@@ -70,9 +70,9 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
                 TagsMasteryId = Guid.NewGuid().ToString(),
                 StudentId = evt.StudentId,
                 TagId = tagResult.TagId,
-                OfficialPoint = 5.00m,
-                PracticePoint = 5.00m,
-                ExamAnchor = 5.00m,
+                OfficialPoint = 0.00m,
+                PracticePoint = 0.00m,
+                ExamAnchor = 0.00m,
                 MasteryStatus = "NotLearned",
                 NumberDone = 0,
                 SeriesAnswerCount = 0,
@@ -213,7 +213,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
 
     private static decimal CalculateExamAnchor(List<ExamHistoryEntry> history)
     {
-        if (history.Count == 0) return 5.00m;
+        if (history.Count == 0) return 0.00m;
 
         decimal weightedSum = 0m;
         decimal weightSum = 0m;
