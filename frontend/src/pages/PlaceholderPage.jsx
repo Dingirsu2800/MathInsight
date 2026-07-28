@@ -18,14 +18,23 @@ export default function PlaceholderPage({ title, description, showLogout = false
             </div>
             <span className="font-bold text-[#1e2a4a]">MathInsight</span>
           </div>
-          <button
-            type="button"
-            onClick={() => logout()}
-            className="flex items-center gap-1.5 text-sm font-semibold text-[#2f5fa8] hover:bg-[#2f5fa8]/10 px-3 py-2 rounded-lg transition-colors cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[18px]">logout</span>
-            Đăng xuất
-          </button>
+          <div className="flex items-center gap-1">
+            <Link
+              to="/profile"
+              className="flex items-center gap-1.5 text-sm font-semibold text-[#2f5fa8] hover:bg-[#2f5fa8]/10 px-3 py-2 rounded-lg transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">person</span>
+              Hồ sơ
+            </Link>
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="flex items-center gap-1.5 text-sm font-semibold text-[#2f5fa8] hover:bg-[#2f5fa8]/10 px-3 py-2 rounded-lg transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">logout</span>
+              Đăng xuất
+            </button>
+          </div>
         </header>
       )}
       <main className="flex-1 flex items-center justify-center p-4">

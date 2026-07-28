@@ -7,8 +7,8 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class CompetencyPoint
 {
-    public Guid CompetencyId { get; set; }
-    public Guid StudentId { get; set; }
+    public string CompetencyId { get; set; } = string.Empty;
+    public string StudentId { get; set; } = string.Empty;
 
     /// <summary>Grade level: 10, 11, or 12.</summary>
     public int Grade { get; set; }

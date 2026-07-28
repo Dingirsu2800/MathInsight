@@ -143,15 +143,17 @@ export default function ModerationPage() {
                   <div className="bg-surface-container-low rounded-lg p-4 text-[14px] text-on-surface flex flex-col gap-2 border border-whisper-border">
                     {isPending ? (
                       <>
-                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Người báo cáo:</span> <span>{report.reporterName} (Học sinh)</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Mục tiêu:</span> <span>{report.targetType === "Question" ? "Câu hỏi" : "Câu trả lời"} — "{report.targetPreview}"</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Lý do:</span> <span className="text-error">{report.reportReason}</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-24 shrink-0">Bài giảng:</span> <span className="text-primary font-medium">{report.lectureTitle}</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-28 shrink-0">Người báo cáo:</span> <span>{report.reporterName} (Học sinh)</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-28 shrink-0">Lý do:</span> <span className="text-error font-medium">{report.reportReason}</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-28 shrink-0">Phân loại:</span> <span>{report.targetType === "Question" ? "Câu hỏi" : "Câu trả lời"} của <strong>{report.targetAuthorName || "Đang tải tên..."}</strong></span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-28 shrink-0">Nội dung:</span> <span className="italic text-on-surface-variant line-clamp-2">"{report.targetPreview}"</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-28 shrink-0">Bài giảng:</span> <span className="text-primary font-medium">{report.lectureTitle}</span></div>
                       </>
                     ) : (
                       <>
-                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Mục tiêu:</span> <span>{report.targetType === "Question" ? "Câu hỏi" : "Câu trả lời"} — "{report.targetPreview}"</span></div>
-                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Xử lý bởi:</span> <span>{report.resolvedBy}</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Phân loại:</span> <span>{report.targetType === "Question" ? "Câu hỏi" : "Câu trả lời"} của <strong>{report.targetAuthorName || "Đang tải tên..."}</strong></span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Nội dung:</span> <span className="italic text-on-surface-variant line-clamp-2">"{report.targetPreview}"</span></div>
+                        <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Xử lý bởi:</span> <span>{report.resolvedBy || "Đang tải tên..."}</span></div>
                         <div className="flex gap-2"><span className="font-semibold w-32 shrink-0">Thời gian xử lý:</span> <span className="font-mono text-[13px]">{new Date(report.resolvedAt).toLocaleString("vi-VN")}</span></div>
                       </>
                     )}
@@ -163,9 +165,7 @@ export default function ModerationPage() {
                         <button onClick={() => handleResolve(report.reportId, true)} className="px-4 py-2 text-[16px] font-medium border border-outline text-on-surface-variant rounded-lg hover:bg-surface-container-low transition-colors">Bác bỏ báo cáo</button>
                         <button onClick={() => handleResolve(report.reportId, false)} className="px-4 py-2 text-[16px] font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">Ghi nhận vi phạm & Ẩn</button>
                       </>
-                    ) : (
-                      <button className="px-4 py-2 text-[16px] font-medium border border-outline text-on-surface rounded-lg hover:bg-surface-container-low transition-colors">Xem chi tiết</button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>

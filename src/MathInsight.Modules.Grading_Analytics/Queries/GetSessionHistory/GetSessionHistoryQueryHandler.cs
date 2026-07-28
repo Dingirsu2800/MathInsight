@@ -28,6 +28,7 @@ public sealed class GetSessionHistoryQueryHandler
 
         var query = _db.TestSessions
             .AsNoTracking()
+            .Include(s => s.Test)
             .Where(s => s.StudentId == request.StudentId && s.Status == "Graded");
 
         // Optional filters
@@ -44,13 +45,14 @@ public sealed class GetSessionHistoryQueryHandler
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
         var items = await query
-            .OrderByDescending(s => s.EndTime) // BR-UC56-02
+            .OrderByDescending(s => s.EndTime ?? s.StartTime) // BR-UC56-02
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(s => new SessionHistoryDto
             {
                 SessionId = s.SessionId,
                 TestId = s.TestId,
+                TestName = s.Test != null ? s.Test.TestName : (s.TestFormat == "Exam" ? "Bài kiểm tra" : "Bài luyện tập"),
                 TestFormat = s.TestFormat,
                 Status = s.Status,
                 Score = s.Score,
@@ -59,8 +61,9 @@ public sealed class GetSessionHistoryQueryHandler
                 NumAbandoned = s.NumAbandoned,
                 TotalQuestion = s.TotalQuestion,
                 DurationMinutes = s.Duration,
-                SubmittedAt = s.EndTime,
+                SubmittedAt = s.EndTime ?? s.StartTime,
                 SubmissionType = s.SubmissionType,
+                GradeRevision = s.GradeRevision,
             })
             .ToListAsync(cancellationToken);
 

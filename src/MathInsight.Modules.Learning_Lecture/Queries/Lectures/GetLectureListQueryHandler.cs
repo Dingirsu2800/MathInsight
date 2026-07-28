@@ -33,7 +33,11 @@ public class GetLectureListQueryHandler : IRequestHandler<GetLectureListQuery, P
 
         if (!string.IsNullOrEmpty(request.Search))
         {
-            query = query.Where(x => x.Title.Contains(request.Search));
+            var searchStr = request.Search.Trim().ToLower();
+            
+            query = query.Where(x => 
+                x.Title.ToLower().Contains(searchStr) || 
+                _dbContext.AccountProfileViews.Any(a => a.AccountId == x.TeacherId && a.AuthorName.ToLower().Contains(searchStr)));
         }
         
         if (!string.IsNullOrEmpty(request.Status))
@@ -68,6 +72,7 @@ public class GetLectureListQueryHandler : IRequestHandler<GetLectureListQuery, P
                 ThumbnailUrl = x.ThumbnailUrl,
                 Likes = x.Likes,
                 TeacherId = x.TeacherId,
+                TeacherName = _dbContext.AccountProfileViews.Where(a => a.AccountId == x.TeacherId).Select(a => a.AuthorName).FirstOrDefault(),
                 TagId = x.TagId,
                 TagName = _dbContext.TagTopics.Where(t => t.TagId == x.TagId).Select(t => t.TagName).FirstOrDefault(),
                 Status = x.Status,

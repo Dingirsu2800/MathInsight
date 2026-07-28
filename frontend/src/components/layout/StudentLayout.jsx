@@ -1,49 +1,41 @@
-import { useNavigate } from 'react-router-dom';
 import DashboardLayout from './DashboardLayout';
 import { studentNavItems, studentTopNavItems } from '../../config/studentNav';
-import { logout, getStoredUser } from '../../services/authApi';
+import { logout } from '../../services/auth';
+import useCurrentUser from '../../hooks/useCurrentUser';
+
+// UC-04 is role-agnostic and lives at "/profile" — there is no "/student/profile" route.
+const PROFILE_PATH = '/profile';
+const ROLE_LABEL = 'Học sinh';
 
 /**
  * Shared layout wrapper for all Student pages.
  * Wraps DashboardLayout with student-specific navigation and branding.
- * Reads real user info from localStorage (populated during login).
+ *
+ * The signed-in user's real name comes from the profile endpoint via useCurrentUser; the role
+ * label is only a last-resort fallback. Sign-out goes through the shared logout() (BR-10),
+ * which revokes the session server-side, clears authStorage, and redirects to /login.
  */
 export default function StudentLayout({ children }) {
-  const navigate = useNavigate();
-  const user = getStoredUser();
-
-  const userName = user?.username || 'Học sinh';
-  const initials = userName
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0))
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'HS';
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
+  const { displayName, initials, profile } = useCurrentUser(ROLE_LABEL);
 
   return (
     <DashboardLayout
       brandName="MathInsight"
-      roleLabel="Học sinh"
+      roleLabel={ROLE_LABEL}
       appTitle="Hệ thống Quản lý Toán học"
       navItems={studentNavItems}
       topNavItems={studentTopNavItems}
-      userName={userName}
-      userRoleLabel="Học sinh"
+      userName={displayName}
+      userRoleLabel={ROLE_LABEL}
       userInitials={initials}
-      userAvatarUrl={null}
-      profilePath="/student/profile"
+      userAvatarUrl={profile?.avatarUrl || null}
+      profilePath={PROFILE_PATH}
       primaryAction={{
         label: "🚀 Luyện tập ngay",
         icon: "rocket_launch",
-        to: "/student/tests",
+        to: "/student/test",
       }}
-      onLogout={handleLogout}
+      onLogout={logout}
     >
       {children}
     </DashboardLayout>

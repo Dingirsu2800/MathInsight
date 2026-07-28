@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
 /**
@@ -14,11 +17,16 @@ export default function CompositeQuestionCard({
   maxScore = 1,
   earnedScore = 0,
   solution = [],
+  machinePoints = 0,
+  isScoreInvalidated = false,
+  reportReason,
+  scoreAdjustedTime,
+  onReport,
 }) {
   const [showSolution, setShowSolution] = useState(false);
 
   const correctCount = statements.filter(
-    (s) => s.correctAnswer === s.studentAnswer
+    (s) => s.isCorrect === true
   ).length;
 
   return (
@@ -40,9 +48,28 @@ export default function CompositeQuestionCard({
 
       {/* Body */}
       <div className="p-6">
+        {isScoreInvalidated && (
+          <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-center gap-2 font-bold">
+              <MaterialIcon name="warning" size={18} />
+              Câu hỏi đã bị vô hiệu hóa sau khi chấm
+            </div>
+            <p className="mt-1">{reportReason || 'Câu hỏi hoặc đáp án của phiên bản này đã được xác nhận có lỗi.'}</p>
+            <p className="mt-2 font-mono text-xs">
+              Điểm máy chấm: {Number(machinePoints).toFixed(2)} · Điểm hiệu lực: {Number(earnedScore).toFixed(2)} / {Number(maxScore).toFixed(2)}
+            </p>
+            {scoreAdjustedTime && (
+              <p className="mt-1 text-xs">Điều chỉnh lúc {new Date(scoreAdjustedTime).toLocaleString('vi-VN')}</p>
+            )}
+          </div>
+        )}
         {/* Stem */}
         <div className="mb-6 p-4 bg-surface-container-low rounded-lg border-l-4 border-primary">
-          <p className="text-base text-on-surface">{stem}</p>
+          <div className="text-base text-on-surface prose prose-sm max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {stem || ''}
+            </ReactMarkdown>
+          </div>
         </div>
 
         {/* Table */}
@@ -58,10 +85,16 @@ export default function CompositeQuestionCard({
             </thead>
             <tbody className="divide-y divide-whisper-border text-sm">
               {statements.map((stmt, i) => {
-                const isCorrectAnswer = stmt.correctAnswer === stmt.studentAnswer;
+                const isCorrectAnswer = stmt.isCorrect === true;
                 return (
                   <tr key={i}>
-                    <td className="px-6 py-4 italic">{stmt.text}</td>
+                    <td className="px-6 py-4 italic">
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {stmt.text || ''}
+                        </ReactMarkdown>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-center">
                       <RadioDot filled={stmt.studentAnswer === true} />
                     </td>
@@ -119,7 +152,11 @@ export default function CompositeQuestionCard({
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết từng ý:</h4>
               <div className="space-y-4 text-sm text-on-surface-variant">
                 {solution.map((step, i) => (
-                  <p key={i} dangerouslySetInnerHTML={{ __html: step }} />
+                  <div key={i} className="prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {step}
+                    </ReactMarkdown>
+                  </div>
                 ))}
               </div>
               <button className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm">
@@ -127,6 +164,16 @@ export default function CompositeQuestionCard({
                 💬 Hỏi AI giải thích câu này
               </button>
             </div>
+          )}
+          {!isScoreInvalidated && onReport && (
+            <button
+              type="button"
+              className="mt-4 flex items-center gap-2 text-sm font-bold text-error hover:underline"
+              onClick={onReport}
+            >
+              <MaterialIcon name="flag" size={18} />
+              Báo cáo câu hỏi
+            </button>
           )}
         </div>
       </div>

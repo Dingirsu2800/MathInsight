@@ -1,12 +1,14 @@
 # Feature Specification: Recommender Module
 
+> **Approved scoring amendment**: [Scoring Contract V2](../scoring-contract-v2.md) defines revision-aware weighted topic input.
+
 **Feature Branch**: `005-recommender`
 
 **Created**: 2026-06-23 | **Updated**: 2026-07-04
 
 **Status**: Approved
 
-**Source Documents**: PRD §4 (FT-06), UCS UC-52-UC-54, algorithm report v2, schema migration 002
+**Source Documents**: PRD §4 (FT-06), UCS UC-52-UC-54, algorithm report v4.1 (Unified Multi-Tag), schema migration 002
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -34,7 +36,7 @@
 
 - **RCM-01**: `TagsMastery` stores mastery at grain `(student_id, tag_id)`, not `(student_id, tag_id, difficulty_id)`.
 - **RCM-02**: `TagsMastery.official_point`, `practice_point`, and `exam_anchor` must stay in range `0.00..10.00`.
-- **RCM-03**: WeakTag classification is derived, not stored as a separate status: `isWeak = official_point < 5.00`.
+- **RCM-03**: WeakTag classification is derived, not stored as a separate status: `isWeak = official_point < 5.00`. Additionally, BR-19 Bottleneck Weak Tag applies to secondary tags: `isBottleneckWeak = official_point < 4.00` (see RCM-14).
 - **RCM-04**: `official_point` is calculated from the role-based formula:
 
 ```text
@@ -44,11 +46,11 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 - **RCM-05**: `exam_anchor` is updated from Exam format sessions (using `GradeCalculatedEvent.TestFormat == "Exam"`) using an **Exponential Decay weighted average** over the `k ≤ 5` most recent per-topic session scores:
 
   ```text
-  exam_anchor = Σ(j=1→k) [β^(j-1) × T_j]  /  Σ(j=1→k) [β^(j-1)]
+  exam_anchor = Σ(j=1→k) [β^(j-1) × T_j^{(i)}]  /  Σ(j=1→k) [β^(j-1)]
   ```
 
   Where:
-  - `T_j` — topic score (0–10) of the j-th most recent graded session (j=1 is the latest)
+  - `T_j^{(i)}` — **weighted** topic score (0–10) of tag_i in the j-th most recent graded session, calculated by Grading module using Tầng 1–2 formula (report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. This value arrives pre-calculated in `TopicGradeResult.TopicScore`.
   - `k ≤ 5` — sliding window of up to 5 recent sessions stored in `exam_history` (JSON array)
   - `β = 0.8` — exponential decay factor (Ebbinghaus Forgetting Curve)
 
@@ -59,18 +61,30 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   - This ordering is mandatory — the formula's weight assignment depends on it.
 
   Decay weights: β⁰ = 1.0 → β¹ = 0.8 → β² = 0.64 → β³ = 0.512 → β⁴ = 0.410
-- **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a Practice format session is submitted and graded (using `GradeCalculatedEvent.TestFormat == "Practice"`) (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` (using the detailed answers provided in `GradeCalculatedEvent.Answers` which includes `QuestionNo` and `IsAbandoned` fields) (F1 resolution):
+- **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a Practice format session is submitted and graded (using `GradeCalculatedEvent.TestFormat == "Practice"`) (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` (using the detailed answers provided in `GradeCalculatedEvent.Answers` which includes `QuestionNo` and `IsAbandoned` fields) (F1 resolution).
+
+  **Bước 1 — Tính Δ_total** (unchanged from MVP):
 
   ```text
-  If CORRECT:  practice_point(t+1) = min(10.0,  practice_point(t) + α × w_D × γ_time)
-  If WRONG:    practice_point(t+1) = max(0.0,   practice_point(t) − α × (5 − w_D) × γ_time_penalty)
+  If CORRECT:  Δ_total = +α × w_D × γ_time
+  If WRONG:    Δ_total = −α × (5 − w_D) × γ_time_penalty
+  ```
+
+  **Bước 2 — Phân phối Δ cho mỗi Tag** (Unified Multi-Tag v4.1, report Công thức 2):
+
+  ```text
+  ΔP_tag_i = Δ_total × w_i
+  practice_point_i(t+1) = clamp(practice_point_i(t) + ΔP_tag_i, 0.0, 10.0)
   ```
 
   Where:
   - `α = 0.05` — base learning rate (K-factor, inspired by Elo rating system)
   - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` — difficulty weight for levels 1–4 (inspired by IRT)
+  - `w_i` — tag weight from `GradedAnswerDto.TagWeights`: `1.0` for single-tag, `w_main` (default `0.65`) for Tag Chính, `(1 − w_main) / N_sub` for Tag Phụ (BR-13/14/15)
   - `γ_time = 1.0` — normal time multiplier
-  - `γ_time_penalty = 1.5` — guessing penalty when answer time `t < 5 seconds` and the student actively selected an answer or input short answer text. For unanswered/abandoned questions (no student selection), `γ_time_penalty = 1.0` (no penalty).
+  - `γ_time_penalty = 1.5` — guessing penalty when answer time `t < 5 seconds` and not abandoned. For unanswered/abandoned questions, `γ_time_penalty = 1.0` (no penalty).
+  - **Degenerate case**: When `w_i = 1.0` (single-tag), `ΔP_tag = Δ_total × 1.0 = Δ_total` — identical to MVP formula.
+  - `series_answer_count` is incremented **for each tag** independently when a question involving that tag is answered.
 
   After `series_answer_count` reaches **10** for a topic, the accumulated practice gains are incorporated into `official_point`, then `practice_point` is reset to the new baseline:
 
@@ -94,6 +108,7 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 - **RCM-09**: TestGen reads Recommender advice in-process. No external recommender service is required for MVP.
 - **RCM-10**: Lecture/material recommendations are simple rule-based matches from weak `tag_id` to `Lecture.TagID` and `LectureMaterial`.
 - **RCM-11**: `mastery_status` remains a coarse learning label only: `NotLearned`, `Learning`, `Mastered`. Do not add `WeakTag` to this enum.
+- **RCM-14 (Bottleneck Weak Tag — BR-19)**: A secondary (sub) tag with `official_point < 4.00` is classified as a **Bottleneck Weak Tag**. This is a stricter threshold than the standard weak threshold (`< 5.00`, RCM-03) because a weak secondary tag creates a bottleneck risk for completing questions that require it. `GetStudentWeakTagsAsync` should include bottleneck weak tags with reason `BottleneckSubTag`. `GetStudentWeakTagAdviceAsync` should flag them with `IsBottleneckWeak = true`.
 - **RCM-12 (CompetencyPoint update)**: After each `TagsMastery` update for a student, recalculate `CompetencyPoint` for that student's grade level:
 
   ```text

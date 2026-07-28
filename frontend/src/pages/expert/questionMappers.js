@@ -69,7 +69,9 @@ export function mapQuestionListItemToViewModel(item) {
     type: mapBackendTypeToUiType(item.questionType),
     expertId: item.expertId || "Hệ thống",
     expertName: item.expertName || "",
-    points: item.defaultPoint ?? 0.2,
+    weight: item.defaultWeight ?? 1,
+    createdTime: item.createdTime || null,
+    updatedTime: item.updatedTime || null,
     topics: item.topics || [],
     topic: primaryTopic?.tagName || primaryTopic?.name || "Chưa phân loại"
   };
@@ -89,7 +91,9 @@ export function mapQuestionDetailToViewModel(detail) {
     type: mapBackendTypeToUiType(detail.questionType),
     expertId: detail.expertId || "Hệ thống",
     expertName: detail.expertName || "",
-    points: detail.defaultPoint ?? 0.2,
+    weight: detail.defaultWeight ?? 1,
+    createdTime: detail.createdTime || null,
+    updatedTime: detail.updatedTime || null,
     topics: detail.topics || [],
     answers: detail.answers || [],
     solutionContent: detail.solutionContent || "",
@@ -127,7 +131,7 @@ export function mapQuestionDetailToEditorState(detail) {
     correctNumeric: p.correctNumeric !== undefined ? p.correctNumeric : null,
     numericTolerance: p.numericTolerance !== undefined ? p.numericTolerance : null,
     explanation: p.explanation || "",
-    defaultPoint: p.defaultPoint ?? 0.05
+    defaultWeight: p.defaultWeight ?? 1
   }));
 
   return {
@@ -137,7 +141,7 @@ export function mapQuestionDetailToEditorState(detail) {
     grade: detail.grade || 12,
     questionType: uiType,
     difficultyId: detail.difficultyId || "",
-    defaultPoint: detail.defaultPoint ?? 0.2,
+    defaultWeight: detail.defaultWeight ?? 1,
     topics: detail.topics || [],
     options: uiType === "TRUE_FALSE"
       ? normalizeTrueFalseOptions(uiOptions)
@@ -191,7 +195,7 @@ export function mapEditorStateToCreateUpdateRequest(state) {
     difficultyId: state.difficultyId,
     grade: parseInt(state.grade) || 12,
     questionType: state.questionType, // SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER, COMPOSITE
-    defaultPoint: numberOrDefault(state.defaultPoint, 0.2),
+    defaultWeight: numberOrDefault(state.defaultWeight, 1),
     topics: topicsPayload
   };
 
@@ -211,7 +215,7 @@ export function mapEditorStateToCreateUpdateRequest(state) {
         correctNumeric: p.partType === "NUMERIC_ANSWER" ? (Number.isFinite(parsedNumeric) ? parsedNumeric : null) : null,
         numericTolerance: p.partType === "NUMERIC_ANSWER" ? (Number.isFinite(parsedTolerance) ? parsedTolerance : null) : null,
         explanation: p.explanation || "",
-        defaultPoint: numberOrDefault(p.defaultPoint, 0.05)
+        defaultWeight: numberOrDefault(p.defaultWeight, 1)
       };
       return mappedPart;
     });
@@ -292,7 +296,7 @@ export function mapOcrDraftToEditorStatePatch(draft) {
         correctNumeric: null,
         numericTolerance: null,
         explanation: part.explanation || "",
-        defaultPoint: 0.05
+        defaultWeight: 1
       });
     });
 

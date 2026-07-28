@@ -281,7 +281,12 @@ export default function MaterialListPage() {
             <div className="px-6 py-4 bg-surface-container-low border-t border-whisper-border flex justify-end gap-3 rounded-b-xl">
               <button 
                 className="px-4 py-2 border border-outline-variant rounded-lg text-[16px] font-medium text-on-surface hover:bg-surface-variant transition-colors"
-                onClick={() => setShowUploadModal(false)}
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setFile(null);
+                  setDocName("");
+                  setUploading(false);
+                }}
               >
                 Hủy
               </button>

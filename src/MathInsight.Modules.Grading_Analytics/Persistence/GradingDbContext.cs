@@ -19,12 +19,18 @@ public class GradingDbContext : DbContext
     public DbSet<TestAnswer> TestAnswers => Set<TestAnswer>();
     public DbSet<TestAnswerOption> TestAnswerOptions => Set<TestAnswerOption>();
     public DbSet<TestAnswerPart> TestAnswerParts => Set<TestAnswerPart>();
+    public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
+    public DbSet<Test> Tests => Set<Test>();
 
     // Cross-read from QuestionBank module (002) — read-only
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<Answer> Answers => Set<Answer>();
     public DbSet<QuestionPart> QuestionParts => Set<QuestionPart>();
     public DbSet<QuestionTopic> QuestionTopics => Set<QuestionTopic>();
+    public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
+    public DbSet<QuestionReport> QuestionReports => Set<QuestionReport>();
+    public DbSet<TagDifficultyReadOnly> TagDifficulties => Set<TagDifficultyReadOnly>();
+    public DbSet<TagTopicReadOnly> TagTopics => Set<TagTopicReadOnly>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

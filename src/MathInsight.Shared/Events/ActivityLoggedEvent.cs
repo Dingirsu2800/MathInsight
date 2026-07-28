@@ -1,6 +1,6 @@
-﻿using MediatR;
+using MediatR;
 
-namespace MathInsight.Modules.Learning_Lecture.Events;
+namespace MathInsight.Shared.Events;
 
 public record ActivityLoggedEvent(
     string StudentId,

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,7 +29,7 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
 
         if (request.IsStudent)
         {
-            query = query.Where(x => x.Status == "Active");
+            query = query.Where(x => x.Status == "Active" || (x.Status == "Hidden" && x.StudentId == request.CurrentAccountId));
         }
 
         var questions = await query
@@ -41,18 +41,20 @@ public class GetDiscussionsQueryHandler : IRequestHandler<GetDiscussionsQuery, L
                 DiscussionQuestionId = x.DiscussionQuestionId,
                 LectureId = x.LectureId,
                 StudentId = x.StudentId,
+                AuthorName = _dbContext.AccountProfileViews.Where(a => a.AccountId == x.StudentId).Select(a => a.AuthorName).FirstOrDefault() ?? "Học sinh ẩn danh",
                 Title = x.Title,
                 Content = x.Content,
                 Status = x.Status,
                 CreatedTime = x.CreatedTime,
                 UpdatedTime = x.UpdatedTime,
                 Answers = x.Answers
-                    .Where(a => a.Status != "Deleted" && (!request.IsStudent || a.Status == "Active"))
+                    .Where(a => a.Status != "Deleted" && (!request.IsStudent || a.Status == "Active" || (a.Status == "Hidden" && a.AccountId == request.CurrentAccountId)))
                     .OrderBy(a => a.CreatedTime)
                     .Select(a => new DiscussionAnswerDto
                     {
                         DiscussionAnswerId = a.DiscussionAnswerId,
                         AccountId = a.AccountId,
+                        AuthorName = _dbContext.AccountProfileViews.Where(acc => acc.AccountId == a.AccountId).Select(acc => acc.AuthorName).FirstOrDefault() ?? "Giáo viên",
                         Content = a.Content,
                         Status = a.Status,
                         CreatedTime = a.CreatedTime,

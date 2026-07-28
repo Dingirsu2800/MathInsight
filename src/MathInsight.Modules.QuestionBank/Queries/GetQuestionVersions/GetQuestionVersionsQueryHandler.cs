@@ -34,7 +34,7 @@ public sealed class GetQuestionVersionsQueryHandler
         var versions = await _context.QuestionVersions
             .AsNoTracking()
             .Where(version => version.QuestionId == request.QuestionId)
-            .OrderByDescending(version => version.CreatedTime)
+            .OrderByDescending(version => version.VersionNumber)
             .Select(version => new QuestionVersionResponse(
                 version.VersionId,
                 version.QuestionId,
@@ -42,6 +42,8 @@ public sealed class GetQuestionVersionsQueryHandler
                 version.QuestionAnswer,
                 version.AnswersSnapshot,
                 version.PictureUrl,
+                version.VersionNumber,
+                version.SnapshotSchemaVersion,
                 version.CreatedTime,
                 version.ExpertId,
                 _context.AccountReadModels

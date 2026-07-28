@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,7 +29,7 @@ public class DiscussionsController : ControllerBase
     [HttpGet("lectures/{lectureId}")]
     public async Task<IActionResult> GetDiscussions(string lectureId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetDiscussionsQuery(lectureId, IsStudent, page, pageSize), cancellationToken);
+        var result = await _mediator.Send(new GetDiscussionsQuery(lectureId, IsStudent, CurrentUserId, page, pageSize), cancellationToken);
         return Ok(result);
     }
 
@@ -37,6 +37,13 @@ public class DiscussionsController : ControllerBase
     public async Task<IActionResult> GetModerationQueue([FromQuery] string? teacherId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
         if (!IsTeacherOrAdmin) return Forbid();
+        
+        var isTeacher = User.FindFirst(ClaimTypes.Role)?.Value == "Teacher";
+        if (isTeacher)
+        {
+            teacherId = CurrentUserId;
+        }
+
         var result = await _mediator.Send(new GetModerationQueueQuery(teacherId, page, pageSize), cancellationToken);
         return Ok(result);
     }

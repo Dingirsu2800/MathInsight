@@ -3,6 +3,8 @@ using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
 using MathInsight.Modules.TestGen.Commands.SubmitBlueprintForReview;
 using MathInsight.Modules.TestGen.Commands.GenerateBlueprintExam;
+using MathInsight.Modules.TestGen.Commands.GenerateSharedBlueprintExam;
+using MathInsight.Modules.TestGen.Commands.ArchiveSharedBlueprintExam;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Generation;
@@ -133,15 +135,15 @@ public sealed class BlueprintSqlServerSmokeTests
             VALUES ('smoke-difficulty', N'Smoke Difficulty', 1, 1, 1);
 
             INSERT INTO [Blueprint]
-                ([BlueprintID], [BlueprintName], [Grade], [TotalQuestions], [DurationMinutes], [ExpertID], [Status])
+                ([BlueprintID], [BlueprintName], [Grade], [TotalQuestions], [TotalScore], [DurationMinutes], [ExpertID], [Status])
             VALUES
-                ('smoke-blueprint', N'Smoke Blueprint', 12, 1, 15, 'smoke-owner', 'Draft'),
-                ('other-blueprint', N'Other Blueprint', 12, 1, 15, 'smoke-owner', 'Draft'),
-                ('generation-blueprint', N'Generation Blueprint', 12, 1, 15, 'smoke-owner', 'Approved');
+                ('smoke-blueprint', N'Smoke Blueprint', 12, 1, 1.00, 15, 'smoke-owner', 'Draft'),
+                ('other-blueprint', N'Other Blueprint', 12, 1, 1.00, 15, 'smoke-owner', 'Draft'),
+                ('generation-blueprint', N'Generation Blueprint', 12, 1, 1.00, 15, 'smoke-owner', 'Approved');
 
             INSERT INTO [BlueprintSection]
                 ([BlueprintSectionID], [BlueprintID], [SectionOrder], [SectionName], [QuestionType],
-                 [TotalQuestions], [DefaultPointPerQuestion])
+                 [TotalQuestions], [ScoreBudget])
             VALUES
                 ('smoke-section', 'smoke-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00),
                 ('other-section', 'other-blueprint', 1, N'Section I', 'SingleChoice', 1, 1.00),
@@ -155,14 +157,25 @@ public sealed class BlueprintSqlServerSmokeTests
 
             INSERT INTO [Question]
                 ([QuestionID], [QuestionContent], [SolutionContent], [DifficultyID], [Grade], [Status],
-                 [QuestionType], [ExpertID], [DefaultPoint], [IsActive])
+                 [QuestionType], [ExpertID], [DefaultWeight], [IsActive])
             VALUES
                 ('generation-question', N'Question', N'Solution', 'smoke-difficulty', 12, 'Approved',
                  'SingleChoice', 'smoke-owner', 1.00, 1);
 
+            INSERT INTO [Answer] ([AnswerID], [QuestionID], [AnswerContent], [IsCorrect])
+            VALUES ('generation-answer', 'generation-question', N'Answer', 1);
+
             INSERT INTO [QuestionTopic]
                 ([QuestionTopicID], [QuestionID], [TagID], [IsPrimary])
             VALUES ('generation-question-topic', 'generation-question', 'smoke-topic', 1);
+
+            INSERT INTO [QuestionVersion]
+                ([VersionID], [QuestionID], [QuestionContent], [QuestionAnswer], [AnswersSnapshot],
+                 [VersionNumber], [SnapshotSchemaVersion], [ExpertID])
+            VALUES
+                ('generation-question-version', 'generation-question', N'Question', N'Solution',
+                  N'{"QuestionId":"generation-question","QuestionType":"SingleChoice","DifficultyId":"smoke-difficulty","Grade":12,"DefaultWeight":1.0,"Topics":[{"TagId":"smoke-topic","IsPrimary":true}],"Answers":[{"AnswerId":"generation-answer","AnswerContent":"Answer","IsCorrect":true}],"Parts":[],"QuestionContent":"Question","SolutionContent":"Solution"}',
+                 1, 2, 'smoke-owner');
             """;
 
         await using var connection = new SqlConnection(connectionString);
@@ -263,6 +276,30 @@ public sealed class BlueprintSqlServerSmokeTests
             .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM [TestSession]")
             .SingleAsync();
         Assert.Equal(0, sessionCount);
+
+        var sharedResult = await new GenerateSharedBlueprintExamCommandHandler(
+            context,
+            new BlueprintExamCandidateProvider(context),
+            new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer()),
+            new FixedTestCodeGenerator("SMKE2345")).Handle(
+                new GenerateSharedBlueprintExamCommand(
+                    "generation-blueprint",
+                    "smoke-owner",
+                    "Shared smoke exam",
+                    20),
+                CancellationToken.None);
+        Assert.True(sharedResult.IsSuccess);
+        Assert.Null(sharedResult.Value!.GeneratedForStudentId);
+        Assert.Equal("SMKE2345", sharedResult.Value.TestCode);
+
+        var archiveResult = await new ArchiveSharedBlueprintExamCommandHandler(context).Handle(
+            new ArchiveSharedBlueprintExamCommand(
+                sharedResult.Value.TestId,
+                "smoke-owner",
+                GeneratedTestValues.ArchivedStatus),
+            CancellationToken.None);
+        Assert.True(archiveResult.IsSuccess);
+        Assert.Equal(GeneratedTestValues.ArchivedStatus, archiveResult.Value!.TestStatus);
     }
 
     private static TestGenDbContext CreateContext(string connectionString)
@@ -284,6 +321,11 @@ public sealed class BlueprintSqlServerSmokeTests
         {
         }
     }
+
+    private sealed class FixedTestCodeGenerator(string code) : ITestCodeGenerator
+    {
+        public string Generate() => code;
+    }
 }
 
 internal sealed class SqlServerSmokeFactAttribute : FactAttribute
@@ -293,6 +335,14 @@ internal sealed class SqlServerSmokeFactAttribute : FactAttribute
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(connectionVariable)))
         {
             Skip = $"Set {connectionVariable} to a disposable SQL Server master connection.";
+            return;
         }
+
+        var schemaPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Database",
+            "001_Create_MathInsight_Azure.sql");
+        if (!File.Exists(schemaPath))
+            Skip = "The canonical sibling Database schema is unavailable in this checkout.";
     }
 }

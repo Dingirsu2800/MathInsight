@@ -7,9 +7,9 @@ namespace MathInsight.Modules.Recommender.Persistence.Entities;
 /// </summary>
 public class LectureReadOnly
 {
-    public Guid LectureId { get; set; }
+    public string LectureId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public Guid TagId { get; set; }
-    public bool IsActive { get; set; }
+    public string TagId { get; set; } = string.Empty;
+    public string Status { get; set; } = "Draft";
 }

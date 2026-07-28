@@ -16,18 +16,18 @@ public class BlueprintSectionConfiguration : IEntityTypeConfiguration<BlueprintS
                 "[QuestionType] IN ('SingleChoice', 'MultipleChoice', 'TrueFalse', 'ShortAnswer', 'Composite')");
             table.HasCheckConstraint("CK_BlueprintSection_TotalQuestions", "[TotalQuestions] >= 0");
             table.HasCheckConstraint(
-                "CK_BlueprintSection_DefaultPointPerQuestion",
-                "[DefaultPointPerQuestion] >= 0 AND [DefaultPointPerQuestion] <= 10");
+                "CK_BlueprintSection_ScoreBudget",
+                "[ScoreBudget] > 0 AND [ScoreBudget] <= 100");
             table.HasCheckConstraint(
-                "CK_BlueprintSection_DefaultPointPerPart",
-                "[DefaultPointPerPart] IS NULL OR ([DefaultPointPerPart] >= 0 AND [DefaultPointPerPart] <= 10)");
+                "CK_BlueprintSection_ScoringRule",
+                "[ScoringRule] IN ('AllOrNothing', 'TieredTrueFalse', 'WeightedParts')");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_PartCountPerQuestion",
                 "[PartCountPerQuestion] IS NULL OR [PartCountPerQuestion] > 0");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_CompositePartMetadata",
-                "([QuestionType] = 'Composite' AND [PartCountPerQuestion] IS NOT NULL AND [DefaultPointPerPart] IS NOT NULL) OR " +
-                "([QuestionType] <> 'Composite' AND [PartCountPerQuestion] IS NULL AND [DefaultPointPerPart] IS NULL)");
+                "([QuestionType] = 'Composite' AND [PartCountPerQuestion] IS NOT NULL AND [ScoringRule] IN ('TieredTrueFalse', 'WeightedParts')) OR " +
+                "([QuestionType] <> 'Composite' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] = 'AllOrNothing')");
         });
 
         builder.HasKey(x => x.BlueprintSectionId).HasName("PK_BlueprintSection");
@@ -65,13 +65,14 @@ public class BlueprintSectionConfiguration : IEntityTypeConfiguration<BlueprintS
         builder.Property(x => x.TotalQuestions)
             .HasColumnName("TotalQuestions")
             .HasDefaultValue(0);
-        builder.Property(x => x.DefaultPointPerQuestion)
-            .HasColumnName("DefaultPointPerQuestion")
-            .HasPrecision(4, 2)
-            .HasDefaultValue(0m);
-        builder.Property(x => x.DefaultPointPerPart)
-            .HasColumnName("DefaultPointPerPart")
-            .HasPrecision(4, 2);
+        builder.Property(x => x.ScoreBudget)
+            .HasColumnName("ScoreBudget")
+            .HasPrecision(5, 2);
+        builder.Property(x => x.ScoringRule)
+            .HasColumnName("ScoringRule")
+            .HasMaxLength(30)
+            .IsUnicode(false)
+            .HasDefaultValue("AllOrNothing");
         builder.Property(x => x.PartCountPerQuestion)
             .HasColumnName("PartCountPerQuestion");
 

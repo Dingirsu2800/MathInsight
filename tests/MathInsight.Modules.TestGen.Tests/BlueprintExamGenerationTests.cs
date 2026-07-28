@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Commands.GenerateBlueprintExam;
 using MathInsight.Modules.TestGen.Contracts.Tests;
@@ -7,12 +8,32 @@ using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
 using MathInsight.Modules.TestGen.Tests;
+using MathInsight.Shared.Questions;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.TestGen.Tests;
 
 public sealed class BlueprintExamGenerationTests
 {
+    [Fact]
+    public void Selector_TieredTrueFalse_RejectsCompositeVersionWithoutTieredSupport()
+    {
+        var selector = new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer());
+        var requirement = new BlueprintExamRequirement(
+            "detail-1", 1, 1, TopicA, EasyDifficultyId,
+            BlueprintQuestionTypes.Composite, "TieredTrueFalse", 1);
+        var weightedOnly = new BlueprintExamCandidate(
+            "question-1", "version-1", 1m, EasyDifficultyId,
+            BlueprintQuestionTypes.Composite,
+            new HashSet<string>([TopicA], StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(["WeightedParts"], StringComparer.OrdinalIgnoreCase));
+
+        var result = selector.Select([requirement], [weightedOnly], CancellationToken.None);
+
+        Assert.False(result.IsComplete);
+        Assert.Empty(result.Assignments);
+    }
+
     private const string StudentId = "student-12";
     private const string BlueprintId = "blueprint-exam";
     private const string EasyDifficultyId = "difficulty-easy";
@@ -286,6 +307,7 @@ public sealed class BlueprintExamGenerationTests
             BlueprintName = blueprintId,
             Grade = grade,
             TotalQuestions = totalQuestions,
+            TotalScore = 1m,
             DurationMinutes = 30,
             ExpertId = "expert-owner",
             Status = status
@@ -298,7 +320,7 @@ public sealed class BlueprintExamGenerationTests
             SectionName = "Single choice",
             QuestionType = BlueprintQuestionTypes.SingleChoice,
             TotalQuestions = totalQuestions,
-            DefaultPointPerQuestion = 1m
+            ScoreBudget = 1m
         };
 
         for (var index = 0; index < slots.Length; index++)
@@ -337,7 +359,37 @@ public sealed class BlueprintExamGenerationTests
             Grade = grade,
             Status = status,
             QuestionType = questionType,
+            DefaultWeight = 1m,
             IsActive = isActive
+        });
+        testContext.Context.QuestionVersions.Add(new QuestionVersionReadModel
+        {
+            VersionId = $"{questionId}-version-1",
+            QuestionId = questionId,
+            VersionNumber = 1,
+            SnapshotSchemaVersion = 2,
+            AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(
+                questionId,
+                questionType,
+                difficultyId,
+                grade,
+                1m,
+                secondTag is null
+                    ? [new QuestionTopicSnapshot(firstTag, true)]
+                    : [new QuestionTopicSnapshot(firstTag, true), new QuestionTopicSnapshot(secondTag, false)],
+                questionType == BlueprintQuestionTypes.Composite
+                    ? []
+                    : [new QuestionAnswerSnapshot($"{questionId}-answer", "Answer", true)],
+                questionType == BlueprintQuestionTypes.Composite
+                    ? Enumerable.Range(1, 4)
+                        .Select(order => new QuestionPartSnapshot(
+                            $"{questionId}-part-{order}", order, ((char)(96 + order)).ToString(),
+                            $"Part {order}", "TrueFalse", true, null, null, null, null, 1m))
+                        .ToList()
+                    : [],
+                $"Question content for {questionId}",
+                $"Solution content for {questionId}")),
+            CreatedTime = DateTime.UtcNow
         });
         testContext.Context.QuestionTopics.Add(new QuestionTopicReadModel
         {
@@ -346,6 +398,33 @@ public sealed class BlueprintExamGenerationTests
             TagId = firstTag,
             IsPrimary = true
         });
+
+        if (questionType != BlueprintQuestionTypes.Composite)
+        {
+            testContext.Context.Answers.Add(new AnswerReadModel
+            {
+                AnswerId = $"{questionId}-answer",
+                QuestionId = questionId,
+                IsCorrect = true,
+                IsArchived = false
+            });
+        }
+        else
+        {
+            for (var order = 1; order <= 4; order++)
+            {
+                testContext.Context.QuestionParts.Add(new QuestionPartReadModel
+                {
+                    PartId = $"{questionId}-part-{order}",
+                    QuestionId = questionId,
+                    PartOrder = order,
+                    PartType = "TrueFalse",
+                    CorrectBoolean = true,
+                    DefaultWeight = 1m,
+                    IsArchived = false
+                });
+            }
+        }
 
         if (secondTag is not null)
         {

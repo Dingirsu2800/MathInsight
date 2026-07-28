@@ -18,8 +18,15 @@ public class TestQuestion
     public string? RecommendedDifficultyId { get; set; }
     public decimal? PtagAtSelection { get; set; }
     public string? RuleVersion { get; set; }
+    public string QuestionVersionId { get; set; } = string.Empty;
+    public decimal WeightSnapshot { get; set; }
+    public decimal MaxPointsSnapshot { get; set; }
+    public string ScoringRuleSnapshot { get; set; } = "AllOrNothing";
+    public bool IsScoreInvalidated { get; set; }
+    public string? InvalidatedByReportId { get; set; }
 
     public Test? Test { get; set; }
     public BlueprintDetail? SourceBlueprintDetail { get; set; }
     public QuestionReadModel? Question { get; set; }
+    public QuestionVersionReadModel? QuestionVersion { get; set; }
 }

@@ -31,8 +31,8 @@ export default function LectureDetailPage() {
       const res = await getDiscussions(id, { page: 1, pageSize: 50 });
       const mappedDiscussions = (res.data || []).map(d => ({
         id: d.discussionQuestionId,
-        author: d.studentId || "Học sinh ẩn danh",
-        authorInitials: d.studentId ? d.studentId.substring(0, 2).toUpperCase() : "HS",
+        author: d.authorName || "Học sinh ẩn danh",
+        authorInitials: d.authorName ? d.authorName.substring(0, 2).toUpperCase() : "HS",
         timeAgo: new Date(d.createdTime).toLocaleString("vi-VN"),
         title: d.title,
         content: d.content,
@@ -40,7 +40,7 @@ export default function LectureDetailPage() {
         answers: (d.answers || []).map(a => ({
           id: a.discussionAnswerId,
           authorId: a.accountId,
-          author: a.accountId || "Giáo viên",
+          author: a.authorName || "Giáo viên",
           role: "Giáo viên",
           timeAgo: new Date(a.createdTime).toLocaleString("vi-VN"),
           content: a.content,
@@ -220,20 +220,20 @@ export default function LectureDetailPage() {
               {lecture.materials.map((mat) => {
                 let icon = "insert_drive_file";
                 let colorCls = "text-on-surface-variant bg-surface-variant";
-                const fmt = mat.format?.toUpperCase() || "";
+                const fmt = (mat.format || mat.fileType || "").toUpperCase();
                 if (fmt.includes("PDF")) { icon = "picture_as_pdf"; colorCls = "text-error bg-error-container/20"; }
                 else if (fmt.includes("DOC")) { icon = "description"; colorCls = "text-primary bg-primary-container/20"; }
                 else if (fmt.includes("MP4")) { icon = "movie"; colorCls = "text-tertiary bg-tertiary-container/20"; }
 
                 return (
-                  <div key={mat.id} className="bg-pure-surface rounded-lg border border-whisper-border p-4 flex flex-col hover:border-primary/50 transition-colors">
+                  <div key={mat.id || mat.materialId} className="bg-pure-surface rounded-lg border border-whisper-border p-4 flex flex-col hover:border-primary/50 transition-colors">
                     <div className="flex items-start gap-3 mb-4">
                       <div className={`w-10 h-10 rounded flex items-center justify-center ${colorCls}`}>
                         <span className="material-symbols-outlined">{icon}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-[16px] font-medium text-on-surface truncate">{mat.name}</h3>
-                        <p className="text-[13px] text-on-surface-variant">{mat.size || "1.0 MB"}</p>
+                        <h3 className="text-[16px] font-medium text-on-surface truncate" title={mat.name || mat.materialName}>{mat.name || mat.materialName}</h3>
+                        <p className="text-[13px] text-on-surface-variant uppercase">{mat.format || mat.fileType || "FILE"}</p>
                       </div>
                     </div>
                     <a href={mat.url || mat.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-auto w-full py-2 bg-pure-surface text-primary border border-whisper-border rounded hover:bg-surface-container-low transition-colors font-medium text-[16px] flex items-center justify-center gap-2">

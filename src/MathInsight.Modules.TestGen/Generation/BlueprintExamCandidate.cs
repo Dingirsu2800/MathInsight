@@ -2,9 +2,17 @@ namespace MathInsight.Modules.TestGen.Generation;
 
 public sealed record BlueprintExamCandidate(
     string QuestionId,
+    string QuestionVersionId,
+    decimal DefaultWeight,
     string DifficultyId,
     string QuestionType,
-    IReadOnlySet<string> TagIds);
+    IReadOnlySet<string> TagIds,
+    IReadOnlySet<string> SupportedScoringRules,
+    int PartCount = 0);
+
+public sealed record BlueprintExamCandidatePool(
+    IReadOnlyList<BlueprintExamCandidate> Candidates,
+    IReadOnlyList<BlueprintExamCandidate> InvalidVersionCandidates);
 
 public sealed record BlueprintExamRequirement(
     string BlueprintDetailId,
@@ -13,7 +21,9 @@ public sealed record BlueprintExamRequirement(
     string TagId,
     string DifficultyId,
     string QuestionType,
-    int Quantity);
+    string ScoringRule,
+    int Quantity,
+    int? PartCountPerQuestion = null);
 
 public sealed record BlueprintExamAssignment(
     string QuestionId,
@@ -25,3 +35,10 @@ public sealed record BlueprintExamAssignment(
 public sealed record BlueprintExamSelection(
     bool IsComplete,
     IReadOnlyList<BlueprintExamAssignment> Assignments);
+
+public sealed record PreparedBlueprintExamQuestion(
+    BlueprintExamAssignment Assignment,
+    BlueprintExamCandidate Candidate,
+    string ScoringRule,
+    int QuestionOrder,
+    decimal MaxPoints);

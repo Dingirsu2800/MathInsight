@@ -1,5 +1,12 @@
 # Tasks Checklist: Test Generator Module
 
+## Scoring Contract V2
+
+- [x] Replace Blueprint point fields with TotalScore, ScoreBudget, and ScoringRule.
+- [x] Persist Test MaxScore/ScoringPolicy and TestQuestion version/scoring snapshots.
+- [x] Validate active child shape and allocate exact cent budgets deterministically.
+- [x] Mark all TestQuestions using an invalidated version for recalculation.
+
 **Branch**: `testgen-test-generation` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 **Current delivery slice**: Checkpoint 6A - baseline BlueprintExam
 
@@ -19,7 +26,7 @@
   - [x] Map review audit to `ApprovedBy`, `ReviewNote`, `ReviewTime`.
   - [x] Remove non-existent `CreatedTime` mapping.
 - [x] Correct `BlueprintSection` mapping:
-  - [x] Required `SectionName`, required `DefaultPointPerQuestion`, and SQL decimal precision.
+  - [x] Required `SectionName`, `ScoreBudget`, `ScoringRule`, and SQL decimal precision.
   - [x] Unique `(BlueprintID, SectionOrder)` and composite-section metadata constraints.
 - [x] Correct `BlueprintDetail` mapping:
   - [x] Exact columns and string IDs.
@@ -163,3 +170,22 @@
 
 - [ ] Implement `TopicPractice` generation for exactly 10 questions on one selected WeakTag.
 - [ ] Keep BlueprintID null and hand the generated Test to Testing for Practice TestSession creation.
+
+## Phase 9: Expert Shared BlueprintExam
+
+- [x] Preserve all Student personal BlueprintExam endpoints and regression tests.
+- [x] Add owner-only generation from Approved or Active Blueprints.
+- [x] Generate server-owned TestID once and verify ambiguous commits by the complete persisted aggregate.
+- [x] Generate cryptographic eight-character TestCode values and retry the complete transaction on verified code collisions.
+- [x] Persist shared Test/TestQuestion snapshots atomically and transition first-used Approved Blueprint to Active.
+- [x] Allocate each section budget exactly with final QuestionOrder as largest-remainder tie-break.
+- [x] Require current active Answer/QuestionPart shape and latest supported immutable QuestionVersion V2.
+- [x] Add owner-only immutable Expert preview including answer keys, solutions, composite parts, and scoring.
+- [x] Add owner-only idempotent Active-to-Archived shared-Test transition without deleting history.
+- [x] Add owner-only paged generated-Test listing per Blueprint, including Active and Archived variants.
+- [x] Add paged grade-filtered Student shared-Test discovery.
+- [x] Add normalized generic TestCode resolution with a dedicated rate-limit policy.
+- [x] Add metadata, handler, controller, scoring, collision-precheck, and rollback coverage.
+- [x] Extend the opt-in SQL smoke with shared generation and archive against the canonical sibling schema when available.
+- [ ] Add fault-injected unknown-commit, SQL unique-collision, and concurrent archive/start smoke coverage when the disposable SQL harness supports deterministic fault injection.
+- [x] Do not create TestSession/TestAnswer records in TestGen and do not add schema or EF migrations.

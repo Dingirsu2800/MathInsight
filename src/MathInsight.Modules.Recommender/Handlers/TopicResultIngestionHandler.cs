@@ -11,25 +11,11 @@ namespace MathInsight.Modules.Recommender.Handlers;
 /// <summary>
 /// MediatR in-process handler for GradeCalculatedEvent.
 /// Triggered by Grading module (004) after a TestSession is graded.
-///
-/// Responsibilities per spec:
-///   RCM-08 — Idempotency: insert StudentTopicSessionResult only once per (session_id, tag_id).
-///   RCM-05 — ExamAnchor: Exponential Decay weighted average over k≤5 recent sessions (β=0.8).
-///   RCM-04 — OfficialPoint: 0.7 × ExamAnchor + 0.3 × PracticePoint.
-///   RCM-07 — RecommendedDifficultyLevel: derived from OfficialPoint.
-///   RCM-13 — MasteryStatus thresholds: NotLearned / Learning / Mastered.
-///   U3     — Lazy-create TagsMastery with neutral OfficialPoint=5.00 when no prior row exists.
-///   G1     — Trigger CompetencyEngine to recalculate CompetencyPoint after mastery update.
 /// </summary>
 public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalculatedEvent>
 {
-    // Exponential decay factor β (Ebbinghaus Forgetting Curve, RCM-05)
     private const decimal Beta = 0.8m;
-
-    // Maximum exam history window (RCM-05)
     private const int MaxExamHistory = 5;
-
-    // Mastery status threshold (RCM-13)
     private const decimal MasteredThreshold = 7.50m;
 
     private readonly RecommenderDbContext _db;
@@ -46,21 +32,17 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         if (notification.PerTagResults.Count == 0)
             return;
 
-        // We need a student grade to update CompetencyPoint.
-        // For MVP, derive grade from context if available; otherwise default to 0 (unknown).
-        // Full grade resolution from Identity module is deferred to a later phase.
-        const int defaultGrade = 0;
+        var student = await _db.Students
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.StudentId == notification.StudentId, cancellationToken);
 
-        // PerTagResults.TagId is a TagTopic (topic tag) ID, not a TagDifficulty ID.
-        // WeakTag evaluation is always per-topic. Difficulty is derived separately
-        // via RecommendedDifficultyLevel → TagDifficulty.LevelValue → DifficultyID.
         foreach (var tagResult in notification.PerTagResults)
         {
             await IngestTopicResultAsync(notification, tagResult, cancellationToken);
         }
 
-        // RCM-12 / G1: Recalculate CompetencyPoint once after all tags are updated.
-        await _competencyEngine.RecalculateAsync(notification.StudentId, defaultGrade, cancellationToken);
+        if (student?.CurrentGrade is int grade)
+            await _competencyEngine.RecalculateAsync(notification.StudentId, grade, cancellationToken);
     }
 
     private async Task IngestTopicResultAsync(
@@ -68,12 +50,13 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         TopicGradeResult tagResult,
         CancellationToken ct)
     {
-        // ── RCM-08: Idempotency ──────────────────────────────────────────────────
-        // Skip if (session_id, tag_id) already exists — safe to call multiple times.
-        bool alreadyIngested = await _db.StudentTopicSessionResults
-            .AnyAsync(r => r.SessionId == evt.SessionId && r.TagId == tagResult.TagId, ct);
+        var incomingRevision = Math.Max(1, evt.GradeRevision);
 
-        if (alreadyIngested)
+        // ── RCM-08: Idempotency ──────────────────────────────────────────────────
+        var existingResult = await _db.StudentTopicSessionResults
+            .FirstOrDefaultAsync(r => r.SessionId == evt.SessionId && r.TagId == tagResult.TagId, ct);
+
+        if (existingResult is not null && existingResult.GradeRevision >= incomingRevision)
             return;
 
         // ── U3 / RCM no-history: Lazy-create TagsMastery if absent ───────────────
@@ -84,12 +67,12 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         {
             mastery = new TagsMastery
             {
-                TagsMasteryId = Guid.NewGuid(),
+                TagsMasteryId = Guid.NewGuid().ToString(),
                 StudentId = evt.StudentId,
                 TagId = tagResult.TagId,
-                OfficialPoint = 5.00m,   // neutral baseline (RCM spec U3)
-                PracticePoint = 5.00m,
-                ExamAnchor = 5.00m,
+                OfficialPoint = 0.00m,
+                PracticePoint = 0.00m,
+                ExamAnchor = 0.00m,
                 MasteryStatus = "NotLearned",
                 NumberDone = 0,
                 SeriesAnswerCount = 0,
@@ -98,62 +81,87 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             _db.TagsMasteries.Add(mastery);
         }
 
-        decimal pointBefore = mastery.OfficialPoint;
-
         if (string.Equals(evt.TestFormat, "Exam", StringComparison.OrdinalIgnoreCase))
         {
             // ── RCM-05: Update ExamAnchor using Exponential Decay ───────────────────
             var history = DeserializeHistory(mastery.ExamHistory);
-            history.Insert(0, tagResult.TopicScore); // prepend — newest first
+            var existingHistoryIndex = history.FindIndex(item =>
+                string.Equals(item.SessionId, evt.SessionId, StringComparison.OrdinalIgnoreCase));
+            var hasUsableEvidence = tagResult.TotalItems > 0m;
+
+            if (!hasUsableEvidence && existingHistoryIndex >= 0)
+                history.RemoveAt(existingHistoryIndex);
+            else if (hasUsableEvidence && existingHistoryIndex >= 0)
+                history[existingHistoryIndex] = history[existingHistoryIndex] with
+                {
+                    GradeRevision = incomingRevision,
+                    TopicScore = tagResult.TopicScore,
+                    GradedAt = evt.GradedAt
+                };
+            else if (hasUsableEvidence)
+                history.Insert(0, new ExamHistoryEntry(
+                    evt.SessionId,
+                    incomingRevision,
+                    tagResult.TopicScore,
+                    evt.GradedAt));
+
             if (history.Count > MaxExamHistory)
-                history.RemoveAt(history.Count - 1); // drop oldest
+                history.RemoveAt(history.Count - 1);
 
             mastery.ExamAnchor = CalculateExamAnchor(history);
             mastery.ExamHistory = JsonSerializer.Serialize(history);
 
-            // ── RCM-04: Recalculate OfficialPoint ────────────────────────────────────
             mastery.OfficialPoint = Math.Clamp(
                 0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
                 0.00m, 10.00m);
+
+            mastery.PracticePoint = mastery.OfficialPoint;
         }
         else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
         {
-            // ── RCM-06: Update PracticePoint using Elo formula sequentially ─────────
-            var tagAnswers = (evt.Answers ?? Array.Empty<GradedAnswerDto>())
-                .Where(a => a.TagId == tagResult.TagId)
+            mastery.LastPracticedTime = evt.GradedAt;
+
+            var tagAnswers = (evt.Answers ?? [])
+                .Where(answer => HasTag(answer, tagResult.TagId))
                 .OrderBy(a => a.QuestionNo)
                 .ToList();
 
             foreach (var ans in tagAnswers)
             {
-                mastery.SeriesAnswerCount++;
-
-                decimal wD = ans.DifficultyLevel switch
+                if (existingResult is not null && ans.IsScoreInvalidated && ans.MachineIsCorrect is bool machineIsCorrect)
                 {
-                    1 => 0.5m,
-                    2 => 1.0m,
-                    3 => 1.5m,
-                    4 => 2.0m,
-                    _ => 1.0m
-                };
+                    decimal previousDelta = CalculatePracticeDelta(machineIsCorrect, ans);
+                    decimal tagWeight = GetTagWeight(ans, tagResult.TagId);
 
-                decimal timePenalty = (ans.TimeSpent < 5 && !ans.IsAbandoned) ? 1.5m : 1.0m;
+                    mastery.PracticePoint = Math.Clamp(
+                        mastery.PracticePoint - (previousDelta * tagWeight),
+                        0.00m,
+                        10.00m);
 
-                decimal delta = ans.IsCorrect
-                    ? 0.05m * wD
-                    : -0.05m * (5.0m - wD) * timePenalty;
-
-                mastery.PracticePoint = Math.Clamp(mastery.PracticePoint + delta, 0.00m, 10.00m);
-
-                mastery.OfficialPoint = Math.Clamp(
-                    0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
-                    0.00m, 10.00m);
-
-                if (mastery.SeriesAnswerCount >= 10)
-                {
-                    mastery.PracticePoint = mastery.OfficialPoint;
-                    mastery.SeriesAnswerCount = 0;
+                    mastery.SeriesAnswerCount = Math.Max(0, mastery.SeriesAnswerCount - 1);
                 }
+                else if (!ans.IsScoreInvalidated)
+                {
+                    decimal delta = CalculatePracticeDelta(ans.IsCorrect, ans);
+                    decimal tagWeight = GetTagWeight(ans, tagResult.TagId);
+
+                    mastery.PracticePoint = Math.Clamp(
+                        mastery.PracticePoint + (delta * tagWeight),
+                        0.00m,
+                        10.00m);
+
+                    mastery.SeriesAnswerCount++;
+                }
+            }
+
+            mastery.OfficialPoint = Math.Clamp(
+                0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
+                0.00m, 10.00m);
+
+            if (mastery.SeriesAnswerCount >= 10)
+            {
+                mastery.PracticePoint = mastery.OfficialPoint;
+                mastery.SeriesAnswerCount -= 10;
             }
         }
 
@@ -161,49 +169,59 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         mastery.RecommendedDifficultyLevel = MapDifficultyLevel(mastery.OfficialPoint);
 
         // ── RCM-13: Update MasteryStatus ──────────────────────────────────────────
-        mastery.NumberDone += tagResult.TotalCount;
-        mastery.NumCorrect += tagResult.CorrectCount;
+        int numDoneDelta = decimal.ToInt32(tagResult.TotalItems - (existingResult?.TotalItems ?? 0m));
+        int numCorrectDelta = decimal.ToInt32(tagResult.CorrectItems - (existingResult?.CorrectItems ?? 0m));
+
+        mastery.NumberDone = Math.Max(0, mastery.NumberDone + numDoneDelta);
+        mastery.NumCorrect = Math.Max(0, mastery.NumCorrect + numCorrectDelta);
         mastery.AccuracyRate = mastery.NumberDone > 0
-            ? Math.Round((decimal)mastery.NumCorrect / mastery.NumberDone, 4)
+            ? Math.Round((decimal)mastery.NumCorrect / mastery.NumberDone * 100m, 2)
             : 0m;
         mastery.MasteryStatus = DetermineMasteryStatus(mastery.NumberDone, mastery.OfficialPoint);
         mastery.LastCalculatedAt = evt.GradedAt;
 
-        decimal pointAfter = mastery.OfficialPoint;
+        var answersForTag = (evt.Answers ?? [])
+            .Where(answer => HasTag(answer, tagResult.TagId) && !answer.IsScoreInvalidated)
+            .ToList();
 
-        // ── RCM-08: Insert StudentTopicSessionResult ────────────────────────────
-        _db.StudentTopicSessionResults.Add(new StudentTopicSessionResult
+        decimal earnedPoints = answersForTag.Sum(a => a.PointsEarned);
+        decimal maxPoints = answersForTag.Sum(a => a.MaxPoints);
+
+        // ── RCM-08: Insert or Update StudentTopicSessionResult ───────────────────
+        if (existingResult is null)
         {
-            StudentTopicSessionResultId = Guid.NewGuid(),
-            StudentId = evt.StudentId,
-            SessionId = evt.SessionId,
-            TagId = tagResult.TagId,
-            TotalQuestions = tagResult.TotalCount,
-            CorrectCount = tagResult.CorrectCount,
-            WrongCount = tagResult.TotalCount - tagResult.CorrectCount,
-            TopicScore = tagResult.TopicScore,
-            PointBefore = pointBefore,
-            PointAfter = pointAfter,
-            CreatedTime = evt.GradedAt
-        });
+            existingResult = new StudentTopicSessionResult
+            {
+                StudentTopicSessionResultId = Guid.NewGuid().ToString(),
+                StudentId = evt.StudentId,
+                SessionId = evt.SessionId,
+                TagId = tagResult.TagId,
+                CreatedTime = evt.GradedAt
+            };
+            _db.StudentTopicSessionResults.Add(existingResult);
+        }
+
+        existingResult.TotalItems = tagResult.TotalItems;
+        existingResult.CorrectItems = tagResult.CorrectItems;
+        existingResult.EarnedPoints = earnedPoints;
+        existingResult.MaxPoints = maxPoints;
+        existingResult.TopicScore = tagResult.TopicScore;
+        existingResult.GradeRevision = incomingRevision;
 
         await _db.SaveChangesAsync(ct);
     }
 
-    // ── RCM-05: Exponential Decay formula ────────────────────────────────────────
-    // exam_anchor = Σ(j=1→k) [β^(j-1) × T_j] / Σ(j=1→k) [β^(j-1)]
-    // j=1 is the most recent (history[0]); β=0.8.
-    private static decimal CalculateExamAnchor(List<decimal> history)
+    private static decimal CalculateExamAnchor(List<ExamHistoryEntry> history)
     {
-        if (history.Count == 0) return 5.00m;
+        if (history.Count == 0) return 0.00m;
 
         decimal weightedSum = 0m;
         decimal weightSum = 0m;
-        decimal weight = 1m; // β^0 = 1 for j=1
+        decimal weight = 1m;
 
-        foreach (var score in history)
+        foreach (var entry in history)
         {
-            weightedSum += weight * score;
+            weightedSum += weight * entry.TopicScore;
             weightSum += weight;
             weight *= Beta;
         }
@@ -211,16 +229,14 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         return Math.Clamp(weightedSum / weightSum, 0.00m, 10.00m);
     }
 
-    // ── RCM-07: Difficulty level mapping ─────────────────────────────────────────
     private static byte MapDifficultyLevel(decimal officialPoint) => officialPoint switch
     {
         < 3.00m => 1,
         < 5.00m => 2,
         < 7.50m => 3,
-        _       => 4
+        _ => 4
     };
 
-    // ── RCM-13: MasteryStatus thresholds ─────────────────────────────────────────
     private static string DetermineMasteryStatus(int numberDone, decimal officialPoint)
     {
         if (numberDone == 0) return "NotLearned";
@@ -228,10 +244,63 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
         return "Learning";
     }
 
-    private static List<decimal> DeserializeHistory(string? json)
+    private static decimal CalculatePracticeDelta(bool isCorrect, GradedAnswerDto answer)
+    {
+        var difficultyWeight = answer.DifficultyLevel switch
+        {
+            1 => 0.5m,
+            2 => 1.0m,
+            3 => 1.5m,
+            4 => 2.0m,
+            _ => 1.0m
+        };
+        var timePenalty = answer.TimeSpent < 5 && !answer.IsAbandoned ? 1.5m : 1.0m;
+        return isCorrect
+            ? 0.05m * difficultyWeight
+            : -0.05m * (5.0m - difficultyWeight) * timePenalty;
+    }
+
+    private static bool HasTag(GradedAnswerDto answer, string tagId)
+        => answer.TagWeights.Any(weight => string.Equals(
+               weight.TagId,
+               tagId,
+               StringComparison.OrdinalIgnoreCase)) ||
+           (answer.TagWeights.Count == 0 && string.Equals(
+               answer.TagId,
+               tagId,
+               StringComparison.OrdinalIgnoreCase));
+
+    private static decimal GetTagWeight(GradedAnswerDto answer, string tagId)
+        => answer.TagWeights.FirstOrDefault(weight => string.Equals(
+               weight.TagId,
+               tagId,
+               StringComparison.OrdinalIgnoreCase))?.Weight ?? 1m;
+
+    private static List<ExamHistoryEntry> DeserializeHistory(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return [];
-        try { return JsonSerializer.Deserialize<List<decimal>>(json) ?? []; }
-        catch { return []; }
+        try
+        {
+            return JsonSerializer.Deserialize<List<ExamHistoryEntry>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            try
+            {
+                var legacy = JsonSerializer.Deserialize<List<decimal>>(json) ?? [];
+                return legacy.Select((score, index) => new ExamHistoryEntry(
+                    $"legacy-{index}", 1, score, DateTime.MinValue)).ToList();
+            }
+            catch (JsonException)
+            {
+                return [];
+            }
+        }
     }
+
+    private sealed record ExamHistoryEntry(
+        string SessionId,
+        int GradeRevision,
+        decimal TopicScore,
+        DateTime GradedAt);
 }

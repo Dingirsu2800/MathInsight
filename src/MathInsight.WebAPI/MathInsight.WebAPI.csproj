@@ -12,7 +12,14 @@
 		<PackageReference Include="Hangfire.AspNetCore" Version="1.8.11" />
 		<PackageReference Include="Azure.Identity" Version="1.11.4" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+		<!-- Swashbuckle is held on the 7.x line deliberately: the AddSwaggerGen block in
+		     Program.cs is written against Microsoft.OpenApi 1.x (Microsoft.OpenApi.Models,
+		     OpenApiReference-based security requirements), and its DocInclusionPredicate
+		     workaround documents 7.x behaviour. Swashbuckle 10.x requires Microsoft.OpenApi
+		     2.x, which deleted that namespace. Pin Microsoft.OpenApi too so the transitive
+		     version cannot drift between restores or machines. -->
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+		<PackageReference Include="Microsoft.OpenApi" Version="1.6.24" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\MathInsight.Shared\MathInsight.Shared.csproj" />

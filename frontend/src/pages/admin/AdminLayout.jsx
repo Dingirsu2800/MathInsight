@@ -37,7 +37,7 @@ export default function AdminLayout({ children }) {
       userName="Quản trị viên"
       userRoleLabel="Admin"
       userInitials="QT"
-      profilePath="/admin/profile"
+      profilePath="/profile"
       onLogout={handleLogout}
     >
       {children}

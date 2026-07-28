@@ -7,7 +7,7 @@ namespace MathInsight.Modules.Recommender.Services;
 /// <summary>
 /// SQL-only implementation of <see cref="IRecommenderService"/> for MVP.
 /// Reads TagsMastery and joins to TagTopic (read-only) to resolve tag names.
-/// Redis cache is optional for future optimization.
+/// Resolves TagDifficulty.DifficultyID based on RecommendedDifficultyLevel (1..4).
 /// </summary>
 public sealed class RecommenderService : IRecommenderService
 {
@@ -24,10 +24,8 @@ public sealed class RecommenderService : IRecommenderService
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(
-        Guid studentId, CancellationToken cancellationToken = default)
+        string studentId, CancellationToken cancellationToken = default)
     {
-        // RCM-03: WeakTag = official_point < 5.00.
-        // No-row behavior (MVP): Topics without a TagsMastery row are NOT returned as weak.
         var weakTags = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
@@ -36,7 +34,8 @@ public sealed class RecommenderService : IRecommenderService
             select new WeakTagDto(
                 tm.TagId,
                 tt.TagName,
-                tm.OfficialPoint)
+                tm.OfficialPoint,
+                tm.NumberDone)
         ).ToListAsync(cancellationToken);
 
         return weakTags;
@@ -44,8 +43,12 @@ public sealed class RecommenderService : IRecommenderService
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(
-        Guid studentId, CancellationToken cancellationToken = default)
+        string studentId, CancellationToken cancellationToken = default)
     {
+        var difficulties = await _db.TagDifficulties
+            .AsNoTracking()
+            .ToDictionaryAsync(td => td.LevelValue, td => td.DifficultyId, cancellationToken);
+
         var masteryRows = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
@@ -64,12 +67,17 @@ public sealed class RecommenderService : IRecommenderService
         {
             bool isWeak = _difficultyMapping.IsWeak(row.OfficialPoint);
             bool isRemedial = _difficultyMapping.IsRemedial(row.RecommendedDifficultyLevel, row.OfficialPoint);
+            bool isBottleneckWeak = _difficultyMapping.IsBottleneckWeak(row.OfficialPoint);
 
-            string reason = isRemedial
-                ? "RemedialLevel1"
-                : isWeak
-                    ? "OfficialPointBelow5"
-                    : "NormalPractice";
+            string reason = isBottleneckWeak
+                ? "BottleneckSubTag"
+                : isRemedial
+                    ? "RemedialLevel1"
+                    : isWeak
+                        ? "OfficialPointBelow5"
+                        : "NormalPractice";
+
+            difficulties.TryGetValue(row.RecommendedDifficultyLevel, out var difficultyId);
 
             return new WeakTagAdviceDto(
                 row.TagId,
@@ -78,7 +86,8 @@ public sealed class RecommenderService : IRecommenderService
                 IsWeak: isWeak,
                 RecommendedDifficultyLevel: row.RecommendedDifficultyLevel,
                 IsRemedial: isRemedial,
-                Reason: reason);
+                Reason: reason,
+                RecommendedDifficultyId: difficultyId);
         }).ToList();
 
         return result;

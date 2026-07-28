@@ -52,6 +52,21 @@ public static class AuthErrors
     public static Error ApplicationRejected(string? reviewComments) =>
         new(AuthErrorCodes.ApplicationRejected, reviewComments ?? string.Empty);
 
+    // UC-03. Distinct from InvalidCredentials: the caller is already authenticated, so this is a
+    // failed re-authentication of the current password, not a failed login. No account enumeration
+    // risk — the account id came from the caller's own token.
+    public static readonly Error InvalidCurrentPassword = new(
+        AuthErrorCodes.InvalidCurrentPassword,
+        "The current password is incorrect.");
+
+    public static readonly Error SamePassword = new(
+        AuthErrorCodes.SamePassword,
+        "The new password must be different from the current password.");
+
+    public static readonly Error NoPasswordSet = new(
+        AuthErrorCodes.NoPasswordSet,
+        "This account has no password to change; it signs in with Google.");
+
     /// <summary>Certificate failed BR-05 validation (400). Carries the validation detail.</summary>
     public static Error CertificateInvalid(string message) =>
         new(AuthErrorCodes.CertificateInvalid, message);

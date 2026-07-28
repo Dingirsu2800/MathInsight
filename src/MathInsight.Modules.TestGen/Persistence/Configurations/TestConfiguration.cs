@@ -20,6 +20,8 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
                 "[TestMode] <> 'BlueprintExam' OR [BlueprintID] IS NOT NULL");
             table.HasCheckConstraint("CK_Test_DurationMinutes", "[DurationMinutes] > 0");
             table.HasCheckConstraint("CK_Test_TotalQuestions", "[TotalQuestions] > 0");
+            table.HasCheckConstraint("CK_Test_MaxScore", "[MaxScore] > 0 AND [MaxScore] <= 100");
+            table.HasCheckConstraint("CK_Test_ScoringPolicy", "[ScoringPolicy] IN ('BlueprintBudget', 'NormalizedWeight')");
         });
 
         builder.HasKey(x => x.TestId).HasName("PK_Test");
@@ -64,6 +66,13 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
             .HasColumnName("DurationMinutes");
         builder.Property(x => x.TotalQuestions)
             .HasColumnName("TotalQuestions");
+        builder.Property(x => x.MaxScore)
+            .HasColumnName("MaxScore")
+            .HasPrecision(5, 2);
+        builder.Property(x => x.ScoringPolicy)
+            .HasColumnName("ScoringPolicy")
+            .HasMaxLength(30)
+            .IsUnicode(false);
         builder.Property(x => x.CreatedTime)
             .HasColumnName("CreatedTime")
             .HasColumnType("datetime2(0)")

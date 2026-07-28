@@ -1,4 +1,5 @@
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Imports;
 using MathInsight.Modules.QuestionBank.Persistence;
@@ -29,6 +30,13 @@ public sealed class ConfirmQuestionImportCommandHandler
         CancellationToken cancellationToken)
     {
         var request = command.Request;
+        if (string.IsNullOrWhiteSpace(request.ImportId))
+        {
+            return Result<QuestionImportConfirmResponse>.Success(Invalid(request.ImportId, [
+                Issue("Confirm", null, "ImportId", null, QuestionBankErrors.QuestionImportIdInvalid.Message, QuestionBankErrors.QuestionImportIdInvalid)
+            ]));
+        }
+
         if (request.Items is null || request.Items.Count == 0)
             return Result<QuestionImportConfirmResponse>.Success(Invalid(request.ImportId, [
                 Issue("Confirm", null, "Items", null, "At least one valid preview item must be selected.")
@@ -43,7 +51,7 @@ public sealed class ConfirmQuestionImportCommandHandler
         {
             if (string.IsNullOrWhiteSpace(item.QuestionKey) || item.QuestionKey.Length > 50)
             {
-                issues.Add(Issue("Confirm", null, "QuestionKey", item.QuestionKey, "QuestionKey is required and must not exceed 50 characters."));
+                issues.Add(Issue("Confirm", null, "QuestionKey", item.QuestionKey, QuestionBankErrors.QuestionImportQuestionKeyInvalid.Message, QuestionBankErrors.QuestionImportQuestionKeyInvalid));
                 continue;
             }
 
@@ -58,7 +66,7 @@ public sealed class ConfirmQuestionImportCommandHandler
 
         foreach (var duplicate in candidates.GroupBy(candidate => candidate.QuestionKey, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1))
         {
-            issues.Add(Issue("Confirm", null, "QuestionKey", duplicate.Key, "QuestionKey must be unique in the confirmation request."));
+            issues.Add(Issue("Confirm", null, "QuestionKey", duplicate.Key, QuestionBankErrors.QuestionImportQuestionKeyDuplicate.Message, QuestionBankErrors.QuestionImportQuestionKeyDuplicate));
         }
 
         if (issues.Count > 0)
@@ -74,6 +82,8 @@ public sealed class ConfirmQuestionImportCommandHandler
             QuestionRequestValidator.Validate(candidate.Draft, out var databaseQuestionType);
             var question = QuestionImportQuestionFactory.Create(candidate.Draft, command.ExpertId, databaseQuestionType!);
             _context.Questions.Add(question);
+            _context.QuestionVersions.Add(
+                QuestionVersionSnapshotFactory.Create(question, command.ExpertId, 1, question.CreatedTime));
             questions.Add((candidate.QuestionKey, question.QuestionId));
         }
 
@@ -107,8 +117,9 @@ public sealed class ConfirmQuestionImportCommandHandler
         int? row,
         string? column,
         string? questionKey,
-        string message) => new(
-            QuestionBankErrors.QuestionImportValidationFailed.Code,
+        string message,
+        Error? error = null) => new(
+            error?.Code ?? QuestionBankErrors.QuestionImportValidationFailed.Code,
             message,
             sheet,
             row,

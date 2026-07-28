@@ -15,6 +15,11 @@ public sealed class ImageUploadException : Exception
     {
     }
 
+    public ImageUploadException(string message)
+        : base(message)
+    {
+    }
+
     public ImageUploadException(Exception innerException)
         : base("Image upload failed.", innerException)
     {

@@ -7,10 +7,11 @@ namespace MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 /// </summary>
 public class Answer
 {
-    public Guid AnswerId { get; set; }
-    public Guid QuestionId { get; set; }
+    public string AnswerId { get; set; } = string.Empty;
+    public string QuestionId { get; set; } = string.Empty;
     public string AnswerContent { get; set; } = string.Empty;
     public bool IsCorrect { get; set; }
+    public bool IsArchived { get; set; }
 
     // Navigation
     public Question Question { get; set; } = null!;

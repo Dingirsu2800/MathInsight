@@ -1,89 +1,341 @@
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import StudentLayout from '../../components/layout/StudentLayout';
+import QuestionPanel from './test-session/QuestionPanel';
+import QuestionNav from './test-session/QuestionNav';
+import SessionTimer from './test-session/SessionTimer';
+import SubmitConfirmModal from './test-session/SubmitConfirmModal';
+import {
+  autoSaveAnswers,
+  getSessionContent,
+  recordIncident,
+  submitSession,
+  timeoutSubmitSession,
+} from '../../services/testingApi';
 
-export default function TestSession({ sessionId, testId }) {
+const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_SAVE_DEBOUNCE_MS = 1200;
+
+function adaptQuestion(question) {
+  return {
+    ...question,
+    options: (question.answerOptions || []).map((option) => ({
+      optionId: option.answerId,
+      content: option.answerContent,
+    })),
+    parts: (question.parts || []).map((part) => {
+      const normalizedType = (part.partType || '').toLowerCase();
+      const answerType = normalizedType.includes('num') || normalizedType.includes('number')
+        ? 'NUMERIC'
+        : normalizedType.includes('short') || normalizedType.includes('text')
+          ? 'TEXT'
+          : 'BOOLEAN';
+      return { ...part, content: part.partContent, answerType };
+    }),
+  };
+}
+
+function hydrateAnswers(savedAnswers = []) {
+  return Object.fromEntries(savedAnswers.map((answer) => [answer.questionId, {
+    answerId: answer.answerId || null,
+    shortAnswerText: answer.shortAnswerText || '',
+    timeSpent: answer.timeSpent || 0,
+    selectedOptions: (answer.selectedOptions || []).map((option) => option.answerId),
+    parts: (answer.parts || []).map((part) => ({ ...part })),
+  }]));
+}
+
+function toAutoSavePayload(answers) {
+  return Object.entries(answers).map(([questionId, answer]) => ({
+    questionId,
+    answerId: answer.answerId || null,
+    shortAnswerText: answer.shortAnswerText?.trim() || null,
+    timeSpent: answer.timeSpent || 0,
+    selectedOptions: (answer.selectedOptions || []).map((answerId) => ({ answerId })),
+    parts: (answer.parts || []).map((part) => ({
+      partId: part.partId,
+      booleanAnswer: part.booleanAnswer ?? null,
+      textAnswer: part.textAnswer?.trim() || null,
+      numericAnswer: part.numericAnswer === '' || part.numericAnswer == null
+        ? null
+        : Number(part.numericAnswer),
+    })),
+  }));
+}
+
+export default function TestSession() {
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
+  const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState({});
-  const [tabSwitches, setTabSwitches] = useState(0);
+  const [currentQuestionId, setCurrentQuestionId] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [incidentCount, setIncidentCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        return;
-      }
+  const answersRef = useRef(answers);
+  const sessionRef = useRef(session);
+  const dirtyRef = useRef(false);
+  const submitInFlightRef = useRef(false);
+  const autoSaveTimerRef = useRef(null);
+  const autoSaveQueueRef = useRef(Promise.resolve());
+  const questionStartTimeRef = useRef(Date.now());
+  const previousQuestionIdRef = useRef(null);
+  answersRef.current = answers;
+  sessionRef.current = session;
 
-      setTabSwitches((previousCount) => {
-        const updatedCount = previousCount + 1;
+  const loadSession = useCallback(async () => {
+    if (!sessionId) {
+      setError('Mã phiên làm bài không hợp lệ.');
+      setLoading(false);
+      return;
+    }
 
-        api.post(`/testing/sessions/${sessionId}/incidents`, {
-          incidentType: 'TabSwitch',
-          details: `Student switched tabs. Total incidents: ${updatedCount}`,
-        }).catch((error) => {
-          console.error('Error logging incident', error);
-        });
-
-        alert(
-          `Cảnh báo an toàn thi cử: bạn vừa rời tab làm bài. Đây là lần vi phạm thứ ${updatedCount}.`
-        );
-
-        return updatedCount;
-      });
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getSessionContent(sessionId);
+      const questions = (data.questions || []).map(adaptQuestion);
+      const view = { ...data, questions };
+      const persistedAnswers = hydrateAnswers(data.savedAnswers);
+      setSession(view);
+      setAnswers(persistedAnswers);
+      answersRef.current = persistedAnswers;
+      setRemainingSeconds(data.remainingSeconds ?? data.durationMinutes * 60);
+      setCurrentQuestionId((current) => current || questions[0]?.questionId || null);
+      dirtyRef.current = false;
+    } catch {
+      setError('Không thể tải phiên làm bài. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   }, [sessionId]);
 
-  const handleSelectAnswer = (questionId, optionValue) => {
-    setAnswers((currentAnswers) => ({
-      ...currentAnswers,
-      [questionId]: optionValue,
-    }));
-  };
+  useEffect(() => {
+    loadSession();
+  }, [loadSession]);
 
-  const handleSubmit = async (format) => {
+  useEffect(() => () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!currentQuestionId) return;
+    const previousId = previousQuestionIdRef.current;
+    const now = Date.now();
+    if (previousId && previousId !== currentQuestionId) {
+      const elapsed = Math.max(0, Math.floor((now - questionStartTimeRef.current) / 1000));
+      if (elapsed > 0) {
+        setAnswers((current) => ({
+          ...current,
+          [previousId]: {
+            ...(current[previousId] || {}),
+            timeSpent: (current[previousId]?.timeSpent || 0) + elapsed,
+          },
+        }));
+        dirtyRef.current = true;
+      }
+    }
+    previousQuestionIdRef.current = currentQuestionId;
+    questionStartTimeRef.current = now;
+  }, [currentQuestionId]);
+
+  const handleTimeoutSubmit = useCallback(async () => {
+    if (!sessionId || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    setSubmitting(true);
     try {
-      const response = await api.post('/testing/submit', {
-        studentId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-        testId,
-        testFormat: format,
-        answers,
-      });
+      await timeoutSubmitSession(sessionId);
+      navigate(`/student/test-result/${sessionId}`);
+    } catch (requestError) {
+      const code = requestError.response?.data?.code;
+      if (code === 'TESTING_SESSION_NOT_EXPIRED') {
+        submitInFlightRef.current = false;
+        setSubmitting(false);
+        await loadSession();
+        return;
+      }
+      // Session already completed (Submitted/Graded by another path) → go to result
+      if (code === 'TESTING_SESSION_ALREADY_COMPLETED') {
+        navigate(`/student/test-result/${sessionId}`);
+        return;
+      }
+      setError('Không thể tự động nộp bài hết giờ. Vui lòng thử lại.');
+      submitInFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }, [loadSession, navigate, sessionId]);
 
-      alert(`Bài làm đã được nộp. Trạng thái server: ${response.data.status}`);
+  const performAutoSave = useCallback(async () => {
+    if (!sessionId || sessionRef.current?.status !== 'InProgress' || !dirtyRef.current) return;
+    const payload = toAutoSavePayload(answersRef.current);
+    dirtyRef.current = false;
+
+    const request = autoSaveQueueRef.current.catch(() => undefined).then(async () => {
+      try {
+        const result = await autoSaveAnswers(sessionId, payload);
+        if (result.remainingSeconds != null) setRemainingSeconds(result.remainingSeconds);
+      } catch (requestError) {
+        if (requestError.response?.data?.code === 'TESTING_SESSION_EXPIRED') {
+          await handleTimeoutSubmit();
+          return;
+        }
+        dirtyRef.current = true;
+        throw requestError;
+      }
+    });
+    autoSaveQueueRef.current = request;
+    return request;
+  }, [handleTimeoutSubmit, sessionId]);
+
+  useEffect(() => {
+    if (session?.status !== 'InProgress') return undefined;
+    const interval = setInterval(() => performAutoSave().catch(() => undefined), AUTO_SAVE_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [performAutoSave, session?.status]);
+
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      performAutoSave().catch(() => undefined);
+    }, AUTO_SAVE_DEBOUNCE_MS);
+  }, [performAutoSave]);
+
+  const handleAnswer = useCallback((questionId, update) => {
+    setAnswers((current) => {
+      const next = {
+        ...current,
+        [questionId]: { ...(current[questionId] || {}), ...update },
+      };
+      answersRef.current = next;
+      return next;
+    });
+    dirtyRef.current = true;
+    scheduleAutoSave();
+  }, [scheduleAutoSave]);
+
+  const isExam = session?.testFormat === 'Exam';
+  useEffect(() => {
+    if (!sessionId || !isExam || session?.status !== 'InProgress') return undefined;
+    const handleVisibility = async () => {
+      if (!document.hidden || submitInFlightRef.current) return;
+      try {
+        const result = await recordIncident(sessionId, 'TAB_SWITCH');
+        setIncidentCount(result.totalIncidents);
+        if (result.forceSubmitted) navigate(`/student/test-result/${sessionId}`);
+      } catch {
+        // Incident logging failure must not block the test UI.
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [isExam, navigate, session?.status, sessionId]);
+
+  const questions = session?.questions || [];
+  const currentIndex = questions.findIndex((question) => question.questionId === currentQuestionId);
+  const currentQuestion = questions[currentIndex] || questions[0];
+  const answeredIds = useMemo(() => new Set(Object.entries(answers)
+    .filter(([, answer]) => answer.answerId
+      || answer.shortAnswerText?.trim()
+      || answer.selectedOptions?.length
+      || answer.parts?.some((part) => part.booleanAnswer != null
+        || part.textAnswer?.trim()
+        || part.numericAnswer != null))
+    .map(([questionId]) => questionId)), [answers]);
+  const unansweredCount = questions.length - answeredIds.size;
+
+  const handleConfirmSubmit = async () => {
+    if (!sessionId || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    setSubmitting(true);
+    try {
+      if (dirtyRef.current) await performAutoSave();
+      await submitSession(sessionId);
+      navigate(`/student/test-result/${sessionId}`);
     } catch {
-      alert('Nộp bài thất bại. Kiểm tra backend API rồi thử lại.');
+      setError('Nộp bài thất bại. Vui lòng thử lại.');
+      submitInFlightRef.current = false;
+      setSubmitting(false);
+      setShowSubmitModal(false);
     }
   };
 
-  return (
-    <main className="page">
-      <p className="eyebrow">Testing</p>
-      <h1>Phiên làm bài MathInsight</h1>
-      <p className="danger">Số lần rời tab: {tabSwitches} / 10</p>
+  const handleRetrySubmit = useCallback(async () => {
+    setError(null);
+    submitInFlightRef.current = false;
+    await handleTimeoutSubmit();
+  }, [handleTimeoutSubmit]);
 
-      <section className="card panel">
-        <h2>Câu hỏi mẫu</h2>
-        <p>Tìm họ nghiệm của phương trình sin(x) = sin(α).</p>
-        <div className="button-row">
-          <button type="button" onClick={() => handleSelectAnswer('q1', 'a')}>
-            A. x = α + k2π hoặc x = π - α + k2π
-          </button>
-          <button type="button" onClick={() => handleSelectAnswer('q1', 'b')}>
-            B. x = α + kπ hoặc x = -α + kπ
-          </button>
+  if (loading) {
+    return <StudentLayout><div className="flex items-center justify-center py-24"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div></StudentLayout>;
+  }
+
+  if (error || !session) {
+    return (
+      <StudentLayout>
+        <div className="flex items-center justify-center py-24">
+          <div className="bg-pure-surface border border-whisper-border rounded-xl p-8 max-w-md text-center shadow-sm">
+            <span className="material-symbols-outlined text-4xl text-deep-rose mb-3">error</span>
+            <h3 className="text-lg font-bold text-on-surface mb-2">Không thể tiếp tục</h3>
+            <p className="text-sm text-on-surface-variant mb-4">{error || 'Lỗi không xác định.'}</p>
+            <div className="flex items-center justify-center gap-3">
+              {session && (
+                <button
+                  onClick={handleRetrySubmit}
+                  disabled={submitting}
+                  className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                >
+                  {submitting ? 'Đang gửi...' : 'Thử lại'}
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/student/test')}
+                className="px-6 py-2 border border-whisper-border text-on-surface rounded-lg text-sm font-bold hover:bg-surface-container-low"
+              >
+                Quay lại chọn đề
+              </button>
+            </div>
+          </div>
         </div>
-      </section>
+      </StudentLayout>
+    );
+  }
 
-      <div className="button-row" style={{ marginTop: 16 }}>
-        <button type="button" onClick={() => handleSubmit('Practice')}>
-          Nộp bài luyện tập
-        </button>
-        <button type="button" className="button-secondary" onClick={() => handleSubmit('Exam')}>
-          Nộp bài thi
-        </button>
+  return (
+    <StudentLayout>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-on-surface">{session.testName}</h2>
+            <p className="text-sm text-on-surface-variant">{questions.length} câu hỏi · {session.durationMinutes} phút</p>
+          </div>
+          <div className="flex items-center gap-4">
+            {isExam && incidentCount > 0 && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-700">{incidentCount}/5 vi phạm</span>}
+            {isExam && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-600 border border-red-200">Giám sát bật</span>}
+            <SessionTimer remainingSeconds={remainingSeconds} onTimeUp={handleTimeoutSubmit} />
+            <button onClick={() => setShowSubmitModal(true)} disabled={submitting} className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-bold disabled:opacity-50">Nộp bài</button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12 lg:col-span-8 xl:col-span-9">
+            <QuestionPanel question={currentQuestion} answer={answers[currentQuestion?.questionId]} onAnswer={handleAnswer} totalQuestions={questions.length} />
+            <div className="flex items-center justify-between mt-4">
+              <button onClick={() => setCurrentQuestionId(questions[currentIndex - 1]?.questionId)} disabled={currentIndex <= 0} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30">Câu trước</button>
+              <button onClick={() => setCurrentQuestionId(questions[currentIndex + 1]?.questionId)} disabled={currentIndex >= questions.length - 1} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30">Câu tiếp</button>
+            </div>
+          </div>
+          <div className="col-span-12 lg:col-span-4 xl:col-span-3">
+            <div className="sticky top-6"><QuestionNav questions={questions} answeredIds={answeredIds} currentQuestionId={currentQuestionId} onSelect={setCurrentQuestionId} /></div>
+          </div>
+        </div>
       </div>
-    </main>
+
+      <SubmitConfirmModal isOpen={showSubmitModal} unansweredCount={unansweredCount} totalQuestions={questions.length} onConfirm={handleConfirmSubmit} onCancel={() => setShowSubmitModal(false)} submitting={submitting} />
+    </StudentLayout>
   );
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Learning_Lecture.Entities;
 using System.Reflection;
 
@@ -18,6 +18,7 @@ public class LearningDbContext : DbContext
     public DbSet<DiscussionAnswer> DiscussionAnswers => Set<DiscussionAnswer>();
     public DbSet<DiscussionReport> DiscussionReports => Set<DiscussionReport>();
     public DbSet<TagTopicReadOnly> TagTopics => Set<TagTopicReadOnly>();
+    public DbSet<AccountProfileView> AccountProfileViews => Set<AccountProfileView>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

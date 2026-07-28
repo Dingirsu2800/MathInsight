@@ -8,20 +8,20 @@ public class TestAnswerConfiguration : IEntityTypeConfiguration<TestAnswer>
 {
     public void Configure(EntityTypeBuilder<TestAnswer> builder)
     {
-        builder.ToTable("TestAnswer");
+        builder.ToTable("TestAnswer", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.TestAnswerId);
 
-        builder.Property(x => x.TestAnswerId).HasColumnName("test_answer_id");
-        builder.Property(x => x.SessionId).HasColumnName("session_id");
-        builder.Property(x => x.QuestionId).HasColumnName("question_id");
-        builder.Property(x => x.AnswerId).HasColumnName("answer_id");
-        builder.Property(x => x.QuestionNo).HasColumnName("question_no");
-        builder.Property(x => x.TimeSpent).HasColumnName("time_spent");
-        builder.Property(x => x.FirstChoiceTime).HasColumnName("first_choice_time");
-        builder.Property(x => x.UpdateChoiceTime).HasColumnName("update_choice_time");
-        builder.Property(x => x.ShortAnswerText).HasColumnName("short_answer_text").HasMaxLength(500);
-        builder.Property(x => x.IsCorrect).HasColumnName("is_correct");
-        builder.Property(x => x.PointsEarned).HasColumnName("points_earned").HasPrecision(5, 2);
+        builder.Property(x => x.TestAnswerId).HasColumnName("TestAnswerID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.SessionId).HasColumnName("SessionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.QuestionId).HasColumnName("QuestionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.AnswerId).HasColumnName("AnswerID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(x => x.QuestionNo).HasColumnName("QuestionNo");
+        builder.Property(x => x.TimeSpent).HasColumnName("TimeSpent");
+        builder.Property(x => x.FirstChoiceTime).HasColumnName("FirstChoiceTime");
+        builder.Property(x => x.UpdateChoiceTime).HasColumnName("UpdateChoiceTime");
+        builder.Property(x => x.ShortAnswerText).HasColumnName("ShortAnswerText");
+        builder.Property(x => x.IsCorrect).HasColumnName("IsCorrect");
+        builder.Property(x => x.PointsEarned).HasColumnName("PointsEarned").HasPrecision(5, 2);
 
         builder.HasOne(x => x.Session)
                .WithMany(s => s.TestAnswers)
@@ -39,5 +39,10 @@ public class TestAnswerConfiguration : IEntityTypeConfiguration<TestAnswer>
         builder.HasMany(x => x.AnswerParts)
                .WithOne(p => p.TestAnswer)
                .HasForeignKey(p => p.TestAnswerId);
+
+        // TestQuestion navigation is resolved manually in GradingOrchestrator
+        // because TestQuestion PK is (TestId, QuestionId) and TestAnswer only has QuestionId.
+        // TestId comes from the parent TestSession.TestId.
+        builder.Ignore(x => x.TestQuestion);
     }
 }

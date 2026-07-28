@@ -41,21 +41,24 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Guid studentId, Guid sessionId, Guid tagId, decimal topicScore)
         => new()
         {
-            StudentId    = studentId,
-            SessionId    = sessionId,
-            TestId       = Guid.NewGuid(),
-            TestFormat   = "Exam",
-            Score        = topicScore,
-            NumCorrect   = 1,
+            StudentId = studentId.ToString(),
+            SessionId = sessionId.ToString(),
+            TestId = Guid.NewGuid().ToString(),
+            GradeRevision = 1,
+            TestFormat = "Exam",
+            Score = topicScore,
+            NumCorrect = 1,
             NumIncorrect = 0,
             NumAbandoned = 0,
-            GradedAt     = DateTime.UtcNow,
+            GradedAt = DateTime.UtcNow,
             PerTagResults = [new TopicGradeResult
             {
-                TagId        = tagId,
+                TagId        = tagId.ToString(),
                 TopicScore   = topicScore,
-                CorrectCount = 1,
-                TotalCount   = 1
+                CorrectItems = 1,
+                TotalItems   = 1,
+                EarnedPoints = topicScore / 10m,
+                MaxPoints = 1m
             }]
         };
 
@@ -64,27 +67,33 @@ public class TopicResultIngestionHandlerTests : IDisposable
         bool isCorrect, byte difficultyLevel, int timeSpent = 10)
         => new()
         {
-            StudentId    = studentId,
-            SessionId    = sessionId,
-            TestId       = Guid.NewGuid(),
-            TestFormat   = "Practice",
-            Score        = isCorrect ? 10m : 0m,
-            NumCorrect   = isCorrect ? 1 : 0,
+            StudentId = studentId.ToString(),
+            SessionId = sessionId.ToString(),
+            TestId = Guid.NewGuid().ToString(),
+            GradeRevision = 1,
+            TestFormat = "Practice",
+            Score = isCorrect ? 10m : 0m,
+            NumCorrect = isCorrect ? 1 : 0,
             NumIncorrect = isCorrect ? 0 : 1,
-            GradedAt     = DateTime.UtcNow,
+            GradedAt = DateTime.UtcNow,
             PerTagResults = [new TopicGradeResult
             {
-                TagId        = tagId,
+                TagId        = tagId.ToString(),
                 TopicScore   = isCorrect ? 10m : 0m,
-                CorrectCount = isCorrect ? 1 : 0,
-                TotalCount   = 1
+                CorrectItems = isCorrect ? 1 : 0,
+                TotalItems   = 1,
+                EarnedPoints = isCorrect ? 1m : 0m,
+                MaxPoints = 1m
             }],
             Answers = [new GradedAnswerDto
             {
-                QuestionId      = Guid.NewGuid(),
-                TagId           = tagId,
+                QuestionId      = Guid.NewGuid().ToString(),
+                TagId           = tagId.ToString(),
+                TagWeights      = [new TagWeightEntry { TagId = tagId.ToString(), Weight = 1.0m, IsPrimary = true }],
+                NormalizedScore = isCorrect ? 10m : 0m,
                 IsCorrect       = isCorrect,
                 PointsEarned    = isCorrect ? 1m : 0m,
+                MaxPoints       = 1m,
                 TimeSpent       = timeSpent,
                 DifficultyLevel = difficultyLevel,
                 QuestionNo      = 1,
@@ -106,19 +115,19 @@ public class TopicResultIngestionHandlerTests : IDisposable
         // First handle
         await _handler.Handle(evt, default);
         var masteryAfterFirst = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
         var pointAfterFirst = masteryAfterFirst.OfficialPoint;
 
         // Second handle — same session, same tag — must be idempotent
         await _handler.Handle(evt, default);
         var masteryAfterSecond = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.Equal(pointAfterFirst, masteryAfterSecond.OfficialPoint);
 
         // Also verify only 1 StudentTopicSessionResult row
         var sessionResultCount = await _db.StudentTopicSessionResults
-            .CountAsync(r => r.SessionId == sessionId && r.TagId == tagId);
+            .CountAsync(r => r.SessionId == sessionId.ToString() && r.TagId == tagId.ToString());
         Assert.Equal(1, sessionResultCount);
     }
 
@@ -136,18 +145,18 @@ public class TopicResultIngestionHandlerTests : IDisposable
 
         // StudentTopicSessionResult should be inserted
         var sessionResult = await _db.StudentTopicSessionResults
-            .FirstOrDefaultAsync(r => r.SessionId == sessionId && r.TagId == tagId);
+            .FirstOrDefaultAsync(r => r.SessionId == sessionId.ToString() && r.TagId == tagId.ToString());
         Assert.NotNull(sessionResult);
         Assert.Equal(9.00m, sessionResult.TopicScore);
 
         // TagsMastery should be lazy-created and updated
         var mastery = await _db.TagsMasteries
-            .FirstOrDefaultAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstOrDefaultAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
         Assert.NotNull(mastery);
         // ExamAnchor after one exam result = T1 = 9.00
         Assert.Equal(9.00m, mastery.ExamAnchor);
-        // OfficialPoint = 0.7×9 + 0.3×5 (initial practice) = 6.3 + 1.5 = 7.8
-        Assert.Equal(7.80m, mastery.OfficialPoint);
+        // OfficialPoint = 0.7×9 + 0.3×0 (initial practice) = 6.30
+        Assert.Equal(6.30m, mastery.OfficialPoint);
     }
 
     // ── Test: TagsMastery unique key is (student_id, tag_id) only ──────────────
@@ -165,10 +174,50 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 9.00m), default);
 
         var masteryCount = await _db.TagsMasteries
-            .CountAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .CountAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         // Unique key: only 1 row must exist
         Assert.Equal(1, masteryCount);
+    }
+
+    [Fact]
+    public async Task Handle_RevisedOlderExam_ReplacesMatchingSessionAndIgnoresStaleRevision()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+        var olderSessionId = Guid.NewGuid();
+
+        var olderEvent = MakeExamEvent(studentId, olderSessionId, tagId, topicScore: 2.00m);
+        await _handler.Handle(olderEvent, default);
+        await _handler.Handle(
+            MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 8.00m), default);
+
+        var revisedResult = new TopicGradeResult
+        {
+            TagId = tagId.ToString(),
+            TopicScore = 10m,
+            CorrectItems = 1,
+            TotalItems = 1,
+            EarnedPoints = 1m,
+            MaxPoints = 1m
+        };
+        await _handler.Handle(olderEvent with
+        {
+            GradeRevision = 2,
+            GradedAt = DateTime.UtcNow.AddMinutes(1),
+            PerTagResults = [revisedResult]
+        }, default);
+
+        var mastery = await _db.TagsMasteries.SingleAsync();
+        Assert.Equal(8.89m, Math.Round(mastery.ExamAnchor, 2));
+        var snapshot = await _db.StudentTopicSessionResults
+            .SingleAsync(item => item.SessionId == olderSessionId.ToString());
+        Assert.Equal(2, snapshot.GradeRevision);
+        Assert.Equal(10m, snapshot.TopicScore);
+
+        await _handler.Handle(olderEvent, default);
+        Assert.Equal(2, snapshot.GradeRevision);
+        Assert.Equal(10m, snapshot.TopicScore);
     }
 
     // ── Test: WeakTags query returns only rows with official_point < 5.00 ────
@@ -184,7 +233,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 0.00m), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.True(mastery.OfficialPoint < 5.00m, $"Expected weak but got {mastery.OfficialPoint}");
     }
@@ -200,7 +249,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 10.00m), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.False(mastery.OfficialPoint < 5.00m, $"Expected not weak but got {mastery.OfficialPoint}");
     }
@@ -213,12 +262,16 @@ public class TopicResultIngestionHandlerTests : IDisposable
         var studentId = Guid.NewGuid();
         var tagId = Guid.NewGuid();
 
+        // Seed student with grade 11 to test grade resolution
+        _db.Students.Add(new StudentReadOnly { StudentId = studentId.ToString(), CurrentGrade = 11 });
+        await _db.SaveChangesAsync();
+
         await _handler.Handle(
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 8.00m), default);
 
-        // CompetencyPoint should exist for grade=0 (MVP default)
+        // CompetencyPoint should exist for grade=11 (resolved from student)
         var cp = await _db.CompetencyPoints
-            .FirstOrDefaultAsync(c => c.StudentId == studentId);
+            .FirstOrDefaultAsync(c => c.StudentId == studentId.ToString() && c.Grade == 11);
         Assert.NotNull(cp);
         Assert.True(cp.Point >= 0m && cp.Point <= 10m);
     }
@@ -241,7 +294,7 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Assert.Null(exception);
 
         var mastery = await _db.TagsMasteries
-            .FirstOrDefaultAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstOrDefaultAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
         Assert.NotNull(mastery);
     }
 
@@ -259,10 +312,57 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakePracticeEvent(studentId, sessionId, tagId, isCorrect: true, difficultyLevel: 2), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
-        // PracticePoint started at 5.00 (lazy-create), Δ=+0.05 → 5.05
-        Assert.Equal(5.05m, mastery.PracticePoint);
+        // PracticePoint started at 0.00 (lazy-create), Δ=+0.05 → 0.05
+        Assert.Equal(0.05m, mastery.PracticePoint);
+    }
+
+    [Fact]
+    public async Task Handle_RevisedPractice_ReversesMachineDeltaWithoutDoubleCounting()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var original = MakePracticeEvent(
+            studentId, sessionId, tagId, isCorrect: true, difficultyLevel: 2);
+        await _handler.Handle(original, default);
+
+        var revisedAnswers = original.Answers.Select(answer => answer with
+        {
+            IsCorrect = true,
+            MachineIsCorrect = true,
+            IsScoreInvalidated = true,
+            PointsEarned = 1m
+        }).ToList();
+        await _handler.Handle(original with
+        {
+            GradeRevision = 2,
+            Score = 10m,
+            NumCorrect = 0,
+            NumIncorrect = 0,
+            GradedAt = DateTime.UtcNow.AddMinutes(1),
+            Answers = revisedAnswers,
+            PerTagResults =
+            [
+                new TopicGradeResult
+                {
+                    TagId = tagId.ToString(),
+                    TopicScore = 0m,
+                    CorrectItems = 0,
+                    TotalItems = 0,
+                    EarnedPoints = 0m,
+                    MaxPoints = 0m
+                }
+            ]
+        }, default);
+
+        var mastery = await _db.TagsMasteries.SingleAsync();
+        Assert.Equal(0.00m, mastery.PracticePoint);
+        Assert.Equal(0, mastery.NumberDone);
+        Assert.Equal(0, mastery.NumCorrect);
+        Assert.Equal(0m, mastery.AccuracyRate);
+        Assert.Equal(0, mastery.SeriesAnswerCount);
     }
 
     // ── Test: Lecture/material recommendations prioritize remedial weak topics ─
@@ -278,9 +378,28 @@ public class TopicResultIngestionHandlerTests : IDisposable
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 0.00m), default);
 
         var mastery = await _db.TagsMasteries
-            .FirstAsync(tm => tm.StudentId == studentId && tm.TagId == tagId);
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
         Assert.Equal(1, mastery.RecommendedDifficultyLevel);
         Assert.True(mastery.OfficialPoint < 5.00m);
+    }
+
+    // ── Test: Exam event resets PracticePoint to OfficialPoint per BR-09b ─────
+
+    [Fact]
+    public async Task Handle_ExamEvent_ResetsPracticePointToOfficialPoint_PerBR09b()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+
+        await _handler.Handle(
+            MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 9.00m), default);
+
+        var mastery = await _db.TagsMasteries
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
+
+        // OfficialPoint = 0.7*9 + 0.3*0 = 6.30. PracticePoint must be reset to OfficialPoint (6.30)
+        Assert.Equal(6.30m, mastery.OfficialPoint);
+        Assert.Equal(mastery.OfficialPoint, mastery.PracticePoint);
     }
 }

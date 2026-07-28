@@ -8,4 +8,6 @@ public sealed record ReportQuestionResponse(
     string Status,
     DateTime CreatedTime,
     string QuestionStatus,
-    bool QuestionIsActive);
+    bool QuestionIsActive,
+    string? SessionId,
+    string? QuestionVersionId);

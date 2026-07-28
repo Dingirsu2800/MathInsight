@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 
 /**
@@ -12,6 +15,13 @@ export default function QuestionAnswerCard({
   difficultyClass = 'bg-primary-fixed text-primary',
   options = [],
   solution = [],
+  machinePoints = 0,
+  effectivePoints = 0,
+  maxPoints = 0,
+  isScoreInvalidated = false,
+  reportReason,
+  scoreAdjustedTime,
+  onReport,
 }) {
   const [showSolution, setShowSolution] = useState(false);
 
@@ -32,7 +42,26 @@ export default function QuestionAnswerCard({
 
       {/* Body */}
       <div className="p-6">
-        <p className="text-base mb-4 text-on-surface">{question}</p>
+        {isScoreInvalidated && (
+          <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-center gap-2 font-bold">
+              <MaterialIcon name="warning" size={18} />
+              Câu hỏi đã bị vô hiệu hóa sau khi chấm
+            </div>
+            <p className="mt-1">{reportReason || 'Câu hỏi hoặc đáp án của phiên bản này đã được xác nhận có lỗi.'}</p>
+            <p className="mt-2 font-mono text-xs">
+              Điểm máy chấm: {Number(machinePoints).toFixed(2)} · Điểm hiệu lực: {Number(effectivePoints).toFixed(2)} / {Number(maxPoints).toFixed(2)}
+            </p>
+            {scoreAdjustedTime && (
+              <p className="mt-1 text-xs">Điều chỉnh lúc {new Date(scoreAdjustedTime).toLocaleString('vi-VN')}</p>
+            )}
+          </div>
+        )}
+        <div className="text-base mb-4 text-on-surface prose prose-sm max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {question || ''}
+          </ReactMarkdown>
+        </div>
 
         {/* Options grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -60,7 +89,14 @@ export default function QuestionAnswerCard({
                 key={opt.label}
                 className={`p-4 border rounded-lg flex items-center justify-between text-sm ${borderClass} ${bgClass}`}
               >
-                <span>{opt.label}. {opt.text}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">{opt.label}.</span>
+                  <div className="prose prose-sm max-w-none inline-block">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {opt.text || ''}
+                    </ReactMarkdown>
+                  </div>
+                </div>
                 {iconEl}
               </div>
             );
@@ -69,6 +105,12 @@ export default function QuestionAnswerCard({
 
         {/* Solution toggle */}
         <div className="mt-6 pt-6 border-t border-whisper-border">
+          <div className="mb-4 flex items-center justify-between gap-4 text-sm">
+            <span className="text-on-surface-variant">Điểm</span>
+            <span className="font-mono font-bold text-primary">
+              {Number(effectivePoints).toFixed(2)} / {Number(maxPoints).toFixed(2)}
+            </span>
+          </div>
           <button
             className="flex items-center gap-2 text-primary font-bold text-sm hover:underline"
             onClick={() => setShowSolution(!showSolution)}
@@ -85,7 +127,11 @@ export default function QuestionAnswerCard({
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết:</h4>
               <div className="space-y-3 text-sm text-on-surface-variant">
                 {solution.map((step, i) => (
-                  <p key={i}>{step}</p>
+                  <div key={i} className="prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {step}
+                    </ReactMarkdown>
+                  </div>
                 ))}
               </div>
               <button className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm">
@@ -93,6 +139,16 @@ export default function QuestionAnswerCard({
                 💬 Hỏi AI giải thích câu này
               </button>
             </div>
+          )}
+          {!isScoreInvalidated && onReport && (
+            <button
+              type="button"
+              className="mt-4 flex items-center gap-2 text-sm font-bold text-error hover:underline"
+              onClick={onReport}
+            >
+              <MaterialIcon name="flag" size={18} />
+              Báo cáo câu hỏi
+            </button>
           )}
         </div>
       </div>

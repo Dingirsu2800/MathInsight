@@ -6,6 +6,7 @@ using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Scoring;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -93,14 +94,19 @@ public sealed class GenerateBlueprintExamCommandHandler
         if (blueprint.Grade != studentGrade)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.GradeMismatch);
 
-        var requirements = BuildRequirements(blueprint);
-        if (!HasValidStructure(blueprint, requirements))
+        var requirements = BlueprintExamGenerationPlanner.BuildRequirements(blueprint);
+        if (BlueprintExamGenerationPlanner.ValidateStructure(blueprint, requirements) != BlueprintExamStructureError.None)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.BlueprintUnavailable);
 
-        var candidates = await _candidateProvider.GetCandidatesAsync(blueprint, cancellationToken);
-        var selection = _selector.Select(requirements, candidates, cancellationToken);
+        var candidatePool = await _candidateProvider.GetCandidatesAsync(blueprint, cancellationToken);
+        var selection = _selector.Select(requirements, candidatePool.Candidates, cancellationToken);
         if (!selection.IsComplete || selection.Assignments.Count != blueprint.TotalQuestions)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.InsufficientQuestions);
+
+        var preparedQuestions = BlueprintExamGenerationPlanner.PrepareQuestions(
+            blueprint,
+            selection,
+            candidatePool.Candidates);
 
         var test = new TestEntity
         {
@@ -114,24 +120,31 @@ public sealed class GenerateBlueprintExamCommandHandler
             TestCode = null,
             DurationMinutes = blueprint.DurationMinutes,
             TotalQuestions = blueprint.TotalQuestions,
+            MaxScore = blueprint.TotalScore,
+            ScoringPolicy = ScoringPolicies.BlueprintBudget,
             CreatedTime = createdTime
         };
 
-        for (var index = 0; index < selection.Assignments.Count; index++)
+        foreach (var prepared in preparedQuestions)
         {
-            var assignment = selection.Assignments[index];
             test.Questions.Add(new TestQuestion
             {
                 TestId = test.TestId,
-                QuestionId = assignment.QuestionId,
-                QuestionOrder = index + 1,
-                SourceBlueprintDetailId = assignment.BlueprintDetailId,
+                QuestionId = prepared.Assignment.QuestionId,
+                QuestionOrder = prepared.QuestionOrder,
+                SourceBlueprintDetailId = prepared.Assignment.BlueprintDetailId,
                 SelectionReason = GeneratedTestValues.BlueprintNormalReason,
                 IsAdaptiveSelected = false,
                 RecommendedForTagId = null,
                 RecommendedDifficultyId = null,
                 PtagAtSelection = null,
-                RuleVersion = null
+                RuleVersion = null,
+                QuestionVersionId = prepared.Candidate.QuestionVersionId,
+                WeightSnapshot = prepared.Candidate.DefaultWeight,
+                MaxPointsSnapshot = prepared.MaxPoints,
+                ScoringRuleSnapshot = prepared.ScoringRule,
+                IsScoreInvalidated = false,
+                InvalidatedByReportId = null
             });
         }
 
@@ -197,6 +210,9 @@ public sealed class GenerateBlueprintExamCommandHandler
             persisted.TestName == blueprint.BlueprintName &&
             persisted.DurationMinutes == blueprint.DurationMinutes &&
             persisted.TotalQuestions == persisted.Questions.Count &&
+            persisted.MaxScore == blueprint.TotalScore &&
+            persisted.ScoringPolicy == ScoringPolicies.BlueprintBudget &&
+            persisted.Questions.Sum(question => question.MaxPointsSnapshot) == persisted.MaxScore &&
             orders.SequenceEqual(Enumerable.Range(1, persisted.TotalQuestions)) &&
             detailQuantitiesMatch &&
             persisted.Questions.All(IsBaselineAuditRow);
@@ -206,45 +222,6 @@ public sealed class GenerateBlueprintExamCommandHandler
             : (false, default!);
     }
 
-    private static IReadOnlyList<BlueprintExamRequirement> BuildRequirements(Blueprint blueprint)
-    {
-        var requirements = new List<BlueprintExamRequirement>();
-        var detailOrder = 0;
-        foreach (var section in blueprint.Sections.OrderBy(section => section.SectionOrder))
-        {
-            foreach (var detail in section.Details
-                         .OrderBy(detail => detail.TagId, StringComparer.OrdinalIgnoreCase)
-                         .ThenBy(detail => detail.DifficultyId, StringComparer.OrdinalIgnoreCase)
-                         .ThenBy(detail => detail.BlueprintDetailId, StringComparer.OrdinalIgnoreCase))
-            {
-                requirements.Add(new BlueprintExamRequirement(
-                    detail.BlueprintDetailId,
-                    section.SectionOrder,
-                    detailOrder++,
-                    detail.TagId,
-                    detail.DifficultyId,
-                    section.QuestionType,
-                    detail.Quantity));
-            }
-        }
-
-        return requirements;
-    }
-
-    private static bool HasValidStructure(
-        Blueprint blueprint,
-        IReadOnlyList<BlueprintExamRequirement> requirements)
-        => blueprint.TotalQuestions > 0 &&
-           blueprint.DurationMinutes > 0 &&
-           blueprint.Sections.Count > 0 &&
-           blueprint.Sections.All(section =>
-               section.TotalQuestions > 0 &&
-               section.Details.Count > 0 &&
-               section.Details.Sum(detail => detail.Quantity) == section.TotalQuestions) &&
-           blueprint.Sections.Sum(section => section.TotalQuestions) == blueprint.TotalQuestions &&
-           requirements.All(requirement => requirement.Quantity > 0) &&
-           requirements.Sum(requirement => requirement.Quantity) == blueprint.TotalQuestions;
-
     private static bool IsBaselineAuditRow(TestQuestion question)
         => !string.IsNullOrWhiteSpace(question.SourceBlueprintDetailId) &&
            question.SelectionReason == GeneratedTestValues.BlueprintNormalReason &&
@@ -252,7 +229,13 @@ public sealed class GenerateBlueprintExamCommandHandler
            question.RecommendedForTagId is null &&
            question.RecommendedDifficultyId is null &&
            question.PtagAtSelection is null &&
-           question.RuleVersion is null;
+           question.RuleVersion is null &&
+           !string.IsNullOrWhiteSpace(question.QuestionVersionId) &&
+           question.WeightSnapshot > 0m &&
+           question.MaxPointsSnapshot >= 0m &&
+           ScoringRules.IsSupported(question.ScoringRuleSnapshot) &&
+           !question.IsScoreInvalidated &&
+           question.InvalidatedByReportId is null;
 
     private static GenerateBlueprintExamResponse ToResponse(TestEntity test)
         => new(
@@ -262,5 +245,7 @@ public sealed class GenerateBlueprintExamCommandHandler
             test.TestName,
             test.DurationMinutes,
             test.TotalQuestions,
+            test.MaxScore,
+            test.ScoringPolicy,
             test.CreatedTime);
 }

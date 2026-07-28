@@ -30,14 +30,14 @@ public class WeakTagQueryTests : IDisposable
     public void Dispose() => _db.Dispose();
 
     private static TagTopicReadOnly MakeTagTopic(Guid tagId, string name) =>
-        new() { TagId = tagId, TagName = name };
+        new() { TagId = tagId.ToString(), TagName = name };
 
     private static TagsMastery MakeMastery(Guid studentId, Guid tagId, decimal officialPoint) =>
         new()
         {
-            TagsMasteryId  = Guid.NewGuid(),
-            StudentId      = studentId,
-            TagId          = tagId,
+            TagsMasteryId  = Guid.NewGuid().ToString(),
+            StudentId      = studentId.ToString(),
+            TagId          = tagId.ToString(),
             OfficialPoint  = officialPoint,
             PracticePoint  = officialPoint,
             ExamAnchor     = officialPoint,
@@ -59,10 +59,10 @@ public class WeakTagQueryTests : IDisposable
             MakeMastery(studentId, strongTagId, 5.00m)); // not weak
         await _db.SaveChangesAsync();
 
-        var result = await _sut.GetStudentWeakTagsAsync(studentId);
+        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
 
         Assert.Single(result);
-        Assert.Equal(weakTagId, result[0].TagId);
+        Assert.Equal(weakTagId.ToString(), result[0].TagId);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class WeakTagQueryTests : IDisposable
         _db.TagsMasteries.Add(MakeMastery(studentId, tagId, 5.00m));
         await _db.SaveChangesAsync();
 
-        var result = await _sut.GetStudentWeakTagsAsync(studentId);
+        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
         Assert.Empty(result);
     }
 
@@ -90,7 +90,7 @@ public class WeakTagQueryTests : IDisposable
         // Intentionally no TagsMastery row added
         await _db.SaveChangesAsync();
 
-        var result = await _sut.GetStudentWeakTagsAsync(studentId);
+        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
         Assert.Empty(result);
     }
 
@@ -112,7 +112,7 @@ public class WeakTagQueryTests : IDisposable
             MakeMastery(studentId, tag3, 4.50m));
         await _db.SaveChangesAsync();
 
-        var result = await _sut.GetStudentWeakTagsAsync(studentId);
+        var result = await _sut.GetStudentWeakTagsAsync(studentId.ToString());
 
         Assert.Equal(3, result.Count);
         Assert.Equal(1.00m, result[0].OfficialPoint);

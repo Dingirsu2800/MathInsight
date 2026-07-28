@@ -14,6 +14,7 @@ export function getBlueprintActions(blueprint, currentAccountId) {
     canDelete: isOwner && (status === "Draft" || status === "Rejected" || status === "Approved"),
     canDeactivate: isOwner && status === "Active",
     canClone: status !== "Deactivated",
-    canReview: !isOwner && status === "PendingReview"
+    canReview: !isOwner && status === "PendingReview",
+    canGenerate: isOwner && (status === "Approved" || status === "Active")
   };
 }

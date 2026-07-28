@@ -37,4 +37,13 @@ public static class AuthErrorCodes
 
     /// <summary>Google OAuth failed: code exchange error, or the Google email is unverified (UC-07).</summary>
     public const string GoogleAuthFailed = "AUTH_GOOGLE_FAILED";
+
+    /// <summary>Change password: currentPassword does not match the stored hash (UC-03). HTTP 400.</summary>
+    public const string InvalidCurrentPassword = "AUTH_INVALID_CURRENT_PASSWORD";
+
+    /// <summary>Change password: newPassword is identical to the current one (UC-03). HTTP 400.</summary>
+    public const string SamePassword = "AUTH_SAME_PASSWORD";
+
+    /// <summary>Change password: the account has no local password (Google-only sign-in). HTTP 400.</summary>
+    public const string NoPasswordSet = "AUTH_NO_PASSWORD_SET";
 }

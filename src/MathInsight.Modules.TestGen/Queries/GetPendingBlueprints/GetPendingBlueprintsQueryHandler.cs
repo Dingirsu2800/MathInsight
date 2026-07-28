@@ -52,6 +52,7 @@ public sealed class GetPendingBlueprintsQueryHandler
                 blueprint.BlueprintName,
                 blueprint.Grade,
                 blueprint.TotalQuestions,
+                blueprint.TotalScore,
                 blueprint.DurationMinutes,
                 blueprint.ExpertId,
                 _context.Accounts

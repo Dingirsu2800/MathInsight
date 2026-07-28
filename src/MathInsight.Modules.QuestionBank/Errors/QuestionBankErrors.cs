@@ -104,9 +104,9 @@ public static class QuestionBankErrors
         "QUESTION_GRADE_INVALID",
         "Question grade must be 10, 11, or 12.");
 
-    public static readonly Error QuestionDefaultPointInvalid = new(
-        "QUESTION_DEFAULT_POINT_INVALID",
-        "Question default point must be between 0 and 10.");
+    public static readonly Error QuestionDefaultWeightInvalid = new(
+        "QUESTION_WEIGHT_INVALID",
+        "Question weight must be greater than 0 and no greater than 100.");
 
     public static readonly Error QuestionTopicRequired = new(
         "QUESTION_TOPIC_REQUIRED",
@@ -160,13 +160,25 @@ public static class QuestionBankErrors
         "QUESTION_PART_ORDER_DUPLICATE",
         "Question parts must not contain duplicate part orders.");
 
-    public static readonly Error QuestionPartDefaultPointInvalid = new(
-        "QUESTION_PART_DEFAULT_POINT_INVALID",
-        "Question part default point must be between 0 and 10.");
+    public static readonly Error QuestionPartLabelInvalid = new(
+        "QUESTION_PART_LABEL_INVALID",
+        "Question part label must not exceed 10 characters.");
+
+    public static readonly Error QuestionPartLabelDuplicate = new(
+        "QUESTION_PART_LABEL_DUPLICATE",
+        "Question parts must not contain duplicate labels.");
+
+    public static readonly Error QuestionPartDefaultWeightInvalid = new(
+        "QUESTION_PART_WEIGHT_INVALID",
+        "Question part weight must be greater than 0 and no greater than 100.");
 
     public static readonly Error QuestionPartNumericToleranceInvalid = new(
         "QUESTION_PART_NUMERIC_TOLERANCE_INVALID",
         "Question part numeric tolerance must be greater than or equal to 0.");
+
+    public static readonly Error QuestionPartNumericValueInvalid = new(
+        "QUESTION_PART_NUMERIC_VALUE_INVALID",
+        "Question part numeric values must fit decimal(18,6).");
 
     public static readonly Error QuestionPartInvalidType = new(
         "QUESTION_PART_INVALID_TYPE",
@@ -304,6 +316,22 @@ public static class QuestionBankErrors
         "REPORT_ALREADY_HANDLED",
         "Question report has already been handled.");
 
+    public static readonly Error ReportSessionContextInvalid = new(
+        "REPORT_SESSION_CONTEXT_INVALID",
+        "The report session or question version context is invalid.");
+
+    public static readonly Error ReportResolutionActionInvalid = new(
+        "REPORT_RESOLUTION_ACTION_INVALID",
+        "The report resolution action is invalid.");
+
+    public static readonly Error QuestionFixRequiredBeforeScoreAdjustment = new(
+        "QUESTION_FIX_REQUIRED_BEFORE_SCORE_ADJUSTMENT",
+        "Create a corrected question version or deactivate the question before adjusting scores.");
+
+    public static readonly Error ScoreAdjustmentNotRetryable = new(
+        "SCORE_ADJUSTMENT_NOT_RETRYABLE",
+        "This report does not have a pending score adjustment.");
+
     public static readonly Error AdminReportWorkflowAlreadyExists = new(
         "ADMIN_REPORT_WORKFLOW_ALREADY_EXISTS",
         "An active Admin report workflow already exists for this question.");
@@ -351,4 +379,40 @@ public static class QuestionBankErrors
     public static readonly Error QuestionImportValidationFailed = new(
         "QUESTION_IMPORT_VALIDATION_FAILED",
         "One or more imported questions are invalid.");
+
+    public static readonly Error QuestionImportNoQuestions = new(
+        "QUESTION_IMPORT_NO_QUESTIONS",
+        "Excel import must contain at least one question row.");
+
+    public static readonly Error QuestionImportIdInvalid = new(
+        "QUESTION_IMPORT_ID_INVALID",
+        "ImportId is required.");
+
+    public static readonly Error QuestionImportFormulaNotAllowed = new(
+        "QUESTION_IMPORT_FORMULA_NOT_ALLOWED",
+        "Formula cells are not supported in import data.");
+
+    public static readonly Error QuestionImportQuestionKeyInvalid = new(
+        "QUESTION_IMPORT_QUESTION_KEY_INVALID",
+        "QuestionKey is required and must not exceed 50 characters.");
+
+    public static readonly Error QuestionImportQuestionKeyDuplicate = new(
+        "QUESTION_IMPORT_QUESTION_KEY_DUPLICATE",
+        "QuestionKey must be unique in the workbook.");
+
+    public static readonly Error QuestionImportOrphanRow = new(
+        "QUESTION_IMPORT_ORPHAN_ROW",
+        "A child row references a QuestionKey that does not exist in Questions.");
+
+    public static readonly Error QuestionImportNumericInvalid = new(
+        "QUESTION_IMPORT_NUMERIC_INVALID",
+        "Value must be a valid number without thousands separators.");
+
+    public static readonly Error QuestionImportBooleanInvalid = new(
+        "QUESTION_IMPORT_BOOLEAN_INVALID",
+        "Value must be true or false.");
+
+    public static readonly Error QuestionImportTopicAmbiguous = new(
+        "QUESTION_IMPORT_TOPIC_AMBIGUOUS",
+        "Topic name matches more than one active topic in the question grade.");
 }

@@ -1,12 +1,15 @@
+using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Grading_Analytics.Persistence;
+using MathInsight.Shared.Questions;
 
 namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionResult;
 
 /// <summary>
 /// Handles GetSessionResultQuery (UC-55).
 /// Loads session + all nested navigation properties required for the result page.
+/// Uses TestQuestion.MaxPointsSnapshot for MaxPoints and exposes invalidation info.
 /// </summary>
 public sealed class GetSessionResultQueryHandler
     : IRequestHandler<GetSessionResultQuery, SessionResultDto?>
@@ -26,50 +29,89 @@ public sealed class GetSessionResultQueryHandler
             .AsNoTracking()
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.Question)
+                    .ThenInclude(q => q.QuestionTopics)
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.SelectedOptions)
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.AnswerParts)
-                    .ThenInclude(ap => ap.QuestionPart)
             .FirstOrDefaultAsync(s => s.SessionId == request.SessionId, cancellationToken);
 
-        // 404
         if (session is null)
             return null;
 
-        // 403 — student does not own the session (BR-UC55-01)
-        if (session.StudentId != request.AuthenticatedStudentId)
+        if (!string.Equals(session.StudentId, request.AuthenticatedStudentId, StringComparison.Ordinal))
             throw new UnauthorizedAccessException(
                 $"Student {request.AuthenticatedStudentId} does not own session {request.SessionId}.");
 
+        // ── Load TestQuestion scoring snapshots for this test ─────────────────
+        var testQuestions = await _db.TestQuestions
+            .AsNoTracking()
+            .Where(tq => tq.TestId == session.TestId)
+            .ToDictionaryAsync(tq => tq.QuestionId, cancellationToken);
+
+        var difficultyLevels = await _db.TagDifficulties
+            .AsNoTracking()
+            .ToDictionaryAsync(td => td.DifficultyId, td => td.LevelValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        var tagTopics = await _db.TagTopics
+            .AsNoTracking()
+            .ToDictionaryAsync(tt => tt.TagId, tt => tt.TagName, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
         var answers = session.TestAnswers
             .OrderBy(a => a.QuestionNo)
-            .Select(a => new GradedAnswerDetailDto
+            .Select(a =>
             {
-                QuestionId = a.QuestionId,
-                QuestionNo = a.QuestionNo,
-                QuestionType = a.Question.QuestionType,
-                QuestionContent = a.Question.QuestionContent,
-                DifficultyLevel = a.Question.DifficultyLevel,
-                IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
-                PointsEarned = a.PointsEarned,
-                MaxPoints = a.Question.DefaultPoint,
-                TimeSpent = a.TimeSpent,
-                SelectedOptionId = a.AnswerId,
-                ShortAnswerText = a.ShortAnswerText,
-                SelectedOptionIds = a.SelectedOptions
-                    .Select(o => o.AnswerId)
-                    .ToList(),
-                AnswerParts = a.AnswerParts
-                    .Select(ap => new AnswerPartDetailDto
-                    {
-                        QuestionPartId = ap.QuestionPartId,
-                        PartType = ap.QuestionPart.PartType,
-                        StudentAnswer = ap.StudentAnswer,
-                        IsCorrect = ap.IsCorrect,
-                        PointsEarned = ap.PointsEarned,
-                    })
-                    .ToList(),
+                var tq = testQuestions.GetValueOrDefault(a.QuestionId);
+                decimal maxPoints = tq?.MaxPointsSnapshot ?? a.Question.DefaultWeight;
+
+                byte difficultyLevel = 1;
+                if (!string.IsNullOrEmpty(a.Question.DifficultyId) &&
+                    difficultyLevels.TryGetValue(a.Question.DifficultyId, out var level))
+                {
+                    difficultyLevel = (byte)level;
+                }
+
+                var primaryTopic = a.Question.QuestionTopics.FirstOrDefault(qt => qt.IsPrimary)
+                    ?? a.Question.QuestionTopics.FirstOrDefault();
+                string tagId = primaryTopic?.TagId ?? string.Empty;
+                string topicName = !string.IsNullOrEmpty(tagId) && tagTopics.TryGetValue(tagId, out var tName)
+                    ? tName
+                    : string.Empty;
+
+                return new GradedAnswerDetailDto
+                {
+                    QuestionId = a.QuestionId,
+                    QuestionNo = a.QuestionNo,
+                    QuestionType = a.Question.QuestionType,
+                    QuestionContent = a.Question.QuestionContent,
+                    DifficultyId = a.Question.DifficultyId,
+                    DifficultyLevel = difficultyLevel,
+                    TagId = tagId,
+                    TopicName = topicName,
+                    IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
+                    PointsEarned = a.PointsEarned,
+                    MaxPoints = maxPoints,
+                    TimeSpent = a.TimeSpent,
+                    IsScoreInvalidated = tq?.IsScoreInvalidated ?? false,
+                    InvalidatedByReportId = tq?.InvalidatedByReportId,
+                    SelectedOptionId = a.AnswerId,
+                    ShortAnswerText = a.ShortAnswerText,
+                    SelectedOptionIds = a.SelectedOptions
+                        .Select(o => o.AnswerId)
+                        .ToList(),
+                    AnswerParts = a.AnswerParts
+                        .Select(ap => new AnswerPartDetailDto
+                        {
+                            QuestionPartId = ap.PartId,
+                            PartType = ap.QuestionPart.PartType,
+                            StudentAnswer = ap.BooleanAnswer?.ToString() 
+                                            ?? ap.TextAnswer 
+                                            ?? ap.NumericAnswer?.ToString(),
+                            IsCorrect = ap.IsCorrect,
+                            PointsEarned = ap.PointsEarned,
+                        })
+                        .ToList(),
+                };
             })
             .ToList();
 
@@ -86,6 +128,7 @@ public sealed class GetSessionResultQueryHandler
             TotalQuestion = session.TotalQuestion,
             DurationMinutes = session.Duration,
             SubmittedAt = session.EndTime,
+            GradeRevision = session.GradeRevision,
             Answers = answers,
         };
     }

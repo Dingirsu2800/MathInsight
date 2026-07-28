@@ -26,6 +26,7 @@ internal static class BlueprintAggregateFactory
         blueprint.BlueprintName = validated.BlueprintName;
         blueprint.Grade = validated.Grade;
         blueprint.TotalQuestions = validated.TotalQuestions;
+        blueprint.TotalScore = validated.TotalScore;
         blueprint.DurationMinutes = validated.DurationMinutes;
         blueprint.Sections = CreateSections(blueprint.BlueprintId, validated.Sections);
     }
@@ -38,6 +39,7 @@ internal static class BlueprintAggregateFactory
             BlueprintName = CreateCopyName(source.BlueprintName),
             Grade = source.Grade,
             TotalQuestions = source.TotalQuestions,
+            TotalScore = source.TotalScore,
             DurationMinutes = source.DurationMinutes,
             ExpertId = expertId,
             Status = BlueprintStatuses.Draft,
@@ -59,8 +61,8 @@ internal static class BlueprintAggregateFactory
                 QuestionType = sourceSection.QuestionType,
                 InstructionText = sourceSection.InstructionText,
                 TotalQuestions = sourceSection.TotalQuestions,
-                DefaultPointPerQuestion = sourceSection.DefaultPointPerQuestion,
-                DefaultPointPerPart = sourceSection.DefaultPointPerPart,
+                ScoreBudget = sourceSection.ScoreBudget,
+                ScoringRule = sourceSection.ScoringRule,
                 PartCountPerQuestion = sourceSection.PartCountPerQuestion
             };
 
@@ -112,8 +114,8 @@ internal static class BlueprintAggregateFactory
                 QuestionType = sectionRequest.QuestionType,
                 InstructionText = sectionRequest.InstructionText,
                 TotalQuestions = sectionRequest.TotalQuestions,
-                DefaultPointPerQuestion = sectionRequest.DefaultPointPerQuestion,
-                DefaultPointPerPart = sectionRequest.DefaultPointPerPart,
+                ScoreBudget = sectionRequest.ScoreBudget,
+                ScoringRule = sectionRequest.ScoringRule,
                 PartCountPerQuestion = sectionRequest.PartCountPerQuestion
             };
 

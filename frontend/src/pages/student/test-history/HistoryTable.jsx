@@ -54,6 +54,7 @@ export default function HistoryTable({ filters = {}, onViewDetail }) {
       try {
         const data = await getSessionHistory({
           page,
+          pageIndex: page,
           pageSize: PAGE_SIZE,
           testFormat: filters.testFormat || undefined,
           fromDate: filters.fromDate || undefined,
@@ -150,7 +151,7 @@ export default function HistoryTable({ filters = {}, onViewDetail }) {
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-sm font-bold text-on-surface truncate max-w-[240px]">
-                      {row.testFormat === 'Exam' ? 'Kiểm tra' : 'Luyện tập'}
+                      {row.testName || (row.testFormat === 'Exam' ? 'Bài kiểm tra' : 'Bài luyện tập')}
                     </p>
                     <p className="text-[12px] text-outline font-mono">
                       #{row.sessionId.substring(0, 8).toUpperCase()}
