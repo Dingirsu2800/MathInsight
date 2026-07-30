@@ -4,6 +4,7 @@ using MathInsight.Modules.TestGen.Contracts.Tests;
 using MathInsight.Modules.TestGen.Controllers;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
+using MathInsight.Modules.TestGen.Queries.GetTopicPracticeOptions;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -29,6 +30,22 @@ public sealed class StudentTestsControllerTests
         var controller = CreateController(mediator.Object);
 
         var result = await controller.GetBlueprintOptions(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        mediator.VerifyAll();
+    }
+
+    [Fact]
+    public async Task TopicPracticeOptions_UsesAuthenticatedStudentClaim()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator.Setup(instance => instance.Send(
+                It.Is<GetTopicPracticeOptionsQuery>(query => query.StudentId == StudentId),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<TopicPracticeOptionsResponse>.Success(new TopicPracticeOptionsResponse(12, 10, [])));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GetTopicPracticeOptions(CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);
         mediator.VerifyAll();
