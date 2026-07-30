@@ -75,6 +75,7 @@ export default function App() {
         <Route path="/student/test-result/:sessionId" element={<TestResultPage />} />
         <Route path="/student/test-result" element={<TestResultPage />} />
         <Route path="/student/test" element={<SharedBlueprintExamDiscoveryPage />} />
+        <Route path="/student/test/topics" element={<SharedBlueprintExamDiscoveryPage />} />
         <Route path="/student/test/:sessionId" element={<TestSession />} />
         <Route path="/student/lectures" element={<StudentLectureListPage />} />
         <Route path="/student/lectures/:id" element={<StudentLectureDetailPage />} />

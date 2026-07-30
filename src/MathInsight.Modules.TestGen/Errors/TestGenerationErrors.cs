@@ -51,4 +51,10 @@ public static class TestGenerationErrors
     public static readonly Error GeneratedTestNotFound = new(
         "GENERATED_TEST_NOT_FOUND",
         "The generated test was not found or is unavailable.");
+
+    public static readonly Error TopicPracticeStudentNotFound = new("TOPIC_PRACTICE_STUDENT_NOT_FOUND", "A usable Student profile was not found.");
+    public static readonly Error TopicPracticeTopicNotFound = new("TOPIC_PRACTICE_TOPIC_NOT_FOUND", "The requested topic was not found.");
+    public static readonly Error TopicPracticeTopicUnavailable = new("TOPIC_PRACTICE_TOPIC_UNAVAILABLE", "The requested topic is inactive or does not match the Student grade.");
+    public static readonly Error TopicPracticeInsufficientQuestions = new("TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS", "The selected topic does not contain ten valid questions.");
+    public static readonly Error TopicPracticeGenerationConflict = new("TOPIC_PRACTICE_GENERATION_CONFLICT", "The generated test could not be verified after a persistence conflict.");
 }

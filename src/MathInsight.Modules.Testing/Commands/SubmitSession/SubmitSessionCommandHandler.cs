@@ -49,7 +49,7 @@ public sealed class SubmitSessionCommandHandler
 
         var now = DateTime.UtcNow;
         if (session.Test is not null &&
-            now >= session.StartTime.AddMinutes(session.Test.DurationMinutes))
+            SessionTimePolicy.IsExpired(session.StartTime, session.Test.DurationMinutes, now))
         {
             return await _mediator.Send(
                 new ForceSubmitSessionCommand(session.SessionId, "TimeoutSubmit"),

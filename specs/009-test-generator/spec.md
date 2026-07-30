@@ -14,10 +14,10 @@ The module is delivered in explicit slices:
 1. **Expert Blueprint MVP (complete)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
 2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
 3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
-4. **Checkpoint 6C (later)**: generate a 10-question `TopicPractice` test for one selected WeakTag topic. WeakTag advice now includes **Bottleneck Weak Tags** (BR-19, RCM-14): secondary tags with `official_point < 4.0` that create bottleneck risk. TopicPractice should prioritize these tags for targeted remediation.
+4. **Checkpoint 6C (current)**: generate a 10-question `TopicPractice` test for one Student-selected active topic in the Student's current grade. This baseline is independent of Recommender; later adaptive work may supply a recommended topic and difficulty profile to the same generation core.
 5. **Expert Shared BlueprintExam (current additive checkpoint)**: let the owning Expert generate, preview, publish immediately, and archive shared BlueprintExam variants while preserving the completed Student personal generation flow.
 
-TestGen creates `Test` and `TestQuestion` records only. Testing owns `TestSession` creation and the answer-taking workflow. No database migration is part of this feature.
+TestGen creates `Test` and `TestQuestion` records only. Testing owns `TestSession` creation and the answer-taking workflow. EF migrations remain out of scope; approved SQL migration 005 changes the existing `Test.DurationMinutes` check to permit unlimited TopicPractice Tests.
 
 ## Use Cases
 
@@ -174,10 +174,43 @@ Frontend localizes these codes; backend messages remain developer-facing English
   - **Easy-Level Protection**: when `official_point < 5.00` at `Easy`, bias probability is reduced to 10%, no further downscaling is applied, and foundational learning content is prioritized.
 - **Student Practice and Exam Flow**: student endpoints expose two initial formats across separate checkpoints:
   - **Exam Mode**: a full-length session generated from an approved blueprint.
-  - **Practice Mode**: exactly 10 questions targeting one diagnosed WeakTag topic, using that topic's `RecommendedDifficultyLevel`.
-- **BR-54 Student Practice and Exam Flow**: after an Exam session is completed and the student's WeakTags are updated, the student may choose:
+  - **Practice Mode**: exactly 10 questions from one Student-selected active topic/subtree. The baseline difficulty profile is 3/4/2/1 across levels 1-4; it does not call Recommender.
+- **BR-54 Student Practice and Exam Flow**: a Student may choose:
   - **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: generate a new `Test` from the original blueprint structure. Testing subsequently creates an `Exam` TestSession for that Test. Checkpoint 6A preserves exact section/detail slots; Checkpoint 6B adds adaptive adjustments based on the student's latest results.
-  - **Format B (Luyện tập chuỗi 10 câu liên quan đến WeakTag)**: generate a `TopicPractice` Test of exactly 10 questions for a selected WeakTag topic. Testing subsequently creates a `Practice` TestSession. Answers update the topic's practice point through the Recommender grading pipeline.
+  - **Format B (Luyện tập theo chủ đề)**: generate a `TopicPractice` Test of exactly 10 unique questions for one selected active topic, including active descendants. Testing subsequently creates an unlimited `Practice` TestSession. Questions use level quota 3/4/2/1, nearest-level fallback preferring the lower level on ties, at most two Composite questions, and unseen-then-oldest reuse preference.
+
+## Checkpoint 6C: TopicPractice
+
+### Student API
+
+Base route: `/api/test-generator/tests`
+
+| Method | Route | Behavior |
+|---|---|---|
+| `GET` | `/topic-practice-options` | Return active current-grade topics as a flat tree list with valid selectable question count and `canGenerate` |
+| `POST` | `/topic-practices` | Create one personal 10-question TopicPractice Test for the requested topic |
+
+The POST body contains only `tagId`. The backend derives Student ID, topic subtree, question count, quota, duration, score, and audit data. It returns 409 before writing when fewer than ten selectable valid candidates exist.
+
+### TopicPractice Rules
+
+- Candidate Questions are `Approved`, active, in the Student grade, tagged to the selected active subtree, use an active level 1-4 difficulty, and have a latest valid immutable QuestionVersion V2.
+- Question types are `SingleChoice`, `Composite`, and `ShortAnswer`; a generated Test may contain at most two Composite Questions.
+- The default level profile is three level-1, four level-2, two level-3, and one level-4 Question. Missing slots use the nearest available level and prefer lower level on equal distance.
+- Selection prefers Questions the Student has never received in a personal Test, then the oldest previously seen Question. Candidate ties are randomized.
+- Test persistence uses `BlueprintID = NULL`, `TestMode = TopicPractice`, `GeneratedForStudentID = current Student`, `DurationMinutes = 0`, `MaxScore = 10.00`, and `ScoringPolicy = NormalizedWeight`.
+- Every TestQuestion stores the latest QuestionVersion, weight, allocated score, `SelectionReason = TopicPractice`, `RecommendedForTagID = selected TagID`, and `RuleVersion = TopicPractice-v1`.
+- TestGen does not create TestSession or TestAnswer rows.
+
+### Checkpoint 6C Stable Errors
+
+| Code | HTTP | Meaning |
+|---|---:|---|
+| `TOPIC_PRACTICE_STUDENT_NOT_FOUND` | 404 | Authenticated account has no usable Student profile |
+| `TOPIC_PRACTICE_TOPIC_NOT_FOUND` | 404 | Requested topic does not exist |
+| `TOPIC_PRACTICE_TOPIC_UNAVAILABLE` | 422 | Topic is inactive or outside the Student grade |
+| `TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS` | 409 | Valid selectable pool cannot fulfill ten questions |
+| `TOPIC_PRACTICE_GENERATION_CONFLICT` | 409 | Persisted aggregate cannot be verified after a transient conflict |
 
 ## Checkpoint 6A: Baseline BlueprintExam
 
@@ -290,9 +323,8 @@ Discovery is not an authorization boundary. Testing must revalidate personal own
 ## Out of Scope for Checkpoint 6A
 
 - Adaptive WeakTag selection and Recommender integration.
-- TopicPractice and the 10-question practice series.
 - Recent-session question deduplication until the product window/fallback rule is approved.
 - TestSession, TestAnswer, submission, grading, and solution APIs owned by Testing/Grading.
 - Student generation frontend.
 - Expert CRUD over Test or TestQuestion.
-- Redis, RabbitMQ, background queues, EF migrations, or schema changes.
+- Redis, RabbitMQ, background queues, or EF migrations.

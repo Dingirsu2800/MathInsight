@@ -82,10 +82,8 @@ public sealed class GetSessionContentQueryHandler
                     .ToList()))
             .ToList();
 
-        var elapsedSeconds = (DateTime.UtcNow - session.StartTime).TotalSeconds;
-        var remainingSeconds = Math.Max(
-            0,
-            (int)Math.Ceiling(test.DurationMinutes * 60 - elapsedSeconds));
+        var now = DateTime.UtcNow;
+        var remainingSeconds = SessionTimePolicy.RemainingSeconds(session.StartTime, test.DurationMinutes, now);
 
         return Result<TestSessionViewResponse>.Success(new TestSessionViewResponse(
             session.SessionId,
@@ -95,7 +93,9 @@ public sealed class GetSessionContentQueryHandler
             session.TestFormat,
             test.DurationMinutes,
             test.MaxScore,
+            SessionTimePolicy.HasTimeLimit(test.DurationMinutes),
             remainingSeconds,
+            SessionTimePolicy.ElapsedSeconds(session.StartTime, now),
             questions,
             savedAnswers));
     }

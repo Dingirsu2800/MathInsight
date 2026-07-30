@@ -18,7 +18,7 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
             table.HasCheckConstraint(
                 "CK_Test_Blueprint_Required",
                 "[TestMode] <> 'BlueprintExam' OR [BlueprintID] IS NOT NULL");
-            table.HasCheckConstraint("CK_Test_DurationMinutes", "[DurationMinutes] > 0");
+            table.HasCheckConstraint("CK_Test_DurationMinutes", "[DurationMinutes] >= 0");
             table.HasCheckConstraint("CK_Test_TotalQuestions", "[TotalQuestions] > 0");
             table.HasCheckConstraint("CK_Test_MaxScore", "[MaxScore] > 0 AND [MaxScore] <= 100");
             table.HasCheckConstraint("CK_Test_ScoringPolicy", "[ScoringPolicy] IN ('BlueprintBudget', 'NormalizedWeight')");

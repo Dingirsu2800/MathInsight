@@ -38,7 +38,7 @@ public sealed class AutoSaveCommandHandler
 
         var now = DateTime.UtcNow;
         if (session.Test is not null &&
-            now >= session.StartTime.AddMinutes(session.Test.DurationMinutes))
+            SessionTimePolicy.IsExpired(session.StartTime, session.Test.DurationMinutes, now))
         {
             return Result<AutoSaveResponse>.Failure(TestingErrors.SessionExpired);
         }
@@ -125,12 +125,13 @@ public sealed class AutoSaveCommandHandler
 
         // 4. Calculate remaining time
         var durationMinutes = session.Test?.DurationMinutes ?? 0;
-        var elapsed = (now - session.StartTime).TotalSeconds;
-        var remainingSeconds = Math.Max(
-            0,
-            (int)Math.Ceiling(durationMinutes * 60 - elapsed));
+        var remainingSeconds = SessionTimePolicy.RemainingSeconds(session.StartTime, durationMinutes, now);
 
         return Result<AutoSaveResponse>.Success(
-            new AutoSaveResponse(SavedAt: now, RemainingSeconds: remainingSeconds));
+            new AutoSaveResponse(
+                SavedAt: now,
+                HasTimeLimit: SessionTimePolicy.HasTimeLimit(durationMinutes),
+                RemainingSeconds: remainingSeconds,
+                ElapsedSeconds: SessionTimePolicy.ElapsedSeconds(session.StartTime, now)));
     }
 }

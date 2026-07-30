@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { Button } from "../../components/ui/button";
 import StartTestDialog from "../../components/student/StartTestDialog";
+import PracticeSetupPanel from "../../components/student/PracticeSetupPanel";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { getTestGenErrorMessage } from "../../utils/testGenerationErrorLocalizer";
 import { cn } from "../../utils/cn";
 
+
 export default function SharedBlueprintExamDiscoveryPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // TestCode Resolution State
   const [testCodeInput, setTestCodeInput] = useState("");
   const [resolvingCode, setResolvingCode] = useState(false);
@@ -27,6 +33,9 @@ export default function SharedBlueprintExamDiscoveryPage() {
   // Dialog State
   const [selectedTest, setSelectedTest] = useState(null);
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
+
+  // Mode derived from route path: '/student/test/topics' -> practice, else -> exam
+  const mode = location.pathname.endsWith('/topics') ? 'practice' : 'exam';
 
   const resolveInFlightRef = useRef(false);
 
@@ -48,8 +57,10 @@ export default function SharedBlueprintExamDiscoveryPage() {
   };
 
   useEffect(() => {
-    fetchExams();
-  }, [pageIndex, pageSize]);
+    if (mode === 'exam') {
+      fetchExams();
+    }
+  }, [pageIndex, pageSize, mode]);
 
   const handleResolveCodeSubmit = async (e) => {
     e.preventDefault();
@@ -91,9 +102,51 @@ export default function SharedBlueprintExamDiscoveryPage() {
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto select-none">
         {/* Page Header */}
         <DashboardPageHeader
-          title="Đề thi luyện tập"
-          subtitle="Chọn đề thi dùng chung phù hợp khối lớp hoặc nhập mã đề thi từ giáo viên để bắt đầu làm bài."
+          title={mode === 'practice' ? 'Luyện tập theo chủ đề' : 'Đề thi luyện tập'}
+          subtitle={
+            mode === 'practice'
+              ? 'Chọn chủ đề bài học để tạo bài luyện tập 10 câu hỏi không giới hạn thời gian.'
+              : 'Chọn đề thi dùng chung phù hợp khối lớp hoặc nhập mã đề thi từ giáo viên để bắt đầu làm bài.'
+          }
         />
+
+        {/* ── Mode Tab Switcher ── */}
+        <div role="tablist" aria-label="Chế độ thi và luyện tập" className="flex items-center gap-1 p-1 bg-surface-container-low border border-whisper-border rounded-xl w-fit">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'exam'}
+            onClick={() => navigate('/student/test')}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px] ${
+              mode === 'exam'
+                ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">quiz</span>
+            Đề thi
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'practice'}
+            onClick={() => navigate('/student/test/topics')}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px] ${
+              mode === 'practice'
+                ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">fitness_center</span>
+            Luyện theo chủ đề
+          </button>
+        </div>
+
+        {/* ── Practice Mode ── */}
+        {mode === 'practice' && <PracticeSetupPanel />}
+
+        {/* ── Exam Mode content below ── */}
+        {mode === 'exam' && (<>
 
         {/* Enter TestCode Card */}
         <div className="bg-pure-surface border border-whisper-border rounded-xl p-5 md:p-6 shadow-sm flex flex-col gap-3">
@@ -279,6 +332,8 @@ export default function SharedBlueprintExamDiscoveryPage() {
             </div>
           </div>
         )}
+        {/* close exam-mode conditional fragment */}
+        </>)}
       </div>
 
       {/* Start Test Dialog */}
@@ -290,3 +345,4 @@ export default function SharedBlueprintExamDiscoveryPage() {
     </StudentLayout>
   );
 }
+

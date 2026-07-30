@@ -41,6 +41,9 @@ public sealed class TimeoutSubmitSessionCommandHandler
         if (session.Test is null)
             return Result<SubmitSessionResponse>.Failure(TestingErrors.TestNotFound);
 
+        if (!SessionTimePolicy.HasTimeLimit(session.Test.DurationMinutes))
+            return Result<SubmitSessionResponse>.Failure(TestingErrors.TestHasNoTimeLimit);
+
         var expiresAt = session.StartTime.AddMinutes(session.Test.DurationMinutes);
         if (DateTime.UtcNow < expiresAt)
             return Result<SubmitSessionResponse>.Failure(TestingErrors.SessionNotExpired);

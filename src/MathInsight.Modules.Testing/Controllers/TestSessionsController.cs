@@ -238,7 +238,8 @@ public class TestSessionsController : ControllerBase
 
             if (result.Error.Code is "TESTING_SESSION_NOT_EXPIRED"
                                      or "TESTING_SESSION_ALREADY_COMPLETED"
-                                     or "TESTING_SESSION_NOT_IN_PROGRESS")
+                                     or "TESTING_SESSION_NOT_IN_PROGRESS"
+                                     or "TESTING_TEST_HAS_NO_TIME_LIMIT")
             {
                 return Conflict(new ApiErrorResponse(result.Error));
             }

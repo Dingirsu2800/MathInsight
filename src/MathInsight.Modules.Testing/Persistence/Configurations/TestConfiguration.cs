@@ -15,7 +15,7 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
             table.HasCheckConstraint("CK_Test_Mode", "[TestMode] IN ('BlueprintExam', 'AdaptivePractice', 'TopicPractice', 'Diagnostic')");
             table.HasCheckConstraint("CK_Test_GeneratedBy", "[GeneratedBy] IN ('Expert', 'System')");
             table.HasCheckConstraint("CK_Test_Blueprint_Required", "[TestMode] <> 'BlueprintExam' OR [BlueprintID] IS NOT NULL");
-            table.HasCheckConstraint("CK_Test_DurationMinutes", "[DurationMinutes] > 0");
+            table.HasCheckConstraint("CK_Test_DurationMinutes", "[DurationMinutes] >= 0");
             table.HasCheckConstraint("CK_Test_TotalQuestions", "[TotalQuestions] > 0");
         });
 

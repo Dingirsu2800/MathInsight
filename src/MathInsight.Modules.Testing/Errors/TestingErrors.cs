@@ -36,6 +36,10 @@ public static class TestingErrors
         "TESTING_SESSION_NOT_EXPIRED",
         "The session duration has not expired.");
 
+    public static readonly Error TestHasNoTimeLimit = new(
+        "TESTING_TEST_HAS_NO_TIME_LIMIT",
+        "The test has no server-enforced time limit.");
+
     public static readonly Error SessionExpired = new(
         "TESTING_SESSION_EXPIRED",
         "The session duration has expired and no longer accepts answer changes.");

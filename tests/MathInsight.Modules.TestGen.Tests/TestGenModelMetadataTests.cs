@@ -105,6 +105,10 @@ public sealed class TestGenModelMetadataTests
         Assert.Equal("[TestCode] IS NOT NULL", testCodeIndex.GetFilter());
         Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_Test_Mode");
         Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_Test_Blueprint_Required");
+        var durationConstraint = Assert.Single(
+            entity.GetCheckConstraints(),
+            constraint => constraint.Name == "CK_Test_DurationMinutes");
+        Assert.Equal("[DurationMinutes] >= 0", durationConstraint.Sql);
         Assert.Contains(
             entity.GetForeignKeys(),
             foreignKey => foreignKey.GetConstraintName() == "FK_Test_Student_GeneratedForStudentID" &&

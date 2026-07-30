@@ -31,6 +31,7 @@ public sealed class RecordIncidentCommandHandler
 
         // 2. Validate session exists, belongs to student, and is InProgress
         var session = await _db.TestSessions
+            .Include(item => item.Test)
             .FirstOrDefaultAsync(s => s.SessionId == request.SessionId, cancellationToken);
 
         if (session is null)
@@ -60,7 +61,7 @@ public sealed class RecordIncidentCommandHandler
 
         // 5. BR-10: If >= 5 incidents, force-submit the session
         bool forceSubmitted = false;
-        if (totalIncidents >= 5)
+        if (session.TestFormat == "Exam" && totalIncidents >= 5)
         {
             var forceResult = await _mediator.Send(
                 new ForceSubmitSessionCommand(request.SessionId, "SystemSubmit"),

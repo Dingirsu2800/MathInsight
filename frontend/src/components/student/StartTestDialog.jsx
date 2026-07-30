@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { testGeneratorApi } from "../../services/testGeneratorApi";
+import { startSession } from "../../services/testingApi";
 import { getTestGenErrorMessage } from "../../utils/testGenerationErrorLocalizer";
 
 export default function StartTestDialog({ isOpen, onClose, test }) {
@@ -39,9 +39,8 @@ export default function StartTestDialog({ isOpen, onClose, test }) {
     setErrorMessage("");
 
     try {
-      const response = await testGeneratorApi.startSession(test.testId);
-      const data = response.data || {};
-      const sessionId = data.sessionId || data.id;
+      const data = await startSession(test.testId);
+      const sessionId = data?.sessionId || data?.id;
 
       if (sessionId) {
         onClose();
@@ -102,7 +101,7 @@ export default function StartTestDialog({ isOpen, onClose, test }) {
               </div>
               <div>
                 <span className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Thời gian</span>
-                <span className="block text-sm font-bold text-on-surface mt-0.5">{test.durationMinutes} phút</span>
+                <span className="block text-sm font-bold text-on-surface mt-0.5">{test.durationMinutes === 0 ? "Không giới hạn" : `${test.durationMinutes} phút`}</span>
               </div>
               <div>
                 <span className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Số câu hỏi</span>
