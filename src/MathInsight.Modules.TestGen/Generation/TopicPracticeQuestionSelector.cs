@@ -25,8 +25,7 @@ public sealed class TopicPracticeQuestionSelector : ITopicPracticeQuestionSelect
                 return new TopicPracticeSelection(false, []);
 
             var ordered = eligible
-                .OrderBy(candidate => IsComposite(candidate))
-                .ThenBy(candidate => Math.Abs(candidate.DifficultyLevel - targetLevel))
+                .OrderBy(candidate => Math.Abs(candidate.DifficultyLevel - targetLevel))
                 .ThenBy(candidate => candidate.DifficultyLevel)
                 .ThenBy(candidate => candidate.LastSeenAt is not null)
                 .ThenBy(candidate => candidate.LastSeenAt)

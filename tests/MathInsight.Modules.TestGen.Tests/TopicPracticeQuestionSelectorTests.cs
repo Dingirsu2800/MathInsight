@@ -22,6 +22,17 @@ public sealed class TopicPracticeQuestionSelectorTests
     }
 
     [Fact]
+    public void Select_PrefersExactDifficultyComposite_BeforeFartherNonComposite()
+    {
+        var candidates = CandidatesByLevel(10, 0, 0, 0);
+        candidates.Add(Candidate("exact-composite", 4, composite: true));
+
+        var selection = CreateSelector().Select(candidates, CancellationToken.None);
+
+        Assert.Contains(selection.Selected, item => item.Question.QuestionId == "exact-composite");
+    }
+
+    [Fact]
     public void Select_NeverReturnsMoreThanTwoCompositeQuestions()
     {
         var candidates = CandidatesByLevel(3, 4, 1, 0);

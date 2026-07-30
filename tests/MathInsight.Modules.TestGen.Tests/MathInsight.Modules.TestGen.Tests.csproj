@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MathInsight.Modules.TestGen\MathInsight.Modules.TestGen.csproj" />
+    <ProjectReference Include="..\..\src\MathInsight.Modules.Testing\MathInsight.Modules.Testing.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.6" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
