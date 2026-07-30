@@ -1,0 +1,47 @@
+using MathInsight.Modules.TestGen.Contracts.Tests;
+using MathInsight.Modules.TestGen.Errors;
+using MathInsight.Modules.TestGen.Generation;
+using MathInsight.Modules.TestGen.Persistence;
+using MathInsight.Modules.TestGen.Persistence.Entities;
+using MathInsight.Shared.Results;
+using MathInsight.Shared.Scoring;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+
+namespace MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
+
+public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<GenerateTopicPracticeCommand, Result<GenerateTopicPracticeResponse>>
+{
+    private readonly TestGenDbContext _context;
+    private readonly IQuestionCandidateCatalog _catalog;
+    private readonly ITopicPracticeQuestionSelector _selector;
+    public GenerateTopicPracticeCommandHandler(TestGenDbContext context, IQuestionCandidateCatalog catalog, ITopicPracticeQuestionSelector selector) { _context = context; _catalog = catalog; _selector = selector; }
+
+    public async Task<Result<GenerateTopicPracticeResponse>> Handle(GenerateTopicPracticeCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.StudentId)) return Result<GenerateTopicPracticeResponse>.Failure(ApplicationErrors.AuthInvalidToken);
+        if (string.IsNullOrWhiteSpace(command.TagId)) return Result<GenerateTopicPracticeResponse>.Failure(TestGenerationErrors.RequestInvalid);
+        await using IDbContextTransaction? transaction = _context.Database.IsRelational() ? await _context.Database.BeginTransactionAsync(cancellationToken) : null;
+        var grade = await _context.Students.Where(student => student.StudentId == command.StudentId).Select(student => student.CurrentGrade).FirstOrDefaultAsync(cancellationToken);
+        if (grade is not (10 or 11 or 12)) return Result<GenerateTopicPracticeResponse>.Failure(TestGenerationErrors.TopicPracticeStudentNotFound);
+        var studentGrade = grade.Value;
+        var selected = await _context.TagTopics.AsNoTracking().FirstOrDefaultAsync(topic => topic.TagId == command.TagId, cancellationToken);
+        if (selected is null) return Result<GenerateTopicPracticeResponse>.Failure(TestGenerationErrors.TopicPracticeTopicNotFound);
+        if (!selected.IsActive || selected.Grade != studentGrade) return Result<GenerateTopicPracticeResponse>.Failure(TestGenerationErrors.TopicPracticeTopicUnavailable);
+        var topics = await _context.TagTopics.AsNoTracking().Where(topic => topic.Grade == studentGrade && topic.IsActive).ToListAsync(cancellationToken);
+        var subtree = TopicTreeResolver.ResolveActiveSubtree(selected.TagId, topics);
+        var difficultyLevels = await _context.TagDifficulties.AsNoTracking().Where(item => item.IsActive && item.LevelValue >= 1 && item.LevelValue <= 4).ToDictionaryAsync(item => item.DifficultyId, item => item.LevelValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
+        var pool = await _catalog.GetCandidatesAsync(new QuestionCandidateCatalogFilter(studentGrade, subtree.ToList(), difficultyLevels.Keys.ToList(), ["SingleChoice", "Composite", "ShortAnswer"]), cancellationToken);
+        var lastSeen = await _context.TestQuestions.AsNoTracking().Where(question => question.Test!.GeneratedForStudentId == command.StudentId).GroupBy(question => question.QuestionId).Select(group => new { QuestionId = group.Key, LastSeen = group.Max(question => question.Test!.CreatedTime) }).ToDictionaryAsync(item => item.QuestionId, item => (DateTime?)item.LastSeen, StringComparer.OrdinalIgnoreCase, cancellationToken);
+        var candidates = pool.Candidates.Where(candidate => candidate.TagIds.Overlaps(subtree) && difficultyLevels.TryGetValue(candidate.DifficultyId, out _)).Select(candidate => new TopicPracticeCandidate(candidate, difficultyLevels[candidate.DifficultyId], lastSeen.GetValueOrDefault(candidate.QuestionId))).ToList();
+        var selection = _selector.Select(candidates, cancellationToken);
+        if (!selection.IsComplete) return Result<GenerateTopicPracticeResponse>.Failure(TestGenerationErrors.TopicPracticeInsufficientQuestions);
+        var testId = Guid.NewGuid().ToString("D"); var now = DateTime.UtcNow;
+        var allocations = ScoringAllocator.Allocate(TopicPracticePolicy.MaxScore, selection.Selected.Select((item, index) => new WeightedScoreItem(item.Question.QuestionId, item.Question.DefaultWeight, index)).ToList());
+        var test = new Test { TestId = testId, BlueprintId = null, TestStatus = GeneratedTestValues.ActiveStatus, TestMode = "TopicPractice", GeneratedForStudentId = command.StudentId, GeneratedBy = GeneratedTestValues.SystemGenerator, TestName = selected.TagName, DurationMinutes = 0, TotalQuestions = TopicPracticePolicy.QuestionCount, MaxScore = TopicPracticePolicy.MaxScore, ScoringPolicy = ScoringPolicies.NormalizedWeight, CreatedTime = now };
+        foreach (var (item, index) in selection.Selected.Select((item, index) => (item, index))) test.Questions.Add(new TestQuestion { TestId = testId, QuestionId = item.Question.QuestionId, QuestionOrder = index + 1, SelectionReason = "TopicPractice", IsAdaptiveSelected = false, RecommendedForTagId = selected.TagId, RecommendedDifficultyId = item.Question.DifficultyId, RuleVersion = TopicPracticePolicy.RuleVersion, QuestionVersionId = item.Question.QuestionVersionId, WeightSnapshot = item.Question.DefaultWeight, MaxPointsSnapshot = allocations[item.Question.QuestionId], ScoringRuleSnapshot = item.Question.SupportedScoringRules.Contains(ScoringRules.TieredTrueFalse) ? ScoringRules.TieredTrueFalse : item.Question.SupportedScoringRules.Contains(ScoringRules.WeightedParts) ? ScoringRules.WeightedParts : ScoringRules.AllOrNothing });
+        _context.Tests.Add(test); await _context.SaveChangesAsync(cancellationToken); if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        return Result<GenerateTopicPracticeResponse>.Success(new GenerateTopicPracticeResponse(testId, test.TestMode, test.DurationMinutes, test.TotalQuestions, test.MaxScore, test.ScoringPolicy, now));
+    }
+}

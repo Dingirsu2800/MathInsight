@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MathInsight.Modules.TestGen.Commands.GenerateBlueprintExam;
+using MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
 using MathInsight.Modules.TestGen.Contracts.Tests;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
@@ -66,6 +67,16 @@ public sealed class StudentTestsController : ControllerBase
         return result.IsFailure
             ? ToErrorResult(result.Error!)
             : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpPost("topic-practices")]
+    public async Task<IActionResult> GenerateTopicPractice([FromBody] GenerateTopicPracticeRequest? request, CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.TagId)) return BadRequest(new ApiErrorResponse(TestGenerationErrors.RequestInvalid));
+        var studentId = GetCurrentStudentId();
+        if (studentId is null) return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+        var result = await _mediator.Send(new GenerateTopicPracticeCommand(studentId, request.TagId), cancellationToken);
+        return result.IsFailure ? ToErrorResult(result.Error!) : StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
     private string? GetCurrentStudentId()
