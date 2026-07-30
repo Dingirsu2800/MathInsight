@@ -12,7 +12,10 @@ public sealed record StartSessionResponse(
     DateTime StartTime,
     int DurationMinutes,
     int TotalQuestions,
-    IReadOnlyList<SessionQuestionDto> Questions);
+    IReadOnlyList<SessionQuestionDto> Questions,
+    bool HasTimeLimit,
+    int? RemainingSeconds,
+    int ElapsedSeconds);
 
 public sealed record SessionQuestionDto(
     string QuestionId,
@@ -26,14 +29,11 @@ public sealed record TestSessionViewResponse(
     string TestFormat,
     int DurationMinutes,
     decimal MaxScore,
-    int RemainingSeconds,
+    bool HasTimeLimit,
+    int? RemainingSeconds,
+    int ElapsedSeconds,
     IReadOnlyList<StudentQuestionResponse> Questions,
-    IReadOnlyList<SavedTestAnswerResponse> SavedAnswers)
-{
-    public bool HasTimeLimit { get; init; }
-    public int? RemainingSecondsNullable { get; init; }
-    public int ElapsedSeconds { get; init; }
-}
+    IReadOnlyList<SavedTestAnswerResponse> SavedAnswers);
 
 public sealed record SavedTestAnswerResponse(
     string QuestionId,
@@ -91,12 +91,9 @@ public sealed record AutoSavePartDto(
 
 public sealed record AutoSaveResponse(
     DateTime SavedAt,
-    int RemainingSeconds)
-{
-    public bool HasTimeLimit { get; init; }
-    public int? RemainingSecondsNullable { get; init; }
-    public int ElapsedSeconds { get; init; }
-}
+    bool HasTimeLimit,
+    int? RemainingSeconds,
+    int ElapsedSeconds);
 
 // ─── RecordIncident ───
 

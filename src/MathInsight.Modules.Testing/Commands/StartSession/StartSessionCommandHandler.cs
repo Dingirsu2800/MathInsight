@@ -175,7 +175,10 @@ public sealed class StartSessionCommandHandler
     }
 
     private static StartSessionResponse ToResponse(TestSession session, Test test)
-        => new(
+    {
+        var now = DateTime.UtcNow;
+        var remainingSeconds = SessionTimePolicy.RemainingSeconds(session.StartTime, test.DurationMinutes, now);
+        return new(
             SessionId: session.SessionId,
             TestId: test.TestId,
             TestFormat: session.TestFormat,
@@ -186,5 +189,9 @@ public sealed class StartSessionCommandHandler
             Questions: test.Questions
                 .OrderBy(question => question.QuestionOrder)
                 .Select(question => new SessionQuestionDto(question.QuestionId, question.QuestionOrder))
-                .ToList());
+                .ToList(),
+            HasTimeLimit: SessionTimePolicy.HasTimeLimit(test.DurationMinutes),
+            RemainingSeconds: remainingSeconds,
+            ElapsedSeconds: SessionTimePolicy.ElapsedSeconds(session.StartTime, now));
+    }
 }

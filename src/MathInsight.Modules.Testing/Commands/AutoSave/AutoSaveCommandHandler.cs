@@ -128,11 +128,10 @@ public sealed class AutoSaveCommandHandler
         var remainingSeconds = SessionTimePolicy.RemainingSeconds(session.StartTime, durationMinutes, now);
 
         return Result<AutoSaveResponse>.Success(
-            new AutoSaveResponse(SavedAt: now, RemainingSeconds: remainingSeconds ?? 0)
-            {
-                HasTimeLimit = SessionTimePolicy.HasTimeLimit(durationMinutes),
-                RemainingSecondsNullable = remainingSeconds,
-                ElapsedSeconds = SessionTimePolicy.ElapsedSeconds(session.StartTime, now)
-            });
+            new AutoSaveResponse(
+                SavedAt: now,
+                HasTimeLimit: SessionTimePolicy.HasTimeLimit(durationMinutes),
+                RemainingSeconds: remainingSeconds,
+                ElapsedSeconds: SessionTimePolicy.ElapsedSeconds(session.StartTime, now)));
     }
 }

@@ -70,6 +70,8 @@ public class TestSessionIntegrationTests
         await using var ctx = TestingInMemoryContext.Create();
         var db = ctx.Context;
         await TestDataSeeder.SeedActiveTestWithQuestions(db);
+        db.Tests.Single(test => test.TestId == TestDataSeeder.ActiveTestId).TestMode = "BlueprintExam";
+        await db.SaveChangesAsync();
 
         var handler = new StartSessionCommandHandler(db);
         var command = new StartSessionCommand(TestDataSeeder.ActiveTestId, TestDataSeeder.StudentId);
@@ -138,7 +140,8 @@ public class TestSessionIntegrationTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.True(result.Value!.RemainingSeconds > 0);
+        Assert.True(result.Value!.HasTimeLimit);
+        Assert.True(result.Value.RemainingSeconds > 0);
         Assert.True(result.Value.SavedAt <= DateTime.UtcNow);
 
         // Verify all 5 answers have UpdateChoiceTime set (use client-side evaluation for InMemory)
@@ -186,6 +189,8 @@ public class TestSessionIntegrationTests
         await using var ctx = TestingInMemoryContext.Create();
         var db = ctx.Context;
         await TestDataSeeder.SeedActiveTestWithQuestions(db);
+        db.Tests.Single(test => test.TestId == TestDataSeeder.ActiveTestId).TestMode = "BlueprintExam";
+        await db.SaveChangesAsync();
 
         var startHandler = new StartSessionCommandHandler(db);
         var startResult = await startHandler.Handle(

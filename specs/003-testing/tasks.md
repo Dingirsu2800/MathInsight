@@ -96,6 +96,8 @@
 - [x] Treat `DurationMinutes = 0` as an unlimited Practice session and return `hasTimeLimit`, nullable `remainingSeconds`, and `elapsedSeconds`.
 - [x] Keep BlueprintExam duration positive at the TestGen business-rule boundary.
 - [x] Reject timeout-submit for unlimited sessions with `TESTING_TEST_HAS_NO_TIME_LIMIT`.
+- [x] Verify unlimited start, resume, autosave, manual submit, timeout rejection, and incident recording through integration tests.
+- [x] Restrict incident-triggered force submission to Exam sessions; Practice incidents remain audit-only.
 
 ---
 

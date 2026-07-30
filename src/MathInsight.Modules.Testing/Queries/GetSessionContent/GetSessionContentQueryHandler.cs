@@ -93,13 +93,10 @@ public sealed class GetSessionContentQueryHandler
             session.TestFormat,
             test.DurationMinutes,
             test.MaxScore,
-            remainingSeconds ?? 0,
+            SessionTimePolicy.HasTimeLimit(test.DurationMinutes),
+            remainingSeconds,
+            SessionTimePolicy.ElapsedSeconds(session.StartTime, now),
             questions,
-            savedAnswers)
-        {
-            HasTimeLimit = SessionTimePolicy.HasTimeLimit(test.DurationMinutes),
-            RemainingSecondsNullable = remainingSeconds,
-            ElapsedSeconds = SessionTimePolicy.ElapsedSeconds(session.StartTime, now)
-        });
+            savedAnswers));
     }
 }
