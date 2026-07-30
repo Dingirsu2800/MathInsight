@@ -63,6 +63,35 @@ function toAutoSavePayload(answers) {
   }));
 }
 
+function getDraftStorageKey(id) {
+  return `mathinsight_test_draft_${id}`;
+}
+
+function getLocalDraft(sessionId) {
+  try {
+    const raw = localStorage.getItem(getDraftStorageKey(sessionId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDraft(sessionId, answers) {
+  try {
+    localStorage.setItem(getDraftStorageKey(sessionId), JSON.stringify(answers));
+  } catch {
+    // Ignore quota or private mode errors
+  }
+}
+
+function clearLocalDraft(sessionId) {
+  try {
+    localStorage.removeItem(getDraftStorageKey(sessionId));
+  } catch {
+    // Ignore
+  }
+}
+
 export default function TestSession() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -75,6 +104,8 @@ export default function TestSession() {
   const [error, setError] = useState(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showRestoredBanner, setShowRestoredBanner] = useState(false);
 
   const answersRef = useRef(answers);
   const sessionRef = useRef(session);
@@ -101,12 +132,28 @@ export default function TestSession() {
       const questions = (data.questions || []).map(adaptQuestion);
       const view = { ...data, questions };
       const persistedAnswers = hydrateAnswers(data.savedAnswers);
+
+      const localDraft = getLocalDraft(sessionId);
+      let finalAnswers = persistedAnswers;
+      if (localDraft && typeof localDraft === 'object') {
+        finalAnswers = { ...persistedAnswers };
+        let hasUnsavedChanges = false;
+        Object.entries(localDraft).forEach(([qId, localAns]) => {
+          if (localAns && (localAns.answerId || localAns.shortAnswerText?.trim() || localAns.selectedOptions?.length || localAns.parts?.length)) {
+            finalAnswers[qId] = { ...(finalAnswers[qId] || {}), ...localAns };
+            hasUnsavedChanges = true;
+          }
+        });
+        if (hasUnsavedChanges) {
+          dirtyRef.current = true;
+        }
+      }
+
       setSession(view);
-      setAnswers(persistedAnswers);
-      answersRef.current = persistedAnswers;
+      setAnswers(finalAnswers);
+      answersRef.current = finalAnswers;
       setRemainingSeconds(data.remainingSeconds ?? data.durationMinutes * 60);
       setCurrentQuestionId((current) => current || questions[0]?.questionId || null);
-      dirtyRef.current = false;
     } catch {
       setError('Không thể tải phiên làm bài. Vui lòng thử lại.');
     } finally {
@@ -149,6 +196,7 @@ export default function TestSession() {
     setSubmitting(true);
     try {
       await timeoutSubmitSession(sessionId);
+      clearLocalDraft(sessionId);
       navigate(`/student/test-result/${sessionId}`);
     } catch (requestError) {
       const code = requestError.response?.data?.code;
@@ -160,6 +208,7 @@ export default function TestSession() {
       }
       // Session already completed (Submitted/Graded by another path) → go to result
       if (code === 'TESTING_SESSION_ALREADY_COMPLETED') {
+        clearLocalDraft(sessionId);
         navigate(`/student/test-result/${sessionId}`);
         return;
       }
@@ -178,6 +227,7 @@ export default function TestSession() {
       try {
         const result = await autoSaveAnswers(sessionId, payload);
         if (result.remainingSeconds != null) setRemainingSeconds(result.remainingSeconds);
+        saveLocalDraft(sessionId, answersRef.current);
       } catch (requestError) {
         if (requestError.response?.data?.code === 'TESTING_SESSION_EXPIRED') {
           await handleTimeoutSubmit();
@@ -190,6 +240,34 @@ export default function TestSession() {
     autoSaveQueueRef.current = request;
     return request;
   }, [handleTimeoutSubmit, sessionId]);
+
+  useEffect(() => {
+    let timer;
+    const handleOnline = () => {
+      setIsOffline(false);
+      setShowRestoredBanner(true);
+      if (dirtyRef.current) {
+        performAutoSave().catch(() => undefined);
+      }
+      timer = setTimeout(() => {
+        setShowRestoredBanner(false);
+      }, 4000);
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      setShowRestoredBanner(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (timer) clearTimeout(timer);
+    };
+  }, [performAutoSave]);
 
   useEffect(() => {
     if (session?.status !== 'InProgress') return undefined;
@@ -212,11 +290,12 @@ export default function TestSession() {
         [questionId]: { ...(current[questionId] || {}), ...update },
       };
       answersRef.current = next;
+      saveLocalDraft(sessionId, next);
       return next;
     });
     dirtyRef.current = true;
     scheduleAutoSave();
-  }, [scheduleAutoSave]);
+  }, [scheduleAutoSave, sessionId]);
 
   const isExam = session?.testFormat === 'Exam';
   useEffect(() => {
@@ -226,7 +305,10 @@ export default function TestSession() {
       try {
         const result = await recordIncident(sessionId, 'TAB_SWITCH');
         setIncidentCount(result.totalIncidents);
-        if (result.forceSubmitted) navigate(`/student/test-result/${sessionId}`);
+        if (result.forceSubmitted) {
+          clearLocalDraft(sessionId);
+          navigate(`/student/test-result/${sessionId}`);
+        }
       } catch {
         // Incident logging failure must not block the test UI.
       }
@@ -255,6 +337,7 @@ export default function TestSession() {
     try {
       if (dirtyRef.current) await performAutoSave();
       await submitSession(sessionId);
+      clearLocalDraft(sessionId);
       navigate(`/student/test-result/${sessionId}`);
     } catch {
       setError('Nộp bài thất bại. Vui lòng thử lại.');
@@ -308,6 +391,26 @@ export default function TestSession() {
   return (
     <ExamLayout>
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {isOffline && (
+          <div className="bg-amber-500 text-white px-4 py-3 rounded-xl shadow-md flex items-center justify-between gap-3 text-sm font-semibold animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-xl">wifi_off</span>
+              <span>Mất kết nối Internet! Bài làm của bạn đang được tự động lưu an toàn trên thiết bị này. Vui lòng không đóng hoặc tải lại trang (F5) cho đến khi có mạng trở lại.</span>
+            </div>
+            <span className="bg-amber-700/50 px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap">Ngoại tuyến</span>
+          </div>
+        )}
+
+        {showRestoredBanner && !isOffline && (
+          <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-md flex items-center justify-between gap-3 text-sm font-semibold transition-all">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-xl">wifi</span>
+              <span>Đã khôi phục kết nối Internet! Hệ thống đang tự động đồng bộ và lưu bài làm của bạn lên máy chủ.</span>
+            </div>
+            <span className="bg-emerald-800/40 px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap">Đã có mạng</span>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-on-surface">{session.testName}</h2>
