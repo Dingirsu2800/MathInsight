@@ -28,7 +28,12 @@ public sealed record TestSessionViewResponse(
     decimal MaxScore,
     int RemainingSeconds,
     IReadOnlyList<StudentQuestionResponse> Questions,
-    IReadOnlyList<SavedTestAnswerResponse> SavedAnswers);
+    IReadOnlyList<SavedTestAnswerResponse> SavedAnswers)
+{
+    public bool HasTimeLimit { get; init; }
+    public int? RemainingSecondsNullable { get; init; }
+    public int ElapsedSeconds { get; init; }
+}
 
 public sealed record SavedTestAnswerResponse(
     string QuestionId,
@@ -86,7 +91,12 @@ public sealed record AutoSavePartDto(
 
 public sealed record AutoSaveResponse(
     DateTime SavedAt,
-    int RemainingSeconds);
+    int RemainingSeconds)
+{
+    public bool HasTimeLimit { get; init; }
+    public int? RemainingSecondsNullable { get; init; }
+    public int ElapsedSeconds { get; init; }
+}
 
 // ─── RecordIncident ───
 
