@@ -25,7 +25,9 @@ public static class TestGenModuleExtensions
         });
 
         services.AddScoped<IBlueprintAggregateValidator, BlueprintAggregateValidator>();
-        services.AddScoped<IBlueprintExamCandidateProvider, BlueprintExamCandidateProvider>();
+        services.AddScoped<IQuestionCandidateCatalog, QuestionCandidateCatalog>();
+        services.AddScoped<IBlueprintExamCandidateProvider>(serviceProvider =>
+            new BlueprintExamCandidateProvider(serviceProvider.GetRequiredService<IQuestionCandidateCatalog>()));
         services.AddScoped<IBlueprintExamQuestionSelector, CapacityAwareQuestionSelector>();
         services.AddSingleton<IGenerationRandomizer, SystemGenerationRandomizer>();
         services.AddSingleton<ITestCodeGenerator, SecureTestCodeGenerator>();
