@@ -65,6 +65,17 @@ public sealed class TestingModelMetadataTests
         AssertPrecision<TestAnswerPart>(nameof(TestAnswerPart.PointsEarned), 4, 2);
     }
 
+    [Fact]
+    public void TestReadModel_AllowsUnlimitedDuration()
+    {
+        var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(Test)));
+        var durationConstraint = Assert.Single(
+            entity.GetCheckConstraints(),
+            constraint => constraint.Name == "CK_Test_DurationMinutes");
+
+        Assert.Equal("[DurationMinutes] >= 0", durationConstraint.Sql);
+    }
+
     private void AssertPrecision<TEntity>(string propertyName, int precision, int scale)
     {
         var entity = Assert.IsAssignableFrom<IEntityType>(_model.FindEntityType(typeof(TEntity)));

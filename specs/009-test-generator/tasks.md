@@ -166,10 +166,13 @@
 - [ ] Populate adaptive recommendation audit fields.
 - [ ] Deduplicate recent questions after the product window/fallback rule is approved.
 
-## Phase 8C: TopicPractice Backlog
+## Phase 8C: TopicPractice
 
-- [ ] Implement `TopicPractice` generation for exactly 10 questions on one selected WeakTag.
-- [ ] Keep BlueprintID null and hand the generated Test to Testing for Practice TestSession creation.
+- [ ] Expose current-grade active topic options with descendant capacity and `canGenerate`.
+- [ ] Implement baseline `TopicPractice` generation for exactly 10 Questions on one selected active topic/subtree without Recommender.
+- [ ] Enforce quota 3/4/2/1, nearest-level fallback, Composite cap, unseen-then-oldest preference, and no partial writes.
+- [ ] Persist personal Test/TestQuestion immutable scoring snapshots with BlueprintID null, duration zero, and NormalizedWeight.
+- [ ] Keep TestSession/TestAnswer creation in Testing only.
 
 ## Phase 9: Expert Shared BlueprintExam
 

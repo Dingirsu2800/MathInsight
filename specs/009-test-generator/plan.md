@@ -7,7 +7,7 @@
 
 ## Summary
 
-The Expert Blueprint lifecycle is complete. Implement Checkpoint 6A as a Student-facing, baseline non-adaptive BlueprintExam generation slice that creates Test and TestQuestion rows from an approved blueprint without Recommender or Testing-session concerns. The current SQL creation script is the persistence contract; no migration or table rename is permitted.
+The Expert Blueprint lifecycle and baseline BlueprintExam are complete. Checkpoint 6C adds Student-facing baseline TopicPractice generation without Recommender or Testing-session concerns. The current SQL creation script remains the persistence contract; EF migrations and table renames are not permitted. Approved SQL migration 005 relaxes only the existing Test duration constraint so a TopicPractice Test can use zero for unlimited duration.
 
 ## Technical Context
 
@@ -130,8 +130,10 @@ MathInsight.Modules.TestGen/
 
 ### Checkpoint 6C: TopicPractice
 
-- Generate exactly 10 questions for one selected WeakTag using `TestMode = TopicPractice`.
-- Keep BlueprintID null and hand the generated Test to Testing for a Practice TestSession.
+- Return active topics for the Student current grade, including descendant capacity in a flat tree response.
+- Generate exactly 10 unique questions for one selected active topic/subtree using `TestMode = TopicPractice`, baseline level quota 3/4/2/1, nearest fallback, at most two Composite questions, and unseen-then-oldest preference.
+- Keep BlueprintID null, persist `DurationMinutes = 0` and `NormalizedWeight`, then hand the generated Test to Testing for a Practice TestSession.
+- Extract immutable candidate validation so BlueprintExam and TopicPractice share the same QuestionVersion V2 gate.
 
 ### Phase 9: Expert Shared BlueprintExam
 
@@ -144,7 +146,7 @@ MathInsight.Modules.TestGen/
 - Add owner-only paged generated-Test listing per Blueprint so Active and Archived variants remain reachable after reload.
 - Add paged Student shared-Test discovery and generic, rate-limited TestCode resolution filtered by exact Student grade and active Blueprint state.
 - Keep authorization and transaction orchestration separate for Student and Expert flows. Extract only pure requirement, selection, ordering, score-allocation, and TestQuestion-construction logic after characterization coverage exists.
-- Do not add durable HTTP idempotency, a Draft Test status, schema changes, Adaptive generation, TopicPractice, Diagnostic, or Recommender integration.
+- Do not add durable HTTP idempotency, a Draft Test status, Adaptive generation, Diagnostic, or Recommender integration.
 
 ## API Design
 

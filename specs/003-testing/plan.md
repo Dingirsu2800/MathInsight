@@ -114,8 +114,9 @@ GET    /api/v1/tests/sessions/{id}/solution      # UC-50: view solution (only if
 - Client sends `POST /api/v1/tests/sessions/{id}/auto-save` every 5 minutes OR on each answer change.
 - Payload: `{ answers: [{ questionId, answerId, selectedOptions, shortAnswerText, timeSpent, parts: [{ partId, booleanAnswer, textAnswer, numericAnswer }] }] }`.
 - Handler validates `SessionID` status is `InProgress`, updates `TestAnswer` and `TestAnswerPart` records in batch.
-- Returns `{ savedAt: "ISO8601", remainingSeconds: N }`.
-- Session content also returns authoritative `remainingSeconds` and all persisted answer/option/part values; an empty auto-save heartbeat is unnecessary.
+- Returns `{ savedAt: "ISO8601", hasTimeLimit, remainingSeconds, elapsedSeconds }`.
+- Session content also returns authoritative `hasTimeLimit`, nullable `remainingSeconds`, `elapsedSeconds`, and all persisted answer/option/part values; an empty auto-save heartbeat is unnecessary.
+- `DurationMinutes = 0` is unlimited Practice. Auto-save and normal submit do not treat it as expired; timeout-submit returns `TESTING_TEST_HAS_NO_TIME_LIMIT`.
 - Auto-save rejects changes after the server deadline. Normal submit rechecks that deadline and delegates to force-submit with `TimeoutSubmit` when expired.
 
 ### Incident Force-Submit Logic

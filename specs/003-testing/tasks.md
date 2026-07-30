@@ -91,6 +91,14 @@
 
 ---
 
+## Phase 5: Unlimited TopicPractice Time Contract
+
+- [ ] Treat `DurationMinutes = 0` as an unlimited Practice session and return `hasTimeLimit`, nullable `remainingSeconds`, and `elapsedSeconds`.
+- [ ] Keep BlueprintExam duration positive at the TestGen business-rule boundary.
+- [ ] Reject timeout-submit for unlimited sessions with `TESTING_TEST_HAS_NO_TIME_LIMIT`.
+
+---
+
 ## Phase 4: Verification
 
 - [x] `dotnet build` — zero compile errors
