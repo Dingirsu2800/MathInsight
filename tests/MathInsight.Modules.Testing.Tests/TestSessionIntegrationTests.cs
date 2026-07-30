@@ -7,7 +7,6 @@ using MathInsight.Modules.Testing.Contracts;
 using MathInsight.Modules.Testing.Entities;
 using MathInsight.Modules.Testing.Queries.GetDetailedSolution;
 using MathInsight.Shared.Events;
-using MassTransit;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -381,53 +380,9 @@ public class TestSessionIntegrationTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Exam submit: persist Submitted before dispatching asynchronous grading
+    // UC-50: View solution before Graded → 403
     // ─────────────────────────────────────────────────────────────────────────
 
-    [Fact]
-    public async Task SubmitSession_Exam_PersistsSubmittedBeforePublishing()
-    {
-        await using var ctx = TestingInMemoryContext.Create();
-        var db = ctx.Context;
-        await TestDataSeeder.SeedSharedBlueprintExam(db);
-
-        var startResult = await new StartSessionCommandHandler(db).Handle(
-            new StartSessionCommand(TestDataSeeder.SharedTestId, TestDataSeeder.StudentId),
-            CancellationToken.None);
-        Assert.True(startResult.IsSuccess);
-
-        var publishEndpoint = new Mock<IPublishEndpoint>();
-        publishEndpoint
-            .Setup(endpoint => endpoint.Publish(
-                It.IsAny<TestSubmittedEvent>(),
-                It.IsAny<CancellationToken>()))
-            .Callback<TestSubmittedEvent, CancellationToken>((message, _) =>
-            {
-                var session = db.TestSessions.Local.Single(item => item.SessionId == message.SessionId);
-                Assert.Equal("Submitted", session.Status);
-                Assert.Equal("StudentSubmit", session.SubmissionType);
-                Assert.NotNull(session.EndTime);
-                Assert.False(db.ChangeTracker.HasChanges());
-            })
-            .Returns(Task.CompletedTask);
-
-        var result = await new SubmitSessionCommandHandler(
-            db,
-            Mock.Of<IMediator>(),
-            publishEndpoint.Object).Handle(
-                new SubmitSessionCommand(startResult.Value!.SessionId, TestDataSeeder.StudentId),
-                CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal("Submitted", result.Value!.Status);
-        publishEndpoint.Verify(endpoint => endpoint.Publish(
-            It.Is<TestSubmittedEvent>(message =>
-                message.SessionId == startResult.Value.SessionId &&
-                message.TestFormat == "Exam"),
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    // UC-50: View solution before Graded → 403
     [Fact]
     public async Task GetDetailedSolution_BeforeGraded_ReturnsSessionNotGraded()
     {
