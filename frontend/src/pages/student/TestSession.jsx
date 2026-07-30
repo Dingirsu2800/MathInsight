@@ -12,6 +12,7 @@ import {
   submitSession,
   timeoutSubmitSession,
 } from '../../services/testingApi';
+import { getTestGenErrorMessage } from '../../utils/testGenerationErrorLocalizer';
 
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 const AUTO_SAVE_DEBOUNCE_MS = 1200;
@@ -98,7 +99,12 @@ export default function TestSession() {
   const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+  // Time Policy states: hasTimeLimit, remainingSeconds, elapsedSeconds
+  const [hasTimeLimit, setHasTimeLimit] = useState(true);
+  const [remainingSeconds, setRemainingSeconds] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   const [incidentCount, setIncidentCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -106,6 +112,9 @@ export default function TestSession() {
   const [submitting, setSubmitting] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+
+  // Track whether failed submission was 'manual' or 'timeout' for exact retry routing
+  const [failedSubmitMode, setFailedSubmitMode] = useState(null);
 
   const answersRef = useRef(answers);
   const sessionRef = useRef(session);
@@ -127,6 +136,7 @@ export default function TestSession() {
 
     setLoading(true);
     setError(null);
+    setFailedSubmitMode(null);
     try {
       const data = await getSessionContent(sessionId);
       const questions = (data.questions || []).map(adaptQuestion);
@@ -152,10 +162,16 @@ export default function TestSession() {
       setSession(view);
       setAnswers(finalAnswers);
       answersRef.current = finalAnswers;
-      setRemainingSeconds(data.remainingSeconds ?? data.durationMinutes * 60);
+
+      // Update time policy states from backend session content
+      const isLimit = data.hasTimeLimit ?? (data.durationMinutes > 0);
+      setHasTimeLimit(isLimit);
+      setRemainingSeconds(isLimit ? (data.remainingSeconds ?? data.durationMinutes * 60) : null);
+      setElapsedSeconds(data.elapsedSeconds ?? 0);
+
       setCurrentQuestionId((current) => current || questions[0]?.questionId || null);
-    } catch {
-      setError('Không thể tải phiên làm bài. Vui lòng thử lại.');
+    } catch (err) {
+      setError(getTestGenErrorMessage(err, 'Không thể tải phiên làm bài. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -191,7 +207,10 @@ export default function TestSession() {
   }, [currentQuestionId]);
 
   const handleTimeoutSubmit = useCallback(async () => {
-    if (!sessionId || submitInFlightRef.current) return;
+    // Only timed Exam sessions can be timeout submitted (backend contract requirement)
+    const isExamTimedMode = sessionRef.current?.testFormat === 'Exam' && hasTimeLimit === true;
+    if (!sessionId || !isExamTimedMode || submitInFlightRef.current) return;
+
     submitInFlightRef.current = true;
     setSubmitting(true);
     try {
@@ -212,11 +231,12 @@ export default function TestSession() {
         navigate(`/student/test-result/${sessionId}`);
         return;
       }
-      setError('Không thể tự động nộp bài hết giờ. Vui lòng thử lại.');
+      setFailedSubmitMode('timeout');
+      setError(getTestGenErrorMessage(requestError, 'Không thể tự động nộp bài hết giờ. Vui lòng thử lại.'));
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [loadSession, navigate, sessionId]);
+  }, [hasTimeLimit, loadSession, navigate, sessionId]);
 
   const performAutoSave = useCallback(async () => {
     if (!sessionId || sessionRef.current?.status !== 'InProgress' || !dirtyRef.current) return;
@@ -226,7 +246,18 @@ export default function TestSession() {
     const request = autoSaveQueueRef.current.catch(() => undefined).then(async () => {
       try {
         const result = await autoSaveAnswers(sessionId, payload);
-        if (result.remainingSeconds != null) setRemainingSeconds(result.remainingSeconds);
+        if (result.hasTimeLimit !== undefined) {
+          setHasTimeLimit(result.hasTimeLimit);
+          if (result.hasTimeLimit === false) {
+            setRemainingSeconds(null);
+          }
+        }
+        if (result.remainingSeconds !== undefined && result.hasTimeLimit !== false) {
+          setRemainingSeconds(result.remainingSeconds);
+        }
+        if (result.elapsedSeconds != null) {
+          setElapsedSeconds(result.elapsedSeconds);
+        }
         saveLocalDraft(sessionId, answersRef.current);
       } catch (requestError) {
         if (requestError.response?.data?.code === 'TESTING_SESSION_EXPIRED') {
@@ -297,9 +328,10 @@ export default function TestSession() {
     scheduleAutoSave();
   }, [scheduleAutoSave, sessionId]);
 
-  const isExam = session?.testFormat === 'Exam';
+  // Strictly enable proctoring incident tracking ONLY for timed Exam sessions (Finding 6)
+  const isExamMode = session?.testFormat === 'Exam' && hasTimeLimit === true;
   useEffect(() => {
-    if (!sessionId || !isExam || session?.status !== 'InProgress') return undefined;
+    if (!sessionId || !isExamMode || session?.status !== 'InProgress') return undefined;
     const handleVisibility = async () => {
       if (!document.hidden || submitInFlightRef.current) return;
       try {
@@ -315,7 +347,7 @@ export default function TestSession() {
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [isExam, navigate, session?.status, sessionId]);
+  }, [isExamMode, navigate, session?.status, sessionId]);
 
   const questions = session?.questions || [];
   const currentIndex = questions.findIndex((question) => question.questionId === currentQuestionId);
@@ -330,7 +362,7 @@ export default function TestSession() {
     .map(([questionId]) => questionId)), [answers]);
   const unansweredCount = questions.length - answeredIds.size;
 
-  const handleConfirmSubmit = async () => {
+  const handleConfirmSubmit = useCallback(async () => {
     if (!sessionId || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
     setSubmitting(true);
@@ -339,19 +371,24 @@ export default function TestSession() {
       await submitSession(sessionId);
       clearLocalDraft(sessionId);
       navigate(`/student/test-result/${sessionId}`);
-    } catch {
-      setError('Nộp bài thất bại. Vui lòng thử lại.');
+    } catch (err) {
+      setFailedSubmitMode('manual');
+      setError(getTestGenErrorMessage(err, 'Nộp bài thất bại. Vui lòng thử lại.'));
       submitInFlightRef.current = false;
       setSubmitting(false);
       setShowSubmitModal(false);
     }
-  };
+  }, [navigate, performAutoSave, sessionId]);
 
   const handleRetrySubmit = useCallback(async () => {
     setError(null);
     submitInFlightRef.current = false;
-    await handleTimeoutSubmit();
-  }, [handleTimeoutSubmit]);
+    if (failedSubmitMode === 'timeout') {
+      await handleTimeoutSubmit();
+    } else {
+      await handleConfirmSubmit();
+    }
+  }, [failedSubmitMode, handleTimeoutSubmit, handleConfirmSubmit]);
 
   if (loading) {
     return <ExamLayout><div className="flex items-center justify-center py-24"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div></ExamLayout>;
@@ -370,14 +407,14 @@ export default function TestSession() {
                 <button
                   onClick={handleRetrySubmit}
                   disabled={submitting}
-                  className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold disabled:opacity-50"
+                  className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold disabled:opacity-50 min-h-[44px]"
                 >
                   {submitting ? 'Đang gửi...' : 'Thử lại'}
                 </button>
               )}
               <button
                 onClick={() => navigate('/student/test')}
-                className="px-6 py-2 border border-whisper-border text-on-surface rounded-lg text-sm font-bold hover:bg-surface-container-low"
+                className="px-6 py-2 border border-whisper-border text-on-surface rounded-lg text-sm font-bold hover:bg-surface-container-low min-h-[44px]"
               >
                 Quay lại chọn đề
               </button>
@@ -387,6 +424,10 @@ export default function TestSession() {
       </ExamLayout>
     );
   }
+
+  const durationText = !hasTimeLimit || session.durationMinutes === 0
+    ? 'Không giới hạn'
+    : `${session.durationMinutes} phút`;
 
   return (
     <ExamLayout>
@@ -414,13 +455,18 @@ export default function TestSession() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-on-surface">{session.testName}</h2>
-            <p className="text-sm text-on-surface-variant">{questions.length} câu hỏi · {session.durationMinutes} phút</p>
+            <p className="text-sm text-on-surface-variant">{questions.length} câu hỏi · {durationText}</p>
           </div>
           <div className="flex items-center gap-4">
-            {isExam && incidentCount > 0 && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-700">{incidentCount}/5 vi phạm</span>}
-            {isExam && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-600 border border-red-200">Giám sát bật</span>}
-            <SessionTimer remainingSeconds={remainingSeconds} onTimeUp={handleTimeoutSubmit} />
-            <button onClick={() => setShowSubmitModal(true)} disabled={submitting} className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-bold disabled:opacity-50">Nộp bài</button>
+            {isExamMode && incidentCount > 0 && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-700">{incidentCount}/5 vi phạm</span>}
+            {isExamMode && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-600 border border-red-200">Giám sát bật</span>}
+            <SessionTimer
+              hasTimeLimit={hasTimeLimit}
+              remainingSeconds={remainingSeconds}
+              elapsedSeconds={elapsedSeconds}
+              onTimeUp={handleTimeoutSubmit}
+            />
+            <button onClick={() => setShowSubmitModal(true)} disabled={submitting} className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-bold disabled:opacity-50 min-h-[44px]">Nộp bài</button>
           </div>
         </div>
 
@@ -428,8 +474,8 @@ export default function TestSession() {
           <div className="col-span-12 lg:col-span-8 xl:col-span-9">
             <QuestionPanel question={currentQuestion} answer={answers[currentQuestion?.questionId]} onAnswer={handleAnswer} totalQuestions={questions.length} />
             <div className="flex items-center justify-between mt-4">
-              <button onClick={() => setCurrentQuestionId(questions[currentIndex - 1]?.questionId)} disabled={currentIndex <= 0} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30">Câu trước</button>
-              <button onClick={() => setCurrentQuestionId(questions[currentIndex + 1]?.questionId)} disabled={currentIndex >= questions.length - 1} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30">Câu tiếp</button>
+              <button onClick={() => setCurrentQuestionId(questions[currentIndex - 1]?.questionId)} disabled={currentIndex <= 0} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30 min-h-[44px]">Câu trước</button>
+              <button onClick={() => setCurrentQuestionId(questions[currentIndex + 1]?.questionId)} disabled={currentIndex >= questions.length - 1} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30 min-h-[44px]">Câu tiếp</button>
             </div>
           </div>
           <div className="col-span-12 lg:col-span-4 xl:col-span-3">

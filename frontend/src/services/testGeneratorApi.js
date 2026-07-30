@@ -81,30 +81,6 @@ export const testGeneratorApi = {
     return client.post("/api/test-generator/tests/resolve-code", { testCode });
   },
 
-  startSession(testId) {
-    return client.post("/api/v1/tests/sessions/start", { testId });
-  },
-
-  getSessionContent(sessionId) {
-    return client.get(`/api/v1/tests/sessions/${sessionId}`);
-  },
-
-  recordIncident(sessionId, type = "TAB_SWITCH") {
-    return client.post(`/api/v1/tests/sessions/${sessionId}/incident`, { type });
-  },
-
-  submitSession(sessionId) {
-    return client.post(`/api/v1/tests/sessions/${sessionId}/submit`);
-  },
-
-  autoSaveSession(sessionId, answers) {
-    return client.post(`/api/v1/tests/sessions/${sessionId}/auto-save`, { answers });
-  },
-
-  timeoutSubmitSession(sessionId) {
-    return client.post(`/api/v1/tests/sessions/${sessionId}/timeout-submit`);
-  },
-
   getBlueprintGeneratedTests(blueprintId, params) {
     const queryParams = {};
     if (params) {
@@ -115,5 +91,13 @@ export const testGeneratorApi = {
       });
     }
     return client.get(`/api/test-generator/blueprints/${blueprintId}/tests`, { params: queryParams });
+  },
+
+  getTopicPracticeOptions() {
+    return client.get('/api/test-generator/tests/topic-practice-options');
+  },
+
+  generateTopicPractice(tagId) {
+    return client.post('/api/test-generator/tests/topic-practices', { tagId });
   }
 };
