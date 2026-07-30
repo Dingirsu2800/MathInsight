@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import StudentLayout from "./StudentLayout";
+import StudentLayout from "../../components/layout/StudentLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { Button } from "../../components/ui/button";
 import StartTestDialog from "../../components/student/StartTestDialog";

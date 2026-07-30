@@ -51,11 +51,25 @@ public class LecturesController : ControllerBase
         }
     }
 
+    [HttpPost("ocr")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> ExtractOcr([FromForm] Microsoft.AspNetCore.Http.IFormFile? file, CancellationToken cancellationToken)
+    {
+        if (IsStudent) return Forbid();
+        var cmd = new ExtractLectureOcrCommand(file);
+        var result = await _mediator.Send(cmd, cancellationToken);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { message = result.Error?.Message ?? "OCR Extraction Failed" });
+        }
+        return Ok(result.Value);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateLecture([FromBody] CreateLectureRequest request, CancellationToken cancellationToken)
     {
         if (IsStudent) return Forbid();
-        var cmd = new CreateLectureCommand(request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId, request.MaterialIds);
+        var cmd = new CreateLectureCommand(request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId, request.MaterialIds, request.NextLectureId);
         var result = await _mediator.Send(cmd, cancellationToken);
         return Ok(result);
     }
@@ -81,7 +95,7 @@ public class LecturesController : ControllerBase
     public async Task<IActionResult> UpdateLecture(string id, [FromBody] UpdateLectureRequest request, CancellationToken cancellationToken)
     {
         if (IsStudent) return Forbid();
-        var cmd = new UpdateLectureCommand(id, request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId, request.MaterialIds);
+        var cmd = new UpdateLectureCommand(id, request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId, request.MaterialIds, request.NextLectureId);
         try
         {
             var result = await _mediator.Send(cmd, cancellationToken);
@@ -154,5 +168,5 @@ public class LecturesController : ControllerBase
     }
 }
 
-public record CreateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds);
-public record UpdateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds);
+public record CreateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
+public record UpdateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);

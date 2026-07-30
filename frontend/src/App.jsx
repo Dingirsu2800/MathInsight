@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import ToastContainer from './components/common/Toast.jsx';
 import StudentDashboard from './pages/student/Dashboard.jsx';
 import StudentLectureListPage from './pages/student/StudentLectureListPage.jsx';
 import StudentLectureDetailPage from './pages/student/StudentLectureDetailPage.jsx';
@@ -55,6 +56,8 @@ function HomeRoute() {
 
 export default function App() {
   return (
+    <>
+    <ToastContainer />
     <Routes>
       <Route path="/" element={<HomeRoute />} />
       <Route path="/login" element={<LoginPage />} />
@@ -128,6 +131,7 @@ export default function App() {
         }
       />
     </Routes>
+    </>
   );
 }
 

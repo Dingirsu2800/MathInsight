@@ -1,14 +1,14 @@
 import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import StudentLayout from "./StudentLayout";
+import StudentLayout from "../../components/layout/StudentLayout";
 import { getLectures, getTopics } from "../../services/learningApi";
 
 export default function StudentLectureListPage() {
   const navigate = useNavigate();
   const [lectures, setLectures] = useState([]);
   const [search, setSearch] = useState("");
-  const [gradeFilter, setGradeFilter] = useState("12");
+  const [gradeFilter, setGradeFilter] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -75,6 +75,7 @@ export default function StudentLectureListPage() {
             value={gradeFilter}
             onChange={(e) => setGradeFilter(e.target.value)}
           >
+            <option value="">Tất cả các lớp</option>
             <option value="12">Lớp 12</option>
             <option value="11">Lớp 11</option>
             <option value="10">Lớp 10</option>

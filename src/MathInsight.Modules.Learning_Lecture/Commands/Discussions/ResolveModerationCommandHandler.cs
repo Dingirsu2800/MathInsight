@@ -34,10 +34,12 @@ public class ResolveModerationCommandHandler : IRequestHandler<ResolveModeration
             if (report.DiscussionQuestionId != null && report.Question != null)
             {
                 report.Question.Status = "Hidden";
+                report.Question.ModerationReason = request.Reason;
             }
             else if (report.DiscussionAnswerId != null && report.Answer != null)
             {
                 report.Answer.Status = "Hidden";
+                report.Answer.ModerationReason = request.Reason;
             }
         }
 

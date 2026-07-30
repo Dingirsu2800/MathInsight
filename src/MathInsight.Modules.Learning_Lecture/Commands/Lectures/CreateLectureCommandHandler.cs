@@ -33,7 +33,8 @@ public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand,
             Status = "Draft",
             CreatedTime = DateTime.UtcNow,
             UpdatedTime = DateTime.UtcNow,
-            Likes = 0
+            Likes = 0,
+            NextLectureId = request.NextLectureId
         };
 
         if (request.MaterialIds != null)
