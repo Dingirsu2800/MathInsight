@@ -39,7 +39,11 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
         GenerateTopicPracticeCommand command,
         CancellationToken cancellationToken)
     {
-        var prepared = await PrepareAsync(command, Guid.NewGuid().ToString("D"), DateTime.UtcNow, cancellationToken);
+        var prepared = await PrepareAsync(
+            command,
+            Guid.NewGuid().ToString("D"),
+            GetUtcNowAtSqlPrecision(),
+            cancellationToken);
         if (prepared.IsFailure)
             return Result<GenerateTopicPracticeResponse>.Failure(prepared.Error!);
 
@@ -322,4 +326,12 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             : question.SupportedScoringRules.Contains(ScoringRules.WeightedParts)
                 ? ScoringRules.WeightedParts
                 : ScoringRules.AllOrNothing;
+
+    private static DateTime GetUtcNowAtSqlPrecision()
+    {
+        var utcNow = DateTime.UtcNow;
+        return new DateTime(
+            utcNow.Ticks - utcNow.Ticks % TimeSpan.TicksPerSecond,
+            DateTimeKind.Utc);
+    }
 }

@@ -23,11 +23,29 @@ internal static class TopicPracticePersistenceVerifier
                 test.CreatedTime,
                 TopicPracticeRecommendationContext.Baseline,
                 null,
-                []));
+                test.Questions
+                    .Select(question => new PreparedTopicPracticeQuestion(
+                        new BlueprintExamCandidate(
+                            question.QuestionId,
+                            question.QuestionVersionId,
+                            question.WeightSnapshot,
+                            string.Empty,
+                            string.Empty,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                            new HashSet<string>([question.ScoringRuleSnapshot], StringComparer.OrdinalIgnoreCase)),
+                        question.QuestionOrder,
+                        question.MaxPointsSnapshot,
+                        question.ScoringRuleSnapshot,
+                        IsWeakTagFocus: false))
+                    .ToList()));
 
     public static bool IsValid(Test test, PreparedTopicPracticeGeneration prepared)
     {
         var questions = test.Questions.ToList();
+        var preparedQuestions = prepared.Questions.ToList();
+        var preparedQuestionIds = preparedQuestions
+            .Select(question => question.Question.QuestionId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var validScoringRules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ScoringRules.AllOrNothing,
@@ -35,7 +53,9 @@ internal static class TopicPracticePersistenceVerifier
             ScoringRules.WeightedParts
         };
 
-        var aggregateIsValid = test.BlueprintId is null &&
+        var aggregateIsValid = string.Equals(test.TestId, prepared.TestId, StringComparison.Ordinal) &&
+            test.CreatedTime == prepared.CreatedTime &&
+            test.BlueprintId is null &&
             string.Equals(test.GeneratedForStudentId, prepared.StudentId, StringComparison.Ordinal) &&
             string.Equals(test.TestStatus, GeneratedTestValues.ActiveStatus, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(test.TestMode, "TopicPractice", StringComparison.OrdinalIgnoreCase) &&
@@ -45,6 +65,8 @@ internal static class TopicPracticePersistenceVerifier
             test.DurationMinutes == 0 &&
             test.TotalQuestions == TopicPracticePolicy.QuestionCount &&
             questions.Count == TopicPracticePolicy.QuestionCount &&
+            preparedQuestions.Count == TopicPracticePolicy.QuestionCount &&
+            preparedQuestionIds.Count == TopicPracticePolicy.QuestionCount &&
             test.MaxScore == TopicPracticePolicy.MaxScore &&
             string.Equals(test.ScoringPolicy, ScoringPolicies.NormalizedWeight, StringComparison.OrdinalIgnoreCase) &&
             questions.Select(question => question.QuestionId).Distinct(StringComparer.OrdinalIgnoreCase).Count() == TopicPracticePolicy.QuestionCount &&
@@ -52,6 +74,7 @@ internal static class TopicPracticePersistenceVerifier
             questions.Sum(question => question.MaxPointsSnapshot) == TopicPracticePolicy.MaxScore &&
             questions.All(question =>
                 question.SourceBlueprintDetailId is null &&
+                string.Equals(question.TestId, test.TestId, StringComparison.Ordinal) &&
                 !string.IsNullOrWhiteSpace(question.QuestionVersionId) &&
                 question.WeightSnapshot > 0m &&
                 question.MaxPointsSnapshot > 0m &&
@@ -60,6 +83,29 @@ internal static class TopicPracticePersistenceVerifier
                 question.InvalidatedByReportId is null);
 
         if (!aggregateIsValid)
+            return false;
+
+        var persistedMatchesPrepared = preparedQuestions.All(preparedQuestion =>
+        {
+            var persisted = questions.SingleOrDefault(question =>
+                string.Equals(
+                    question.QuestionId,
+                    preparedQuestion.Question.QuestionId,
+                    StringComparison.OrdinalIgnoreCase));
+            return persisted is not null &&
+                persisted.QuestionOrder == preparedQuestion.QuestionOrder &&
+                string.Equals(
+                    persisted.QuestionVersionId,
+                    preparedQuestion.Question.QuestionVersionId,
+                    StringComparison.OrdinalIgnoreCase) &&
+                persisted.WeightSnapshot == preparedQuestion.Question.DefaultWeight &&
+                persisted.MaxPointsSnapshot == preparedQuestion.MaxPoints &&
+                string.Equals(
+                    persisted.ScoringRuleSnapshot,
+                    preparedQuestion.ScoringRule,
+                    StringComparison.OrdinalIgnoreCase);
+        });
+        if (!persistedMatchesPrepared)
             return false;
 
         if (!prepared.Recommendation.IsAdaptive)
