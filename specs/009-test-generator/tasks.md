@@ -178,11 +178,11 @@
 
 ## Phase 8D: WeakTag-Aware TopicPractice
 
-- [ ] Add the Shared provider contract and qualified evidence gate in Recommender.
-- [ ] Add feature-flagged representative WeakTag resolution for active topic subtrees.
-- [ ] Add level-1/level-2 focus selection profiles while preserving baseline selection.
+- [x] Add the Shared provider contract and qualified evidence gate in Recommender.
+- [x] Add feature-flagged representative WeakTag resolution for active topic subtrees.
+- [x] Add level-1/level-2 focus selection profiles while preserving baseline selection.
 - [ ] Persist and verify adaptive `TestQuestion` audit fields across SQL retries.
-- [ ] Add additive TopicPractice option and generation response fields with stable 503 mappings.
+- [x] Add additive TopicPractice option and generation response fields with stable 503 mappings.
 - [ ] Add disposable SQL Server smoke coverage for semantic IDs and adaptive audit.
 - [ ] Add frontend weak-topic ordering, preview, dialog copy, localization, build, and browser smoke evidence.
 

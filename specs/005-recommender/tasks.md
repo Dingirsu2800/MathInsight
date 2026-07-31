@@ -93,10 +93,10 @@
 
 ## TopicPractice WeakTag Provider
 
-- [ ] Add `IStudentRecommendationProvider` and `WeakTagAdvice` to `MathInsight.Shared` with string IDs and `EvidenceCount`.
-- [ ] Implement `RecommenderService.GetWeakTagAdviceAsync` for active `TagTopic` rows where `OfficialPoint < 5.00` and `NumberDone >= 3`.
-- [ ] Register `IRecommenderService` and `IStudentRecommendationProvider` against the same scoped `RecommenderService` instance.
-- [ ] Add semantic-ID, evidence-threshold, inactive-topic, and deterministic-order tests.
+- [x] Add `IStudentRecommendationProvider` and `WeakTagAdvice` to `MathInsight.Shared` with string IDs and `EvidenceCount`.
+- [x] Implement `RecommenderService.GetWeakTagAdviceAsync` for active `TagTopic` rows where `OfficialPoint < 5.00` and `NumberDone >= 3`.
+- [x] Register `IRecommenderService` and `IStudentRecommendationProvider` against the same scoped `RecommenderService` instance.
+- [x] Add semantic-ID, evidence-threshold, inactive-topic, and deterministic-order tests.
   - [x] Keep SQL-only implementation for MVP; Redis cache is optional later.
 
 - [x] **Recommendation Queries**:
