@@ -1,4 +1,6 @@
 export const TEST_GENERATION_ERROR_MAP = {
+  TOPIC_PRACTICE_RECOMMENDER_UNAVAILABLE: "Hệ thống gợi ý đang tạm thời gián đoạn. Vui lòng thử lại.",
+  TOPIC_PRACTICE_RECOMMENDATION_INVALID: "Dữ liệu gợi ý hiện chưa thể dùng để tạo bài. Vui lòng thử lại sau.",
   AUTH_INVALID_TOKEN: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
   TEST_GENERATION_REQUEST_INVALID: "Thông tin đề chưa hợp lệ.",
   BLUEPRINT_MUTATION_FORBIDDEN: "Bạn không có quyền sinh đề từ cấu trúc này.",
