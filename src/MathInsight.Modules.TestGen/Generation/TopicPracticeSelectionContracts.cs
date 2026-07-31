@@ -6,12 +6,28 @@ public static class TopicPracticePolicy
     public const int MaxCompositeCount = 2;
     public const decimal MaxScore = 10.00m;
     public const string RuleVersion = "TopicPractice-v1";
-    public static IReadOnlyList<int> TargetLevels { get; } = [1, 1, 1, 2, 2, 2, 2, 3, 3, 4];
+    public const string WeakTagRuleVersion = "TopicPractice-WeakTag-v1";
 }
+
+public enum TopicPracticeSlotScope
+{
+    FocusPreferred,
+    BreadthPreferred
+}
+
+public sealed record TopicPracticeSlot(int TargetDifficultyLevel, TopicPracticeSlotScope Scope);
+
+public sealed record TopicPracticeSelectionPlan(
+    IReadOnlyList<TopicPracticeSlot> Slots,
+    IReadOnlySet<string> FocusTagIds,
+    bool IsDirectFocusSelection,
+    string RuleVersion);
 
 public sealed record TopicPracticeCandidate(
     BlueprintExamCandidate Question,
     int DifficultyLevel,
     DateTime? LastSeenAt);
 
-public sealed record TopicPracticeSelection(bool IsComplete, IReadOnlyList<TopicPracticeCandidate> Selected);
+public sealed record SelectedTopicPracticeQuestion(TopicPracticeCandidate Candidate, bool IsWeakTagFocus);
+
+public sealed record TopicPracticeSelection(bool IsComplete, IReadOnlyList<SelectedTopicPracticeQuestion> Selected);

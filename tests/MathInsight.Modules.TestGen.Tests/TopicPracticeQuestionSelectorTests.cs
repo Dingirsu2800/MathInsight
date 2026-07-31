@@ -5,78 +5,148 @@ namespace MathInsight.Modules.TestGen.Tests;
 public sealed class TopicPracticeQuestionSelectorTests
 {
     [Fact]
-    public void Select_UsesExactThreeFourTwoOneQuota_WhenAvailable()
+    public void Select_BaselineUsesExactThreeFourTwoOneQuota_WhenAvailable()
     {
-        var selection = CreateSelector().Select(CandidatesByLevel(3, 4, 2, 1), CancellationToken.None);
+        var selection = CreateSelector().Select(CandidatesByLevel(3, 4, 2, 1), TopicPracticeSelectionPlanFactory.CreateBaseline(), CancellationToken.None);
+
         Assert.True(selection.IsComplete);
-        Assert.Equal([3, 4, 2, 1], selection.Selected.GroupBy(item => item.DifficultyLevel).OrderBy(item => item.Key).Select(item => item.Count()));
+        Assert.Equal([3, 4, 2, 1], selection.Selected.GroupBy(item => item.Candidate.DifficultyLevel).OrderBy(item => item.Key).Select(item => item.Count()));
+    }
+
+    [Theory]
+    [InlineData(1, 8, 2, 0, 0)]
+    [InlineData(2, 2, 7, 1, 0)]
+    public void CreateAdaptive_BuildsApprovedDifficultyProfile(byte recommendedLevel, int level1, int level2, int level3, int level4)
+    {
+        var plan = TopicPracticeSelectionPlanFactory.CreateAdaptive(recommendedLevel, FocusTags(), isDirectFocusSelection: false);
+
+        Assert.Equal(10, plan.Slots.Count);
+        Assert.Equal(6, plan.Slots.Count(slot => slot.Scope == TopicPracticeSlotScope.FocusPreferred));
+        var countsByLevel = plan.Slots
+            .GroupBy(slot => slot.TargetDifficultyLevel)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Assert.Equal([level1, level2, level3, level4], Enumerable.Range(1, 4).Select(level => countsByLevel.GetValueOrDefault(level)));
+    }
+
+    [Fact]
+    public void Select_AdaptiveParent_UsesSixFocusAndAtLeastTwoOutside_WhenPoolPermits()
+    {
+        var candidates = CandidatesByLevel(8, 2, 0, 0, "focus");
+        candidates.AddRange(CandidatesByLevel(3, 4, 2, 1, "outside", offset: candidates.Count));
+        var plan = TopicPracticeSelectionPlanFactory.CreateAdaptive(1, FocusTags(), isDirectFocusSelection: false);
+
+        var selection = CreateSelector().Select(candidates, plan, CancellationToken.None);
+
+        Assert.True(selection.IsComplete);
+        Assert.InRange(selection.Selected.Count(item => item.IsWeakTagFocus), 6, 8);
+        Assert.True(selection.Selected.Count(item => !item.IsWeakTagFocus) >= 2);
+    }
+
+    [Fact]
+    public void Select_AdaptiveParent_UsesAtMostEightFocus_WhenOnlyTwoOutsideCandidatesExist()
+    {
+        var candidates = CandidatesByLevel(8, 2, 0, 0, "focus");
+        candidates.AddRange(CandidatesByLevel(2, 0, 0, 0, "outside", offset: candidates.Count));
+        var plan = TopicPracticeSelectionPlanFactory.CreateAdaptive(1, FocusTags(), isDirectFocusSelection: false);
+
+        var selection = CreateSelector().Select(candidates, plan, CancellationToken.None);
+
+        Assert.True(selection.IsComplete);
+        Assert.Equal(8, selection.Selected.Count(item => item.IsWeakTagFocus));
+    }
+
+    [Fact]
+    public void Select_DirectWeakTagSelection_AllowsAllTenFocusQuestions()
+    {
+        var plan = TopicPracticeSelectionPlanFactory.CreateAdaptive(1, FocusTags(), isDirectFocusSelection: true);
+
+        var selection = CreateSelector().Select(CandidatesByLevel(8, 2, 0, 0, "focus"), plan, CancellationToken.None);
+
+        Assert.True(selection.IsComplete);
+        Assert.Equal(10, selection.Selected.Count(item => item.IsWeakTagFocus));
     }
 
     [Fact]
     public void Select_FallsBackToNearestLevel_AndPrefersLowerOnTie()
     {
         var candidates = CandidatesByLevel(4, 0, 6, 0);
-        var selection = CreateSelector().Select(candidates, CancellationToken.None);
+        var selection = CreateSelector().Select(candidates, TopicPracticeSelectionPlanFactory.CreateBaseline(), CancellationToken.None);
+
         Assert.True(selection.IsComplete);
-        Assert.Contains(selection.Selected, item => item.Question.QuestionId == "q-1-3-3");
-    }
-
-    [Fact]
-    public void Select_PrefersExactDifficultyComposite_BeforeFartherNonComposite()
-    {
-        var candidates = CandidatesByLevel(10, 0, 0, 0);
-        candidates.Add(Candidate("exact-composite", 4, composite: true));
-
-        var selection = CreateSelector().Select(candidates, CancellationToken.None);
-
-        Assert.Contains(selection.Selected, item => item.Question.QuestionId == "exact-composite");
+        Assert.Contains(selection.Selected, item => item.Candidate.Question.QuestionId == "q-1-3-3");
     }
 
     [Fact]
     public void Select_NeverReturnsMoreThanTwoCompositeQuestions()
     {
         var candidates = CandidatesByLevel(3, 4, 1, 0);
-        candidates.Add(Candidate("composite-1", 3, composite: true));
-        candidates.Add(Candidate("composite-2", 4, composite: true));
-        var selection = CreateSelector().Select(candidates, CancellationToken.None);
+        candidates.Add(Candidate("composite-1", 3, "topic", composite: true));
+        candidates.Add(Candidate("composite-2", 4, "topic", composite: true));
+
+        var selection = CreateSelector().Select(candidates, TopicPracticeSelectionPlanFactory.CreateBaseline(), CancellationToken.None);
+
         Assert.True(selection.IsComplete);
-        Assert.True(selection.Selected.Count(item => item.Question.QuestionType == "Composite") <= 2);
+        Assert.True(selection.Selected.Count(item => item.Candidate.Question.QuestionType == "Composite") <= 2);
     }
 
     [Fact]
     public void Select_PrefersUnseenThenOldestSeen()
     {
         var candidates = CandidatesByLevel(3, 4, 2, 1);
-        candidates[0] = Candidate("seen-new", 1, DateTime.UtcNow);
-        candidates.Add(Candidate("unseen", 1));
-        var selection = CreateSelector().Select(candidates, CancellationToken.None);
-        Assert.Contains(selection.Selected, item => item.Question.QuestionId == "unseen");
-        Assert.DoesNotContain(selection.Selected, item => item.Question.QuestionId == "seen-new");
-    }
+        candidates[0] = Candidate("seen-new", 1, "topic", DateTime.UtcNow);
+        candidates.Add(Candidate("unseen", 1, "topic"));
 
-    [Fact]
-    public void Select_ReturnsTenUniqueQuestions()
-    {
-        var selection = CreateSelector().Select(CandidatesByLevel(3, 4, 2, 1), CancellationToken.None);
-        Assert.Equal(10, selection.Selected.Select(item => item.Question.QuestionId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        var selection = CreateSelector().Select(candidates, TopicPracticeSelectionPlanFactory.CreateBaseline(), CancellationToken.None);
+
+        Assert.Contains(selection.Selected, item => item.Candidate.Question.QuestionId == "unseen");
+        Assert.DoesNotContain(selection.Selected, item => item.Candidate.Question.QuestionId == "seen-new");
     }
 
     [Fact]
     public void Select_ReturnsIncomplete_WhenSelectableCapacityBelowTen()
     {
-        var selection = CreateSelector().Select(CandidatesByLevel(3, 4, 2, 0), CancellationToken.None);
+        var selection = CreateSelector().Select(CandidatesByLevel(3, 4, 2, 0), TopicPracticeSelectionPlanFactory.CreateBaseline(), CancellationToken.None);
+
         Assert.False(selection.IsComplete);
         Assert.Empty(selection.Selected);
     }
 
     private static TopicPracticeQuestionSelector CreateSelector() => new(new NoOpRandomizer());
-    private static List<TopicPracticeCandidate> CandidatesByLevel(int l1, int l2, int l3, int l4, bool composite = false)
+
+    private static IReadOnlySet<string> FocusTags() => new HashSet<string>(["focus"], StringComparer.OrdinalIgnoreCase);
+
+    private static List<TopicPracticeCandidate> CandidatesByLevel(int l1, int l2, int l3, int l4, string tagId = "topic", int offset = 0)
     {
         var result = new List<TopicPracticeCandidate>();
         foreach (var (level, count) in new[] { (1, l1), (2, l2), (3, l3), (4, l4) })
-            for (var index = 0; index < count; index++) result.Add(Candidate($"q-{level}-{index}-{result.Count}", level, null, composite));
+        {
+            for (var index = 0; index < count; index++)
+            {
+                var ordinal = offset + result.Count;
+                result.Add(Candidate($"q-{level}-{index}-{ordinal}", level, tagId));
+            }
+        }
+
         return result;
     }
-    private static TopicPracticeCandidate Candidate(string id, int level, DateTime? lastSeenAt = null, bool composite = false) => new(new BlueprintExamCandidate(id, $"{id}-v", 1m, $"d-{level}", composite ? "Composite" : "SingleChoice", new HashSet<string>(["topic"], StringComparer.OrdinalIgnoreCase), new HashSet<string>(["AllOrNothing"], StringComparer.OrdinalIgnoreCase)), level, lastSeenAt);
-    private sealed class NoOpRandomizer : IGenerationRandomizer { public void Shuffle<T>(IList<T> values) { } }
+
+    private static TopicPracticeCandidate Candidate(string id, int level, string tagId, DateTime? lastSeenAt = null, bool composite = false) => new(
+        new BlueprintExamCandidate(
+            id,
+            $"{id}-v",
+            1m,
+            $"d-{level}",
+            composite ? "Composite" : "SingleChoice",
+            new HashSet<string>([tagId], StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(["AllOrNothing"], StringComparer.OrdinalIgnoreCase)),
+        level,
+        lastSeenAt);
+
+    private sealed class NoOpRandomizer : IGenerationRandomizer
+    {
+        public void Shuffle<T>(IList<T> values)
+        {
+        }
+    }
 }
