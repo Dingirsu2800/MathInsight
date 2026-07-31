@@ -30,6 +30,9 @@ public static class TestGenModuleExtensions
             new BlueprintExamCandidateProvider(serviceProvider.GetRequiredService<IQuestionCandidateCatalog>()));
         services.AddScoped<IBlueprintExamQuestionSelector, CapacityAwareQuestionSelector>();
         services.AddScoped<ITopicPracticeQuestionSelector, TopicPracticeQuestionSelector>();
+        services.Configure<TopicPracticeFeatureOptions>(
+            configuration.GetSection(TopicPracticeFeatureOptions.SectionName));
+        services.AddScoped<ITopicPracticeRecommendationResolver, TopicPracticeRecommendationResolver>();
         services.AddSingleton<IGenerationRandomizer, SystemGenerationRandomizer>();
         services.AddSingleton<ITestCodeGenerator, SecureTestCodeGenerator>();
 

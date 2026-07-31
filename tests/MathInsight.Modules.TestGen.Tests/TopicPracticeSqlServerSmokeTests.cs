@@ -4,11 +4,17 @@ using System.Text.RegularExpressions;
 using MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
 using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
+using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Modules.Testing.Commands.StartSession;
+using MathInsight.Modules.Recommender.Persistence;
+using MathInsight.Modules.Recommender.Services;
 using MathInsight.Shared.Questions;
+using MathInsight.Shared.Results;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using TestGenContext = MathInsight.Modules.TestGen.Persistence.TestGenDbContext;
 using TestingContext = MathInsight.Modules.Testing.Persistence.TestingDbContext;
 
@@ -34,10 +40,18 @@ public sealed class TopicPracticeSqlServerSmokeTests
 
             var ambiguousCommit = new ThrowOnceAfterCommitInterceptor();
             await using var generationContext = CreateTestGenContext(databaseConnectionString, ambiguousCommit);
+            await using var recommenderContext = CreateRecommenderContext(databaseConnectionString);
+            var recommender = new RecommenderService(recommenderContext, new DifficultyMappingService());
+            var resolver = new TopicPracticeRecommendationResolver(
+                recommender,
+                Options.Create(new TopicPracticeFeatureOptions { WeakTagAdaptiveEnabled = true }),
+                NullLogger<TopicPracticeRecommendationResolver>.Instance);
             var handler = new GenerateTopicPracticeCommandHandler(
                 generationContext,
                 new QuestionCandidateCatalog(generationContext),
-                new TopicPracticeQuestionSelector(new NoOpRandomizer()));
+                new TopicPracticeQuestionSelector(new NoOpRandomizer()),
+                resolver,
+                NullLogger<GenerateTopicPracticeCommandHandler>.Instance);
 
             var generation = await handler.Handle(
                 new GenerateTopicPracticeCommand("student_01", "TOPIC-G12-CALCULUS"),
@@ -45,18 +59,27 @@ public sealed class TopicPracticeSqlServerSmokeTests
 
             Assert.True(ambiguousCommit.WasTriggered);
             Assert.True(generation.IsSuccess);
+            Assert.True(generation.Value!.WasAdaptive);
+            Assert.Equal("TOPIC-G12-DERIVAPP", generation.Value.WeakTagId);
+            Assert.InRange(generation.Value.AdaptiveQuestionCount, 6, 8);
+            Assert.Equal(10, generation.Value.AdaptiveQuestionCount + generation.Value.FallbackQuestionCount);
             generationContext.ChangeTracker.Clear();
             var persisted = await generationContext.Tests
                 .AsNoTracking()
                 .Include(test => test.Questions)
                 .SingleAsync(test => test.TestId == generation.Value!.TestId);
-            Assert.True(TopicPracticePersistenceVerifier.IsValid(
-                persisted,
-                "student_01",
-                "TOPIC-G12-CALCULUS",
-                "Luyện tập: Giải tích 12"));
             Assert.Equal(1, await generationContext.Tests.CountAsync());
             Assert.Equal(10, await generationContext.TestQuestions.CountAsync());
+            Assert.All(
+                persisted.Questions.Where(question => question.IsAdaptiveSelected),
+                question =>
+                {
+                    Assert.Equal("WeakTagPractice", question.SelectionReason);
+                    Assert.Equal("TOPIC-G12-DERIVAPP", question.RecommendedForTagId);
+                    Assert.Equal("DIFF-1", question.RecommendedDifficultyId);
+                    Assert.Equal(2.40m, question.PtagAtSelection);
+                    Assert.Equal(TopicPracticePolicy.WeakTagRuleVersion, question.RuleVersion);
+                });
 
             await using var testingContext = CreateTestingContext(databaseConnectionString);
             var ownerStart = await new StartSessionCommandHandler(testingContext).Handle(
@@ -169,19 +192,36 @@ public sealed class TopicPracticeSqlServerSmokeTests
             await command.ExecuteNonQueryAsync();
         }
 
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO [TagTopic] ([TagID], [ParentTagID], [TagName], [Grade], [IsActive], [DisplayOrder])
+                VALUES ('TOPIC-G12-DERIVAPP', 'TOPIC-G12-CALCULUS', N'Weak derivative applications', 12, 1, 2);
+
+                INSERT INTO [TagsMastery]
+                    ([TagsMasteryID], [StudentID], [TagID], [OfficialPoint], [PracticePoint],
+                     [ExamAnchor], [MasteryStatus], [NumberDone], [RecommendedDifficultyLevel])
+                VALUES
+                    ('TM-STUDENT01-DERIVAPP', 'student_01', 'TOPIC-G12-DERIVAPP', 2.40, 2.40,
+                     5.00, 'Learning', 5, 1);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
         for (var index = 1; index <= 12; index++)
         {
             var questionId = $"QUESTION-{index:00}";
             var answerId = $"ANSWER-{index:00}";
             var versionId = $"VERSION-{index:00}";
             var difficultyId = $"DIFF-{((index - 1) % 4) + 1}";
+            var tagId = index <= 8 ? "TOPIC-G12-DERIVAPP" : "TOPIC-G12-CALCULUS";
             var snapshot = new QuestionSnapshotV2(
                 questionId,
                 "SingleChoice",
                 difficultyId,
                 12,
                 1m,
-                [new QuestionTopicSnapshot("TOPIC-G12-CALCULUS", true)],
+                [new QuestionTopicSnapshot(tagId, true)],
                 [new QuestionAnswerSnapshot(answerId, "Đáp án đúng", true)],
                 [],
                 $"Câu hỏi {index}",
@@ -199,7 +239,7 @@ public sealed class TopicPracticeSqlServerSmokeTests
                 VALUES (@answerId, @questionId, N'Đáp án đúng', 1);
 
                 INSERT INTO [QuestionTopic] ([QuestionTopicID], [QuestionID], [TagID], [IsPrimary])
-                VALUES (@questionTopicId, @questionId, 'TOPIC-G12-CALCULUS', 1);
+                VALUES (@questionTopicId, @questionId, @tagId, 1);
 
                 INSERT INTO [QuestionVersion]
                     ([VersionID], [QuestionID], [QuestionContent], [QuestionAnswer], [AnswersSnapshot],
@@ -211,6 +251,7 @@ public sealed class TopicPracticeSqlServerSmokeTests
             command.Parameters.AddWithValue("@questionTopicId", $"QUESTION-TOPIC-{index:00}");
             command.Parameters.AddWithValue("@versionId", versionId);
             command.Parameters.AddWithValue("@difficultyId", difficultyId);
+            command.Parameters.AddWithValue("@tagId", tagId);
             command.Parameters.AddWithValue("@content", $"Câu hỏi {index}");
             command.Parameters.AddWithValue("@snapshot", JsonSerializer.Serialize(snapshot));
             await command.ExecuteNonQueryAsync();
@@ -238,6 +279,14 @@ public sealed class TopicPracticeSqlServerSmokeTests
                 sqlOptions => sqlOptions.EnableRetryOnFailure(3, TimeSpan.FromSeconds(1), null))
             .Options;
         return new TestingContext(options);
+    }
+
+    private static RecommenderDbContext CreateRecommenderContext(string connectionString)
+    {
+        var options = new DbContextOptionsBuilder<RecommenderDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        return new RecommenderDbContext(options);
     }
 
     private sealed class NoOpRandomizer : IGenerationRandomizer

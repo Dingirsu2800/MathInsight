@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Recommender.Contracts;
 using MathInsight.Modules.Recommender.Persistence;
+using MathInsight.Shared.Recommendations;
 
 namespace MathInsight.Modules.Recommender.Services;
 
@@ -9,7 +10,7 @@ namespace MathInsight.Modules.Recommender.Services;
 /// Reads TagsMastery and joins to TagTopic (read-only) to resolve tag names.
 /// Resolves TagDifficulty.DifficultyID based on RecommendedDifficultyLevel (1..4).
 /// </summary>
-public sealed class RecommenderService : IRecommenderService
+public sealed class RecommenderService : IRecommenderService, IStudentRecommendationProvider
 {
     private const decimal WeakThreshold = 5.00m;
 
@@ -91,5 +92,27 @@ public sealed class RecommenderService : IRecommenderService
         }).ToList();
 
         return result;
+    }
+
+    public async Task<IReadOnlyList<WeakTagAdvice>> GetWeakTagAdviceAsync(
+        string studentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await (
+            from mastery in _db.TagsMasteries.AsNoTracking()
+            join topic in _db.TagTopics.AsNoTracking() on mastery.TagId equals topic.TagId
+            where mastery.StudentId == studentId
+                && mastery.OfficialPoint < WeakThreshold
+                && mastery.NumberDone >= 3
+                && topic.IsActive
+            orderby mastery.OfficialPoint, mastery.TagId
+            select new WeakTagAdvice(
+                mastery.TagId,
+                topic.TagName,
+                mastery.OfficialPoint,
+                mastery.NumberDone,
+                mastery.RecommendedDifficultyLevel,
+                mastery.OfficialPoint < 4.00m ? "BottleneckSubTag" : "OfficialPointBelow5"))
+            .ToListAsync(cancellationToken);
     }
 }

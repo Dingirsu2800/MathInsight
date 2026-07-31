@@ -20,7 +20,7 @@
 | UC-53 | View Recommended Lectures | Student | Based on WeakTags; returns matching lectures |
 | UC-54 | View Recommended Materials | Student | Based on WeakTags; returns matching PDFs/materials |
 | - | Update Topic Mastery | System | After a session is graded |
-| - | Provide WeakTag Advice | TestGen module | `IRecommenderService.GetStudentWeakTagAdviceAsync()` |
+| - | Provide WeakTag Advice | TestGen module | `IStudentRecommendationProvider.GetWeakTagAdviceAsync()` |
 
 ### Edge Cases
 
@@ -147,14 +147,14 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 ```csharp
 public interface IRecommenderService
 {
-    Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(Guid studentId);
-    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(Guid studentId);
+    Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(string studentId);
+    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(string studentId);
 }
 ```
 
 ```csharp
 public sealed record WeakTagAdviceDto(
-    Guid TagId,
+    string TagId,
     string TagName,
     decimal OfficialPoint,
     bool IsWeak,
@@ -163,6 +163,29 @@ public sealed record WeakTagAdviceDto(
     string Reason
 );
 ```
+
+### Shared TopicPractice Advice Contract
+
+`MathInsight.Shared` owns the additive in-process boundary used by TestGen. It is intentionally narrower than the existing `WeakTagAdviceDto` REST/internal compatibility DTO: it does not expose `IsRemedial` or a database `DifficultyID`.
+
+```csharp
+public interface IStudentRecommendationProvider
+{
+    Task<IReadOnlyList<WeakTagAdvice>> GetWeakTagAdviceAsync(
+        string studentId,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record WeakTagAdvice(
+    string TagId,
+    string TagName,
+    decimal OfficialPoint,
+    int EvidenceCount,
+    byte RecommendedDifficultyLevel,
+    string Reason);
+```
+
+The provider returns only active qualified rows where `OfficialPoint < 5.00` and `EvidenceCount >= 3`. An empty list is a successful no-advice result. Provider exceptions are technical failures for the consumer to handle; they are not equivalent to an empty list.
 
 `Reason` is for audit/debugging, for example `OfficialPointBelow5`, `RemedialLevel1`, or `NormalPractice`.
 

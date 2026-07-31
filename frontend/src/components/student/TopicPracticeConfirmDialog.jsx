@@ -46,6 +46,13 @@ export default function TopicPracticeConfirmDialog({
               </div>
             </div>
 
+            {topic.isWeakRecommended && topic.weakTagName && topic.recommendedDifficultyLevel && (
+              <div className="border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-on-surface">
+                Bài luyện sẽ ưu tiên chủ đề <span className="font-bold">{topic.weakTagName}</span> ở mức độ {topic.recommendedDifficultyLevel}.
+                Hệ thống vẫn chọn đủ 10 câu trong phạm vi chủ đề bạn đã chọn.
+              </div>
+            )}
+
             {/* Error Message */}
             {errorMessage && (
               <div role="alert" className="p-3.5 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-start gap-2">

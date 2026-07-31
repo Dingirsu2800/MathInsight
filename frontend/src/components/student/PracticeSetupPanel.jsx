@@ -7,6 +7,30 @@ import { startSession } from "../../services/testingApi";
 import { getTopicPracticeErrorMessage } from "../../utils/topicPracticeErrorLocalizer";
 import { cn } from "../../utils/cn";
 
+function normalizeTopicPracticeOption(topic) {
+  return {
+    ...topic,
+    isWeakRecommended: topic?.isWeakRecommended === true,
+    officialPoint: Number.isFinite(Number(topic?.officialPoint))
+      ? Number(topic.officialPoint)
+      : null,
+    evidenceCount: Number.isInteger(Number(topic?.evidenceCount))
+      ? Number(topic.evidenceCount)
+      : null,
+    recommendedDifficultyLevel: Number.isInteger(Number(topic?.recommendedDifficultyLevel))
+      ? Number(topic.recommendedDifficultyLevel)
+      : null,
+  };
+}
+
+function compareTopicPracticeSiblings(a, b) {
+  if (a.isWeakRecommended !== b.isWeakRecommended) {
+    return a.isWeakRecommended ? -1 : 1;
+  }
+  if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+  return (a.tagName || "").localeCompare(b.tagName || "", "vi");
+}
+
 // Helper 1: Build cycle-safe tree hierarchy from flat topic list
 function buildCycleSafeTopicTree(rawTopics) {
   if (!Array.isArray(rawTopics)) return [];
@@ -55,10 +79,7 @@ function buildCycleSafeTopicTree(rawTopics) {
   // Cycle-safe recursive sorting
   const sortVisited = new Set();
   const sortNodes = (nodeList) => {
-    nodeList.sort((a, b) => {
-      if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
-      return (a.tagName || "").localeCompare(b.tagName || "", "vi");
-    });
+    nodeList.sort(compareTopicPracticeSiblings);
 
     nodeList.forEach((n) => {
       if (!sortVisited.has(n.tagId)) {
@@ -135,7 +156,9 @@ export default function PracticeSetupPanel() {
       const res = await testGeneratorApi.getTopicPracticeOptions();
       const data = res.data || {};
       setGrade(data.grade || null);
-      const rawTopics = data.topics || [];
+      const rawTopics = Array.isArray(data.topics)
+        ? data.topics.map(normalizeTopicPracticeOption)
+        : [];
       setTopics(rawTopics);
 
       // Auto-expand top-level root nodes
@@ -271,6 +294,10 @@ export default function PracticeSetupPanel() {
     const isExpanded = expandedTagIds.has(node.tagId);
     const hasChildren = Array.isArray(node.children) && node.children.length > 0;
     const isSearchMode = !!search.trim();
+    const hasWeakRecommendation = node.isWeakRecommended &&
+      node.weakTagName &&
+      node.recommendedDifficultyLevel !== null &&
+      node.officialPoint !== null;
 
     if (isSearchMode && !matchingTagIds.has(node.tagId) && !ancestorTagIds.has(node.tagId)) {
       return null;
@@ -319,9 +346,21 @@ export default function PracticeSetupPanel() {
                 aria-label={`Chọn chủ đề ${node.tagName}`}
                 className="flex flex-col justify-center text-left min-w-0 flex-1 min-h-[44px] py-1 px-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors group"
               >
-                <span className="text-xs font-bold truncate text-on-surface group-hover:text-primary transition-colors">
-                  {node.tagName}
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-bold truncate text-on-surface group-hover:text-primary transition-colors">
+                    {node.tagName}
+                  </span>
+                  {node.isWeakRecommended && (
+                    <span className="shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                      Cần củng cố
+                    </span>
+                  )}
                 </span>
+                {hasWeakRecommendation && (
+                  <span className="mt-0.5 truncate text-[10px] text-on-surface-variant">
+                    Trọng tâm: {node.weakTagName} · Mức {node.recommendedDifficultyLevel} · {node.officialPoint.toFixed(2)}/10
+                  </span>
+                )}
               </button>
             ) : (
               <div className="flex flex-col justify-center text-left min-w-0 flex-1 min-h-[44px] py-1 px-2">

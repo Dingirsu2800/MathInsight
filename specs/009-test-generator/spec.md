@@ -14,7 +14,8 @@ The module is delivered in explicit slices:
 1. **Expert Blueprint MVP (complete)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
 2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
 3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
-4. **Checkpoint 6C (current)**: generate a 10-question `TopicPractice` test for one Student-selected active topic in the Student's current grade. This baseline is independent of Recommender; later adaptive work may supply a recommended topic and difficulty profile to the same generation core.
+4. **Checkpoint 6C (complete)**: generate a 10-question baseline `TopicPractice` test for one Student-selected active topic in the Student's current grade.
+5. **Checkpoint 6D (current)**: apply one qualified WeakTag from the selected active subtree to TopicPractice without changing the request shape, database schema, or Adaptive BlueprintExam behavior.
 5. **Expert Shared BlueprintExam (current additive checkpoint)**: let the owning Expert generate, preview, publish immediately, and archive shared BlueprintExam variants while preserving the completed Student personal generation flow.
 
 TestGen creates `Test` and `TestQuestion` records only. Testing owns `TestSession` creation and the answer-taking workflow. EF migrations remain out of scope; approved SQL migration 005 changes the existing `Test.DurationMinutes` check to permit unlimited TopicPractice Tests.
@@ -200,6 +201,31 @@ The POST body contains only `tagId`. The backend derives Student ID, topic subtr
 - Selection prefers Questions the Student has never received in a personal Test, then the oldest previously seen Question. Candidate ties are randomized.
 - Test persistence uses `BlueprintID = NULL`, `TestMode = TopicPractice`, `GeneratedForStudentID = current Student`, `DurationMinutes = 0`, `MaxScore = 10.00`, and `ScoringPolicy = NormalizedWeight`.
 - Every TestQuestion stores the latest QuestionVersion, weight, allocated score, `SelectionReason = TopicPractice`, `RecommendedForTagID = selected TagID`, and `RuleVersion = TopicPractice-v1`.
+
+## Checkpoint 6D: WeakTag-Aware TopicPractice
+
+When `TopicPractice:WeakTagAdaptiveEnabled` is `false`, TestGen does not call Recommender and keeps the baseline `3/4/2/1` level profile. When enabled, it resolves qualified advice (`OfficialPoint < 5.00`, `EvidenceCount >= 3`) from `IStudentRecommendationProvider`. Empty advice keeps the baseline; provider failure or invalid advice returns a stable `503` before Test/TestQuestion writes.
+
+For the selected active topic subtree, TestGen deterministically selects one representative WeakTag by lowest point, then lowest recommended level, deepest descendant, `DisplayOrder`, and ordinal Tag ID. The profiles are:
+
+| Recommended level | Level 1 | Level 2 | Level 3 | Level 4 | Focus slots |
+|---|---:|---:|---:|---:|---|
+| Baseline/no advice | 3 | 4 | 2 | 1 | None |
+| 1 | 8 | 2 | 0 | 0 | 5xL1 + 1xL2 |
+| 2 | 2 | 7 | 1 | 0 | 1xL1 + 4xL2 + 1xL3 |
+
+Selecting an ancestor targets at least six Questions from the representative WeakTag subtree and preserves two outside-focus Questions where the pool permits, normally capping focus at eight. The cap may relax only to avoid a false insufficient-pool result. Direct selection of the representative WeakTag does not apply the breadth cap. Existing nearest-level fallback, lower-level tie preference, unique Question, Composite cap, and unseen-then-oldest rules remain in force.
+
+Option responses add `isWeakRecommended`, representative tag data, point, evidence count, recommended level, and reason. Generation responses add `wasAdaptive`, representative tag data, level, adaptive/fallback counts, and rule version. The client still submits only `{ tagId }`.
+
+Adaptive focus rows persist `SelectionReason = WeakTagPractice`, `IsAdaptiveSelected = true`, the representative Tag ID, resolved Difficulty ID, `PtagAtSelection`, and `RuleVersion = TopicPractice-WeakTag-v1`. Non-focus rows from the same adaptive test retain `SelectionReason = TopicPractice`, `IsAdaptiveSelected = false`, the selected Tag ID, null recommendation values, and the adaptive rule version.
+
+### Checkpoint 6D Stable Errors
+
+| Error code | HTTP | Meaning |
+|---|---:|---|
+| `TOPIC_PRACTICE_RECOMMENDER_UNAVAILABLE` | 503 | Enabled provider failed technically. |
+| `TOPIC_PRACTICE_RECOMMENDATION_INVALID` | 503 | Enabled provider returned advice that cannot be safely applied. |
 - TestGen does not create TestSession or TestAnswer rows.
 
 ### Checkpoint 6C Stable Errors
