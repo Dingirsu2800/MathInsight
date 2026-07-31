@@ -176,6 +176,16 @@
 - [x] Run an opt-in disposable SQL Server smoke with semantic IDs, fault-injected post-commit timeout, owner start, and non-owner rejection.
 - [x] Keep TestSession/TestAnswer creation in Testing only.
 
+## Phase 8D: WeakTag-Aware TopicPractice
+
+- [ ] Add the Shared provider contract and qualified evidence gate in Recommender.
+- [ ] Add feature-flagged representative WeakTag resolution for active topic subtrees.
+- [ ] Add level-1/level-2 focus selection profiles while preserving baseline selection.
+- [ ] Persist and verify adaptive `TestQuestion` audit fields across SQL retries.
+- [ ] Add additive TopicPractice option and generation response fields with stable 503 mappings.
+- [ ] Add disposable SQL Server smoke coverage for semantic IDs and adaptive audit.
+- [ ] Add frontend weak-topic ordering, preview, dialog copy, localization, build, and browser smoke evidence.
+
 ## Phase 9: Expert Shared BlueprintExam
 
 - [x] Preserve all Student personal BlueprintExam endpoints and regression tests.

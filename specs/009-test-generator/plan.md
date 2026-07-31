@@ -135,6 +135,13 @@ MathInsight.Modules.TestGen/
 - Keep BlueprintID null, persist `DurationMinutes = 0` and `NormalizedWeight`, then hand the generated Test to Testing for a Practice TestSession.
 - Extract immutable candidate validation so BlueprintExam and TopicPractice share the same QuestionVersion V2 gate.
 
+### Checkpoint 6D: WeakTag-Aware TopicPractice
+
+- Keep the completed TopicPractice request and baseline behavior, then consume `IStudentRecommendationProvider` only through `MathInsight.Shared`.
+- Resolve one qualified WeakTag inside the selected active subtree, choose the approved level-1 or level-2 profile, and preserve parent breadth when the candidate pool permits it.
+- Store recommendation audit in existing `TestQuestion` fields; no schema change, Recommender project reference, REST call, Redis, or Adaptive BlueprintExam implementation is permitted.
+- Return additive option/generation metadata and stable `503` errors; frontend remains a display client and sends only `tagId`.
+
 ### Phase 9: Expert Shared BlueprintExam
 
 - Preserve the completed Student personal BlueprintExam API and characterization tests.

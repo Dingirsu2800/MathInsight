@@ -89,7 +89,14 @@
   - [x] `GetStudentWeakTagsAsync(studentId)` reads `TagsMastery` where `official_point < 5.00`.
     - **WeakTag tag type**: `TagsMastery.TagId` refers to `TagTopic` (topic tags). WeakTag evaluation is always per-topic, not per-difficulty.
     - **No-row behavior (MVP)**: Topics with no `TagsMastery` row are **not** returned as weak. They stay neutral until the first graded data point triggers lazy-create (see Phase 2 → CompetencyEngine → Lazy-create task). A newly created row starts at `official_point = 5.00` (above the `< 5.00` weak threshold), so it will not appear in WeakTags until real grading data lowers the score.
-  - [x] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
+- [x] `GetStudentWeakTagAdviceAsync(studentId)` returns `WeakTagAdviceDto` with `official_point`, `recommended_difficulty_level`, `is_remedial`, and reason.
+
+## TopicPractice WeakTag Provider
+
+- [ ] Add `IStudentRecommendationProvider` and `WeakTagAdvice` to `MathInsight.Shared` with string IDs and `EvidenceCount`.
+- [ ] Implement `RecommenderService.GetWeakTagAdviceAsync` for active `TagTopic` rows where `OfficialPoint < 5.00` and `NumberDone >= 3`.
+- [ ] Register `IRecommenderService` and `IStudentRecommendationProvider` against the same scoped `RecommenderService` instance.
+- [ ] Add semantic-ID, evidence-threshold, inactive-topic, and deterministic-order tests.
   - [x] Keep SQL-only implementation for MVP; Redis cache is optional later.
 
 - [x] **Recommendation Queries**:
