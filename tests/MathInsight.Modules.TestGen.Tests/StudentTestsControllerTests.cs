@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MathInsight.Modules.TestGen.Commands.GenerateBlueprintExam;
+using MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
 using MathInsight.Modules.TestGen.Contracts.Tests;
 using MathInsight.Modules.TestGen.Controllers;
 using MathInsight.Modules.TestGen.Errors;
@@ -149,6 +150,31 @@ public sealed class StudentTestsControllerTests
             CancellationToken.None);
 
         Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Theory]
+    [InlineData("unavailable")]
+    [InlineData("invalid")]
+    public async Task TopicPractice_MapsRecommendationFailuresTo503(string errorKind)
+    {
+        var error = errorKind == "unavailable"
+            ? TestGenerationErrors.TopicPracticeRecommenderUnavailable
+            : TestGenerationErrors.TopicPracticeRecommendationInvalid;
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(instance => instance.Send(
+                It.IsAny<GenerateTopicPracticeCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateTopicPracticeResponse>.Failure(error));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GenerateTopicPractice(
+            new GenerateTopicPracticeRequest { TagId = "topic" },
+            CancellationToken.None);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, objectResult.StatusCode);
+        Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
     }
 
     private static StudentTestsController CreateController(IMediator mediator)

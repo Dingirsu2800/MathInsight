@@ -108,6 +108,12 @@ public sealed class StudentTestsController : ControllerBase
             error == TestGenerationErrors.TopicPracticeGenerationConflict)
             return Conflict(new ApiErrorResponse(error));
 
+        if (error == TestGenerationErrors.TopicPracticeRecommenderUnavailable ||
+            error == TestGenerationErrors.TopicPracticeRecommendationInvalid)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiErrorResponse(error));
+        }
+
         return BadRequest(new ApiErrorResponse(error));
     }
 }
