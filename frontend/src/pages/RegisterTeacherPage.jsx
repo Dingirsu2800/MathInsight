@@ -7,17 +7,34 @@ import { mapAuthError, getAuthErrorCode } from "../services/authErrors";
 // AuthValidation.PasswordPattern on the backend so most 400s are caught client-side.
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\da-zA-Z]).{8,128}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Vietnamese phone number as dialled domestically: 10 digits starting with 0. Mirrors
+// AuthValidation.PhoneNumberPattern on the backend.
+const PHONE_PATTERN = /^0\d{9}$/;
 const PASSWORD_HINT =
   "Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.";
 
 const REGISTER_FALLBACK_ERROR = "Đăng ký thất bại. Vui lòng thử lại sau.";
 
-// Certificate constraints (BR-05): JPG/PNG only, ≤ 10 MB.
+// Certificate constraints (BR-05): JPG/PNG only, ≤ 10 MB per file. Multiple files allowed.
 const CERT_ACCEPT = "image/jpeg,image/png";
 const CERT_ALLOWED_TYPES = ["image/jpeg", "image/png"];
 const CERT_MAX_BYTES = 10 * 1024 * 1024;
 const CERT_TYPE_ERROR = "Chứng chỉ phải là ảnh JPG hoặc PNG.";
-const CERT_SIZE_ERROR = "Chứng chỉ không được vượt quá 10MB.";
+const CERT_SIZE_ERROR = "Mỗi chứng chỉ không được vượt quá 10MB.";
+// Keeps the multipart body inside the endpoint's 64MB RequestSizeLimit.
+const CERT_MAX_FILES = 6;
+const CERT_COUNT_ERROR = `Chỉ được tải lên tối đa ${CERT_MAX_FILES} ảnh chứng chỉ.`;
+
+// Same name + size + mtime is treated as the same file, so re-picking is idempotent.
+function toCertificateId(file) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ASP.NET ValidationProblemDetails keys the errors dict by PascalCase property
 // name; our field state uses camelCase. Lowercasing the first char lines them up.
@@ -52,12 +69,13 @@ export default function RegisterTeacherPage() {
     firstName: "",
     username: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
     biography: "",
   });
-  const [certificate, setCertificate] = React.useState(null);
-  const [certPreview, setCertPreview] = React.useState("");
+  // One entry per selected image: { id, file, previewUrl }.
+  const [certificates, setCertificates] = React.useState([]);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [errors, setErrors] = React.useState({});
@@ -65,12 +83,17 @@ export default function RegisterTeacherPage() {
   const [loading, setLoading] = React.useState(false);
   const [submittedEmail, setSubmittedEmail] = React.useState("");
 
-  // Release the object URL used for the certificate preview when it changes or unmounts.
+  // Release every preview object URL on unmount. The ref keeps this effect from re-running
+  // on each list change, which would revoke URLs that are still on screen.
+  const certificatesRef = React.useRef(certificates);
+  React.useEffect(() => {
+    certificatesRef.current = certificates;
+  }, [certificates]);
   React.useEffect(() => {
     return () => {
-      if (certPreview) URL.revokeObjectURL(certPreview);
+      certificatesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     };
-  }, [certPreview]);
+  }, []);
 
   const setField = (name) => (e) => {
     const value = e.target.value;
@@ -80,33 +103,61 @@ export default function RegisterTeacherPage() {
   };
 
   const handleCertChange = (e) => {
-    const file = e.target.files?.[0];
-    // Reset any previous preview/URL and cert error.
-    setCertPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return "";
+    const selected = Array.from(e.target.files ?? []);
+    // Clear the input so removing a file and re-picking it still fires onChange.
+    e.target.value = "";
+
+    if (selected.length === 0) return;
+
+    // Client-side rejection before submit (BR-05), per file — valid files are still kept.
+    const existingIds = new Set(certificates.map((item) => item.id));
+    const added = [];
+    const rejectedType = [];
+    const rejectedSize = [];
+    let rejectedCount = false;
+
+    selected.forEach((file) => {
+      if (!CERT_ALLOWED_TYPES.includes(file.type)) {
+        rejectedType.push(file.name);
+        return;
+      }
+      if (file.size > CERT_MAX_BYTES) {
+        rejectedSize.push(file.name);
+        return;
+      }
+
+      const id = toCertificateId(file);
+      if (existingIds.has(id)) return;
+
+      if (existingIds.size >= CERT_MAX_FILES) {
+        rejectedCount = true;
+        return;
+      }
+
+      existingIds.add(id);
+      added.push({ id, file, previewUrl: URL.createObjectURL(file) });
     });
-    setErrors((prev) => (prev.certificate ? { ...prev, certificate: undefined } : prev));
 
-    if (!file) {
-      setCertificate(null);
-      return;
+    if (added.length > 0) {
+      setCertificates((prev) => [...prev, ...added]);
     }
 
-    // Client-side rejection before submit (BR-05).
-    if (!CERT_ALLOWED_TYPES.includes(file.type)) {
-      setCertificate(null);
-      setErrors((prev) => ({ ...prev, certificate: CERT_TYPE_ERROR }));
-      return;
-    }
-    if (file.size > CERT_MAX_BYTES) {
-      setCertificate(null);
-      setErrors((prev) => ({ ...prev, certificate: CERT_SIZE_ERROR }));
-      return;
-    }
+    const messages = [];
+    if (rejectedType.length > 0) messages.push(`${CERT_TYPE_ERROR} (${rejectedType.join(", ")})`);
+    if (rejectedSize.length > 0) messages.push(`${CERT_SIZE_ERROR} (${rejectedSize.join(", ")})`);
+    if (rejectedCount) messages.push(CERT_COUNT_ERROR);
+    setErrors((prev) => ({
+      ...prev,
+      certificates: messages.length > 0 ? messages.join(" ") : undefined,
+    }));
+  };
 
-    setCertificate(file);
-    setCertPreview(URL.createObjectURL(file));
+  const handleCertRemove = (id) => {
+    const target = certificates.find((item) => item.id === id);
+    if (target) URL.revokeObjectURL(target.previewUrl);
+
+    setCertificates((prev) => prev.filter((item) => item.id !== id));
+    setErrors((prev) => (prev.certificates ? { ...prev, certificates: undefined } : prev));
   };
 
   function validate() {
@@ -122,6 +173,12 @@ export default function RegisterTeacherPage() {
       next.email = "Email không hợp lệ.";
     }
 
+    if (!form.phoneNumber.trim()) {
+      next.phoneNumber = "Vui lòng nhập số điện thoại.";
+    } else if (!PHONE_PATTERN.test(form.phoneNumber.trim())) {
+      next.phoneNumber = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.";
+    }
+
     if (!form.password) {
       next.password = "Vui lòng nhập mật khẩu.";
     } else if (!PASSWORD_PATTERN.test(form.password)) {
@@ -134,8 +191,8 @@ export default function RegisterTeacherPage() {
       next.confirmPassword = "Mật khẩu xác nhận không khớp.";
     }
 
-    if (!certificate) {
-      next.certificate = "Vui lòng tải lên chứng chỉ giảng dạy (JPG hoặc PNG).";
+    if (certificates.length === 0) {
+      next.certificates = "Vui lòng tải lên ít nhất một chứng chỉ giảng dạy (JPG hoặc PNG).";
     }
 
     return next;
@@ -160,13 +217,15 @@ export default function RegisterTeacherPage() {
     const formData = new FormData();
     formData.append("Username", form.username.trim());
     formData.append("Email", form.email.trim());
+    formData.append("PhoneNumber", form.phoneNumber.trim());
     formData.append("Password", form.password);
     formData.append("FirstName", form.firstName.trim());
     formData.append("LastName", form.lastName.trim());
     if (form.biography.trim()) {
       formData.append("Biography", form.biography.trim());
     }
-    formData.append("Certificate", certificate);
+    // Repeated "Certificates" entries bind to the DTO's List<IFormFile>.
+    certificates.forEach((item) => formData.append("Certificates", item.file));
 
     try {
       // Override the client's default application/json content-type: with FormData,
@@ -184,7 +243,7 @@ export default function RegisterTeacherPage() {
 
       if (status === 400 && code === "AUTH_CERTIFICATE_INVALID") {
         // Certificate-specific rejection from the backend — surface under the file input.
-        setErrors({ certificate: "Chứng chỉ không hợp lệ. Vui lòng tải lên ảnh JPG/PNG rõ ràng." });
+        setErrors({ certificates: "Chứng chỉ không hợp lệ. Vui lòng tải lên ảnh JPG/PNG rõ ràng." });
         setFormError("Vui lòng kiểm tra lại chứng chỉ đã tải lên.");
       } else if (status === 400 && err.response?.data?.errors) {
         // Surface backend field errors under the matching inputs.
@@ -195,6 +254,10 @@ export default function RegisterTeacherPage() {
           mapped[toFieldKey(key)] = Array.isArray(messages) ? messages[0] : String(messages);
         });
         setErrors(mapped);
+        setFormError("Vui lòng kiểm tra lại các thông tin được đánh dấu.");
+      } else if (status === 409 && code === "AUTH_PHONE_ALREADY_USED") {
+        // Distinct 409 from the email/username one — surface it under the phone input.
+        setErrors({ phoneNumber: "Số điện thoại này đã được sử dụng." });
         setFormError("Vui lòng kiểm tra lại các thông tin được đánh dấu.");
       } else if (status === 409) {
         setFormError("Email hoặc tên đăng nhập đã được sử dụng.");
@@ -309,6 +372,21 @@ export default function RegisterTeacherPage() {
             />
           </LabeledInput>
 
+          {/* Số điện thoại */}
+          <LabeledInput id="phoneNumber" label="Số điện thoại" icon="call" error={errors.phoneNumber}>
+            <input
+              id="phoneNumber"
+              type="tel"
+              value={form.phoneNumber}
+              onChange={setField("phoneNumber")}
+              className={inputClass}
+              placeholder="0912345678"
+              autoComplete="tel"
+              maxLength={20}
+              disabled={loading}
+            />
+          </LabeledInput>
+
           {/* Mật khẩu */}
           <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm font-semibold text-[#1e2a4a]">
@@ -407,31 +485,55 @@ export default function RegisterTeacherPage() {
             >
               <span className="material-symbols-outlined text-slate-400 text-[22px]">upload_file</span>
               <span className="text-sm text-slate-500 truncate">
-                {certificate ? certificate.name : "Chọn ảnh JPG hoặc PNG (tối đa 10MB)"}
+                {certificates.length > 0
+                  ? `Đã chọn ${certificates.length}/${CERT_MAX_FILES} ảnh — bấm để thêm`
+                  : "Chọn một hoặc nhiều ảnh JPG/PNG (tối đa 10MB mỗi ảnh)"}
               </span>
               <input
                 id="certificate"
                 type="file"
                 accept={CERT_ACCEPT}
+                multiple
                 onChange={handleCertChange}
                 className="hidden"
                 disabled={loading}
               />
             </label>
-            {certPreview && (
-              <div className="mt-2 flex items-center gap-3">
-                <img
-                  src={certPreview}
-                  alt="Xem trước chứng chỉ"
-                  className="w-16 h-16 object-cover rounded-lg border border-slate-200"
-                />
-                <span className="text-xs text-slate-500 truncate">{certificate?.name}</span>
-              </div>
+            {certificates.length > 0 && (
+              <ul className="mt-2 space-y-2">
+                {certificates.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3 p-2 border border-slate-200 rounded-lg"
+                  >
+                    <img
+                      src={item.previewUrl}
+                      alt={`Xem trước ${item.file.name}`}
+                      className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-[#1e2a4a] font-medium truncate">{item.file.name}</p>
+                      <p className="text-xs text-slate-400">{formatFileSize(item.file.size)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCertRemove(item.id)}
+                      className="shrink-0 text-slate-400 hover:text-deep-rose transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      aria-label={`Xóa ${item.file.name}`}
+                      disabled={loading}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">close</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-            {errors.certificate ? (
-              <p className="text-xs text-deep-rose font-medium">{errors.certificate}</p>
+            {errors.certificates ? (
+              <p className="text-xs text-deep-rose font-medium">{errors.certificates}</p>
             ) : (
-              <p className="text-xs text-slate-400">Chỉ chấp nhận ảnh JPG/PNG, dung lượng tối đa 10MB.</p>
+              <p className="text-xs text-slate-400">
+                Có thể tải lên tối đa {CERT_MAX_FILES} ảnh. Chỉ chấp nhận JPG/PNG, dung lượng tối đa 10MB mỗi ảnh.
+              </p>
             )}
           </div>
 

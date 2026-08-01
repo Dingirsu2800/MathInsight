@@ -28,6 +28,16 @@ function formatDateTime(value) {
   }
 }
 
+// DocumentsUrl holds one or more certificate URLs, newline-separated (BR-05 allows the
+// applicant to upload multiple certificate images).
+function toDocumentUrls(documentsUrl) {
+  if (!documentsUrl) return [];
+  return documentsUrl
+    .split("\n")
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
 function resolveErrorMessage(err, fallback) {
   const data = err?.response?.data;
   return data?.message || err?.message || fallback;
@@ -319,16 +329,22 @@ export default function TeacherApplicationsPage() {
 
               <div>
                 <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Chứng chỉ đính kèm</h4>
-                {detail.documentsUrl ? (
-                  <a
-                    href={detail.documentsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-primary font-semibold text-[13px] hover:underline"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">description</span>
-                    Xem tài liệu
-                  </a>
+                {toDocumentUrls(detail.documentsUrl).length > 0 ? (
+                  <ul className="space-y-1">
+                    {toDocumentUrls(detail.documentsUrl).map((url, index) => (
+                      <li key={url}>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-primary font-semibold text-[13px] hover:underline"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">description</span>
+                          Xem tài liệu {index + 1}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
                   <p className="text-[13px] text-on-surface-variant">Không có tài liệu đính kèm.</p>
                 )}
