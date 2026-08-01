@@ -54,6 +54,7 @@ builder.Services.AddMassTransit(x =>
 {
     // Register asynchronous consumers for Exam mode grading
     x.AddConsumer<MathInsight.Modules.Grading_Analytics.Consumers.TestSubmittedConsumer>();
+    x.AddConsumer<MathInsight.Modules.Gamification.Consumers.GamificationTestSubmittedConsumer>();
     // x.AddConsumer<GradeCalculatedConsumer>(); // Uses MediatR in-process — not a MassTransit consumer
 
     if (rabbitMqEnabled)

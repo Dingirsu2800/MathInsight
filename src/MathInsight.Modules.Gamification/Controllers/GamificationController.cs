@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MathInsight.Modules.Gamification.Queries.GetStreak;
+using MathInsight.Modules.Gamification.Queries.GetHeatmap;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -40,6 +41,27 @@ public class GamificationController : ControllerBase
         }
 
         var result = await _mediator.Send(new GetStreakQuery(studentId), cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return BadRequest(new { error = result.Error?.Message });
+        }
+
+        return Ok(result.Value);
+    }
+
+    [HttpGet("heatmap")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetHeatmap(CancellationToken cancellationToken)
+    {
+        var studentId = GetAuthenticatedStudentId();
+        if (string.IsNullOrWhiteSpace(studentId))
+        {
+            return Unauthorized(new { error = "Invalid or missing student identity." });
+        }
+
+        var result = await _mediator.Send(new GetHeatmapQuery(studentId), cancellationToken);
 
         if (result.IsFailure)
         {

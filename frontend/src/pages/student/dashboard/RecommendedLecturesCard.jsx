@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import { getRecommendedLectures } from '../../../services/recommenderApi';
 
 export default function RecommendedLecturesCard() {
+  const navigate = useNavigate();
   const [lectures, setLectures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -74,6 +76,7 @@ export default function RecommendedLecturesCard() {
             return (
               <div
                 key={lecture.lectureId}
+                onClick={() => navigate(`/student/lectures/${lecture.lectureId}`)}
                 className="group cursor-pointer rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 transition-all"
               >
                 {/* Thumbnail placeholder */}

@@ -120,7 +120,6 @@ public sealed class BadgeService : IBadgeService
 
             await _dbContext.Database.OpenConnectionAsync(cancellationToken);
             var result = await command.ExecuteScalarAsync(cancellationToken);
-            await _dbContext.Database.CloseConnectionAsync();
 
             return result != DBNull.Value && result != null ? Convert.ToInt32(result) : 0;
         }
