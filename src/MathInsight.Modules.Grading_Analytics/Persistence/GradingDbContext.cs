@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 using MathInsight.Modules.Grading_Analytics.Persistence.Configurations;
+using MathInsight.Shared.Persistence;
 
 namespace MathInsight.Modules.Grading_Analytics.Persistence;
 
@@ -38,5 +39,6 @@ public class GradingDbContext : DbContext
 
         // Apply all EF configurations from this assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(GradingDbContext).Assembly);
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }
