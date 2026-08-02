@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Learning_Lecture.Entities;
+using MathInsight.Shared.Persistence;
 using System.Reflection;
 
 namespace MathInsight.Modules.Learning_Lecture.Persistence;
@@ -25,8 +26,9 @@ public class LearningDbContext : DbContext
         base.OnModelCreating(modelBuilder);
         
         // Ensure this only applies configurations from this assembly/module
-        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly(), 
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly(),
             t => t.Namespace != null && t.Namespace.Contains("Learning_Lecture"));
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }
 

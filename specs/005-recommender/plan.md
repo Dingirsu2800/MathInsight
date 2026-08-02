@@ -7,7 +7,7 @@
 
 ## Summary
 
-Builds `MathInsight.Modules.Recommender` for Rule-Based/Ptag v4.1 (Unified Multi-Tag). The module tracks topic mastery at `(StudentID, TagID)`, supports multi-tag Elo delta distribution, diagnoses WeakTags and Bottleneck Weak Tags, maps the recommended difficulty level, and exposes an in-process API for TestGen.
+Builds `MathInsight.Modules.Recommender` for Rule-Based/Ptag v4.1 (Unified Multi-Tag). The module tracks topic mastery at `(StudentID, TagID)`, supports multi-tag Elo delta distribution, diagnoses WeakTags and Bottleneck Weak Tags, maps the recommended difficulty level, and exposes an in-process API for TestGen. The stable cross-module contract is `IStudentRecommendationProvider` in `MathInsight.Shared`; it uses semantic string IDs and returns only qualified WeakTag evidence.
 
 ## Technical Context
 
@@ -66,8 +66,8 @@ src/MathInsight.Modules.Recommender/
 ```csharp
 public interface IRecommenderService
 {
-    Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(Guid studentId);
-    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(Guid studentId);
+    Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(string studentId);
+    Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(string studentId);
 }
 ```
 

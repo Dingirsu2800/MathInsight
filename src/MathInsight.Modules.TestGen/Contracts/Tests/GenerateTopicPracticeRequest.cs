@@ -12,4 +12,11 @@ public sealed record GenerateTopicPracticeResponse(
     int TotalQuestions,
     decimal MaxScore,
     string ScoringPolicy,
-    DateTime CreatedTime);
+    DateTime CreatedTime,
+    bool WasAdaptive,
+    string? WeakTagId,
+    string? WeakTagName,
+    byte? RecommendedDifficultyLevel,
+    int AdaptiveQuestionCount,
+    int FallbackQuestionCount,
+    string RuleVersion);

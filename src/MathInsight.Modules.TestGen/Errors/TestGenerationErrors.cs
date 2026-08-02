@@ -57,4 +57,6 @@ public static class TestGenerationErrors
     public static readonly Error TopicPracticeTopicUnavailable = new("TOPIC_PRACTICE_TOPIC_UNAVAILABLE", "The requested topic is inactive or does not match the Student grade.");
     public static readonly Error TopicPracticeInsufficientQuestions = new("TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS", "The selected topic does not contain ten valid questions.");
     public static readonly Error TopicPracticeGenerationConflict = new("TOPIC_PRACTICE_GENERATION_CONFLICT", "The generated test could not be verified after a persistence conflict.");
+    public static readonly Error TopicPracticeRecommenderUnavailable = new("TOPIC_PRACTICE_RECOMMENDER_UNAVAILABLE", "Recommendation advice is temporarily unavailable.");
+    public static readonly Error TopicPracticeRecommendationInvalid = new("TOPIC_PRACTICE_RECOMMENDATION_INVALID", "Recommendation advice could not be safely applied.");
 }

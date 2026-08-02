@@ -1,4 +1,5 @@
 using MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
+using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 
 namespace MathInsight.Modules.TestGen.Tests;
@@ -34,6 +35,18 @@ public sealed class TopicPracticePersistenceVerifierTests
         Assert.False(TopicPracticePersistenceVerifier.IsValid(wrongOrder, "student_01", "topic_01", "Luyen tap"));
         Assert.False(TopicPracticePersistenceVerifier.IsValid(wrongScore, "student_01", "topic_01", "Luyen tap"));
         Assert.False(TopicPracticePersistenceVerifier.IsValid(wrongAudit, "student_01", "topic_01", "Luyen tap"));
+    }
+
+    [Fact]
+    public void IsValid_RejectsPersistedQuestionThatDiffersFromPreparedAggregate()
+    {
+        var test = CreateValidTest();
+        var prepared = CreatePrepared(test);
+        test.Questions.First().QuestionVersionId = "unexpected-version";
+
+        var result = TopicPracticePersistenceVerifier.IsValid(test, prepared);
+
+        Assert.False(result);
     }
 
     private static Test CreateValidTest()
@@ -73,5 +86,36 @@ public sealed class TopicPracticePersistenceVerifierTests
         }
 
         return test;
+    }
+
+    private static PreparedTopicPracticeGeneration CreatePrepared(Test test)
+    {
+        var questions = test.Questions
+            .OrderBy(question => question.QuestionOrder)
+            .Select(question => new PreparedTopicPracticeQuestion(
+                new BlueprintExamCandidate(
+                    question.QuestionId,
+                    question.QuestionVersionId,
+                    question.WeightSnapshot,
+                    "difficulty_01",
+                    "SingleChoice",
+                    new HashSet<string>(["topic_01"], StringComparer.OrdinalIgnoreCase),
+                    new HashSet<string>([question.ScoringRuleSnapshot], StringComparer.OrdinalIgnoreCase)),
+                question.QuestionOrder,
+                question.MaxPointsSnapshot,
+                question.ScoringRuleSnapshot,
+                IsWeakTagFocus: false))
+            .ToList();
+
+        return new PreparedTopicPracticeGeneration(
+            test.TestId,
+            "student_01",
+            "topic_01",
+            "Topic",
+            "Luyen tap",
+            test.CreatedTime,
+            TopicPracticeRecommendationContext.Baseline,
+            null,
+            questions);
     }
 }

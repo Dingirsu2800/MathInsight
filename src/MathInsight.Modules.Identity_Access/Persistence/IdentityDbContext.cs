@@ -1,4 +1,5 @@
 ﻿using MathInsight.Modules.Identity_Access.Entities;
+using MathInsight.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.Identity_Access.Persistence;
@@ -22,5 +23,6 @@ public class IdentityDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }
