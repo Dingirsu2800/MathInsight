@@ -46,6 +46,7 @@ public class QuestionsController : ControllerBase
         [FromQuery] string? difficultyId,
         [FromQuery] string? questionType,
         [FromQuery] string? expertId,
+        [FromQuery] string? search,
         CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(
@@ -57,7 +58,8 @@ public class QuestionsController : ControllerBase
                 tagId,
                 difficultyId,
                 questionType,
-                expertId),
+                expertId,
+                search),
             cancellationToken);
 
         if (result.IsFailure)
