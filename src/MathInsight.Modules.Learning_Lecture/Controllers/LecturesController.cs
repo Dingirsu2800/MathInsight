@@ -4,7 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using MathInsight.Modules.Learning_Lecture.Commands.Lectures;
+using MathInsight.Modules.Learning_Lecture.Errors;
 using MathInsight.Modules.Learning_Lecture.Queries.Lectures;
+using MathInsight.Shared.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -66,12 +68,14 @@ public class LecturesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateLecture([FromBody] CreateLectureRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateLecture([FromBody] CreateLectureRequest? request, CancellationToken cancellationToken)
     {
         if (IsStudent) return Forbid();
-        var cmd = new CreateLectureCommand(request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId, request.MaterialIds, request.NextLectureId);
+        if (request is null) return BadRequest(new ApiErrorResponse(LearningErrors.LectureRequestInvalid));
+
+        var cmd = new CreateLectureCommand(request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, request.DifficultyId, CurrentUserId, request.MaterialIds, request.NextLectureId);
         var result = await _mediator.Send(cmd, cancellationToken);
-        return Ok(result);
+        return result.IsSuccess ? Ok(result.Value) : ToLectureErrorResult(result.Error!);
     }
 
     [HttpPost("upload-thumbnail")]
@@ -92,34 +96,22 @@ public class LecturesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateLecture(string id, [FromBody] UpdateLectureRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> UpdateLecture(string id, [FromBody] UpdateLectureRequest? request, CancellationToken cancellationToken)
     {
         if (IsStudent) return Forbid();
-        var cmd = new UpdateLectureCommand(id, request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, CurrentUserId, request.MaterialIds, request.NextLectureId);
-        try
-        {
-            var result = await _mediator.Send(cmd, cancellationToken);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        if (request is null) return BadRequest(new ApiErrorResponse(LearningErrors.LectureRequestInvalid));
+
+        var cmd = new UpdateLectureCommand(id, request.Title, request.Content, request.VideoUrl, request.ThumbnailUrl, request.TagId, request.DifficultyId, CurrentUserId, request.MaterialIds, request.NextLectureId);
+        var result = await _mediator.Send(cmd, cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : ToLectureErrorResult(result.Error!);
     }
 
     [HttpPost("{id}/publish")]
     public async Task<IActionResult> PublishLecture(string id, CancellationToken cancellationToken)
     {
         if (IsStudent) return Forbid();
-        try
-        {
-            await _mediator.Send(new PublishLectureCommand(id, CurrentUserId, IsAdmin), cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await _mediator.Send(new PublishLectureCommand(id, CurrentUserId, IsAdmin), cancellationToken);
+        return result.IsSuccess ? NoContent() : ToLectureErrorResult(result.Error!);
     }
 
     [HttpPost("{id}/deactivate")]
@@ -166,7 +158,22 @@ public class LecturesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    private IActionResult ToLectureErrorResult(Error error)
+    {
+        if (error == LearningErrors.LectureNotFound ||
+            error == LearningErrors.LectureTopicNotFound ||
+            error == LearningErrors.LectureDifficultyNotFound)
+        {
+            return NotFound(new ApiErrorResponse(error));
+        }
+
+        if (error == LearningErrors.LectureForbidden)
+            return StatusCode(403, new ApiErrorResponse(error));
+
+        return BadRequest(new ApiErrorResponse(error));
+    }
 }
 
-public record CreateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
-public record UpdateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
+public record CreateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, string? DifficultyId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
+public record UpdateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, string? DifficultyId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);

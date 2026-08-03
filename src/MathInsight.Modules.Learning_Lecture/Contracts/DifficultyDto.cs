@@ -4,5 +4,4 @@ public sealed record DifficultyDto(
     string DifficultyId,
     string DifficultyName,
     int LevelValue,
-    int DisplayOrder,
-    bool IsActive);
+    int DisplayOrder);
