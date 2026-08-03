@@ -153,6 +153,7 @@ export default function LectureListPage() {
                 <tr>
                   <th className="px-6 py-4">Tên bài giảng</th>
                   <th className="px-6 py-4">Chủ đề</th>
+                  <th className="px-6 py-4">Độ khó</th>
                   <th className="px-6 py-4">Trạng thái</th>
                   <th className="px-6 py-4">Lượt thích</th>
                   <th className="px-6 py-4">Ngày tạo</th>
@@ -161,9 +162,9 @@ export default function LectureListPage() {
               </thead>
               <tbody className="divide-y divide-whisper-border text-[13px]">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-on-surface-variant">Đang tải dữ liệu...</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-12 text-center text-on-surface-variant">Đang tải dữ liệu...</td></tr>
                 ) : lectures.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-on-surface-variant">Không có bài giảng nào.</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-12 text-center text-on-surface-variant">Không có bài giảng nào.</td></tr>
                 ) : lectures.map((lec) => {
                   const badge = STATUS_BADGES[lec.status] || STATUS_BADGES.Draft;
                   return (
@@ -175,10 +176,22 @@ export default function LectureListPage() {
                       </td>
                       <td className="px-6 py-4 text-on-surface-variant">{lec.tagName || "—"}</td>
                       <td className="px-6 py-4">
+                        {lec.difficultyName ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                            {lec.difficultyName}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-surface-container-high text-on-surface-variant/70 border border-whisper-border">
+                            Chưa có
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
                           {badge.label}
                         </span>
                       </td>
+
                       <td className="px-6 py-4 text-on-surface-variant">{lec.likes ?? 0}</td>
                       <td className="px-6 py-4 text-on-surface-variant font-mono text-[13px]">{formatDate(lec.createdTime)}</td>
                       <td className="px-6 py-4 text-right">

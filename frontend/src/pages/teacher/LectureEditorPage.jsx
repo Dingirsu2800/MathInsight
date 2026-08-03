@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TeacherLayout from "./TeacherLayout";
-import { getLectures, createLecture, getLecture, updateLecture, getTopics, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
+import { getLectures, createLecture, getLecture, updateLecture, getTopics, getDifficulties, attachMaterial, publishLecture, uploadLectureThumbnail, uploadMaterial } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 import MathTextArea from "../../components/common/MathTextArea";
 import { toast } from "../../components/common/Toast";
@@ -15,6 +15,7 @@ export default function LectureEditorPage() {
   const [form, setForm] = useState({
     title: "",
     tagId: "",
+    difficultyId: "",
     content: "",
     videoUrl: "",
     thumbnailFile: null,
@@ -26,7 +27,9 @@ export default function LectureEditorPage() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [topics, setTopics] = useState([]);
+  const [difficulties, setDifficulties] = useState([]);
   const [availableLectures, setAvailableLectures] = useState([]);
+
   const [attachedMaterials, setAttachedMaterials] = useState([]);
   const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
   const [isExtractingOcr, setIsExtractingOcr] = useState(false);
@@ -60,6 +63,18 @@ export default function LectureEditorPage() {
   }, [selectedGrade]);
 
   useEffect(() => {
+    getDifficulties()
+      .then((res) => {
+        const list = res.data || [];
+        setDifficulties(list);
+      })
+      .catch((err) => {
+        console.error("Lỗi khi tải danh sách độ khó:", err);
+        setDifficulties([]);
+      });
+  }, []);
+
+  useEffect(() => {
     // Fetch available lectures for Next Lecture dropdown
     getLectures({ pageSize: 200 })
       .then((res) => {
@@ -76,6 +91,7 @@ export default function LectureEditorPage() {
         setForm({
           title: data.title || "",
           tagId: data.tagId || "",
+          difficultyId: data.difficultyId || "",
           content: data.content || "",
           videoUrl: data.videoUrl || "",
           thumbnailFile: null,
@@ -95,6 +111,7 @@ export default function LectureEditorPage() {
     const e = {};
     if (!form.title.trim()) e.title = "Vui lòng nhập tiêu đề";
     if (!form.tagId) e.tagId = "Vui lòng chọn chủ đề";
+    if (!form.difficultyId) e.difficultyId = "Vui lòng chọn độ khó bài giảng";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -138,12 +155,24 @@ export default function LectureEditorPage() {
       setTimeout(() => navigate("/teacher/lectures"), 1200);
     } catch (err) {
       console.error("Lưu bài giảng thất bại:", err);
-      toast.error("Đã xảy ra lỗi khi lưu bài giảng!");
+      const code = err.response?.data?.code;
+      if (code === "LECTURE_DIFFICULTY_REQUIRED") {
+        toast.error("Vui lòng chọn độ khó cho bài giảng trước khi xuất bản.");
+      } else if (code === "LECTURE_DIFFICULTY_NOT_FOUND") {
+        toast.error("Mức độ khó được chọn không tồn tại.");
+      } else if (code === "LECTURE_DIFFICULTY_INACTIVE") {
+        toast.error("Mức độ khó được chọn hiện đang tạm ngưng.");
+      } else if (code === "LECTURE_TOPIC_INACTIVE") {
+        toast.error("Chủ đề bài giảng được chọn hiện đang tạm ngưng.");
+      } else {
+        toast.error("Đã xảy ra lỗi khi lưu bài giảng!");
+      }
     } finally {
       setSaving(false);
       setPublishing(false);
     }
   };
+
 
   const handleUploadMaterial = async (e) => {
     const file = e.target.files?.[0];
@@ -335,7 +364,7 @@ export default function LectureEditorPage() {
                   <div className="space-y-4">
                     {/* Topic Select */}
                     <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Chủ đề bài giảng <span className="text-error">*</span></label>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5" htmlFor="topic">Chủ đề bài giảng <span className="text-error">*</span></label>
                       <div className="relative">
                         <select
                           className={`appearance-none ${fieldClass("tagId")} pr-10`}
@@ -361,7 +390,40 @@ export default function LectureEditorPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-4 lg:col-span-2">
+                  <div className="space-y-4">
+                    {/* Difficulty Select */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5" htmlFor="difficulty">
+                        Mức độ khó <span className="text-error">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          className={`appearance-none ${fieldClass("difficultyId")} pr-10`}
+                          id="difficulty"
+                          value={form.difficultyId}
+                          onChange={(e) => setForm((f) => ({ ...f, difficultyId: e.target.value }))}
+                        >
+                          <option value="">Chọn mức độ khó</option>
+                          {difficulties.map((d) => (
+                            <option key={d.difficultyId} value={d.difficultyId}>
+                              {d.difficultyName} (Mức {d.levelValue})
+                            </option>
+                          ))}
+                        </select>
+                        {errors.difficultyId && (
+                          <p className="text-[13px] text-error mt-1 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">error</span>
+                            {errors.difficultyId}
+                          </p>
+                        )}
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-on-surface-variant">
+                          <span className="material-symbols-outlined">expand_more</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
                     {/* Next Lecture Select */}
                     <div>
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Bài giảng tiếp theo (Gợi ý cho học sinh)</label>
@@ -382,6 +444,14 @@ export default function LectureEditorPage() {
                       </div>
                     </div>
                   </div>
+
+                  {isEdit && !form.difficultyId && (
+                    <div className="p-3 bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-lg text-[#B45309] text-xs font-semibold flex items-center gap-2 lg:col-span-2">
+                      <span className="material-symbols-outlined text-[18px] shrink-0">warning</span>
+                      <span>Bài giảng chưa có độ khó. Vui lòng chọn độ khó và lưu bài giảng trước khi xuất bản.</span>
+                    </div>
+                  )}
+
                 </div>
               </div>
 
@@ -573,13 +643,15 @@ export default function LectureEditorPage() {
               </button>
               <button
                 onClick={(e) => handleSubmit(e, true)}
-                disabled={saving || publishing}
+                disabled={saving || publishing || !form.difficultyId}
+                title={!form.difficultyId ? "Vui lòng chọn độ khó cho bài giảng trước khi xuất bản" : undefined}
                 className="px-6 py-2.5 rounded-lg bg-primary text-on-primary text-[16px] font-medium hover:opacity-90 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
                 type="button"
               >
                 <span className="material-symbols-outlined text-[20px]">publish</span>
                 {publishing ? "Đang xuất bản..." : "Xuất bản"}
               </button>
+
             </div>
           </div>
         </div>
