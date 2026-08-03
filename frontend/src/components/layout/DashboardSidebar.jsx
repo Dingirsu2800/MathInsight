@@ -5,6 +5,7 @@ import { cn } from "../../utils/cn";
 export default function DashboardSidebar({
   brandName = "MathInsight",
   roleLabel = "Quản trị viên",
+  logoPath,
   navItems = [],
   primaryAction,
   onLogout,
@@ -16,15 +17,30 @@ export default function DashboardSidebar({
   return (
     <aside className="w-sidebar-width h-screen bg-surface-container-low border-r border-whisper-border flex flex-col py-gutter px-4 z-20 shrink-0 select-none">
       {/* Brand */}
-      <div className="flex items-center gap-3 mb-8 px-2">
-        <div className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-lg">
-          {brandInitials}
+      {logoPath ? (
+        <Link
+          to={logoPath}
+          className="flex items-center gap-3 mb-8 px-2 group"
+        >
+          <div className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-lg group-hover:opacity-80 transition-opacity">
+            {brandInitials}
+          </div>
+          <div>
+            <h1 className="font-bold text-[18px] text-primary leading-tight group-hover:opacity-80 transition-opacity">{brandName}</h1>
+            <p className="text-[12px] text-on-surface-variant">{roleLabel}</p>
+          </div>
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3 mb-8 px-2">
+          <div className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-lg">
+            {brandInitials}
+          </div>
+          <div>
+            <h1 className="font-bold text-[18px] text-primary leading-tight">{brandName}</h1>
+            <p className="text-[12px] text-on-surface-variant">{roleLabel}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-[18px] text-primary leading-tight">{brandName}</h1>
-          <p className="text-[12px] text-on-surface-variant">{roleLabel}</p>
-        </div>
-      </div>
+      )}
 
       {/* Primary Action Button (CTA) */}
       {primaryAction && (

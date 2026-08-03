@@ -7,6 +7,7 @@ export default function DashboardLayout({
   brandName = "MathInsight",
   roleLabel = "Quản trị viên",
   appTitle = "Hệ thống Quản lý Toán học",
+  logoPath,
   navItems = [],
   primaryAction,
   onLogout,
@@ -43,6 +44,7 @@ export default function DashboardLayout({
       <DashboardSidebar
         brandName={brandName}
         roleLabel={roleLabel}
+        logoPath={logoPath}
         navItems={navItems}
         primaryAction={primaryAction}
         onLogout={showSidebarLogout ? onLogout : undefined}
@@ -54,6 +56,7 @@ export default function DashboardLayout({
         {/* Top header bar */}
         <DashboardTopbar
           appTitle={appTitle}
+          logoPath={logoPath}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           topNavItems={topNavItems}
