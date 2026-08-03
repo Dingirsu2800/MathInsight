@@ -1,88 +1,186 @@
+using MathInsight.Modules.Recommender.Persistence;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using MathInsight.Modules.Recommender.Persistence;
-using MathInsight.Modules.Recommender.Services;
 
 namespace MathInsight.Modules.Recommender.Queries.GetRecommendedLectures;
 
-/// <summary>
-/// Handles <see cref="GetRecommendedLecturesQuery"/>: matches Lecture.TagID to student's
-/// weak TagIDs (official_point &lt; 5.00). Remedial topics sorted first (UC-53, RCM-10).
-/// </summary>
 public sealed class GetRecommendedLecturesQueryHandler
     : IRequestHandler<GetRecommendedLecturesQuery, IReadOnlyList<RecommendedLectureResponse>>
 {
     private const decimal WeakThreshold = 5.00m;
+    private const decimal ProgressionThreshold = 7.50m;
+    private const int MinimumEvidenceCount = 3;
+    private const int MaximumPerTopic = 2;
+    private const int MaximumRecommendations = 6;
 
     private readonly RecommenderDbContext _db;
-    private readonly IDifficultyMappingService _difficultyMapping;
 
-    public GetRecommendedLecturesQueryHandler(
-        RecommenderDbContext db,
-        IDifficultyMappingService difficultyMapping)
+    public GetRecommendedLecturesQueryHandler(RecommenderDbContext db)
     {
         _db = db;
-        _difficultyMapping = difficultyMapping;
     }
 
     public async Task<IReadOnlyList<RecommendedLectureResponse>> Handle(
-        GetRecommendedLecturesQuery request, CancellationToken cancellationToken)
+        GetRecommendedLecturesQuery request,
+        CancellationToken cancellationToken)
     {
-        // Step 1: Get weak tag IDs with mastery data
-        var weakTags = await _db.TagsMasteries
-            .AsNoTracking()
-            .Where(tm => tm.StudentId == request.StudentId && tm.OfficialPoint < WeakThreshold)
-            .Select(tm => new
+        var contexts = await (
+            from mastery in _db.TagsMasteries.AsNoTracking()
+            join topic in _db.TagTopics.AsNoTracking() on mastery.TagId equals topic.TagId
+            where mastery.StudentId == request.StudentId
+                && mastery.NumberDone >= MinimumEvidenceCount
+                && topic.IsActive
+            select new
             {
-                tm.TagId,
-                tm.OfficialPoint,
-                tm.RecommendedDifficultyLevel
+                mastery.TagId,
+                topic.TagName,
+                mastery.OfficialPoint,
+                mastery.NumberDone,
+                mastery.RecommendedDifficultyLevel
             })
             .ToListAsync(cancellationToken);
 
-        if (weakTags.Count == 0)
-            return [];
-
-        var weakTagIds = weakTags.Select(wt => wt.TagId).ToHashSet();
-
-        // Step 2: Join lectures to weak tags, resolve tag names
-        var lectures = await (
-            from l in _db.Lectures.AsNoTracking()
-            join tt in _db.TagTopics.AsNoTracking() on l.TagId equals tt.TagId
-            where weakTagIds.Contains(l.TagId) && l.Status == "Published"
+        var lectureRows = await (
+            from lecture in _db.Lectures.AsNoTracking()
+            join topic in _db.TagTopics.AsNoTracking() on lecture.TagId equals topic.TagId
+            join difficulty in _db.TagDifficulties.AsNoTracking() on lecture.DifficultyId equals difficulty.DifficultyId
+            where lecture.Status == "Published"
+                && topic.IsActive
+                && difficulty.IsActive
             select new
             {
-                l.LectureId,
-                l.Title,
-                l.Description,
-                l.TagId,
-                tt.TagName
-            }
-        ).ToListAsync(cancellationToken);
-
-        // Step 3: Enrich with mastery data and sort remedial first
-        var weakTagLookup = weakTags.ToDictionary(wt => wt.TagId);
-
-        var result = lectures
-            .Select(lec =>
-            {
-                var wt = weakTagLookup[lec.TagId];
-                bool isRemedial = _difficultyMapping.IsRemedial(
-                    wt.RecommendedDifficultyLevel, wt.OfficialPoint);
-
-                return new RecommendedLectureResponse(
-                    lec.LectureId,
-                    lec.Title,
-                    lec.Description,
-                    lec.TagId,
-                    lec.TagName,
-                    wt.OfficialPoint,
-                    isRemedial);
+                lecture.LectureId,
+                lecture.Title,
+                lecture.ThumbnailUrl,
+                lecture.TagId,
+                topic.TagName,
+                lecture.DifficultyId,
+                difficulty.DifficultyName,
+                DifficultyLevel = difficulty.LevelValue,
+                lecture.Likes,
+                lecture.UpdatedTime,
+                TopicGrade = topic.Grade
             })
-            .OrderByDescending(r => r.IsRemedial)   // remedial first
-            .ThenBy(r => r.OfficialPoint)             // worst scores first
+            .ToListAsync(cancellationToken);
+
+        var lectures = lectureRows
+            .Select(x => new LectureCandidate(
+                x.LectureId,
+                x.Title,
+                x.ThumbnailUrl,
+                x.TagId,
+                x.TagName,
+                x.DifficultyId!,
+                x.DifficultyName,
+                x.DifficultyLevel,
+                x.Likes,
+                x.UpdatedTime,
+                x.TopicGrade))
             .ToList();
 
-        return result;
+        if (contexts.Count == 0)
+            return await BuildColdStartRecommendationsAsync(request.StudentId, lectures, cancellationToken);
+
+        var recommendations = new List<RecommendedLectureResponse>();
+
+        foreach (var context in contexts
+            .OrderBy(x => GetPriority(x.OfficialPoint))
+            .ThenBy(x => x.OfficialPoint)
+            .ThenBy(x => x.TagId))
+        {
+            var priority = GetPriority(context.OfficialPoint);
+            var candidates = lectures
+                .Where(x => x.TagId == context.TagId && x.DifficultyLevel <= context.RecommendedDifficultyLevel)
+                .OrderBy(x => x.DifficultyLevel == context.RecommendedDifficultyLevel ? 0 : 1)
+                .ThenByDescending(x => x.DifficultyLevel)
+                .ThenByDescending(x => x.Likes)
+                .ThenByDescending(x => x.UpdatedTime)
+                .ThenBy(x => x.LectureId)
+                .Take(MaximumPerTopic);
+
+            foreach (var lecture in candidates)
+            {
+                var isFallback = lecture.DifficultyLevel < context.RecommendedDifficultyLevel;
+                recommendations.Add(new RecommendedLectureResponse(
+                    lecture.LectureId,
+                    lecture.Title,
+                    lecture.ThumbnailUrl,
+                    lecture.TagId,
+                    lecture.TagName,
+                    lecture.DifficultyId!,
+                    lecture.DifficultyName,
+                    lecture.DifficultyLevel,
+                    context.RecommendedDifficultyLevel,
+                    context.OfficialPoint,
+                    context.NumberDone,
+                    lecture.Likes,
+                    isFallback,
+                    BuildReason(priority, isFallback)));
+
+                if (recommendations.Count == MaximumRecommendations)
+                    return recommendations;
+            }
+        }
+
+        return recommendations;
     }
+
+    private async Task<IReadOnlyList<RecommendedLectureResponse>> BuildColdStartRecommendationsAsync(
+        string studentId,
+        IReadOnlyList<LectureCandidate> lectures,
+        CancellationToken cancellationToken)
+    {
+        var grade = await _db.Students
+            .AsNoTracking()
+            .Where(x => x.StudentId == studentId)
+            .Select(x => x.CurrentGrade)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!grade.HasValue)
+            return [];
+
+        return lectures
+            .Where(x => x.TopicGrade == grade.Value && x.DifficultyLevel == 1)
+            .OrderByDescending(x => x.Likes)
+            .ThenByDescending(x => x.UpdatedTime)
+            .ThenBy(x => x.LectureId)
+            .Take(MaximumRecommendations)
+            .Select(lecture => new RecommendedLectureResponse(
+                lecture.LectureId,
+                lecture.Title,
+                lecture.ThumbnailUrl,
+                lecture.TagId,
+                lecture.TagName,
+                lecture.DifficultyId,
+                lecture.DifficultyName,
+                lecture.DifficultyLevel,
+                1,
+                null,
+                0,
+                lecture.Likes,
+                false,
+                "ColdStartGradeFoundation"))
+            .ToList();
+    }
+
+    private static int GetPriority(decimal officialPoint) => officialPoint < WeakThreshold
+        ? 0
+        : officialPoint < ProgressionThreshold ? 1 : 2;
+
+    private static string BuildReason(int priority, bool isFallback) => priority == 0
+        ? isFallback ? "WeakTopicLowerDifficultyFallback" : "WeakTopicExactDifficulty"
+        : isFallback ? "ProgressionLowerDifficultyFallback" : "ProgressionExactDifficulty";
+
+    private sealed record LectureCandidate(
+        string LectureId,
+        string Title,
+        string? ThumbnailUrl,
+        string TagId,
+        string TagName,
+        string DifficultyId,
+        string DifficultyName,
+        int DifficultyLevel,
+        int Likes,
+        DateTime UpdatedTime,
+        int TopicGrade);
 }

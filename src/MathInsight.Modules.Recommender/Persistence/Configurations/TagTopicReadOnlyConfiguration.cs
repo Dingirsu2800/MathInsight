@@ -7,13 +7,13 @@ namespace MathInsight.Modules.Recommender.Persistence.Configurations;
 /// <summary>
 /// Read-only EF configuration for cross-module TagTopic table owned by QuestionBank.
 /// Used by Recommender to resolve tag names for DTOs without a project reference to QuestionBank.
-/// TagTopic.TagId is stored as VARCHAR(36) in the DB, but Recommender uses Guid for its own entities.
+/// TagTopic.TagId is stored as VARCHAR(36) in the canonical schema.
 /// </summary>
 public class TagTopicReadOnlyConfiguration : IEntityTypeConfiguration<TagTopicReadOnly>
 {
     public void Configure(EntityTypeBuilder<TagTopicReadOnly> builder)
     {
-        builder.ToTable("TagTopic");
+        builder.ToTable("TagTopic", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.TagId);
 
         builder.Property(x => x.TagId)
