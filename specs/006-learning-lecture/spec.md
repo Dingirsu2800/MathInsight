@@ -2,7 +2,7 @@
 
 **Feature Branch**: `006-learning-lecture`
 
-**Created**: 2026-06-23 | **Updated**: 2026-06-27
+**Created**: 2026-06-23 | **Updated**: 2026-08-03
 
 **Status**: Approved
 
@@ -50,6 +50,7 @@
 
 ### Functional Requirements
 
+- **DC-01 (lecture difficulty)**: Learning owns `Lecture.DifficultyID`. New lectures require a non-empty difficulty ID; create and update validate that both the selected topic and difficulty exist and are active. Existing legacy lectures may retain a null difficulty during the database transition, but a lecture with null, missing, or inactive difficulty cannot be published. `Lecture.DifficultyID` references the shared `TagDifficulty` taxonomy and is not written by Learning.
 - **DC-02**: Lectures and Materials are soft-deleted by setting `Status = 'Deactivated'` if referenced elsewhere. No hard-delete on published/used entities.
 - **DC-06**: A `DiscussionReport` must have exactly one of `DiscussionQuestionID` or `DiscussionAnswerID` set as non-null. Both null or both non-null returns HTTP 422.
 - **BR-25**: Maximum uploaded file size is **500 MB** for media materials.
@@ -63,6 +64,7 @@
 - **BR-37**: Student activity (UC-71: viewing a lecture, UC-72: downloading a material) must be logged to Gamification via `ActivityLoggedEvent`.
 - **BR-38**: Teacher receives notification when a student posts a discussion question on their lecture (UC-73).
 - **BR-39**: Students can like a published lecture at most once. `Lecture.Likes` stores the aggregate like count and must never be negative. `LectureLike` stores the unique `(LectureID, StudentID)` relationship used to prevent duplicate likes and support unlike.
+- **DC-07 (difficulty API and response)**: `GET /api/v1/difficulties` is authenticated, returns active difficulties only, and orders by `DisplayOrder`, then `DifficultyID`. Lecture list/detail/create/update contracts expose `DifficultyID`, `DifficultyName`, and `DifficultyLevel`; a legacy null difficulty returns null metadata rather than failing read operations.
 
 ### File Upload Rules
 
@@ -75,7 +77,7 @@
 
 ### Key Entities *(current DB script naming)*
 
-- **Lecture**: `LectureID`, `Title`, `Content`, `VideoUrl`, `ThumbnailUrl`, `Likes`, `TeacherID`, `TagID`, `Status` (`Draft` | `Published` | `Deactivated`), `CreatedTime`, `UpdatedTime`
+- **Lecture**: `LectureID`, `Title`, `Content`, `VideoUrl`, `ThumbnailUrl`, `Likes`, `TeacherID`, `TagID`, `DifficultyID` nullable during transition, `Status` (`Draft` | `Published` | `Deactivated`), `CreatedTime`, `UpdatedTime`
 - **Material**: `MaterialID`, `MaterialName`, `FileUrl`, `FileType`, `TeacherID`, `Status` (`Active` | `Deactivated`), `UploadedTime`
 - **LectureMaterial** *(junction, Many-to-Many)*: `LectureID`, `MaterialID`; composite PK `(LectureID, MaterialID)`
 - **LectureLike** *(junction)*: `LectureID`, `StudentID`, `CreatedTime`; composite PK `(LectureID, StudentID)` prevents duplicate likes by the same Student.

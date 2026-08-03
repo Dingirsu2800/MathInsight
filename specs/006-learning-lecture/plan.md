@@ -19,6 +19,12 @@ Build `MathInsight.Modules.Learning_Lecture` for lectures, lecture likes, downlo
 | Testing | xUnit / integration tests when test project exists |
 | Project Type | Modular Monolith Web API |
 
+## Lecture Difficulty Recommendation Addendum
+
+`Lecture.DifficultyID` is a nullable transition field for existing rows and a required field for newly created or published lectures. Learning validates active `TagTopic` and `TagDifficulty` records through migration-excluded read models. The module exposes `GET /api/v1/difficulties` for the Teacher editor and includes nullable difficulty metadata in all lecture read DTOs. The canonical SQL migration owns the legacy transition; Learning does not create EF migrations.
+
+Stable failures are `LECTURE_DIFFICULTY_REQUIRED`, `LECTURE_DIFFICULTY_NOT_FOUND`, `LECTURE_DIFFICULTY_INACTIVE`, and `LECTURE_TOPIC_INACTIVE`. The API translates these to stable HTTP responses without exposing handler exceptions.
+
 ## Project Structure
 
 ```text
@@ -143,7 +149,8 @@ PUT    /api/v1/admin/discussions/comments/{id}/hide
 
 1. `dotnet build` succeeds.
 2. Database script verification confirms `Lecture.Likes`, `LectureLike`, and `LectureMaterial` exist.
-3. Integration behavior to verify:
+3. Difficulty verification confirms create/update validates active topic and difficulty, publishing rejects null difficulty, and `GET /api/v1/difficulties` returns active values in display order.
+4. Integration behavior to verify:
    - UC-61: Create lecture → `Status = 'Draft'`.
    - UC-63: Publish → `Status = 'Published'`.
    - UC-64: Deactivate → `Status = 'Deactivated'`; cannot publish again.

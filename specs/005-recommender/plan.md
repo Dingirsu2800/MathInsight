@@ -2,7 +2,7 @@
 
 > **Current checkpoint**: consume the Recommender integration contract in [Scoring Contract V2](../scoring-contract-v2.md).
 
-**Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-07-04
+**Branch**: `005-recommender` | **Date**: 2026-06-23 | **Updated**: 2026-08-03
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -120,6 +120,12 @@ officialPoint < 5.00m
 officialPoint < 4.00m
 ```
 
+### Difficulty-Aware Lecture Recommendation
+
+`GET /api/v1/recommender/lectures` remains unchanged. Recommender reads `Lecture.DifficultyID`, active `TagTopic`, active `TagDifficulty`, and `Student.CurrentGrade` through migration-excluded read models. A qualified personalized context has `TagsMastery.NumberDone >= 3`; it may be Weak, Learning, or Mastered progression. The target is `RecommendedDifficultyLevel`. For a topic, only `Published` candidates at or below the target level are eligible; choose exact level first, then nearest lower level. Return at most two candidates per topic and six overall with deterministic ordering.
+
+When no qualified context exists, grade-based cold start returns active, `Published`, level-1 lectures for `Student.CurrentGrade`; null grade returns `[]`. The response includes difficulty metadata, nullable `OfficialPoint`, evidence count, fallback flag, and an audit reason. Material recommendation keeps its existing weak-topic behavior and has no difficulty-ranking scope.
+
 ## Verification Plan
 
 1. `dotnet build` - zero compile errors.
@@ -132,3 +138,5 @@ officialPoint < 4.00m
    - WeakTag query returns only `OfficialPoint < 5.00`.
    - `RecommendedDifficultyLevel` mapping returns levels `1..4`.
    - SQL-only recommender works without Redis/SAR.
+   - Personalized exact/lower difficulty matching never returns a harder lecture.
+   - Cold start returns only active level-1 lectures in the student's grade.

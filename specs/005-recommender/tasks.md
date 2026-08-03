@@ -101,7 +101,7 @@
 
 - [x] **Recommendation Queries**:
   - [x] `GetWeakTagsQuery` - UC-52.
-  - [x] `GetRecommendedLecturesQuery` - UC-53: match `Lecture.TagID` to weak `TagID`; remedial topics sorted first.
+- [x] `GetRecommendedLecturesQuery` - UC-53 initial weak-topic baseline. Phase 6 replaces this behavior with qualified all-mastery difficulty-aware ranking.
   - [x] `GetRecommendedMaterialsQuery` - UC-54: match materials through `LectureMaterial`; remedial topics sorted first.
 
 ---
@@ -172,7 +172,7 @@
   - [x] Graded session updates `StudentTopicSessionResult` and `TagsMastery`.
   - [x] `TagsMastery` unique key is `(student_id, tag_id)` only.
   - [x] WeakTags query returns only rows with `official_point < 5.00`.
-  - [x] Lecture/material recommendations prioritize remedial weak topics first.
+  - [x] Historical baseline: the pre-Phase-6 lecture recommendation prioritized remedial weak topics.
   - [x] SQL-only recommender works without Redis/SAR configured.
   - [x] WeakTag API (`GET /weak-tags`) returns within **2 seconds** for a student with 50+ `TagsMastery` rows, SQL Server only, no Redis (G4 — SC SLA).
   - [x] `CompetencyPoint.point` is recalculated and persisted after `TagsMastery` update (RCM-12).
@@ -184,3 +184,15 @@
   - [x] series_answer_count reaches 10 independently per tag → blend + reset.
   - [x] Exam TopicScore: 3 câu liên tag INT: `c_{q,INT}` = `[8.0, 3.9, 1.75]`, `T_j = 13.65/3 = 4.55`.
   - [x] BR-19: sub-tag `official_point = 3.9` → `IsBottleneckWeak = true`; `4.1` → false.
+
+---
+
+## Phase 6: Difficulty-Aware Lecture Recommendation
+
+- [ ] Add canonical SQL `Lecture.DifficultyID` transition migration, fresh-schema FK/index, and idempotent demo lectures.
+- [ ] Map `Lecture.DifficultyID` and active `TagDifficulty` in Learning; exclude taxonomy read models from migrations.
+- [ ] Require a valid active difficulty for Learning create, update, and publish; expose active difficulty values.
+- [ ] Return lecture difficulty metadata from Learning list and detail responses.
+- [ ] Rank lectures for qualified Weak, Learning, and Mastered contexts using exact-or-lower difficulty only, two per topic and six overall.
+- [ ] Implement grade-based level-1 cold start with nullable point and explicit audit reason.
+- [ ] Add SQL Server smoke coverage and module quality gates; record skipped smoke execution separately.

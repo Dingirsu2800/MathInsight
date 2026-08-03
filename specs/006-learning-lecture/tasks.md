@@ -99,3 +99,14 @@
   - [ ] UC-78: Delete → target `Status = 'Deleted'`.
   - [ ] UC-71: View lecture → `ActivityLoggedEvent` with `ActivityType = 'VIEW_LECTURE'`.
   - [ ] UC-72: Download material → `ActivityLoggedEvent` with `ActivityType = 'DOWNLOAD_MATERIAL'`.
+
+---
+
+## Phase 5: Lecture Difficulty Recommendation Contract
+
+- [ ] Add and verify the canonical `Lecture.DifficultyID` SQL transition contract; do not assign an arbitrary difficulty to legacy lectures.
+- [ ] Map nullable `Lecture.DifficultyId` and active `TagDifficultyReadOnly` with `ExcludeFromMigrations()`.
+- [ ] Add nullable difficulty metadata to `LectureDto` and validate active topic/difficulty in create and update.
+- [ ] Require valid active difficulty before publishing and preserve legacy null-difficulty read behavior.
+- [ ] Expose authenticated `GET /api/v1/difficulties`, active-only and ordered by display order then ID.
+- [ ] Add metadata, command, query, and controller tests; tick only after Learning quality gates pass.
