@@ -33,6 +33,7 @@ import TeacherApplicationsPage from './pages/admin/TeacherApplicationsPage.jsx';
 import RolesPermissionsPage from './pages/admin/RolesPermissionsPage.jsx';
 import { getAccessToken, getRoleName } from './services/authStorage.js';
 import { resolveHomePath } from './utils/roleRoutes.js';
+import { NavigationGuardProvider } from './contexts/NavigationGuardContext.jsx';
 
 // Teacher Pages
 import LectureListPage from './pages/teacher/LectureListPage.jsx';
@@ -56,7 +57,7 @@ function HomeRoute() {
 
 export default function App() {
   return (
-    <>
+    <NavigationGuardProvider>
     <ToastContainer />
     <Routes>
       <Route path="/" element={<HomeRoute />} />
@@ -132,7 +133,7 @@ export default function App() {
         }
       />
     </Routes>
-    </>
+    </NavigationGuardProvider>
   );
 }
 
