@@ -189,10 +189,10 @@
 
 ## Phase 6: Difficulty-Aware Lecture Recommendation
 
-- [ ] Add canonical SQL `Lecture.DifficultyID` transition migration, fresh-schema FK/index, and idempotent demo lectures.
-- [ ] Map `Lecture.DifficultyID` and active `TagDifficulty` in Learning; exclude taxonomy read models from migrations.
-- [ ] Require a valid active difficulty for Learning create, update, and publish; expose active difficulty values.
-- [ ] Return lecture difficulty metadata from Learning list and detail responses.
-- [ ] Rank lectures for qualified Weak, Learning, and Mastered contexts using exact-or-lower difficulty only, two per topic and six overall.
-- [ ] Implement grade-based level-1 cold start with nullable point and explicit audit reason.
-- [ ] Add SQL Server smoke coverage and module quality gates; record skipped smoke execution separately.
+- [x] Add canonical SQL `Lecture.DifficultyID` transition migration, fresh-schema FK/index, and idempotent demo lectures.
+- [x] Map `Lecture.DifficultyID` and active `TagDifficulty` in Learning; exclude taxonomy read models from migrations.
+- [x] Require a valid active difficulty for Learning create, update, and publish; expose active difficulty values.
+- [x] Return lecture difficulty metadata from Learning list and detail responses.
+- [x] Rank lectures for qualified Weak, Learning, and Mastered contexts using exact-or-lower difficulty only, two per topic and six overall.
+- [x] Implement grade-based level-1 cold start with nullable point and explicit audit reason.
+- [x] Add SQL Server smoke coverage and module quality gates; LocalDB smoke execution passed.

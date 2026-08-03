@@ -104,9 +104,9 @@
 
 ## Phase 5: Lecture Difficulty Recommendation Contract
 
-- [ ] Add and verify the canonical `Lecture.DifficultyID` SQL transition contract; do not assign an arbitrary difficulty to legacy lectures.
-- [ ] Map nullable `Lecture.DifficultyId` and active `TagDifficultyReadOnly` with `ExcludeFromMigrations()`.
-- [ ] Add nullable difficulty metadata to `LectureDto` and validate active topic/difficulty in create and update.
-- [ ] Require valid active difficulty before publishing and preserve legacy null-difficulty read behavior.
-- [ ] Expose authenticated `GET /api/v1/difficulties`, active-only and ordered by display order then ID.
-- [ ] Add metadata, command, query, and controller tests; tick only after Learning quality gates pass.
+- [x] Add and verify the canonical `Lecture.DifficultyID` SQL transition contract; do not assign an arbitrary difficulty to legacy lectures.
+- [x] Map nullable `Lecture.DifficultyId` and active `TagDifficultyReadOnly` with `ExcludeFromMigrations()`.
+- [x] Add nullable difficulty metadata to `LectureDto` and validate active topic/difficulty in create and update.
+- [x] Require valid active difficulty before publishing and preserve legacy null-difficulty read behavior.
+- [x] Expose authenticated `GET /api/v1/difficulties`, active-only and ordered by display order then ID.
+- [x] Add metadata, command, query, and controller tests; Learning quality gates passed.
