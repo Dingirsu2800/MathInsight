@@ -1,4 +1,5 @@
 ﻿using MathInsight.Modules.QuestionBank.Entities;
+using MathInsight.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.QuestionBank.Persistence;
@@ -24,5 +25,6 @@ public class QuestionBankDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(QuestionBankDbContext).Assembly);
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }

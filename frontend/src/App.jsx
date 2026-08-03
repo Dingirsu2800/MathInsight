@@ -7,6 +7,9 @@ import TestSession from './pages/student/TestSession.jsx';
 import TestHistoryPage from './pages/student/TestHistoryPage.jsx';
 import CompetencyPage from './pages/student/CompetencyPage.jsx';
 import TestResultPage from './pages/student/TestResultPage.jsx';
+import BadgeCataloguePage from './pages/student/BadgeCataloguePage.jsx';
+import TargetScorePage from './pages/student/TargetScorePage.jsx';
+import LeaderboardPage from './pages/student/LeaderboardPage.jsx';
 import QuestionBankListPage from './pages/expert/QuestionBankListPage.jsx';
 import QuestionEditorPage from './pages/expert/QuestionEditorPage.jsx';
 import ExpertProfilePage from './pages/expert/ExpertProfilePage.jsx';
@@ -80,6 +83,9 @@ export default function App() {
         <Route path="/student/test/:sessionId" element={<TestSession />} />
         <Route path="/student/lectures" element={<StudentLectureListPage />} />
         <Route path="/student/lectures/:id" element={<StudentLectureDetailPage />} />
+        <Route path="/student/achievements" element={<BadgeCataloguePage />} />
+        <Route path="/student/targets" element={<TargetScorePage />} />
+        <Route path="/student/leaderboard" element={<LeaderboardPage />} />
       </Route>
       {/* Role landing pages (placeholders until their dashboards are built) */}
       <Route element={<ProtectedRoute />}>

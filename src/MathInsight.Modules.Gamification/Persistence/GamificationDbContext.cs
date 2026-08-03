@@ -1,4 +1,5 @@
 using MathInsight.Modules.Gamification.Entities;
+using MathInsight.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.Gamification.Persistence;
@@ -19,5 +20,6 @@ public class GamificationDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(GamificationDbContext).Assembly);
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Recommender.Persistence.Entities;
 using MathInsight.Modules.Recommender.Persistence.Configurations;
+using MathInsight.Shared.Persistence;
 
 namespace MathInsight.Modules.Recommender.Persistence;
 
@@ -33,5 +34,6 @@ public class RecommenderDbContext : DbContext
 
         // Apply all EF configurations from this assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(RecommenderDbContext).Assembly);
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }

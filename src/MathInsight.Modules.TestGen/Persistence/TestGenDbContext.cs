@@ -1,5 +1,6 @@
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
+using MathInsight.Shared.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.TestGen.Persistence;
@@ -31,5 +32,6 @@ public class TestGenDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TestGenDbContext).Assembly);
+        modelBuilder.ApplyUtcDateTimeConversion();
     }
 }

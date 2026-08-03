@@ -49,6 +49,7 @@ public class AnswerDiscussionQuestionCommandHandler : IRequestHandler<AnswerDisc
         await _mediator.Publish(new DiscussionAnsweredEvent(
             answer.DiscussionAnswerId,
             question.DiscussionQuestionId,
+            question.LectureId,
             answer.AccountId,
             question.StudentId
         ), cancellationToken);
