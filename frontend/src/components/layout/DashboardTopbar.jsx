@@ -5,6 +5,7 @@ import NotificationBell from "../NotificationBell";
 
 export default function DashboardTopbar({
   appTitle = "Hệ thống Quản lý Toán học",
+  logoPath,
   darkMode,
   setDarkMode,
   topNavItems = [],
@@ -70,7 +71,16 @@ export default function DashboardTopbar({
     // any z-index used inside <main>.
     <header className="h-header-height border-b border-whisper-border bg-surface flex justify-between items-center w-full px-gutter z-50 sticky top-0 shrink-0 select-none">
       <div className="flex items-center gap-8 h-full">
-        <h2 className="text-[20px] font-bold text-primary">{appTitle}</h2>
+        {logoPath ? (
+          <Link
+            to={logoPath}
+            className="text-[20px] font-bold text-primary hover:opacity-80 transition-opacity"
+          >
+            {appTitle}
+          </Link>
+        ) : (
+          <h2 className="text-[20px] font-bold text-primary">{appTitle}</h2>
+        )}
         {topNavItems.length > 0 && (
           <nav className="hidden md:flex gap-6 h-full items-center">
             {topNavItems.filter((item) => !item.disabled).map((item, idx) => {

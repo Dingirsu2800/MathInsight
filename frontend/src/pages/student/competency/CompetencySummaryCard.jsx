@@ -2,8 +2,53 @@
  * Overall competency summary card with radial progress gauge.
  * Data: derived from recommenderApi.getWeakTags() — average of officialPoint values.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getWeakTags } from '../../../services/recommenderApi';
+
+function InfoPopover({ content }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <span ref={ref} className="relative inline-flex items-center ml-1.5" style={{ verticalAlign: 'middle' }}>
+      <button
+        type="button"
+        aria-label="Thông tin"
+        onClick={() => setOpen((v) => !v)}
+        className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[11px] font-bold leading-none
+          border border-current text-outline hover:text-primary hover:border-primary
+          transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/40"
+      >
+        i
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-[200] top-full left-1/2 -translate-x-1/2 mt-2
+            w-64 rounded-xl bg-pure-surface border border-whisper-border shadow-xl p-3
+            text-xs text-on-surface-variant leading-relaxed"
+        >
+          {/* Arrow */}
+          <span
+            className="absolute left-1/2 -translate-x-1/2 -top-[7px]
+              w-3 h-3 bg-pure-surface border-l border-t border-whisper-border
+              rotate-45"
+          />
+          {content}
+        </div>
+      )}
+    </span>
+  );
+}
 
 export default function CompetencySummaryCard() {
   const [score, setScore] = useState(0);
@@ -45,8 +90,25 @@ export default function CompetencySummaryCard() {
 
   return (
     <div className="bg-pure-surface border border-whisper-border rounded-xl p-6 flex flex-col items-center justify-center">
-      <h3 className="text-lg font-semibold text-on-surface self-start mb-6">
+      <h3 className="text-lg font-semibold text-on-surface self-start mb-6 flex items-center">
         Chỉ số năng lực tổng quát
+        <InfoPopover
+          content={
+            <>
+              <p className="font-semibold text-on-surface mb-1">Chỉ số năng lực tổng quát</p>
+              <p>
+                Điểm trung bình của tất cả các chủ đề bạn đã học, dao động từ{' '}
+                <strong>0 đến 10</strong>.
+              </p>
+              <ul className="mt-2 space-y-0.5 pl-3 list-disc">
+                <li><strong>≥ 8</strong> — Giỏi</li>
+                <li><strong>≥ 6.5</strong> — Trung bình - Khá</li>
+                <li><strong>≥ 5</strong> — Trung bình</li>
+                <li><strong>&lt; 5</strong> — Cần cải thiện</li>
+              </ul>
+            </>
+          }
+        />
       </h3>
 
       {loading && (

@@ -11,7 +11,4 @@ export const studentNavItems = [
 ];
 
 export const studentTopNavItems = [
-  { label: "Trang chủ", to: "/student/dashboard" },
-  { label: "Thống kê", to: "/student/history" },
-  { label: "Cài đặt", to: "/student/settings", disabled: true },
 ];

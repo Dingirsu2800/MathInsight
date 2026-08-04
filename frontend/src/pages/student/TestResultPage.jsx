@@ -5,6 +5,7 @@ import ScoreOverviewCard from './test-result/ScoreOverviewCard';
 import TopicBreakdownCard from './test-result/TopicBreakdownCard';
 import QuestionAnswerCard from './test-result/QuestionAnswerCard';
 import CompositeQuestionCard from './test-result/CompositeQuestionCard';
+import ChatbotWidget from '../../components/student/ChatbotWidget';
 import { getSessionResult, reportSessionQuestion } from '../../services/gradingApi';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -37,6 +38,15 @@ export default function TestResultPage() {
   const [reportReason, setReportReason] = useState('');
   const [reportError, setReportError] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  // --- Chatbot state ---
+  const [chatContext, setChatContext] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  const openChat = (context) => {
+    setChatContext(context);
+    setIsChatOpen(true);
+  };
 
   useEffect(() => {
     if (!sessionId) return;
@@ -197,6 +207,14 @@ export default function TestResultPage() {
                 const diff = difficultyLabel(answer.difficultyLevel);
 
                 if (answer.questionType === 'COMPOSITE') {
+                  // Xây dựng correctAnswer từ các ý đúng của composite
+                  const correctStatements = answer.answerParts
+                    .filter((p) => p.isCorrect)
+                    .map((p, i) => `Ý ${i + 1}: ${p.partContent} → ${p.correctAnswer}`);
+                  const compositeCorrectAnswer = correctStatements.length > 0
+                    ? correctStatements.join('; ')
+                    : 'Xem lời giải chi tiết';
+
                   return (
                     <CompositeQuestionCard
                       key={answer.questionId}
@@ -218,11 +236,25 @@ export default function TestResultPage() {
                       scoreAdjustedTime={answer.scoreAdjustedTime}
                       solution={answer.solutionContent ? [answer.solutionContent] : []}
                       onReport={() => openReportDialog(answer)}
+                      onAskChatbot={() => openChat({
+                        sessionId,
+                        questionId: answer.questionId,
+                        questionNo: answer.questionNo,
+                        questionContent: answer.questionContent,
+                        correctAnswer: compositeCorrectAnswer,
+                      })}
                     />
                   );
                 }
 
                 // SINGLE_CHOICE, MULTIPLE_SELECT, TRUE_FALSE, SHORT_ANSWER
+                // Xây dựng correctAnswer từ các option đúng
+                const correctOptions = (answer.answerOptions || [])
+                  .filter((o) => o.isCorrect)
+                  .map((o, i) => `${String.fromCharCode(65 + (answer.answerOptions || []).indexOf(o))}. ${o.answerContent}`)
+                  .join(', ');
+                const mcqCorrectAnswer = correctOptions || 'Xem lời giải chi tiết';
+
                 return (
                   <QuestionAnswerCard
                     key={answer.questionId}
@@ -245,6 +277,13 @@ export default function TestResultPage() {
                     reportReason={answer.reportReason}
                     scoreAdjustedTime={answer.scoreAdjustedTime}
                     onReport={() => openReportDialog(answer)}
+                    onAskChatbot={() => openChat({
+                      sessionId,
+                      questionId: answer.questionId,
+                      questionNo: answer.questionNo,
+                      questionContent: answer.questionContent,
+                      correctAnswer: mcqCorrectAnswer,
+                    })}
                   />
                 );
               })}
@@ -286,6 +325,13 @@ export default function TestResultPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+
+      {/* Chatbot Widget — floating bottom-right */}
+      <ChatbotWidget
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        context={chatContext}
+      />
     </StudentLayout>
   );
 }

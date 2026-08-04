@@ -102,11 +102,11 @@ export default function SharedBlueprintExamDiscoveryPage() {
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto select-none">
         {/* Page Header */}
         <DashboardPageHeader
-          title={mode === 'practice' ? 'Luyện tập theo chủ đề' : 'Đề thi luyện tập'}
+          title={mode === 'practice' ? 'Luyện tập theo chủ đề' : 'Đề thi tạo theo ma trận'}
           subtitle={
             mode === 'practice'
               ? 'Chọn chủ đề bài học để tạo bài luyện tập 10 câu hỏi không giới hạn thời gian.'
-              : 'Chọn đề thi dùng chung phù hợp khối lớp hoặc nhập mã đề thi từ giáo viên để bắt đầu làm bài.'
+              : 'Đề thi gồm các câu hỏi được tập hợp theo ma trận có sẵn'
           }
         />
 
@@ -117,11 +117,10 @@ export default function SharedBlueprintExamDiscoveryPage() {
             role="tab"
             aria-selected={mode === 'exam'}
             onClick={() => navigate('/student/test')}
-            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px] ${
-              mode === 'exam'
-                ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
-                : 'text-on-surface-variant hover:text-on-surface'
-            }`}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px] ${mode === 'exam'
+              ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+              : 'text-on-surface-variant hover:text-on-surface'
+              }`}
           >
             <span className="material-symbols-outlined text-[18px]">quiz</span>
             Đề thi
@@ -131,11 +130,10 @@ export default function SharedBlueprintExamDiscoveryPage() {
             role="tab"
             aria-selected={mode === 'practice'}
             onClick={() => navigate('/student/test/topics')}
-            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px] ${
-              mode === 'practice'
-                ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
-                : 'text-on-surface-variant hover:text-on-surface'
-            }`}
+            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px] ${mode === 'practice'
+              ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+              : 'text-on-surface-variant hover:text-on-surface'
+              }`}
           >
             <span className="material-symbols-outlined text-[18px]">fitness_center</span>
             Luyện theo chủ đề
@@ -148,191 +146,191 @@ export default function SharedBlueprintExamDiscoveryPage() {
         {/* ── Exam Mode content below ── */}
         {mode === 'exam' && (<>
 
-        {/* Enter TestCode Card */}
-        <div className="bg-pure-surface border border-whisper-border rounded-xl p-5 md:p-6 shadow-sm flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[24px]">vpn_key</span>
-            <div>
-              <h2 className="text-sm font-bold text-on-surface">Nhập mã đề thi trực tiếp</h2>
-              <p className="text-xs text-on-surface-variant">Nhập mã đề thi (TestCode) do giáo viên cấp để tìm bài thi tương ứng.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleResolveCodeSubmit} className="flex flex-col sm:flex-row gap-3 mt-1 select-text">
-            <div className="flex-1 relative">
-              <label htmlFor="student-test-code-input" className="sr-only">Nhập mã đề thi</label>
-              <input
-                id="student-test-code-input"
-                type="text"
-                value={testCodeInput}
-                disabled={resolvingCode}
-                onChange={(e) => {
-                  setTestCodeInput(e.target.value);
-                  if (resolveError) setResolveError("");
-                }}
-                placeholder="Ví dụ: MATH7K2P..."
-                className="w-full h-11 pl-3.5 pr-3 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface font-mono uppercase tracking-wider focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
-              />
-            </div>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={resolvingCode}
-              className="h-11 min-h-[44px] px-6 font-bold shrink-0"
-            >
-              {resolvingCode ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Đang tìm...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[18px]">search</span>
-                  <span>Tìm đề</span>
-                </div>
-              )}
-            </Button>
-          </form>
-
-          {resolveError && (
-            <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2 select-text">
-              <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
-              <span>{resolveError}</span>
-            </div>
-          )}
-        </div>
-
-        {/* List Section Title */}
-        <div className="flex items-center justify-between border-b border-whisper-border pb-3">
-          <h2 className="text-sm font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[20px]">quiz</span>
-            Danh sách đề thi dùng chung phù hợp
-          </h2>
-          {totalCount > 0 && (
-            <span className="text-xs text-on-surface-variant font-bold font-mono">
-              Tổng số: {totalCount} bài thi
-            </span>
-          )}
-        </div>
-
-        {/* Error Banner */}
-        {listError && (
-          <div role="alert" className="p-4 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center justify-between gap-3 select-text">
+          {/* Enter TestCode Card */}
+          <div className="bg-pure-surface border border-whisper-border rounded-xl p-5 md:p-6 shadow-sm flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] shrink-0">error</span>
-              <span>{listError}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={fetchExams} className="h-8 text-xs font-bold">Thử lại</Button>
-          </div>
-        )}
-
-        {/* Grid List Cards */}
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {Array.from({ length: 6 }).map((_, idx) => (
-              <div key={idx} className="bg-pure-surface border border-whisper-border rounded-xl p-5 h-48 animate-pulse flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div className="h-5 bg-surface-container-high rounded-md w-3/4"></div>
-                  <div className="h-3 bg-surface-container rounded-md w-1/2"></div>
-                </div>
-                <div className="h-9 bg-surface-container-high rounded-lg w-full"></div>
+              <span className="material-symbols-outlined text-primary text-[24px]">vpn_key</span>
+              <div>
+                <h2 className="text-sm font-bold text-on-surface">Nhập mã ma trận trực tiếp</h2>
+                <p className="text-xs text-on-surface-variant">Nhập mã ma trận (TestCode) để tìm bài thi tương ứng.</p>
               </div>
-            ))}
-          </div>
-        ) : listError ? null : exams.length === 0 ? (
-          <div className="bg-pure-surface border border-whisper-border rounded-xl p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-[48px] text-outline-variant">assignment_late</span>
-            <p className="text-sm font-bold text-on-surface">Chưa có đề thi dùng chung nào phù hợp với khối lớp của bạn.</p>
-            <p className="text-xs">Bạn có thể dùng mã đề thi do giáo viên cung cấp ở ô tìm kiếm trên.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {exams.map((exam) => (
-              <div
-                key={exam.testId}
-                className="bg-pure-surface border border-whisper-border rounded-xl p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-4 group"
+            </div>
+
+            <form onSubmit={handleResolveCodeSubmit} className="flex flex-col sm:flex-row gap-3 mt-1 select-text">
+              <div className="flex-1 relative">
+                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã ma trận</label>
+                <input
+                  id="student-test-code-input"
+                  type="text"
+                  value={testCodeInput}
+                  disabled={resolvingCode}
+                  onChange={(e) => {
+                    setTestCodeInput(e.target.value);
+                    if (resolveError) setResolveError("");
+                  }}
+                  placeholder="Ví dụ: MATH7K2P..."
+                  className="w-full h-11 pl-3.5 pr-3 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface font-mono uppercase tracking-wider focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={resolvingCode}
+                className="h-11 min-h-[44px] px-6 font-bold shrink-0"
               >
-                <div className="space-y-2 select-text">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-bold text-sm text-on-surface group-hover:text-primary transition-colors line-clamp-2">
-                      {exam.testName}
-                    </h3>
-                    <span className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-extrabold px-2 py-0.5 rounded shrink-0">
-                      Khối {exam.grade}
-                    </span>
+                {resolvingCode ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Đang tìm...</span>
                   </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[18px]">search</span>
+                    <span>Tìm đề</span>
+                  </div>
+                )}
+              </Button>
+            </form>
 
-                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
-                    {exam.testCode && (
-                      <span className="text-on-surface-variant font-mono">
-                        Mã đề: <strong className="text-primary">{exam.testCode}</strong>
-                      </span>
-                    )}
-                    {exam.createdTime && (
-                      <span className="text-[10px] text-on-surface-variant">
-                        {new Date(exam.createdTime).toLocaleDateString("vi-VN")}
-                      </span>
-                    )}
-                  </div>
+            {resolveError && (
+              <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2 select-text">
+                <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                <span>{resolveError}</span>
+              </div>
+            )}
+          </div>
 
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-whisper-border/50 text-[11px] text-on-surface-variant font-medium">
-                    <div>
-                      Thời gian: <strong className="block text-on-surface font-bold">{exam.durationMinutes} phút</strong>
-                    </div>
-                    <div>
-                      Số câu: <strong className="block text-on-surface font-bold font-mono">{exam.totalQuestions} câu</strong>
-                    </div>
-                    <div>
-                      Điểm tối đa: <strong className="block text-primary font-bold font-mono">{exam.maxScore} đ</strong>
-                    </div>
+          {/* List Section Title */}
+          <div className="flex items-center justify-between border-b border-whisper-border pb-3">
+            <h2 className="text-sm font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-[20px]">quiz</span>
+              Danh sách ma trận đề thi
+            </h2>
+            {totalCount > 0 && (
+              <span className="text-xs text-on-surface-variant font-bold font-mono">
+                Tổng số: {totalCount} bài thi
+              </span>
+            )}
+          </div>
+
+          {/* Error Banner */}
+          {listError && (
+            <div role="alert" className="p-4 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center justify-between gap-3 select-text">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] shrink-0">error</span>
+                <span>{listError}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchExams} className="h-8 text-xs font-bold">Thử lại</Button>
+            </div>
+          )}
+
+          {/* Grid List Cards */}
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="bg-pure-surface border border-whisper-border rounded-xl p-5 h-48 animate-pulse flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="h-5 bg-surface-container-high rounded-md w-3/4"></div>
+                    <div className="h-3 bg-surface-container rounded-md w-1/2"></div>
                   </div>
+                  <div className="h-9 bg-surface-container-high rounded-lg w-full"></div>
                 </div>
-
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => handleOpenStartDialog(exam)}
-                  className="w-full h-10 font-bold justify-center"
+              ))}
+            </div>
+          ) : listError ? null : exams.length === 0 ? (
+            <div className="bg-pure-surface border border-whisper-border rounded-xl p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
+              <span className="material-symbols-outlined text-[48px] text-outline-variant">assignment_late</span>
+              <p className="text-sm font-bold text-on-surface">Chưa có đề thi dùng chung nào phù hợp với khối lớp của bạn.</p>
+              <p className="text-xs">Bạn có thể dùng mã đề thi do giáo viên cung cấp ở ô tìm kiếm trên.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {exams.map((exam) => (
+                <div
+                  key={exam.testId}
+                  className="bg-pure-surface border border-whisper-border rounded-xl p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all flex flex-col justify-between gap-4 group"
                 >
-                  <span className="material-symbols-outlined text-[18px] mr-1.5">play_arrow</span>
-                  Bắt đầu làm bài
+                  <div className="space-y-2 select-text">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-bold text-sm text-on-surface group-hover:text-primary transition-colors line-clamp-2">
+                        {exam.testName}
+                      </h3>
+                      <span className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-extrabold px-2 py-0.5 rounded shrink-0">
+                        Khối {exam.grade}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                      {exam.testCode && (
+                        <span className="text-on-surface-variant font-mono">
+                          Mã đề: <strong className="text-primary">{exam.testCode}</strong>
+                        </span>
+                      )}
+                      {exam.createdTime && (
+                        <span className="text-[10px] text-on-surface-variant">
+                          {new Date(exam.createdTime).toLocaleDateString("vi-VN")}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-whisper-border/50 text-[11px] text-on-surface-variant font-medium">
+                      <div>
+                        Thời gian: <strong className="block text-on-surface font-bold">{exam.durationMinutes} phút</strong>
+                      </div>
+                      <div>
+                        Số câu: <strong className="block text-on-surface font-bold font-mono">{exam.totalQuestions} câu</strong>
+                      </div>
+                      <div>
+                        Điểm tối đa: <strong className="block text-primary font-bold font-mono">{exam.maxScore} đ</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => handleOpenStartDialog(exam)}
+                    className="w-full h-10 font-bold justify-center"
+                  >
+                    <span className="material-symbols-outlined text-[18px] mr-1.5">play_arrow</span>
+                    Bắt đầu làm bài
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination Bar */}
+          {totalPages > 1 && (
+            <div className="p-4 bg-pure-surface border border-whisper-border rounded-xl flex items-center justify-between shadow-sm">
+              <span className="text-xs text-on-surface-variant font-semibold">
+                Trang {pageIndex} / {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pageIndex <= 1 || loading}
+                  onClick={() => setPageIndex((p) => Math.max(1, p - 1))}
+                  className="h-9 px-3 font-bold"
+                >
+                  <span className="material-symbols-outlined text-[16px] mr-1">chevron_left</span>
+                  Trước
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pageIndex >= totalPages || loading}
+                  onClick={() => setPageIndex((p) => Math.min(totalPages, p + 1))}
+                  className="h-9 px-3 font-bold"
+                >
+                  Sau
+                  <span className="material-symbols-outlined text-[16px] ml-1">chevron_right</span>
                 </Button>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div className="p-4 bg-pure-surface border border-whisper-border rounded-xl flex items-center justify-between shadow-sm">
-            <span className="text-xs text-on-surface-variant font-semibold">
-              Trang {pageIndex} / {totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pageIndex <= 1 || loading}
-                onClick={() => setPageIndex((p) => Math.max(1, p - 1))}
-                className="h-9 px-3 font-bold"
-              >
-                <span className="material-symbols-outlined text-[16px] mr-1">chevron_left</span>
-                Trước
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pageIndex >= totalPages || loading}
-                onClick={() => setPageIndex((p) => Math.min(totalPages, p + 1))}
-                className="h-9 px-3 font-bold"
-              >
-                Sau
-                <span className="material-symbols-outlined text-[16px] ml-1">chevron_right</span>
-              </Button>
             </div>
-          </div>
-        )}
-        {/* close exam-mode conditional fragment */}
+          )}
+          {/* close exam-mode conditional fragment */}
         </>)}
       </div>
 

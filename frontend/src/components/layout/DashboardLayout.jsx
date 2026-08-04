@@ -8,6 +8,7 @@ function DashboardLayoutShell({
   brandName = "MathInsight",
   roleLabel = "Quản trị viên",
   appTitle = "Hệ thống Quản lý Toán học",
+  logoPath,
   navItems = [],
   primaryAction,
   onLogout,
@@ -47,6 +48,7 @@ function DashboardLayoutShell({
       <DashboardSidebar
         brandName={brandName}
         roleLabel={roleLabel}
+        logoPath={logoPath}
         navItems={navItems}
         primaryAction={primaryAction}
         onLogout={showSidebarLogout ? onLogout : undefined}
@@ -62,6 +64,7 @@ function DashboardLayoutShell({
         {/* Top header bar */}
         <DashboardTopbar
           appTitle={appTitle}
+          logoPath={logoPath}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           topNavItems={topNavItems}
