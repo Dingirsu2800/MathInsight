@@ -304,6 +304,16 @@ export default function BlueprintDetailPage() {
     }
   };
 
+  const allocationSummary = (blueprint?.sections || [])
+    .flatMap((section) => section.details || [])
+    .reduce((summary, detail) => {
+      const key = detail.difficultyName || "Chưa xác định";
+      summary[key] = (summary[key] || 0) + (Number(detail.quantity) || 0);
+      return summary;
+    }, {});
+  const allocatedQuestionCount = Object.values(allocationSummary).reduce((sum, value) => sum + value, 0);
+  const hasAllocationMismatch = Number(blueprint?.totalQuestions || 0) !== allocatedQuestionCount;
+
   return (
     <ExpertLayout>
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto select-none">
@@ -313,7 +323,7 @@ export default function BlueprintDetailPage() {
           title={blueprint.blueprintName}
           subtitle="Xem chi tiết thiết lập phần thi, chủ đề phân bổ và thực hiện các quy trình kiểm soát."
         >
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap justify-end gap-2.5 max-w-full">
             <Button
               variant="outline"
               disabled={isMutating}
@@ -398,7 +408,7 @@ export default function BlueprintDetailPage() {
                 disabled={isMutating}
                 onClick={() => setIsDeleteOpen(true)}
               >
-                <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">delete</span>
+                <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">archive</span>
                 {actions.canDeactivate ? "Ngừng sử dụng" : "Xóa cấu trúc"}
               </Button>
             )}
@@ -454,6 +464,31 @@ export default function BlueprintDetailPage() {
             </div>
           </div>
         )}
+
+        <section className="bg-pure-surface border border-whisper-border rounded-xl p-4 shadow-sm" aria-label="Tóm tắt phân bổ">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-on-surface">Tóm tắt phân bổ</h2>
+              <p className="text-xs text-on-surface-variant">Tổng hợp nhanh số câu theo độ khó để kiểm tra trước khi sinh đề.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(allocationSummary).map(([label, count]) => (
+                <span key={label} className="rounded-lg bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface">
+                  {label}: {count}
+                </span>
+              ))}
+              <span className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
+                Tổng: {allocatedQuestionCount}
+              </span>
+            </div>
+          </div>
+          {hasAllocationMismatch && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-warning/30 bg-amber-warning/10 p-3 text-xs font-semibold text-amber-warning" role="alert">
+              <span className="material-symbols-outlined text-[16px]">warning</span>
+              <span>Số câu trong phân bổ ({allocatedQuestionCount}) chưa khớp tổng cấu trúc ({blueprint.totalQuestions || 0}).</span>
+            </div>
+          )}
+        </section>
 
         {/* Detail content grid layout */}
         <div className="grid grid-cols-12 gap-6 items-start">
@@ -603,7 +638,7 @@ export default function BlueprintDetailPage() {
                       <li className="flex justify-between items-center pb-1">
                         <span className="text-on-surface-variant font-medium">Thời gian kiểm soát</span>
                         <span className="text-on-surface font-bold">
-                          {new Date(blueprint.reviewTime).toLocaleString("vi-VN", { timeZone: "UTC" })} (UTC)
+                          {new Date(blueprint.reviewTime).toLocaleString("vi-VN")}
                         </span>
                       </li>
                     )}

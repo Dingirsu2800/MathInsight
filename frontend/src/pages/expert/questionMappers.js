@@ -193,7 +193,7 @@ export function mapEditorStateToCreateUpdateRequest(state) {
     solutionContent: state.solutionContent,
     pictureUrl: state.pictureUrl || null,
     difficultyId: state.difficultyId,
-    grade: parseInt(state.grade) || 12,
+    grade: state.grade ? parseInt(state.grade) : null,
     questionType: state.questionType, // SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER, COMPOSITE
     defaultWeight: numberOrDefault(state.defaultWeight, 1),
     topics: topicsPayload

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import ExpertLayout from "./ExpertLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { Badge } from "../../components/ui/badge";
@@ -34,18 +34,19 @@ function getPaginationItems(totalPages, currentPage) {
 export default function BlueprintListPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [urlParams, setUrlParams] = useSearchParams();
 
   // Tab state: "all" | "mine" | "pending"
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState(() => urlParams.get("scope") || "all");
 
   // Filters state
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedGrade, setSelectedGrade] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => urlParams.get("search") || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => urlParams.get("search") || "");
+  const [selectedGrade, setSelectedGrade] = useState(() => urlParams.get("grade") || "");
+  const [selectedStatus, setSelectedStatus] = useState(() => urlParams.get("status") || "");
 
   // Pagination state
-  const [pageIndex, setPageIndex] = useState(1);
+  const [pageIndex, setPageIndex] = useState(() => Math.max(1, Number(urlParams.get("page") || 1)));
   const [pageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -60,6 +61,7 @@ export default function BlueprintListPage() {
 
   // Action states
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState(null);
   const [cloneTarget, setCloneTarget] = useState(null);
   const [isCloneConfirmOpen, setIsCloneConfirmOpen] = useState(false);
   const [cloneLoading, setCloneLoading] = useState(false);
@@ -67,6 +69,17 @@ export default function BlueprintListPage() {
 
   const currentAccountId = getAccountId();
   const menuRef = useRef(null);
+  const hasInitializedFiltersRef = useRef(false);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (activeTab !== "all") next.set("scope", activeTab);
+    if (searchTerm.trim()) next.set("search", searchTerm.trim());
+    if (selectedGrade) next.set("grade", selectedGrade);
+    if (selectedStatus) next.set("status", selectedStatus);
+    if (pageIndex > 1) next.set("page", String(pageIndex));
+    setUrlParams(next, { replace: true });
+  }, [activeTab, searchTerm, selectedGrade, selectedStatus, pageIndex, setUrlParams]);
 
   // Read navigate state feedback once on mount or location change
   useEffect(() => {
@@ -87,6 +100,10 @@ export default function BlueprintListPage() {
 
   // Reset pagination on filter or tab change
   useEffect(() => {
+    if (!hasInitializedFiltersRef.current) {
+      hasInitializedFiltersRef.current = true;
+      return;
+    }
     setPageIndex(1);
   }, [activeTab, debouncedSearch, selectedGrade, selectedStatus]);
 
@@ -95,10 +112,20 @@ export default function BlueprintListPage() {
     const handleOutsideClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setOpenMenuId(null);
+        setMenuPosition(null);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    const closeMenuOnScroll = () => {
+      setOpenMenuId(null);
+      setMenuPosition(null);
+    };
+    window.addEventListener("scroll", closeMenuOnScroll, true);
+    return () => window.removeEventListener("scroll", closeMenuOnScroll, true);
   }, []);
 
   // Fetch blueprints list
@@ -425,7 +452,19 @@ export default function BlueprintListPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setOpenMenuId(isMenuOpen ? null : bp.blueprintId);
+                                  if (isMenuOpen) {
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                    return;
+                                  }
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const menuHeight = 128;
+                                  const top = window.innerHeight - rect.bottom < menuHeight
+                                    ? rect.top - menuHeight - 4
+                                    : rect.bottom + 4;
+                                  const left = Math.min(window.innerWidth - 180, Math.max(8, rect.right - 168));
+                                  setMenuPosition({ top, left });
+                                  setOpenMenuId(bp.blueprintId);
                                 }}
                                 className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
                                 aria-label="Thao tác thêm"
@@ -438,18 +477,9 @@ export default function BlueprintListPage() {
                               {isMenuOpen && (
                                 <div
                                   ref={menuRef}
-                                  className="absolute right-0 mt-1 w-40 bg-pure-surface border border-whisper-border rounded-xl shadow-lg z-50 overflow-hidden text-left"
+                                  className="fixed w-40 bg-pure-surface border border-whisper-border rounded-xl shadow-lg z-[100] overflow-hidden text-left"
+                                  style={{ top: menuPosition?.top || 8, left: menuPosition?.left || 8 }}
                                 >
-                                  <button
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      navigate(`/expert/blueprints/${bp.blueprintId}`);
-                                    }}
-                                    className="w-full px-4 py-2.5 text-[11px] font-bold text-on-surface-variant hover:bg-surface-container-low hover:text-primary transition-colors flex items-center gap-2 border-b border-whisper-border/30 cursor-pointer"
-                                  >
-                                    <span className="material-symbols-outlined text-[16px]">visibility</span>
-                                    XEM CHI TIẾT
-                                  </button>
                                   {actions.canEdit && (
                                     <button
                                       onClick={() => {

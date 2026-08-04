@@ -14,6 +14,7 @@ public class GetQuestionListQueryHandler
     private const int DefaultPageIndex = 1;
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
+    private const int MaxSearchLength = 200;
 
     private readonly QuestionBankDbContext _context;
 
@@ -52,6 +53,18 @@ public class GetQuestionListQueryHandler
 
         if (!string.IsNullOrWhiteSpace(request.ExpertId))
             query = query.Where(question => question.ExpertId == request.ExpertId);
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            if (search.Length > MaxSearchLength)
+                search = search[..MaxSearchLength];
+
+            var escapedSearch = EscapeLikePattern(search);
+            query = query.Where(question =>
+                EF.Functions.Like(question.QuestionContent, $"%{escapedSearch}%") ||
+                question.QuestionTopics.Any(topic => EF.Functions.Like(topic.Tag.TagName, $"%{escapedSearch}%")));
+        }
 
         if (questionType is not null)
             query = query.Where(question => question.QuestionType == questionType);
@@ -120,6 +133,14 @@ public class GetQuestionListQueryHandler
             "DEACTIVATED" => "Deactivated",
             _ => string.Empty
         };
+    }
+
+    internal static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]");
     }
 
     private static string? MapQuestionType(string? questionType)
