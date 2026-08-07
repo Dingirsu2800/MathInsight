@@ -13,4 +13,5 @@ public sealed record GetQuestionListQuery(
     string? TagId,
     string? DifficultyId,
     string? QuestionType,
-    string? ExpertId) : IRequest<Result<PagedResponse<QuestionListItemResponse>>>;
+    string? ExpertId,
+    string? Search) : IRequest<Result<PagedResponse<QuestionListItemResponse>>>;
