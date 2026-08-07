@@ -107,6 +107,9 @@ export default function RecommendedLecturesCard() {
           {lectures.map((lecture) => {
             const explanation = getRecommendationExplanation(lecture);
             const isColdStart = lecture.reason === 'ColdStartGradeFoundation';
+            const isRemedial = lecture.reason?.startsWith('WeakTopic') === true;
+            const chipColor = isRemedial ? 'bg-deep-rose' : 'bg-primary';
+            const chipLabel = isRemedial ? `Phụ đạo: ${lecture.tagName}` : lecture.tagName;
 
             return (
               <Link
@@ -131,8 +134,8 @@ export default function RecommendedLecturesCard() {
 
                     {/* Topic & Difficulty Chips */}
                     <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[85%]">
-                      <span className="bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
-                        {lecture.tagName}
+                      <span className={`${chipColor} text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm`}>
+                        {chipLabel}
                       </span>
                       {lecture.difficultyName && (
                         <span className="bg-surface-container-highest/90 text-on-surface text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm shadow-sm border border-whisper-border">

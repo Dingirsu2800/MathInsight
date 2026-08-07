@@ -5,6 +5,7 @@ import QuestionPanel from './test-session/QuestionPanel';
 import QuestionNav from './test-session/QuestionNav';
 import SessionTimer from './test-session/SessionTimer';
 import SubmitConfirmModal from './test-session/SubmitConfirmModal';
+import TabSwitchWarningModal from './test-session/TabSwitchWarningModal';
 import {
   autoSaveAnswers,
   getSessionContent,
@@ -99,6 +100,7 @@ export default function TestSession() {
   const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentQuestionId, setCurrentQuestionId] = useState(null);
+  const [flaggedIds, setFlaggedIds] = useState(new Set());
 
   // Time Policy states: hasTimeLimit, remainingSeconds, elapsedSeconds
   const [hasTimeLimit, setHasTimeLimit] = useState(true);
@@ -109,6 +111,7 @@ export default function TestSession() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showTabWarning, setShowTabWarning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
@@ -328,8 +331,28 @@ export default function TestSession() {
     scheduleAutoSave();
   }, [scheduleAutoSave, sessionId]);
 
+  const toggleFlag = useCallback((questionId) => {
+    setFlaggedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(questionId)) next.delete(questionId);
+      else next.add(questionId);
+      return next;
+    });
+  }, []);
+
   // Strictly enable proctoring incident tracking ONLY for timed Exam sessions (Finding 6)
   const isExamMode = session?.testFormat === 'Exam' && hasTimeLimit === true;
+
+  // Tab-switch WARNING for ALL session types (purely UI, no server call)
+  useEffect(() => {
+    if (session?.status !== 'InProgress') return undefined;
+    const handleVisibilityWarning = () => {
+      if (document.hidden) setShowTabWarning(true);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityWarning);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityWarning);
+  }, [session?.status]);
+
   useEffect(() => {
     if (!sessionId || !isExamMode || session?.status !== 'InProgress') return undefined;
     const handleVisibility = async () => {
@@ -475,16 +498,37 @@ export default function TestSession() {
             <QuestionPanel question={currentQuestion} answer={answers[currentQuestion?.questionId]} onAnswer={handleAnswer} totalQuestions={questions.length} />
             <div className="flex items-center justify-between mt-4">
               <button onClick={() => setCurrentQuestionId(questions[currentIndex - 1]?.questionId)} disabled={currentIndex <= 0} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30 min-h-[44px]">Câu trước</button>
+              <button
+                onClick={() => toggleFlag(currentQuestion?.questionId)}
+                title={flaggedIds.has(currentQuestion?.questionId) ? 'Bỏ đánh dấu phân vân' : 'Đánh dấu phân vân'}
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-bold min-h-[44px] transition-all ${flaggedIds.has(currentQuestion?.questionId)
+                    ? 'bg-amber-400/15 border-amber-400 text-amber-600 hover:bg-amber-400/25'
+                    : 'border-whisper-border text-on-surface-variant hover:bg-amber-50 hover:border-amber-300 hover:text-amber-600'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {flaggedIds.has(currentQuestion?.questionId) ? 'flag' : 'flag'}
+                </span>
+                {flaggedIds.has(currentQuestion?.questionId) ? 'Bỏ đánh dấu' : 'Đánh dấu'}
+              </button>
               <button onClick={() => setCurrentQuestionId(questions[currentIndex + 1]?.questionId)} disabled={currentIndex >= questions.length - 1} className="px-5 py-2.5 rounded-xl border border-whisper-border text-sm font-bold disabled:opacity-30 min-h-[44px]">Câu tiếp</button>
             </div>
           </div>
           <div className="col-span-12 lg:col-span-4 xl:col-span-3">
-            <div className="sticky top-6"><QuestionNav questions={questions} answeredIds={answeredIds} currentQuestionId={currentQuestionId} onSelect={setCurrentQuestionId} /></div>
+            <div className="sticky top-6"><QuestionNav questions={questions} answeredIds={answeredIds} flaggedIds={flaggedIds} currentQuestionId={currentQuestionId} onSelect={setCurrentQuestionId} /></div>
           </div>
         </div>
       </div>
 
       <SubmitConfirmModal isOpen={showSubmitModal} unansweredCount={unansweredCount} totalQuestions={questions.length} onConfirm={handleConfirmSubmit} onCancel={() => setShowSubmitModal(false)} submitting={submitting} />
+
+      <TabSwitchWarningModal
+        isOpen={showTabWarning}
+        isExamMode={isExamMode}
+        incidentCount={incidentCount}
+        maxIncidents={5}
+        onClose={() => setShowTabWarning(false)}
+      />
     </ExamLayout>
   );
 }

@@ -1,9 +1,56 @@
 /**
  * Multi-dimensional competency radar chart (SVG-based).
  * Data: recommenderApi.getWeakTags() — officialPoint per tag.
+ * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to 8.5).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getWeakTags } from '../../../services/recommenderApi';
+import { getTargets } from '../../../services/gamificationApi';
+
+function InfoPopover({ content }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <span ref={ref} className="relative inline-flex items-center ml-1.5" style={{ verticalAlign: 'middle' }}>
+      <button
+        type="button"
+        aria-label="Thông tin"
+        onClick={() => setOpen((v) => !v)}
+        className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[11px] font-bold leading-none
+          border border-current text-outline hover:text-primary hover:border-primary
+          transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary/40"
+      >
+        i
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-[200] top-full left-0 mt-2
+            w-72 rounded-xl bg-pure-surface border border-whisper-border shadow-xl p-3
+            text-xs text-on-surface-variant leading-relaxed"
+        >
+          {/* Arrow */}
+          <span
+            className="absolute left-4 -top-[7px]
+              w-3 h-3 bg-pure-surface border-l border-t border-whisper-border
+              rotate-45"
+          />
+          {content}
+        </div>
+      )}
+    </span>
+  );
+}
 
 const SVG_SIZE = 400;
 const CENTER = SVG_SIZE / 2;
@@ -39,16 +86,24 @@ function gridPolygon(count, scale) {
 
 export default function RadarChartCard() {
   const [tags, setTags] = useState([]);
+  const [targetMap, setTargetMap] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    getWeakTags()
-      .then((data) => {
-        if (!cancelled && data?.length > 0) setTags(data);
-      })
-      .catch(() => { /* keep empty */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    Promise.all([
+      getWeakTags().catch(() => []),
+      getTargets().catch(() => []),
+    ]).then(([weakData, targetData]) => {
+      if (cancelled) return;
+      if (weakData?.length > 0) setTags(weakData);
+      // Build a map: tagId -> targetPoint (0-10)
+      const map = {};
+      if (Array.isArray(targetData)) {
+        targetData.forEach((t) => { map[t.tagId] = Number(t.targetPoint || 0); });
+      }
+      setTargetMap(map);
+    }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -60,24 +115,58 @@ export default function RadarChartCard() {
   }, [tags]);
 
   const currentValues = axes.map((t) => Math.min(Number(t.officialPoint || 0) / 10, 1));
-  // Target: 0.85 for all axes
-  const targetValues = axes.map(() => 0.85);
+  // Target: only use explicitly set targets — null means no target for that axis
+  const targetValues = axes.map((t) => {
+    const tp = targetMap[t.tagId];
+    return (tp != null && tp > 0) ? Math.min(tp / 10, 1) : null;
+  });
+  const hasAnyTarget = targetValues.some((v) => v !== null);
 
   const n = axes.length;
 
   return (
     <div className="bg-pure-surface border border-whisper-border rounded-xl p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-on-surface">Bản đồ năng lực đa chiều</h3>
+        <h3 className="text-lg font-semibold text-on-surface flex items-center">
+          Bản đồ năng lực đa chiều
+          <InfoPopover
+            content={
+              <>
+                <p className="font-semibold text-on-surface mb-1">Bản đồ năng lực đa chiều</p>
+                <p>
+                  Biểu đồ radar thể hiện điểm số (0–10) của từng chủ đề,
+                  giúp bạn dễ dàng nhận ra các mảng mạnh và cần cải thiện.
+                </p>
+                <ul className="mt-2 space-y-1 pl-3 list-disc">
+                  <li>
+                    <span className="inline-block w-2 h-2 rounded-full bg-primary mr-1 align-middle" />
+                    <strong>Hiện tại</strong> — kết quả thực tế của bạn.
+                  </li>
+                  {hasAnyTarget && (
+                    <li>
+                      <span className="inline-block w-2 h-2 rounded-full bg-outline mr-1 align-middle" />
+                      <strong>Mục tiêu</strong> — mục tiêu bạn đã đặt cho từng chủ đề.
+                    </li>
+                  )}
+                </ul>
+                <p className="mt-2">
+                  Vùng tô sáng càng gần viền ngoài, năng lực càng cao.
+                </p>
+              </>
+            }
+          />
+        </h3>
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-primary" />
             <span className="font-mono text-xs text-on-surface-variant">Hiện tại</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-outline" />
-            <span className="font-mono text-xs text-on-surface-variant">Mục tiêu</span>
-          </div>
+          {hasAnyTarget && (
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-outline" />
+              <span className="font-mono text-xs text-on-surface-variant">Mục tiêu</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -118,15 +207,23 @@ export default function RadarChartCard() {
               );
             })}
 
-            {/* Target shape (dashed) */}
-            <polygon
-              fill="rgba(114, 119, 132, 0.08)"
-              points={buildPolygon(targetValues)}
-              stroke="currentColor"
-              strokeDasharray="4"
-              strokeWidth="2"
-              className="text-outline"
-            />
+            {/* Target markers — one per axis that has a target set (dashed circle) */}
+            {hasAnyTarget && axes.map((tag, i) => {
+              const tv = targetValues[i];
+              if (tv === null) return null;
+              const { x, y } = polarToXY(i, n, tv);
+              return (
+                <circle
+                  key={`target-${tag.tagId}`}
+                  cx={x} cy={y} r="6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeDasharray="3 2"
+                  className="text-outline"
+                />
+              );
+            })}
 
             {/* Current shape */}
             <polygon

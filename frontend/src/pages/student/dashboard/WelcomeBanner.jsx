@@ -1,20 +1,78 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import useCurrentUser from '../../../hooks/useCurrentUser';
+import { getTargets } from '../../../services/gamificationApi';
+import { getWeakTags } from '../../../services/recommenderApi';
+import { getStudentHistoryStats } from '../../../services/gradingApi';
 
-// TODO: Replace with real API data.
-// Needs endpoint: GET /api/v1/reports/competency-summary (not yet implemented in backend)
-// Expected DTO: { userName, grade, competencyPoint, weeklyProgressPercent, trendDelta }
-const MOCK_DATA = {
-  grade: 'Khối 12 — Học kỳ 2',
-  competencyPoint: 6.8,
-  weeklyProgress: 75,
-  trendDelta: 0.4,
-};
+/**
+ * Tính điểm năng lực trung bình từ danh sách chủ đề yếu.
+ * Nếu không có dữ liệu weak-tags, fallback sang averageScore của grading.
+ */
+function resolveCompetencyPoint(weakTags, stats) {
+  if (Array.isArray(weakTags) && weakTags.length > 0) {
+    const avg = weakTags.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / weakTags.length;
+    return Math.round(avg * 10) / 10;
+  }
+  if (stats?.averageScore != null) {
+    return Math.round(Number(stats.averageScore) * 10) / 10;
+  }
+  return null;
+}
+
+/**
+ * Tính phần trăm tiến độ mục tiêu trung bình từ danh sách targets.
+ * Dùng progressPercentage nếu có, ngược lại tính currentPoint/targetPoint.
+ */
+function resolveWeeklyProgress(targets) {
+  if (!Array.isArray(targets) || targets.length === 0) return null;
+  const total = targets.reduce((sum, t) => {
+    const pct = t.progressPercentage != null
+      ? Number(t.progressPercentage)
+      : t.targetPoint > 0 ? Math.min(100, (Number(t.currentPoint) / Number(t.targetPoint)) * 100) : 0;
+    return sum + pct;
+  }, 0);
+  return Math.round(total / targets.length);
+}
 
 export default function WelcomeBanner() {
-  // Shares the single cached profile request with StudentLayout's header.
-  const { displayName: userName } = useCurrentUser('Bạn');
-  const { grade, competencyPoint, weeklyProgress, trendDelta } = MOCK_DATA;
+  const { profile, displayName: userName } = useCurrentUser('Bạn');
+
+  const [competencyPoint, setCompetencyPoint] = useState(null);
+  const [weeklyProgress, setWeeklyProgress] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      const [weakTagsResult, targetsResult, statsResult] = await Promise.allSettled([
+        getWeakTags(),
+        getTargets(),
+        getStudentHistoryStats(),
+      ]);
+
+      if (!isMounted) return;
+
+      const weakTags = weakTagsResult.status === 'fulfilled' ? weakTagsResult.value : null;
+      const targets = targetsResult.status === 'fulfilled' ? targetsResult.value : null;
+      const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
+
+      setCompetencyPoint(resolveCompetencyPoint(weakTags, stats));
+      setWeeklyProgress(resolveWeeklyProgress(targets));
+      setLoading(false);
+    }
+
+    load();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Lấy khối lớp từ profile; profile trả về từ /api/v1/accounts/profile
+  const gradeLabel = profile?.grade ? `Khối ${profile.grade}` : null;
+
+  const displayCompetency = competencyPoint != null ? competencyPoint : '—';
+  const displayProgress = weeklyProgress != null ? weeklyProgress : null;
 
   return (
     <section className="relative overflow-hidden rounded-2xl bg-primary text-white p-8 shadow-md">
@@ -29,17 +87,32 @@ export default function WelcomeBanner() {
           <h2 className="text-[30px] leading-[38px] font-semibold">
             Chào buổi sáng, {userName}! 👋
           </h2>
+          {gradeLabel && (
+            <p className="text-primary-fixed-dim/70 text-sm font-medium">{gradeLabel}</p>
+          )}
           <p className="text-primary-fixed-dim/80 text-base">
-            Hôm nay là một ngày tuyệt vời để chinh phục các bài tập Tích phân. Bạn đã hoàn thành{' '}
-            {weeklyProgress}% mục tiêu tuần rồi!
+            {displayProgress != null ? (
+              <>
+                Hôm nay là một ngày tuyệt vời để chinh phục Toán học. Bạn đã hoàn thành{' '}
+                <span className="font-semibold text-white">{displayProgress}%</span> mục tiêu rồi!
+              </>
+            ) : (
+              'Hôm nay là một ngày tuyệt vời để chinh phục Toán học. Hãy bắt đầu ngay!'
+            )}
           </p>
           <div className="flex flex-wrap gap-4 pt-4 justify-center md:justify-start">
-            <button className="px-6 py-2 bg-white text-primary rounded-full font-bold shadow-lg hover:bg-surface-bright transition-colors active:scale-95">
+            <Link
+              to="/student/lectures"
+              className="px-6 py-2 bg-white !text-primary rounded-full font-bold shadow-lg hover:bg-surface-bright transition-colors active:scale-95 no-underline"
+            >
               Tiếp tục học
-            </button>
-            <button className="px-6 py-2 bg-primary-container border border-on-primary-container/30 text-white rounded-full font-bold hover:bg-primary-container/80 transition-colors active:scale-95">
-              Xem lộ trình
-            </button>
+            </Link>
+            <Link
+              to="/student/test"
+              className="px-6 py-2 bg-primary-container border border-on-primary-container/30 text-white rounded-full font-bold hover:bg-primary-container/80 transition-colors active:scale-95"
+            >
+              Luyện tập
+            </Link>
           </div>
         </div>
 
@@ -50,6 +123,7 @@ export default function WelcomeBanner() {
           </p>
           <div className="relative w-[140px] h-[70px]">
             <svg className="w-full h-full" viewBox="0 0 100 50">
+              {/* Track */}
               <path
                 d="M 10 45 A 35 35 0 0 1 90 45"
                 fill="none"
@@ -57,6 +131,7 @@ export default function WelcomeBanner() {
                 strokeWidth="6"
                 strokeLinecap="round"
               />
+              {/* Progress arc — shows 0 while loading */}
               <path
                 d="M 10 45 A 35 35 0 0 1 90 45"
                 fill="none"
@@ -64,17 +139,27 @@ export default function WelcomeBanner() {
                 strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray="110"
-                strokeDashoffset={110 - 110 * (competencyPoint / 10)}
+                strokeDashoffset={
+                  loading || competencyPoint == null
+                    ? 110
+                    : 110 - 110 * (competencyPoint / 10)
+                }
                 className="transition-all duration-1000"
               />
             </svg>
             <div className="absolute inset-0 flex items-end justify-center pb-1">
-              <span className="text-2xl font-bold text-white">{competencyPoint}</span>
-              <span className="text-primary-fixed-dim/60 text-sm ml-1 mb-0.5">/10</span>
+              {loading ? (
+                <span className="text-lg font-bold text-white animate-pulse">…</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-white">{displayCompetency}</span>
+                  <span className="text-primary-fixed-dim/60 text-sm ml-1 mb-0.5">/10</span>
+                </>
+              )}
             </div>
           </div>
-          <p className="text-xs text-white/70 mt-2">
-            Tăng {trendDelta} so với tuần trước
+          <p className="text-xs text-white/60 mt-2">
+            Tính trên các chủ đề đã học
           </p>
         </div>
       </div>
