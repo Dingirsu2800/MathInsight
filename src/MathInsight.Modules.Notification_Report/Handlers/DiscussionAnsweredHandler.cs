@@ -20,7 +20,7 @@ public sealed class DiscussionAnsweredHandler : INotificationHandler<DiscussionA
             notification.StudentId,
             "Answer Received",
             "A teacher replied to your question.",
-            $"/student/lectures/{notification.LectureId}",
+            $"/student/lectures/{notification.LectureId}#discussions",
             cancellationToken);
     }
 }

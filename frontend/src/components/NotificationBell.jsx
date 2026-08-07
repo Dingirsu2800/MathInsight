@@ -1,5 +1,6 @@
 import * as React from 'react';
 import MaterialIcon from './ui/MaterialIcon';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogHeader, DialogTitle, DialogContent } from './ui/dialog';
 import { getAccessToken } from '../services/authStorage';
 import { getNotifications, markNotificationRead, connectNotificationHub } from '../services/notificationApi';
@@ -32,6 +33,7 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [selectedNotification, setSelectedNotification] = React.useState(null);
   const menuRef = React.useRef(null);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     if (!getAccessToken()) return undefined;
@@ -91,7 +93,12 @@ export default function NotificationBell() {
     }
 
     setIsOpen(false);
-    setSelectedNotification(notification);
+    
+    if (notification.link) {
+      navigate(notification.link);
+    } else {
+      setSelectedNotification(notification);
+    }
   }
 
   return (

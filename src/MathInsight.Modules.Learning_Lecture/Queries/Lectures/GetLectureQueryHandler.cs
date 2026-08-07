@@ -62,6 +62,7 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
             TeacherId = lecture.TeacherId,
             TeacherName = await _dbContext.AccountProfileViews.Where(a => a.AccountId == lecture.TeacherId).Select(a => a.AuthorName).FirstOrDefaultAsync(cancellationToken),
             TagId = lecture.TagId,
+            TagName = await _dbContext.TagTopics.Where(t => t.TagId == lecture.TagId).Select(t => t.TagName).FirstOrDefaultAsync(cancellationToken),
             IsLiked = isLiked,
             Status = lecture.Status,
             CreatedTime = lecture.CreatedTime,

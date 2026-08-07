@@ -5,6 +5,7 @@ import StudentLayout from "../../components/layout/StudentLayout";
 import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment } from "../../services/learningApi";
 import LatexPreview from "../../components/expert/LatexPreview";
 import MathTextArea from "../../components/common/MathTextArea";
+import RelatedLecturesList from "../../components/student/RelatedLecturesList";
 
 const getYouTubeEmbedUrl = (url) => {
   if (!url) return null;
@@ -78,7 +79,6 @@ export default function StudentLectureDetailPage() {
   };
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
     setLoading(true);
     getLecture(id)
       .then((res) => {
@@ -86,6 +86,17 @@ export default function StudentLectureDetailPage() {
         if (res.data.isLiked !== undefined) {
           setIsLiked(res.data.isLiked);
         }
+        setTimeout(() => {
+          if (window.location.hash === '#discussions') {
+            const el = document.getElementById('discussions');
+            if (el) {
+              const y = el.getBoundingClientRect().top + window.scrollY - 80;
+              window.scrollTo({ top: y, behavior: 'smooth' });
+            }
+          } else {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }
+        }, 100);
       })
       .catch((err) => {
         console.error("Lỗi khi tải chi tiết bài giảng:", err);
@@ -217,7 +228,8 @@ export default function StudentLectureDetailPage() {
 
   return (
     <StudentLayout>
-      <div className="p-gutter flex flex-col w-full max-w-4xl mx-auto mb-12">
+      <div className="p-gutter grid grid-cols-1 lg:grid-cols-3 gap-8 w-full max-w-7xl mx-auto mb-12">
+        <div className="lg:col-span-2 flex flex-col min-w-0">
         {/* Navigation Breadcrumb */}
         <button 
           onClick={() => navigate("/student/lectures")}
@@ -229,28 +241,24 @@ export default function StudentLectureDetailPage() {
 
         {/* Video & Info Section */}
         <article className="bg-pure-surface border border-whisper-border rounded-2xl overflow-hidden shadow-sm mb-8">
-          <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
-            {lecture.videoUrl ? (
-              getYouTubeEmbedUrl(lecture.videoUrl) ? (
-                <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+          {(lecture.videoUrl || lecture.thumbnailUrl) && (
+            <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
+              {lecture.videoUrl ? (
+                getYouTubeEmbedUrl(lecture.videoUrl) ? (
+                  <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+                ) : (
+                  <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+                )
               ) : (
-                <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
-              )
-            ) : lecture.thumbnailUrl ? (
-              <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-tr from-surface-variant to-surface-container-high"></div>
-            )}
-            {!lecture.videoUrl && (
-              <button className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-pure-surface/90 rounded-full flex items-center justify-center text-primary shadow-lg group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-3xl ml-1" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
-              </button>
-            )}
-            {/* Progress Bar */}
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-surface-variant">
-              <div className="h-full bg-primary w-[45%]"></div>
+                <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
+              )}
+              {lecture.videoUrl && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-surface-variant">
+                  <div className="h-full bg-primary w-[45%]"></div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           <div className="p-8">
             <div className="flex items-start justify-between gap-4 mb-4">
@@ -332,7 +340,7 @@ export default function StudentLectureDetailPage() {
         )}
 
         {/* Discussion Section */}
-        <section>
+        <section id="discussions">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-[20px] font-semibold text-on-surface flex items-center gap-2">
               <span className="material-symbols-outlined">forum</span>
@@ -536,6 +544,16 @@ export default function StudentLectureDetailPage() {
             ))}
           </div>
         </section>
+        </div>
+        
+        {/* Right Column: Related Lectures */}
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          <RelatedLecturesList 
+            currentLectureId={lecture.lectureId} 
+            tagId={lecture.tagId} 
+            teacherId={lecture.teacherId} 
+          />
+        </div>
       </div>
 
       {/* Next Lecture Suggestion */}

@@ -20,7 +20,7 @@ public sealed class DiscussionQuestionPostedHandler : INotificationHandler<Discu
             notification.TeacherId,
             "New Question",
             $"A student asked: \"{notification.Title}\"",
-            $"/teacher/lectures/{notification.LectureId}",
+            $"/teacher/lectures/{notification.LectureId}#discussions",
             cancellationToken);
     }
 }

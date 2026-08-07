@@ -69,7 +69,8 @@ public sealed class TestSubmittedHandler : INotificationHandler<TestSubmittedEve
         });
 
         // Duration is irrelevant for PRACTICE/EXAM (they always qualify); the service ignores it.
-        var activityDate = DateOnly.FromDateTime(submittedTime);
+        // NOTE: UTC+7 is used to ensure calendar day aligns with Vietnam time.
+        var activityDate = DateOnly.FromDateTime(submittedTime.AddHours(7));
         await _streakService.UpdateStreakAsync(
             studentId,
             activityType,
