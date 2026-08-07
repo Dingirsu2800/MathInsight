@@ -5,6 +5,7 @@ import NotificationBell from "../NotificationBell";
 
 export default function DashboardTopbar({
   appTitle = "Hệ thống Quản lý Toán học",
+  logoPath,
   darkMode,
   setDarkMode,
   topNavItems = [],
@@ -15,6 +16,9 @@ export default function DashboardTopbar({
   profilePath,
   onLogout,
   onExport,
+  showThemeToggle = true,
+  showNotifications = true,
+  onBeforeNavigate,
   exportLabel = "Xuất dữ liệu"
 }) {
   const location = useLocation();
@@ -67,10 +71,19 @@ export default function DashboardTopbar({
     // any z-index used inside <main>.
     <header className="h-header-height border-b border-whisper-border bg-surface flex justify-between items-center w-full px-gutter z-50 sticky top-0 shrink-0 select-none">
       <div className="flex items-center gap-8 h-full">
-        <h2 className="text-[20px] font-bold text-primary">{appTitle}</h2>
+        {logoPath ? (
+          <Link
+            to={logoPath}
+            className="text-[20px] font-bold text-primary hover:opacity-80 transition-opacity"
+          >
+            {appTitle}
+          </Link>
+        ) : (
+          <h2 className="text-[20px] font-bold text-primary">{appTitle}</h2>
+        )}
         {topNavItems.length > 0 && (
           <nav className="hidden md:flex gap-6 h-full items-center">
-            {topNavItems.map((item, idx) => {
+            {topNavItems.filter((item) => !item.disabled).map((item, idx) => {
               const isActive = item.isActive !== undefined 
                 ? item.isActive 
                 : (item.to && location.pathname.startsWith(item.to));
@@ -90,6 +103,9 @@ export default function DashboardTopbar({
                 <Link
                   key={idx}
                   to={item.to || "#"}
+                  onClick={(event) => {
+                    if (onBeforeNavigate && !onBeforeNavigate()) event.preventDefault();
+                  }}
                   className={cn(
                     "text-[14px] transition-all pb-1 font-bold h-full flex items-center pt-1 hover:text-primary active:scale-95",
                     isActive
@@ -117,8 +133,14 @@ export default function DashboardTopbar({
           </button>
         )}
         <div className="flex items-center gap-2 border-l border-whisper-border pl-4">
-          <NotificationBell />
-          <button
+          {showNotifications && <button
+            type="button"
+            className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer border-0 bg-transparent outline-none"
+            aria-label="Thông báo"
+          >
+            <span className="material-symbols-outlined">notifications</span>
+          </button>}
+          {showThemeToggle && <button
             type="button"
             onClick={() => setDarkMode(!darkMode)}
             className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer border-0 bg-transparent outline-none"
@@ -127,7 +149,7 @@ export default function DashboardTopbar({
             <span className="material-symbols-outlined">
               {darkMode ? "light_mode" : "dark_mode"}
             </span>
-          </button>
+          </button>}
           
           {/* Avatar / Account Dropdown Button container wrapped with menuRef */}
           <div className="relative flex items-center" ref={menuRef}>
@@ -163,6 +185,7 @@ export default function DashboardTopbar({
                   <button
                     type="button"
                     onClick={() => {
+                      if (onBeforeNavigate && !onBeforeNavigate()) return;
                       setIsAccountMenuOpen(false);
                       navigate(profilePath);
                     }}
@@ -177,6 +200,7 @@ export default function DashboardTopbar({
                   <button
                     type="button"
                     onClick={() => {
+                      if (onBeforeNavigate && !onBeforeNavigate()) return;
                       setIsAccountMenuOpen(false);
                       onLogout();
                     }}

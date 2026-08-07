@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import { getRecommendedLectures } from '../../../services/recommenderApi';
 
 export default function RecommendedLecturesCard() {
-  const navigate = useNavigate();
   const [lectures, setLectures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -74,15 +73,15 @@ export default function RecommendedLecturesCard() {
               : lecture.tagName;
 
             return (
-              <div
+              <Link
                 key={lecture.lectureId}
-                onClick={() => navigate(`/student/lectures/${lecture.lectureId}`)}
-                className="group cursor-pointer rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 transition-all"
+                to={`/student/lectures/${lecture.lectureId}`}
+                className="group block rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 transition-all"
               >
                 {/* Thumbnail placeholder */}
                 <div className="relative w-full h-[180px] bg-surface-container overflow-hidden">
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary-container/30">
-                    <MaterialIcon name="play_circle" size={48} className="text-primary/40" />
+                    <MaterialIcon name="play_circle" size={48} className="text-primary/40 group-hover:text-primary/70 transition-colors" />
                   </div>
                   <div className={`absolute top-3 left-3 ${chipColor} text-white text-[10px] font-bold px-2.5 py-1 rounded`}>
                     {chipLabel}
@@ -98,7 +97,7 @@ export default function RecommendedLecturesCard() {
                     </p>
                   )}
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

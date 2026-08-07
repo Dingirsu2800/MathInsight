@@ -11,6 +11,7 @@ import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/ques
 import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
 import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
+import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
 
 function getRoleLabel(role) {
   if (role === "Student") return "Học sinh";
@@ -87,6 +88,8 @@ export default function QuestionEditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isEditMode = !!id;
+  const { registerGuard, confirmNavigation } = useNavigationGuard();
+  const initialFormSnapshotRef = React.useRef(null);
 
   const searchParams = new URLSearchParams(location.search);
   const fromReported = searchParams.get("from") === "reported";
@@ -108,23 +111,23 @@ export default function QuestionEditorPage() {
     questionContent: "",
     solutionContent: "",
     pictureUrl: "",
-    grade: 12,
+    grade: null,
     questionType: "SINGLE_CHOICE",
     difficultyId: "",
     defaultWeight: 1,
     topics: [], // Array of { tagId, isPrimary }
     options: [
-      { content: "Đáp án A", isCorrect: true },
-      { content: "Đáp án B", isCorrect: false },
-      { content: "Đáp án C", isCorrect: false },
-      { content: "Đáp án D", isCorrect: false }
+      { content: "", isCorrect: false },
+      { content: "", isCorrect: false },
+      { content: "", isCorrect: false },
+      { content: "", isCorrect: false }
     ],
     shortAnswer: "",
     parts: [] // Array of composite parts
   });
 
   // Page level loading/error states
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(isEditMode);
   const [error, setError] = React.useState(null);
   const [isTopicPanelOpen, setIsTopicPanelOpen] = React.useState(false);
   const [isTopicPanelClosing, setIsTopicPanelClosing] = React.useState(false);
@@ -132,6 +135,32 @@ export default function QuestionEditorPage() {
   const closeTopicPanelTimerRef = React.useRef(null);
   const errorRef = React.useRef(null);
   const drawerErrorRef = React.useRef(null);
+
+  const formSnapshot = React.useMemo(() => JSON.stringify(form), [form]);
+  const isDirty = initialFormSnapshotRef.current !== null && initialFormSnapshotRef.current !== formSnapshot;
+
+  React.useEffect(() => {
+    if (!loading && initialFormSnapshotRef.current === null) {
+      initialFormSnapshotRef.current = formSnapshot;
+    }
+  }, [loading, formSnapshot]);
+
+  React.useEffect(() => {
+    return registerGuard(() => {
+      if (!isDirty) return true;
+      return window.confirm("Bạn có thay đổi chưa lưu. Rời khỏi trang sẽ làm mất dữ liệu đang soạn.");
+    });
+  }, [registerGuard, isDirty]);
+
+  React.useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
 
   React.useEffect(() => {
     return () => {
@@ -176,6 +205,7 @@ export default function QuestionEditorPage() {
   // OCR state helper
   const [ocrFile, setOcrFile] = React.useState(null);
   const [ocrPreviewUrl, setOcrPreviewUrl] = React.useState("");
+  const [ocrCropSelection, setOcrCropSelection] = React.useState(null);
   const [ocrScanning, setOcrScanning] = React.useState(false);
   const [ocrScanError, setOcrScanError] = React.useState("");
   const [ocrResult, setOcrResult] = React.useState(null);
@@ -474,10 +504,10 @@ export default function QuestionEditorPage() {
           updated.options = normalizeTrueFalseOptions(prev.options);
         } else if (value === "SINGLE_CHOICE" || value === "MULTIPLE_CHOICE") {
           updated.options = [
-            { content: "Đáp án A", isCorrect: true },
-            { content: "Đáp án B", isCorrect: false },
-            { content: "Đáp án C", isCorrect: false },
-            { content: "Đáp án D", isCorrect: false }
+            { content: "", isCorrect: false },
+            { content: "", isCorrect: false },
+            { content: "", isCorrect: false },
+            { content: "", isCorrect: false }
           ];
         } else if (value === "COMPOSITE" && updated.parts.length === 0) {
           updated.parts = [
@@ -644,6 +674,7 @@ export default function QuestionEditorPage() {
     if (!validTypes.includes(file.type)) {
       setOcrScanError("Định dạng ảnh không được hỗ trợ. Vui lòng chọn ảnh JPEG, PNG, hoặc WebP.");
       setOcrFile(null);
+      setOcrCropSelection(null);
       setManualCropSelection(null);
       if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
       setOcrPreviewUrl("");
@@ -655,6 +686,7 @@ export default function QuestionEditorPage() {
     if (file.size > maxSize) {
       setOcrScanError("Kích thước ảnh vượt quá giới hạn 5MB. Vui lòng chọn ảnh nhỏ hơn.");
       setOcrFile(null);
+      setOcrCropSelection(null);
       setManualCropSelection(null);
       if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
       setOcrPreviewUrl("");
@@ -662,6 +694,7 @@ export default function QuestionEditorPage() {
     }
 
     setOcrFile(file);
+    setOcrCropSelection(null);
     setManualCropSelection(null);
     if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
     setOcrPreviewUrl(URL.createObjectURL(file));
@@ -669,6 +702,7 @@ export default function QuestionEditorPage() {
 
   const handleOcrFileClear = () => {
     setOcrFile(null);
+    setOcrCropSelection(null);
     setManualCropSelection(null);
     if (ocrPreviewUrl) URL.revokeObjectURL(ocrPreviewUrl);
     setOcrPreviewUrl("");
@@ -680,7 +714,10 @@ export default function QuestionEditorPage() {
     setOcrScanning(true);
     setOcrScanError("");
     try {
-      const res = await questionBankApi.extractQuestionOcrDraft(ocrFile);
+      const scanFile = ocrCropSelection
+        ? await createCroppedImageFile(ocrFile, ocrCropSelection)
+        : ocrFile;
+      const res = await questionBankApi.extractQuestionOcrDraft(scanFile);
       const data = res.data;
       if (!data || !data.draft) {
         throw new Error("Không nhận được dữ liệu bản nháp từ server.");
@@ -815,6 +852,7 @@ export default function QuestionEditorPage() {
 
     // Clean up OCR preview and file state
     setOcrFile(null);
+    setOcrCropSelection(null);
     setSelectedExtractedImageId(null);
     setManualCropSelection(null);
     if (ocrPreviewUrl) {
@@ -863,6 +901,10 @@ export default function QuestionEditorPage() {
       showError("Nội dung câu hỏi không được để trống!");
       return;
     }
+    if (!form.grade) {
+      showError("Vui lòng chọn khối lớp cho câu hỏi!");
+      return;
+    }
     if (!form.difficultyId) {
       showError("Vui lòng chọn độ khó cho câu hỏi!");
       return;
@@ -890,12 +932,20 @@ export default function QuestionEditorPage() {
 
     // Type-specific validations
     if (form.questionType === "SINGLE_CHOICE") {
+      if (form.options.some((option) => !option.content.trim())) {
+        showError("Vui lòng nhập nội dung cho tất cả phương án trả lời.");
+        return;
+      }
       const correctCount = form.options.filter(o => o.isCorrect).length;
       if (correctCount !== 1) {
         showError("Câu hỏi SingleChoice cần có đúng 1 đáp án được đánh dấu là ĐÚNG!");
         return;
       }
     } else if (form.questionType === "MULTIPLE_CHOICE") {
+      if (form.options.some((option) => !option.content.trim())) {
+        showError("Vui lòng nhập nội dung cho tất cả phương án trả lời.");
+        return;
+      }
       const correctCount = form.options.filter(o => o.isCorrect).length;
       if (correctCount < 1) {
         showError("Câu hỏi MultipleChoice cần chọn ít nhất 1 đáp án là ĐÚNG!");
@@ -948,6 +998,7 @@ export default function QuestionEditorPage() {
 
     saveRequest
       .then(() => {
+        initialFormSnapshotRef.current = JSON.stringify(form);
         if (fromReported) {
           setHasSavedInSession(true);
           setInfoMessage("Đã lưu câu hỏi thành công. Bây giờ bạn có thể giải quyết hoặc không chấp nhận các báo cáo.");
@@ -1030,7 +1081,9 @@ export default function QuestionEditorPage() {
             </p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => navigate("/expert/questions")}>Hủy</Button>
+            <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => {
+              if (confirmNavigation()) navigate("/expert/questions");
+            }}>Hủy</Button>
             <Button
               className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
               onClick={handleSaveQuestion}
@@ -1069,11 +1122,11 @@ export default function QuestionEditorPage() {
                     <div>
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp học</label>
                       <CustomSelect
-                        value={form.grade?.toString() || "12"}
+                        value={form.grade?.toString() || ""}
                         onValueChange={(val) => {
                           setForm(prev => ({
                             ...prev,
-                            grade: parseInt(val),
+                            grade: val ? parseInt(val) : null,
                             topics: []
                           }));
                           setIsTopicPanelOpen(false);
@@ -2126,6 +2179,8 @@ export default function QuestionEditorPage() {
         onClose={() => setIsOcrPanelOpen(false)}
         ocrFile={ocrFile}
         ocrPreviewUrl={ocrPreviewUrl}
+        ocrCropSelection={ocrCropSelection}
+        onCropSelectionChange={setOcrCropSelection}
         ocrScanning={ocrScanning}
         ocrScanError={ocrScanError}
         onFileSelect={handleOcrFileSelect}

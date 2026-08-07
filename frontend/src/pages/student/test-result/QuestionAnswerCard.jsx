@@ -22,6 +22,7 @@ export default function QuestionAnswerCard({
   reportReason,
   scoreAdjustedTime,
   onReport,
+  onAskChatbot,
 }) {
   const [showSolution, setShowSolution] = useState(false);
 
@@ -134,7 +135,10 @@ export default function QuestionAnswerCard({
                   </div>
                 ))}
               </div>
-              <button className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm">
+              <button
+                className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm"
+                onClick={onAskChatbot}
+              >
                 <MaterialIcon name="smart_toy" size={18} />
                 💬 Hỏi AI giải thích câu này
               </button>

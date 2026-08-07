@@ -5,26 +5,54 @@ import { cn } from "../../utils/cn";
 export default function DashboardSidebar({
   brandName = "MathInsight",
   roleLabel = "Quản trị viên",
+  logoPath,
   navItems = [],
   primaryAction,
   onLogout,
-  currentPath = ""
+  currentPath = "",
+  profilePath,
+  userName,
+  userInitials,
+  onBeforeNavigate,
+  showHelp = false
 }) {
   const navigate = useNavigate();
   const brandInitials = brandName ? brandName.charAt(0) : "M";
 
+  const handleLinkClick = (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (onBeforeNavigate && !onBeforeNavigate()) event.preventDefault();
+  };
+
   return (
     <aside className="w-sidebar-width h-screen bg-surface-container-low border-r border-whisper-border flex flex-col py-gutter px-4 z-20 shrink-0 select-none">
       {/* Brand */}
-      <div className="flex items-center gap-3 mb-8 px-2">
-        <div className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-lg">
-          {brandInitials}
+      {logoPath ? (
+        <Link
+          to={logoPath}
+          className="flex items-center gap-3 mb-8 px-2 group"
+        >
+          <div className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-lg group-hover:opacity-80 transition-opacity">
+            {brandInitials}
+          </div>
+          <div>
+            <h1 className="font-bold text-[18px] text-primary leading-tight group-hover:opacity-80 transition-opacity">{brandName}</h1>
+            <p className="text-[12px] text-on-surface-variant">{roleLabel}</p>
+          </div>
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3 mb-8 px-2">
+          <div className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md font-bold text-lg">
+            {brandInitials}
+          </div>
+          <div>
+            <h1 className="font-bold text-[18px] text-primary leading-tight">{brandName}</h1>
+            <p className="text-[12px] text-on-surface-variant">{roleLabel}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-[18px] text-primary leading-tight">{brandName}</h1>
-          <p className="text-[12px] text-on-surface-variant">{roleLabel}</p>
-        </div>
-      </div>
+      )}
 
       {/* Primary Action Button (CTA) */}
       {primaryAction && (
@@ -33,6 +61,7 @@ export default function DashboardSidebar({
             if (primaryAction.onClick) {
               primaryAction.onClick();
             } else if (primaryAction.to) {
+              if (onBeforeNavigate && !onBeforeNavigate()) return;
               navigate(primaryAction.to);
             }
           }}
@@ -48,8 +77,8 @@ export default function DashboardSidebar({
       )}
 
       {/* Navigation Links */}
-      <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
-        {navItems.map((item) => {
+      <nav className="flex-1 min-h-0 flex flex-col gap-1 overflow-y-auto">
+        {navItems.filter((item) => !item.disabled).map((item) => {
           const isActive = currentPath.startsWith(item.path);
           if (item.disabled) {
             return (
@@ -76,6 +105,7 @@ export default function DashboardSidebar({
               <div key={item.path || item.label} className="flex flex-col gap-1">
                 <Link
                   to={item.path}
+                  onClick={handleLinkClick}
                   className={cn(
                     "flex items-center gap-3 px-3 py-3 rounded-lg transition-all",
                     isChildActive
@@ -102,6 +132,7 @@ export default function DashboardSidebar({
                         <Link
                           key={child.path}
                           to={child.path}
+                          onClick={handleLinkClick}
                           className={cn(
                             "py-2 px-3 rounded-md text-[13px] transition-all",
                             isChildItemActive
@@ -123,6 +154,7 @@ export default function DashboardSidebar({
             <Link
               key={item.path}
               to={item.path}
+              onClick={handleLinkClick}
               className={cn(
                 "flex items-center gap-3 px-3 py-3 rounded-lg transition-all active:-translate-y-px",
                 isActive
@@ -143,18 +175,33 @@ export default function DashboardSidebar({
       </nav>
 
       {/* Sidebar Footer Link & Logout */}
-      <div className="mt-auto flex flex-col gap-1 border-t border-whisper-border pt-4">
+      <div className="mt-auto shrink-0 flex flex-col gap-1 border-t border-whisper-border pt-4">
+        {profilePath && (
+          <Link
+            to={profilePath}
+            onClick={handleLinkClick}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+          >
+            <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold text-[10px]">
+              {userInitials || "MI"}
+            </div>
+            <span className="text-[13px] font-semibold truncate">{userName || "Hồ sơ cá nhân"}</span>
+          </Link>
+        )}
         <a
           href="#"
           onClick={(e) => e.preventDefault()}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+          className={cn("flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors", !showHelp && "hidden")}
         >
           <span className="material-symbols-outlined">help</span>
           <span className="text-[14px]">Trợ giúp</span>
         </a>
         {onLogout && (
           <button
-            onClick={onLogout}
+            onClick={() => {
+              if (onBeforeNavigate && !onBeforeNavigate()) return;
+              onLogout();
+            }}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-error hover:bg-error/10 transition-colors w-full text-left cursor-pointer border-0 bg-transparent outline-none font-body"
           >
             <span className="material-symbols-outlined">logout</span>

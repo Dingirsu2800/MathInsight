@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import ExpertLayout from "./ExpertLayout";
 import VersionHistoryDrawer from "./VersionHistoryDrawer";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
@@ -23,6 +23,7 @@ import QuestionExcelImportDialog from "../../components/expert/QuestionExcelImpo
 
 export default function QuestionBankListPage() {
   const navigate = useNavigate();
+  const [urlParams, setUrlParams] = useSearchParams();
 
   // Dialog / Drawer states
   const [selectedQuestion, setSelectedQuestion] = React.useState(null);
@@ -39,15 +40,17 @@ export default function QuestionBankListPage() {
   const [difficulties, setDifficulties] = React.useState([]);
 
   // Filter states
-  const [searchTerm, setSearchTerm] = React.useState("");
-  const [selectedGrade, setSelectedGrade] = React.useState("");
-  const [selectedStatus, setSelectedStatus] = React.useState("");
-  const [selectedType, setSelectedType] = React.useState("");
-  const [selectedTopic, setSelectedTopic] = React.useState("");
-  const [selectedDifficulty, setSelectedDifficulty] = React.useState("");
+  const [scope, setScope] = React.useState(() => urlParams.get("scope") === "mine" ? "mine" : "all");
+  const [searchTerm, setSearchTerm] = React.useState(() => urlParams.get("search") || "");
+  const [debouncedSearch, setDebouncedSearch] = React.useState(() => urlParams.get("search") || "");
+  const [selectedGrade, setSelectedGrade] = React.useState(() => urlParams.get("grade") || "");
+  const [selectedStatus, setSelectedStatus] = React.useState(() => urlParams.get("status") || "");
+  const [selectedType, setSelectedType] = React.useState(() => urlParams.get("type") || "");
+  const [selectedTopic, setSelectedTopic] = React.useState(() => urlParams.get("topic") || "");
+  const [selectedDifficulty, setSelectedDifficulty] = React.useState(() => urlParams.get("difficulty") || "");
 
   // Pagination states
-  const [pageIndex, setPageIndex] = React.useState(1);
+  const [pageIndex, setPageIndex] = React.useState(() => Math.max(1, Number(urlParams.get("page") || 1)));
   const [pageSize] = React.useState(10);
   const [totalCount, setTotalCount] = React.useState(0);
   const [totalPages, setTotalPages] = React.useState(1);
@@ -59,6 +62,24 @@ export default function QuestionBankListPage() {
   const [usingMockData, setUsingMockData] = React.useState(false);
 
   const currentAccountId = getAccountId();
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  React.useEffect(() => {
+    const next = new URLSearchParams();
+    if (scope === "mine") next.set("scope", "mine");
+    if (searchTerm.trim()) next.set("search", searchTerm.trim());
+    if (selectedGrade) next.set("grade", selectedGrade);
+    if (selectedStatus) next.set("status", selectedStatus);
+    if (selectedType) next.set("type", selectedType);
+    if (selectedTopic) next.set("topic", selectedTopic);
+    if (selectedDifficulty) next.set("difficulty", selectedDifficulty);
+    if (pageIndex > 1) next.set("page", String(pageIndex));
+    setUrlParams(next, { replace: true });
+  }, [scope, searchTerm, selectedGrade, selectedStatus, selectedType, selectedTopic, selectedDifficulty, pageIndex, setUrlParams]);
 
   // Delete states
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = React.useState(false);
@@ -183,6 +204,8 @@ export default function QuestionBankListPage() {
     if (selectedType) queryParams.questionType = selectedType;
     if (selectedTopic) queryParams.tagId = selectedTopic;
     if (selectedDifficulty) queryParams.difficultyId = selectedDifficulty;
+    if (scope === "mine" && currentAccountId) queryParams.expertId = currentAccountId;
+    if (debouncedSearch.trim()) queryParams.search = debouncedSearch.trim();
 
     questionBankApi.getQuestions(queryParams)
       .then((res) => {
@@ -232,7 +255,7 @@ export default function QuestionBankListPage() {
         }
         setLoading(false);
       });
-  }, [pageIndex, pageSize, selectedGrade, selectedStatus, selectedType, selectedTopic, selectedDifficulty]);
+  }, [pageIndex, pageSize, selectedGrade, selectedStatus, selectedType, selectedTopic, selectedDifficulty, scope, currentAccountId, debouncedSearch]);
 
   // Refetch on dependency changes
   React.useEffect(() => {
@@ -253,11 +276,12 @@ export default function QuestionBankListPage() {
   // Client-side search filtering (search in current page)
   const filteredQuestions = React.useMemo(() => {
     return questions.filter((q) => {
-      const matchesSearch =
-        searchTerm.trim() === "" ||
-        q.id.toString().includes(searchTerm) ||
-        q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.topic.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = usingMockData
+        ? searchTerm.trim() === "" ||
+          q.id.toString().includes(searchTerm) ||
+          q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          q.topic.toLowerCase().includes(searchTerm.toLowerCase())
+        : true;
 
       // If we are using local fallback mock data, we also apply the selectors client-side:
       if (usingMockData) {
@@ -409,6 +433,23 @@ export default function QuestionBankListPage() {
           </div>
         )}
 
+        <nav className="flex items-center gap-6 border-b border-whisper-border" aria-label="Phạm vi ngân hàng câu hỏi">
+          {[{ value: "all", label: "Tất cả" }, { value: "mine", label: "Của tôi" }].map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => { setScope(tab.value); setPageIndex(1); }}
+              className={cn(
+                "pb-3 text-sm font-bold border-b-2 transition-colors cursor-pointer",
+                scope === tab.value ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-primary"
+              )}
+              aria-current={scope === tab.value ? "page" : undefined}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
         {/* Filters & Search Layout */}
         <div className="grid grid-cols-1 gap-3 bg-pure-surface border border-whisper-border p-4 rounded-xl shadow-sm lg:grid-cols-5 2xl:grid-cols-[1fr_110px_125px_135px_155px_155px_42px] 2xl:items-center">
           {/* Search Box */}
@@ -421,7 +462,7 @@ export default function QuestionBankListPage() {
                 setPageIndex(1);
               }}
               className="w-full bg-transparent border-none focus:ring-0 text-[14px] text-on-surface placeholder-on-surface-variant outline-none py-2 pr-4"
-              placeholder="Tìm trong trang hiện tại..."
+              placeholder="Tìm toàn bộ ngân hàng câu hỏi..."
               type="text"
             />
           </div>
@@ -548,10 +589,16 @@ export default function QuestionBankListPage() {
                   filteredQuestions.map((q) => (
                     <tr key={q.id} className="hover:bg-surface-bright transition-all group duration-150">
                       <td className="py-4 px-4 max-w-md">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 hidden">
                           <span className="font-mono text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded font-bold">
                             Q-{q.id}
                           </span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1 text-[10px] text-on-surface-variant">
+                          <span className="font-semibold truncate max-w-[180px]">{q.expertName || "Hệ thống"}</span>
+                          {q.expertId === currentAccountId && (
+                            <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">Của tôi</span>
+                          )}
                         </div>
                         <div className="font-semibold text-on-surface text-[13px] leading-relaxed mi-line-clamp-2" title={q.content}>
                           <LatexPreview content={q.content} />
@@ -592,7 +639,7 @@ export default function QuestionBankListPage() {
                         {q.weight}
                       </td>
                       <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => handleOpenPreview(q)}
                             className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
@@ -667,7 +714,7 @@ export default function QuestionBankListPage() {
       </div>
 
       {/* DETAILED PREVIEW DIALOG */}
-      <Dialog isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} variant="modal">
+      <Dialog isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} variant="modal" className="max-w-3xl">
         {selectedQuestion && (
           <>
             <DialogHeader>
@@ -680,6 +727,16 @@ export default function QuestionBankListPage() {
             </DialogHeader>
 
             <DialogContent className="space-y-4">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-whisper-border px-3 py-2 text-[11px] text-on-surface-variant">
+                <span>Mã kỹ thuật: <code className="font-mono text-on-surface">{selectedQuestionDetails?.id || selectedQuestion.id}</code></span>
+                <button
+                  type="button"
+                  className="text-primary font-bold hover:underline cursor-pointer"
+                  onClick={() => navigator.clipboard?.writeText(String(selectedQuestionDetails?.id || selectedQuestion.id))}
+                >
+                  Sao chép ID
+                </button>
+              </div>
               {detailsLoading ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-2">
                   <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -729,6 +786,8 @@ export default function QuestionBankListPage() {
                   {/* Answers */}
                   <div>
                     <h4 className="text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Đáp án & Lời giải:</h4>
+
+                    <p className="text-[11px] text-emerald-success font-bold mb-2">Đáp án đúng được đánh dấu rõ bên dưới.</p>
 
                     {/* Single / Multiple Choice / True False options */}
                     {(selectedQuestion.type === "SINGLE_CHOICE" || selectedQuestion.type === "MULTIPLE_CHOICE" || selectedQuestion.type === "TRUE_FALSE") && (

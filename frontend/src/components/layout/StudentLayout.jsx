@@ -22,7 +22,8 @@ export default function StudentLayout({ children }) {
     <DashboardLayout
       brandName="MathInsight"
       roleLabel={ROLE_LABEL}
-      appTitle="Hệ thống Quản lý Toán học"
+      appTitle="Hệ thống hỗ trợ học toán"
+      logoPath="/student/dashboard"
       navItems={studentNavItems}
       topNavItems={studentTopNavItems}
       userName={displayName}

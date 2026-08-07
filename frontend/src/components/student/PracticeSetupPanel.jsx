@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "../ui/button";
 import TopicPracticeConfirmDialog from "./TopicPracticeConfirmDialog";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
@@ -127,6 +127,9 @@ function traceCycleSafeAncestors(topics, matchingTagIds) {
 
 export default function PracticeSetupPanel() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // tagId được truyền từ WeakTopicsCard qua Link state
+  const preselectedTagId = location.state?.preselectedTagId ?? null;
 
   // Data states
   const [grade, setGrade] = useState(null);
@@ -164,12 +167,22 @@ export default function PracticeSetupPanel() {
       // Auto-expand top-level root nodes
       const parentIds = new Set(rawTopics.filter((t) => !t.parentTagId).map((t) => t.tagId));
       setExpandedTagIds(parentIds);
+
+      // Nếu điều hướng từ WeakTopicsCard với preselectedTagId → auto-open confirm dialog
+      if (preselectedTagId) {
+        const preselected = rawTopics.find((t) => String(t.tagId) === String(preselectedTagId));
+        if (preselected && preselected.canGenerate) {
+          setSelectedTag(preselected);
+          setGenerationError("");
+          setIsConfirmOpen(true);
+        }
+      }
     } catch (err) {
       setLoadError(getTopicPracticeErrorMessage(err, "Không thể tải danh sách chủ đề luyện tập. Vui lòng thử lại sau."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [preselectedTagId]);
 
   useEffect(() => {
     fetchOptions();

@@ -606,7 +606,7 @@ export default function TagManagementPage() {
                   <tr className="bg-surface-container text-on-surface font-bold text-xs border-b border-whisper-border">
                     <th className="p-4 font-bold">Chủ đề</th>
                     <th className="p-4 font-bold w-36">Khối</th>
-                    <th className="p-4 font-bold w-24">Thứ tự</th>
+                    <th className="p-4 font-bold w-24" title="Thứ tự hiển thị">Thứ tự hiển thị</th>
                     <th className="p-4 font-bold w-36">Trạng thái</th>
                     <th className="p-4 font-bold w-24 text-right">Thao tác</th>
                   </tr>
@@ -693,6 +693,7 @@ export default function TagManagementPage() {
                               <button
                                 role="switch"
                                 aria-checked={isAct}
+                                aria-label={`${isAct ? "Ngừng sử dụng" : "Kích hoạt"} chủ đề ${t.tagName}`}
                                 onClick={() => handleToggleActive(t, "topic")}
                                 className={cn(
                                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus:ring-2 focus:ring-primary/20",
@@ -715,6 +716,7 @@ export default function TagManagementPage() {
                             <button
                               onClick={() => handleOpenEditTopic(t)}
                               className="p-1.5 rounded text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                              aria-label={`Chỉnh sửa chủ đề ${t.tagName}`}
                               title="Chỉnh sửa chủ đề"
                             >
                               <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -769,7 +771,7 @@ export default function TagManagementPage() {
                   <tr className="bg-surface-container text-on-surface font-bold text-xs border-b border-whisper-border">
                     <th className="p-4 font-bold">Độ khó</th>
                     <th className="p-4 font-bold w-48">Cấp độ hệ thống</th>
-                    <th className="p-4 font-bold w-36">Thứ tự</th>
+                    <th className="p-4 font-bold w-36" title="Thứ tự hiển thị">Thứ tự hiển thị</th>
                     <th className="p-4 font-bold w-36">Trạng thái</th>
                     <th className="p-4 font-bold w-24 text-right">Thao tác</th>
                   </tr>
@@ -823,6 +825,7 @@ export default function TagManagementPage() {
                               <button
                                 role="switch"
                                 aria-checked={isAct}
+                                aria-label={`${isAct ? "Ngừng sử dụng" : "Kích hoạt"} độ khó ${d.difficultyName}`}
                                 onClick={() => handleToggleActive(d, "difficulty")}
                                 className={cn(
                                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus:ring-2 focus:ring-primary/20",
@@ -845,6 +848,7 @@ export default function TagManagementPage() {
                             <button
                               onClick={() => handleOpenEditDiff(d)}
                               className="p-1.5 rounded text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                              aria-label={`Chỉnh sửa độ khó ${d.difficultyName}`}
                               title="Chỉnh sửa độ khó"
                             >
                               <span className="material-symbols-outlined text-[18px]">edit</span>
