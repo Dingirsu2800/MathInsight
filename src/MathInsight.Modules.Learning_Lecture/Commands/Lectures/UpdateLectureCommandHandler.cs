@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -34,13 +35,30 @@ public class UpdateLectureCommandHandler : IRequestHandler<UpdateLectureCommand,
         lecture.NextLectureId = request.NextLectureId;
         lecture.UpdatedTime = DateTime.UtcNow;
 
-        if (request.MaterialIds != null)
+        if (request.MaterialIds != null && request.MaterialIds.Any())
         {
+            var materials = await _dbContext.Materials
+                .Where(m => request.MaterialIds.Contains(m.MaterialId))
+                .ToListAsync(cancellationToken);
+
+            var duplicateName = materials
+                .GroupBy(m => m.MaterialName)
+                .FirstOrDefault(g => g.Count() > 1);
+
+            if (duplicateName != null)
+            {
+                throw new InvalidOperationException($"PRD Violation: Lecture cannot contain multiple materials with the same name '{duplicateName.Key}'.");
+            }
+
             _dbContext.LectureMaterials.RemoveRange(lecture.LectureMaterials);
             foreach (var mid in request.MaterialIds)
             {
                 lecture.LectureMaterials.Add(new MathInsight.Modules.Learning_Lecture.Entities.LectureMaterial { LectureId = lecture.LectureId, MaterialId = mid });
             }
+        }
+        else if (request.MaterialIds != null && !request.MaterialIds.Any())
+        {
+            _dbContext.LectureMaterials.RemoveRange(lecture.LectureMaterials);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

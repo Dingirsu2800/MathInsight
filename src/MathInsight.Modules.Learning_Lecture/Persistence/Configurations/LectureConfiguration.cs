@@ -25,6 +25,9 @@ public class LectureConfiguration : IEntityTypeConfiguration<Lecture>
         builder.Property(x => x.UpdatedTime);
 
         builder.HasIndex(x => new { x.Status, x.TagId });
+        
+        // PRD Business Rule: Title is unique under the same Teacher and Course/Subject (TagId) context.
+        builder.HasIndex(x => new { x.Title, x.TeacherId, x.TagId }).IsUnique();
 
         builder.HasMany(x => x.LectureMaterials)
             .WithOne(x => x.Lecture)

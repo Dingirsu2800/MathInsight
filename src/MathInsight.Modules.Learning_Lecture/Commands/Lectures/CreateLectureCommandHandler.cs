@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Learning_Lecture.Contracts;
 using MathInsight.Modules.Learning_Lecture.Entities;
 using MathInsight.Modules.Learning_Lecture.Persistence;
@@ -37,8 +39,21 @@ public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand,
             NextLectureId = request.NextLectureId
         };
 
-        if (request.MaterialIds != null)
+        if (request.MaterialIds != null && request.MaterialIds.Any())
         {
+            var materials = await _dbContext.Materials
+                .Where(m => request.MaterialIds.Contains(m.MaterialId))
+                .ToListAsync(cancellationToken);
+
+            var duplicateName = materials
+                .GroupBy(m => m.MaterialName)
+                .FirstOrDefault(g => g.Count() > 1);
+
+            if (duplicateName != null)
+            {
+                throw new InvalidOperationException($"PRD Violation: Lecture cannot contain multiple materials with the same name '{duplicateName.Key}'.");
+            }
+
             foreach (var mid in request.MaterialIds)
             {
                 lecture.LectureMaterials.Add(new LectureMaterial { LectureId = lecture.LectureId, MaterialId = mid });

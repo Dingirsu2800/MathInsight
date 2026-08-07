@@ -91,8 +91,8 @@ public class StreakService : IStreakService
     private static bool Qualifies(ActivityType activityType, int durationSeconds) =>
         activityType switch
         {
-            ActivityType.PRACTICE => true,
-            ActivityType.EXAM => true,
+            ActivityType.PRACTICE => durationSeconds > 0,
+            ActivityType.EXAM => durationSeconds > 0,
             ActivityType.VIEW_LECTURE => durationSeconds >= MinLectureQualifyingSeconds,
             _ => false // DOWNLOAD_MATERIAL never qualifies.
         };
