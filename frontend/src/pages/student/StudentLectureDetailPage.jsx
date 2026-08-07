@@ -2,7 +2,8 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
-import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment } from "../../services/learningApi";
+import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment, logLectureView } from "../../services/learningApi";
+import { API_BASE_URL } from "../../services/api";
 import LatexPreview from "../../components/expert/LatexPreview";
 import MathTextArea from "../../components/common/MathTextArea";
 import RelatedLecturesList from "../../components/student/RelatedLecturesList";
@@ -106,6 +107,39 @@ export default function StudentLectureDetailPage() {
 
     fetchDiscussionsData();
   }, [id]);
+
+  const lastLoggedIdRef = React.useRef(null);
+
+  // Timer logic for tracking lecture view duration
+  useEffect(() => {
+    let seconds = 0;
+    let timerId = null;
+    let hasSent300sLog = false;
+
+    // Log immediately on enter (0s) to update Heatmap instantly (only once per lecture id)
+    if (lastLoggedIdRef.current !== id) {
+      lastLoggedIdRef.current = id;
+      logLectureView(id, 0).catch(err => console.error("Error logging initial view:", err));
+    }
+
+    // Only count when the document is visible
+    const tick = () => {
+      if (!document.hidden) {
+        seconds++;
+        // Hit 300 seconds -> log immediately so the streak is secure
+        if (seconds === 300 && !hasSent300sLog) {
+          hasSent300sLog = true;
+          logLectureView(id, seconds).catch(err => console.error("Error logging 300s view:", err));
+        }
+      }
+    };
+
+    timerId = setInterval(tick, 1000);
+
+    return () => {
+      if (timerId) clearInterval(timerId);
+    };
+  }, [id]); // Only depend on 'id', not 'lecture' to prevent re-logging on state changes
 
   const handleLikeToggle = async () => {
     try {

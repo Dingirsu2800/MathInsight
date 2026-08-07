@@ -137,6 +137,19 @@ public class LecturesController : ControllerBase
         }
     }
 
+    [HttpPost("{id}/log-view")]
+    public async Task<IActionResult> LogLectureView(string id, [FromBody] LogLectureViewRequest request, CancellationToken cancellationToken)
+    {
+        if (!IsStudent) return Forbid();
+        var cmd = new LogLectureViewCommand(id, CurrentUserId, request.DurationSeconds);
+        var result = await _mediator.Send(cmd, cancellationToken);
+        if (result.IsFailure)
+        {
+            return BadRequest(new { message = result.Error?.Message });
+        }
+        return NoContent();
+    }
+
     [HttpPost("{id}/like")]
     public async Task<IActionResult> LikeLecture(string id, CancellationToken cancellationToken)
     {
@@ -170,3 +183,4 @@ public class LecturesController : ControllerBase
 
 public record CreateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
 public record UpdateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
+public record LogLectureViewRequest(int DurationSeconds);

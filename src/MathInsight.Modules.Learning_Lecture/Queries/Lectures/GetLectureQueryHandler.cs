@@ -35,18 +35,6 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
         bool isLiked = false;
         if (!string.IsNullOrEmpty(request.StudentId))
         {
-            if (lecture.Status == "Published")
-            {
-                // Background event publish for activity logging
-                _ = _mediator.Publish(new ActivityLoggedEvent(
-                    StudentId: request.StudentId,
-                    ActivityType: "VIEW_LECTURE",
-                    LectureId: request.LectureId,
-                    MaterialId: null,
-                    DurationSeconds: 0
-                ), cancellationToken);
-            }
-
             isLiked = await _dbContext.LectureLikes
                 .AnyAsync(l => l.LectureId == request.LectureId && l.StudentId == request.StudentId, cancellationToken);
         }
