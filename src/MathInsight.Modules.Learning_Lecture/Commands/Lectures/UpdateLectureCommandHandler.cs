@@ -4,11 +4,13 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Learning_Lecture.Contracts;
+using MathInsight.Modules.Learning_Lecture.Errors;
 using MathInsight.Modules.Learning_Lecture.Persistence;
+using MathInsight.Shared.Results;
 
 namespace MathInsight.Modules.Learning_Lecture.Commands.Lectures;
 
-public class UpdateLectureCommandHandler : IRequestHandler<UpdateLectureCommand, LectureDto>
+public class UpdateLectureCommandHandler : IRequestHandler<UpdateLectureCommand, Result<LectureDto>>
 {
     private readonly LearningDbContext _dbContext;
 
@@ -17,20 +19,30 @@ public class UpdateLectureCommandHandler : IRequestHandler<UpdateLectureCommand,
         _dbContext = dbContext;
     }
 
-    public async Task<LectureDto> Handle(UpdateLectureCommand request, CancellationToken cancellationToken)
+    public async Task<Result<LectureDto>> Handle(UpdateLectureCommand request, CancellationToken cancellationToken)
     {
         var lecture = await _dbContext.Lectures
             .Include(l => l.LectureMaterials)
             .FirstOrDefaultAsync(x => x.LectureId == request.LectureId, cancellationToken);
-        if (lecture == null) throw new Exception("Lecture not found");
-        if (lecture.TeacherId != request.TeacherId) throw new Exception("Forbidden: Not the owner");
-        if (lecture.Status == "Deactivated") throw new Exception("Cannot update deactivated lecture");
+        if (lecture is null) return Result<LectureDto>.Failure(LearningErrors.LectureNotFound);
+        if (lecture.TeacherId != request.TeacherId) return Result<LectureDto>.Failure(LearningErrors.LectureForbidden);
+        if (lecture.Status == "Deactivated") return Result<LectureDto>.Failure(LearningErrors.LectureCannotUpdateDeactivated);
+
+        var validationError = await LectureTaxonomyValidator.ValidateAssignmentAsync(
+            _dbContext,
+            request.TagId,
+            request.DifficultyId,
+            cancellationToken);
+
+        if (validationError is not null)
+            return Result<LectureDto>.Failure(validationError);
 
         lecture.Title = request.Title;
         lecture.Content = request.Content;
         lecture.VideoUrl = request.VideoUrl;
         lecture.ThumbnailUrl = request.ThumbnailUrl;
         lecture.TagId = request.TagId;
+        lecture.DifficultyId = request.DifficultyId;
         lecture.NextLectureId = request.NextLectureId;
         lecture.UpdatedTime = DateTime.UtcNow;
 
@@ -45,11 +57,12 @@ public class UpdateLectureCommandHandler : IRequestHandler<UpdateLectureCommand,
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new LectureDto 
-        { 
+        return Result<LectureDto>.Success(new LectureDto
+        {
             LectureId = lecture.LectureId, 
             Title = lecture.Title, 
-            Status = lecture.Status 
-        };
+            Status = lecture.Status,
+            DifficultyId = lecture.DifficultyId
+        });
     }
 }
