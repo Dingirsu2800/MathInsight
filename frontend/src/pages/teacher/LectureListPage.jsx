@@ -19,6 +19,7 @@ export default function LectureListPage() {
   const [gradeFilter, setGradeFilter] = useState("12");
   const [topicFilter, setTopicFilter] = useState("");
   const [topics, setTopics] = useState([]);
+  const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -68,7 +69,21 @@ export default function LectureListPage() {
   }, [gradeFilter]);
 
   const handlePublish = async (id) => {
-    try { await publishLecture(id); fetchLectures(); } catch (e) { console.error(e); }
+    setActionError("");
+    try {
+      await publishLecture(id);
+      fetchLectures();
+    } catch (e) {
+      const code = e.response?.data?.code;
+      const message = code === "LECTURE_DIFFICULTY_REQUIRED"
+        ? "Bài giảng chưa có độ khó. Hãy mở chỉnh sửa để bổ sung trước khi xuất bản."
+        : code === "LECTURE_DIFFICULTY_INACTIVE"
+          ? "Độ khó đã tạm ngưng. Hãy mở chỉnh sửa và chọn độ khó đang hoạt động."
+          : code === "LECTURE_TOPIC_INACTIVE"
+            ? "Chủ đề đã tạm ngưng. Hãy mở chỉnh sửa và chọn chủ đề đang hoạt động."
+        : "Không thể xuất bản bài giảng. Vui lòng thử lại.";
+      setActionError(message);
+    }
   };
   const handleDeactivate = async (id) => {
     try { await deactivateLecture(id); fetchLectures(); } catch (e) { console.error(e); }
@@ -97,6 +112,12 @@ export default function LectureListPage() {
             Tạo bài giảng mới
           </button>
         </DashboardPageHeader>
+
+        {actionError && (
+          <div role="alert" className="border border-error/30 bg-error-container/30 text-error rounded-lg px-4 py-3 text-sm">
+            {actionError}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="bg-pure-surface border border-whisper-border rounded-lg p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center">
@@ -208,8 +229,10 @@ export default function LectureListPage() {
                           {lec.status === "Draft" && (
                             <button
                               onClick={() => handlePublish(lec.lectureId)}
-                              className="p-1.5 text-on-surface-variant hover:text-[#10B981] rounded-full hover:bg-[#10B981]/10 transition-colors"
-                              title="Xuất bản"
+                              disabled={!lec.difficultyId}
+                              className="p-1.5 text-on-surface-variant hover:text-[#10B981] rounded-full hover:bg-[#10B981]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
+                              title={lec.difficultyId ? "Xuất bản" : "Bổ sung độ khó trước khi xuất bản"}
+                              aria-label={lec.difficultyId ? "Xuất bản" : "Bổ sung độ khó trước khi xuất bản"}
                             >
                               <span className="material-symbols-outlined text-[18px]">publish</span>
                             </button>

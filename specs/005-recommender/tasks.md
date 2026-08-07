@@ -195,4 +195,4 @@
 - [x] Return lecture difficulty metadata from Learning list and detail responses.
 - [x] Rank lectures for qualified Weak, Learning, and Mastered contexts using exact-or-lower difficulty only, two per topic and six overall.
 - [x] Implement grade-based level-1 cold start with nullable point and explicit audit reason.
-- [x] Add SQL Server smoke coverage and module quality gates; LocalDB smoke execution passed.
+- [x] Add SQL Server smoke coverage with legacy migration/idempotency checks; the opt-in smoke test is explicitly skipped when no disposable SQL Server connection is configured.

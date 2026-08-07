@@ -86,6 +86,7 @@ public sealed class GetRecommendedLecturesQueryHandler
         foreach (var context in contexts
             .OrderBy(x => GetPriority(x.OfficialPoint))
             .ThenBy(x => x.OfficialPoint)
+            .ThenByDescending(x => x.NumberDone)
             .ThenBy(x => x.TagId))
         {
             var priority = GetPriority(context.OfficialPoint);
@@ -141,6 +142,12 @@ public sealed class GetRecommendedLecturesQueryHandler
 
         return lectures
             .Where(x => x.TopicGrade == grade.Value && x.DifficultyLevel == 1)
+            .GroupBy(x => x.TagId)
+            .SelectMany(group => group
+                .OrderByDescending(x => x.Likes)
+                .ThenByDescending(x => x.UpdatedTime)
+                .ThenBy(x => x.LectureId)
+                .Take(MaximumPerTopic))
             .OrderByDescending(x => x.Likes)
             .ThenByDescending(x => x.UpdatedTime)
             .ThenBy(x => x.LectureId)

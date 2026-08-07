@@ -160,6 +160,51 @@ public sealed class RecommendedLectureQueryTests : IDisposable
         Assert.Empty(noGrade);
     }
 
+    [Fact]
+    public async Task Handle_ColdStart_LimitsRecommendationsToTwoLecturesPerTopic()
+    {
+        const string studentId = "student_01";
+        AddStudent(studentId, currentGrade: 12);
+        AddDifficulty("diff-1", level: 1);
+
+        AddActiveTopic("topic-most-popular", grade: 12);
+        AddActiveTopic("topic-second", grade: 12);
+        AddActiveTopic("topic-third", grade: 12);
+
+        for (var lectureNo = 1; lectureNo <= 6; lectureNo++)
+            AddLecture($"lecture-popular-{lectureNo}", "topic-most-popular", "diff-1", likes: 100 - lectureNo);
+
+        AddLecture("lecture-second-1", "topic-second", "diff-1", likes: 90);
+        AddLecture("lecture-second-2", "topic-second", "diff-1", likes: 89);
+        AddLecture("lecture-third-1", "topic-third", "diff-1", likes: 80);
+        AddLecture("lecture-third-2", "topic-third", "diff-1", likes: 79);
+        await _db.SaveChangesAsync();
+
+        var result = await _handler.Handle(new GetRecommendedLecturesQuery(studentId), CancellationToken.None);
+
+        Assert.Equal(6, result.Count);
+        Assert.All(result.GroupBy(x => x.TagId), group => Assert.InRange(group.Count(), 1, 2));
+        Assert.Equal(2, result.Count(x => x.TagId == "topic-most-popular"));
+    }
+
+    [Fact]
+    public async Task Handle_PersonalizedTopics_UsesEvidenceCountAsTieBreaker()
+    {
+        const string studentId = "student_01";
+        AddDifficulty("diff-2", level: 2);
+        AddActiveTopic("topic-a", grade: 12);
+        AddActiveTopic("topic-b", grade: 12);
+        AddMastery(studentId, "topic-a", officialPoint: 6m, numberDone: 3, targetLevel: 2);
+        AddMastery(studentId, "topic-b", officialPoint: 6m, numberDone: 10, targetLevel: 2);
+        AddLecture("lecture-a", "topic-a", "diff-2");
+        AddLecture("lecture-b", "topic-b", "diff-2");
+        await _db.SaveChangesAsync();
+
+        var result = await _handler.Handle(new GetRecommendedLecturesQuery(studentId), CancellationToken.None);
+
+        Assert.Equal(new[] { "topic-b", "topic-a" }, result.Select(x => x.TagId));
+    }
+
     private void AddStudent(string studentId, int? currentGrade)
     {
         _db.Students.Add(new StudentReadOnly { StudentId = studentId, CurrentGrade = currentGrade });

@@ -171,6 +171,10 @@ public class LecturesController : ControllerBase
         if (error == LearningErrors.LectureForbidden)
             return StatusCode(403, new ApiErrorResponse(error));
 
+        if (error == LearningErrors.LectureTopicInactive ||
+            error == LearningErrors.LectureDifficultyInactive)
+            return Conflict(new ApiErrorResponse(error));
+
         return BadRequest(new ApiErrorResponse(error));
     }
 }

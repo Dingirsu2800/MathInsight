@@ -4,30 +4,17 @@ using MathInsight.Modules.Recommender.Queries.GetRecommendedLectures;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MathInsight.Modules.Recommender.Tests.Integration;
 
 public sealed class LectureRecommendationSqlServerSmokeTests
 {
     private const string ConnectionEnvironmentVariable = "RECOMMENDER_SQLSERVER_CONNECTION";
-    private readonly ITestOutputHelper _output;
 
-    public LectureRecommendationSqlServerSmokeTests(ITestOutputHelper output)
-    {
-        _output = output;
-    }
-
-    [Fact]
+    [SqlServerFact]
     public async Task Handle_CanonicalSchema_SupportsPersonalizedAndColdStartRecommendations()
     {
-        var sourceConnectionString = Environment.GetEnvironmentVariable(ConnectionEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(sourceConnectionString))
-        {
-            _output.WriteLine(
-                $"SKIPPED: Set {ConnectionEnvironmentVariable} to a disposable local SQL Server connection to run this smoke test.");
-            return;
-        }
+        var sourceConnectionString = Environment.GetEnvironmentVariable(ConnectionEnvironmentVariable)!;
 
         var databaseName = $"MathInsightLectureRecommendationSmoke_{Guid.NewGuid():N}";
         var masterConnectionString = WithDatabase(sourceConnectionString, "master");
@@ -37,6 +24,9 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         {
             await ExecuteNonQueryAsync(masterConnectionString, $"CREATE DATABASE [{databaseName}]");
             await ExecuteSqlScriptAsync(databaseConnectionString, FindCanonicalSchemaPath());
+            await MakeLectureTableLegacyAsync(databaseConnectionString);
+            await ExecuteSqlScriptAsync(databaseConnectionString, FindLectureDifficultyMigrationPath());
+            await ExecuteSqlScriptAsync(databaseConnectionString, FindLectureDifficultyMigrationPath());
             await SeedRequiredRowsAsync(databaseConnectionString);
 
             var options = new DbContextOptionsBuilder<RecommenderDbContext>()
@@ -115,6 +105,16 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         await ExecuteNonQueryAsync(connectionString, script);
     }
 
+    private static Task MakeLectureTableLegacyAsync(string connectionString)
+        => ExecuteNonQueryAsync(connectionString, """
+            IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Lecture_TagDifficulty_DifficultyID')
+                ALTER TABLE dbo.Lecture DROP CONSTRAINT FK_Lecture_TagDifficulty_DifficultyID;
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Lecture') AND name = N'IX_Lecture_Status_TagID_DifficultyID')
+                DROP INDEX IX_Lecture_Status_TagID_DifficultyID ON dbo.Lecture;
+            IF COL_LENGTH(N'dbo.Lecture', N'DifficultyID') IS NOT NULL
+                ALTER TABLE dbo.Lecture DROP COLUMN DifficultyID;
+            """);
+
     private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
     {
         var script = await File.ReadAllTextAsync(scriptPath);
@@ -168,5 +168,26 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         }
 
         throw new FileNotFoundException("Canonical database schema was not found.");
+    }
+
+    private static string FindLectureDifficultyMigrationPath()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "Database", "Migrations", "006_Lecture_Difficulty_Recommendation.sql");
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException("Lecture difficulty migration was not found.");
+    }
+}
+
+public sealed class SqlServerFactAttribute : FactAttribute
+{
+    public SqlServerFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RECOMMENDER_SQLSERVER_CONNECTION")))
+            Skip = "Set RECOMMENDER_SQLSERVER_CONNECTION to run the disposable SQL Server smoke test.";
     }
 }
