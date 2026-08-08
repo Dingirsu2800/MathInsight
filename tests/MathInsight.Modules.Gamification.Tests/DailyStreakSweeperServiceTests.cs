@@ -43,7 +43,7 @@ public class DailyStreakSweeperServiceTests : IDisposable
             StudentId = "student-1",
             CurrentStreak = 5,
             LongestStreak = 10,
-            LastActivityDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2))
+            LastActivityDate = VietnamToday().AddDays(-2)
         });
         await _db.SaveChangesAsync();
 
@@ -67,7 +67,7 @@ public class DailyStreakSweeperServiceTests : IDisposable
             StudentId = "student-2",
             CurrentStreak = 5,
             LongestStreak = 10,
-            LastActivityDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1))
+            LastActivityDate = VietnamToday().AddDays(-1)
         });
         await _db.SaveChangesAsync();
 
@@ -79,4 +79,6 @@ public class DailyStreakSweeperServiceTests : IDisposable
         Assert.NotNull(streak);
         Assert.Equal(5, streak.CurrentStreak); // Preserved
     }
+    private static DateOnly VietnamToday()
+        => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 }
