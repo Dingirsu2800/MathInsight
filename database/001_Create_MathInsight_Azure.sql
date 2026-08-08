@@ -24,6 +24,13 @@ SET CONCAT_NULL_YIELDS_NULL ON;
 SET NUMERIC_ROUNDABORT OFF;
 GO
 
+IF OBJECT_ID(N'dbo.Account', N'U') IS NOT NULL
+   OR OBJECT_ID(N'dbo.Question', N'U') IS NOT NULL
+BEGIN
+    THROW 51000, N'Target database is not empty. Use migration scripts for an existing database.', 1;
+END;
+GO
+
 
 
 -- Create Table: Account
@@ -104,13 +111,6 @@ CREATE TABLE [Blueprint] (
     CONSTRAINT [CK_Blueprint_DurationMinutes] CHECK ([DurationMinutes] >= 0),
     CONSTRAINT [CK_Blueprint_Status] CHECK ([Status] IN ('Draft', 'PendingReview', 'Approved', 'Rejected', 'Active', 'Deactivated'))
 );
-GO
-
-IF OBJECT_ID(N'dbo.Account', N'U') IS NOT NULL
-   OR OBJECT_ID(N'dbo.Question', N'U') IS NOT NULL
-BEGIN
-    THROW 51000, N'Target database is not empty. Use migration scripts for an existing database.', 1;
-END;
 GO
 
 -- Create Table: BlueprintSection

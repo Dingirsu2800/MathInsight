@@ -58,7 +58,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         }
     }
 
-    private static async Task SeedRequiredRowsAsync(string connectionString)
+    internal static async Task SeedRequiredRowsAsync(string connectionString)
     {
         const string script = """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
@@ -115,7 +115,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
                 ALTER TABLE dbo.Lecture DROP COLUMN DifficultyID;
             """);
 
-    private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
+    internal static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
     {
         var script = await File.ReadAllTextAsync(scriptPath);
         var batches = Regex.Split(script, @"(?im)^\s*GO\s*(?:--.*)?$");
@@ -127,7 +127,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         }
     }
 
-    private static async Task ExecuteNonQueryAsync(string connectionString, string commandText)
+    internal static async Task ExecuteNonQueryAsync(string connectionString, string commandText)
     {
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
@@ -135,7 +135,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task DropDatabaseIfExistsAsync(string masterConnectionString, string databaseName)
+    internal static async Task DropDatabaseIfExistsAsync(string masterConnectionString, string databaseName)
     {
         var command = $"""
             IF DB_ID(N'{databaseName}') IS NOT NULL
@@ -148,7 +148,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         await ExecuteNonQueryAsync(masterConnectionString, command);
     }
 
-    private static string WithDatabase(string connectionString, string databaseName)
+    internal static string WithDatabase(string connectionString, string databaseName)
     {
         var builder = new SqlConnectionStringBuilder(connectionString)
         {
@@ -158,7 +158,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         return builder.ConnectionString;
     }
 
-    private static string FindCanonicalSchemaPath()
+    internal static string FindCanonicalSchemaPath()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
@@ -170,7 +170,7 @@ public sealed class LectureRecommendationSqlServerSmokeTests
         throw new FileNotFoundException("Canonical database schema was not found.");
     }
 
-    private static string FindLectureDifficultyMigrationPath()
+    internal static string FindLectureDifficultyMigrationPath()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
