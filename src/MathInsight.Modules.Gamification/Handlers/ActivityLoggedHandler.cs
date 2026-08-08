@@ -65,7 +65,8 @@ public sealed class ActivityLoggedHandler : INotificationHandler<ActivityLoggedE
         });
 
         // The service applies BR-39 qualification itself; do not pre-filter here.
-        var activityDate = DateOnly.FromDateTime(occurredAt);
+        // NOTE: UTC+7 is used to ensure calendar day aligns with Vietnam time.
+        var activityDate = DateOnly.FromDateTime(occurredAt.AddHours(7));
         await _streakService.UpdateStreakAsync(
             notification.StudentId,
             activityType,

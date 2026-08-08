@@ -30,6 +30,9 @@ export const likeLecture = (id) =>
 export const unlikeLecture = (id) =>
   client.delete(`/api/v1/lectures/${id}/like`);
 
+export const logLectureView = (id, durationSeconds) =>
+  client.post(`/api/v1/lectures/${id}/log-view`, { durationSeconds });
+
 export const extractLectureOcr = (formData) =>
   client.post('/api/v1/lectures/ocr', formData, {
     headers: { 'Content-Type': undefined }

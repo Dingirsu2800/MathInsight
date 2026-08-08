@@ -26,6 +26,13 @@ internal static class LectureTaxonomyValidator
         if (!topic.IsActive)
             return LearningErrors.LectureTopicInactive;
 
+        // Ensure the topic is a child topic (leaf node) by checking if any other topic has it as a parent.
+        var hasChildren = await dbContext.TagTopics
+            .AnyAsync(x => x.ParentTagId == tagId, cancellationToken);
+
+        if (hasChildren)
+            return LearningErrors.LectureTopicMustBeLeaf;
+
         return await ValidateDifficultyAsync(dbContext, difficultyId, cancellationToken);
     }
 

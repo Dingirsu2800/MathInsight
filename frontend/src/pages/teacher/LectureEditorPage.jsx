@@ -43,8 +43,9 @@ export default function LectureEditorPage() {
       let result = [];
       nodes.forEach(node => {
         const currentPath = parentPath ? `${parentPath} > ${node.tagName}` : node.tagName;
-        result.push({ tagId: node.tagId, tagName: currentPath });
-        if (node.children && node.children.length > 0) {
+        const hasChildren = node.children && node.children.length > 0;
+        result.push({ tagId: node.tagId, tagName: currentPath, isParent: hasChildren });
+        if (hasChildren) {
           result = result.concat(flattenTopics(node.children, currentPath));
         }
       });
@@ -374,7 +375,9 @@ export default function LectureEditorPage() {
                         >
                           <option value="">Chọn chủ đề</option>
                           {topics.map((t) => (
-                            <option key={t.tagId} value={t.tagId}>{t.tagName}</option>
+                            <option key={t.tagId} value={t.tagId} disabled={t.isParent}>
+                              {t.tagName}
+                            </option>
                           ))}
                         </select>
                         {errors.tagId && (

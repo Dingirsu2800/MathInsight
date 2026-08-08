@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../../utils/cn";
 import NotificationBell from "../NotificationBell";
+import StreakIndicator from "../common/StreakIndicator";
 
 export default function DashboardTopbar({
   appTitle = "Hệ thống Quản lý Toán học",
@@ -133,6 +134,7 @@ export default function DashboardTopbar({
           </button>
         )}
         <div className="flex items-center gap-2 border-l border-whisper-border pl-4">
+          {userRoleLabel === "Học sinh" && <StreakIndicator />}
           {showNotifications && <NotificationBell />}
           {showThemeToggle && <button
             type="button"

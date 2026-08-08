@@ -62,7 +62,20 @@ export default function LectureDetailPage() {
 
   useEffect(() => {
     getLecture(id)
-      .then((res) => setLecture(res.data))
+      .then((res) => {
+        setLecture(res.data);
+        setTimeout(() => {
+          if (window.location.hash === '#discussions') {
+            const el = document.getElementById('discussions');
+            if (el) {
+              const y = el.getBoundingClientRect().top + window.scrollY - 80;
+              window.scrollTo({ top: y, behavior: 'smooth' });
+            }
+          } else {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }
+        }, 100);
+      })
       .catch((err) => {
         console.error("Lỗi khi tải chi tiết bài giảng:", err);
         setLecture(null);
@@ -168,24 +181,19 @@ export default function LectureDetailPage() {
         {/* Lecture Card */}
         <article className="bg-pure-surface rounded-xl border border-whisper-border shadow-sm overflow-hidden mb-10">
           {/* Video Player */}
-          <div className="relative aspect-video bg-black rounded-xl overflow-hidden mb-8 shadow-sm">
-            {lecture.videoUrl ? (
-              getYouTubeEmbedUrl(lecture.videoUrl) ? (
-                <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+          {(lecture.videoUrl || lecture.thumbnailUrl) && (
+            <div className="relative aspect-video bg-black rounded-xl overflow-hidden mb-8 shadow-sm">
+              {lecture.videoUrl ? (
+                getYouTubeEmbedUrl(lecture.videoUrl) ? (
+                  <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+                ) : (
+                  <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+                )
               ) : (
-                <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
-              )
-            ) : lecture.thumbnailUrl ? (
-              <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-tr from-surface-variant to-surface-container-high"></div>
-            )}
-            {!lecture.videoUrl && (
-              <button className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-pure-surface/90 rounded-full flex items-center justify-center text-primary shadow-lg group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-3xl ml-1" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
-              </button>
-            )}
-          </div>
+                <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
+              )}
+            </div>
+          )}
 
           <div className="p-8">
             <div className="flex items-start justify-between gap-4 mb-4">
@@ -275,7 +283,7 @@ export default function LectureDetailPage() {
         )}
 
         {/* Discussion Section */}
-        <section>
+        <section id="discussions">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-[20px] font-semibold text-on-surface flex items-center gap-2">
               <span className="material-symbols-outlined">forum</span>
