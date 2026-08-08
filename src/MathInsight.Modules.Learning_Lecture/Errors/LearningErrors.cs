@@ -15,4 +15,5 @@ public static class LearningErrors
     public static readonly Error LectureDifficultyRequired = new("LECTURE_DIFFICULTY_REQUIRED", "Lecture difficulty is required.");
     public static readonly Error LectureDifficultyNotFound = new("LECTURE_DIFFICULTY_NOT_FOUND", "Lecture difficulty was not found.");
     public static readonly Error LectureDifficultyInactive = new("LECTURE_DIFFICULTY_INACTIVE", "Lecture difficulty is inactive.");
+    public static readonly Error LectureTopicMustBeLeaf = new("LECTURE_TOPIC_MUST_BE_LEAF", "Chỉ được phép chọn chủ đề con (topic lá) cho bài giảng, không được chọn chủ đề cha.");
 }

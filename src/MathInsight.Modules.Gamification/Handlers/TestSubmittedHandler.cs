@@ -74,7 +74,7 @@ public sealed class TestSubmittedHandler : INotificationHandler<TestSubmittedEve
         await _streakService.UpdateStreakAsync(
             studentId,
             activityType,
-            0,
+            1, // Hardcoded to 1 because PRACTICE/EXAM always qualify and the event lacks duration
             activityDate,
             cancellationToken);
 

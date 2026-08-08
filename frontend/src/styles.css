@@ -274,3 +274,17 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* --- SIMPLE DARK MODE --- */
+html.dark {
+  filter: invert(0.93) hue-rotate(180deg);
+  background-color: #f9f9ff;
+}
+
+html.dark img, 
+html.dark video, 
+html.dark iframe,
+html.dark .mjx-container,
+html.dark .katex {
+  filter: invert(1) hue-rotate(180deg);
+}
