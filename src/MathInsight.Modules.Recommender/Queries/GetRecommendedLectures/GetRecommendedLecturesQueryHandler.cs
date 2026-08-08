@@ -77,7 +77,8 @@ public sealed class GetRecommendedLecturesQueryHandler
                     lec.TagId,
                     lec.TagName,
                     wt.OfficialPoint,
-                    isRemedial);
+                    isRemedial,
+                    wt.RecommendedDifficultyLevel);
             })
             .OrderByDescending(r => r.IsRemedial)   // remedial first
             .ThenBy(r => r.OfficialPoint)             // worst scores first

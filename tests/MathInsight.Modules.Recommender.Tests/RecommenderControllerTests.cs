@@ -133,13 +133,14 @@ public sealed class RecommenderControllerTests
         IReadOnlyList<RecommendedLectureResponse> lectures =
         [
             new RecommendedLectureResponse(
-                LectureId:    "LEC-001",
-                Title:        "Bài 1: Đạo hàm cơ bản",
-                Description:  null,
-                TagId:        "TAG-001",
-                TagName:      "Đạo hàm",
-                OfficialPoint: 2.5m,
-                IsRemedial:   true)
+                LectureId:       "LEC-001",
+                Title:           "Bài 1: Đạo hàm cơ bản",
+                Description:     null,
+                TagId:           "TAG-001",
+                TagName:         "Đạo hàm",
+                OfficialPoint:   2.5m,
+                IsRemedial:      true,
+                DifficultyLevel: 1)
         ];
 
         var mediator = new Mock<IMediator>();

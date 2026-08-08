@@ -10,4 +10,5 @@ public sealed record RecommendedLectureResponse(
     string TagId,
     string TagName,
     decimal OfficialPoint,
-    bool IsRemedial);
+    bool IsRemedial,
+    byte DifficultyLevel);
