@@ -12,6 +12,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -89,7 +90,9 @@ public sealed class RecommenderHttpFlowTests : IDisposable
     {
         var mediator = new Mock<IMediator>();
 
-        var controller = new RecommenderController(mediator.Object)
+        var controller = new RecommenderController(
+            mediator.Object,
+            NullLogger<RecommenderController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -121,10 +124,39 @@ public sealed class RecommenderHttpFlowTests : IDisposable
     {
         var tagRemedial    = Guid.NewGuid().ToString();
         var tagNonRemedial = Guid.NewGuid().ToString();
+        var difficultyBasic = Guid.NewGuid().ToString();
+        var difficultyIntermediate = Guid.NewGuid().ToString();
 
         _db.TagTopics.AddRange(
-            new TagTopicReadOnly { TagId = tagRemedial,    TagName = "Remedial Topic",    Grade = 10 },
-            new TagTopicReadOnly { TagId = tagNonRemedial, TagName = "Non-Remedial Topic", Grade = 10 });
+            new TagTopicReadOnly
+            {
+                TagId = tagRemedial,
+                TagName = "Remedial Topic",
+                Grade = 10,
+                IsActive = true
+            },
+            new TagTopicReadOnly
+            {
+                TagId = tagNonRemedial,
+                TagName = "Non-Remedial Topic",
+                Grade = 10,
+                IsActive = true
+            });
+        _db.TagDifficulties.AddRange(
+            new TagDifficultyReadOnly
+            {
+                DifficultyId = difficultyBasic,
+                DifficultyName = "Basic",
+                LevelValue = 1,
+                IsActive = true
+            },
+            new TagDifficultyReadOnly
+            {
+                DifficultyId = difficultyIntermediate,
+                DifficultyName = "Intermediate",
+                LevelValue = 2,
+                IsActive = true
+            });
 
         // Remedial: level=1, OfficialPoint<3.0
         _db.TagsMasteries.Add(new TagsMastery
@@ -159,18 +191,32 @@ public sealed class RecommenderHttpFlowTests : IDisposable
 
         // Seed Lectures: use Title (actual property name)
         _db.Lectures.AddRange(
-            new LectureReadOnly { LectureId = "lec-remedial",    Title = "Lecture A (Remedial)",    TagId = tagRemedial,    Status = "Published" },
-            new LectureReadOnly { LectureId = "lec-nonremedial", Title = "Lecture B (NonRemedial)", TagId = tagNonRemedial, Status = "Published" });
+            new LectureReadOnly
+            {
+                LectureId = "lec-remedial",
+                Title = "Lecture A (Remedial)",
+                TagId = tagRemedial,
+                DifficultyId = difficultyBasic,
+                Status = "Published"
+            },
+            new LectureReadOnly
+            {
+                LectureId = "lec-nonremedial",
+                Title = "Lecture B (NonRemedial)",
+                TagId = tagNonRemedial,
+                DifficultyId = difficultyIntermediate,
+                Status = "Published"
+            });
 
         await _db.SaveChangesAsync();
 
         // Use query handler directly (no RecommenderService.GetRecommendedLecturesAsync exists)
-        var handler  = new GetRecommendedLecturesQueryHandler(_db, new DifficultyMappingService());
+        var handler  = new GetRecommendedLecturesQueryHandler(_db);
         var lectures = await handler.Handle(new GetRecommendedLecturesQuery(StudentId), default);
 
         Assert.Equal(2, lectures.Count);
-        Assert.True(lectures[0].IsRemedial,
-            $"Expected first lecture to be remedial but got IsRemedial={lectures[0].IsRemedial}");
+        Assert.Equal("WeakTopicExactDifficulty", lectures[0].Reason);
+        Assert.False(lectures[0].IsDifficultyFallback);
         Assert.Equal("lec-remedial", lectures[0].LectureId);
     }
 

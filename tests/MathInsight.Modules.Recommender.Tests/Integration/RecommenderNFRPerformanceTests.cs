@@ -33,18 +33,41 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
     private async Task SeedWeakTagsWithLecturesAsync()
     {
         const int weakTagCount = 30;
+        var basicDifficultyId = Guid.NewGuid().ToString();
+        var intermediateDifficultyId = Guid.NewGuid().ToString();
+
+        _db.TagDifficulties.AddRange(
+            new TagDifficultyReadOnly
+            {
+                DifficultyId = basicDifficultyId,
+                DifficultyName = "Basic",
+                LevelValue = 1,
+                IsActive = true
+            },
+            new TagDifficultyReadOnly
+            {
+                DifficultyId = intermediateDifficultyId,
+                DifficultyName = "Intermediate",
+                LevelValue = 2,
+                IsActive = true
+            });
 
         for (int i = 0; i < weakTagCount; i++)
         {
             var tagId    = Guid.NewGuid().ToString();
             var lectureId = Guid.NewGuid().ToString();
             var matId    = Guid.NewGuid().ToString();
+            var difficultyLevel = i < 15 ? 1 : 2;
+            var difficultyId = difficultyLevel == 1
+                ? basicDifficultyId
+                : intermediateDifficultyId;
 
             _db.TagTopics.Add(new TagTopicReadOnly
             {
                 TagId   = tagId,
                 TagName = $"Topic_{i:D3}",
-                Grade   = 10
+                Grade   = 10,
+                IsActive = true
             });
 
             _db.TagsMasteries.Add(new TagsMastery
@@ -58,7 +81,7 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
                 MasteryStatus              = "Learning",
                 NumberDone                 = 10,
                 SeriesAnswerCount          = 0,
-                RecommendedDifficultyLevel = i < 15 ? (byte)1 : (byte)2,
+                RecommendedDifficultyLevel = (byte)difficultyLevel,
                 ExamHistory                = "[]"
             });
 
@@ -68,6 +91,7 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
                 LectureId = lectureId,
                 Title     = $"Lecture for Topic_{i:D3}",
                 TagId     = tagId,
+                DifficultyId = difficultyId,
                 Status    = "Published"
             });
 
@@ -99,9 +123,9 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
     /// Uses GetRecommendedLecturesQueryHandler directly (RecommenderService has no such method).
     /// </summary>
     [Fact]
-    public async Task GetRecommendedLectures_30WeakTags_CompletesWithin500Ms()
+    public async Task GetRecommendedLectures_30WeakTags_ReturnsAtMostSixWithin500Ms()
     {
-        var handler = new GetRecommendedLecturesQueryHandler(_db, new DifficultyMappingService());
+        var handler = new GetRecommendedLecturesQueryHandler(_db);
 
         var sw = Stopwatch.StartNew();
         var lectures = await handler.Handle(new GetRecommendedLecturesQuery(_studentId), default);
@@ -110,7 +134,7 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
         Assert.True(sw.Elapsed.TotalMilliseconds < 500,
             $"GetRecommendedLectures took {sw.Elapsed.TotalMilliseconds:F1}ms, exceeds 500ms SLA");
 
-        Assert.Equal(30, lectures.Count);
+        Assert.Equal(6, lectures.Count);
     }
 
     // ── TC-SYS-NFR-RCM-003 ───────────────────────────────────────────────────
