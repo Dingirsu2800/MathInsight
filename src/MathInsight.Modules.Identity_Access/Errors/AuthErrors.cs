@@ -45,6 +45,13 @@ public static class AuthErrors
         AuthErrorCodes.EmailAlreadyConfirmed,
         "An account with this email or username already exists.");
 
+    // Checked at registration AND re-checked at confirmation: Account.PhoneNumber is uniquely
+    // indexed where not null, so without this the duplicate would surface as a failed insert
+    // long after the applicant left the form.
+    public static readonly Error PhoneNumberAlreadyUsed = new(
+        AuthErrorCodes.PhoneNumberAlreadyUsed,
+        "An account with this phone number already exists.");
+
     /// <summary>
     /// Rejected teacher application (403). The admin's review comments are carried in the error
     /// message so the controller can surface them as <c>review_comments</c> (BR-13).

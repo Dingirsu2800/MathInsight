@@ -2,10 +2,13 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using MediatR;
 using MathInsight.Modules.Recommender.Queries.GetWeakTags;
 using MathInsight.Modules.Recommender.Queries.GetRecommendedLectures;
 using MathInsight.Modules.Recommender.Queries.GetRecommendedMaterials;
+using MathInsight.Modules.Recommender.Errors;
+using MathInsight.Shared.Results;
 
 namespace MathInsight.Modules.Recommender.Controllers;
 
@@ -20,10 +23,12 @@ namespace MathInsight.Modules.Recommender.Controllers;
 public class RecommenderController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ILogger<RecommenderController> _logger;
 
-    public RecommenderController(IMediator mediator)
+    public RecommenderController(IMediator mediator, ILogger<RecommenderController> logger)
     {
         _mediator = mediator;
+        _logger = logger;
     }
 
     /// <summary>
@@ -37,7 +42,7 @@ public class RecommenderController : ControllerBase
     {
         var studentId = GetAuthenticatedStudentId();
         if (string.IsNullOrWhiteSpace(studentId))
-            return Unauthorized(new { error = "Invalid or missing student identity." });
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
             new GetWeakTagsQuery(studentId), cancellationToken);
@@ -46,8 +51,8 @@ public class RecommenderController : ControllerBase
     }
 
     /// <summary>
-    /// UC-53: Returns recommended lectures based on the student's weak tags (RCM-10).
-    /// Matches Lecture.TagID to weak TagIDs; remedial topics sorted first.
+    /// UC-53: Returns difficulty-aware lectures for qualified mastery contexts,
+    /// or grade foundation lectures when the student has no qualified evidence.
     /// </summary>
     [HttpGet("lectures")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -56,12 +61,21 @@ public class RecommenderController : ControllerBase
     {
         var studentId = GetAuthenticatedStudentId();
         if (string.IsNullOrWhiteSpace(studentId))
-            return Unauthorized(new { error = "Invalid or missing student identity." });
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
-        var result = await _mediator.Send(
-            new GetRecommendedLecturesQuery(studentId), cancellationToken);
+        try
+        {
+            var result = await _mediator.Send(
+                new GetRecommendedLecturesQuery(studentId), cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Unable to produce lecture recommendations for student {StudentId}", studentId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new ApiErrorResponse(RecommenderErrors.LectureRecommendationUnavailable));
+        }
     }
 
     /// <summary>
@@ -75,7 +89,7 @@ public class RecommenderController : ControllerBase
     {
         var studentId = GetAuthenticatedStudentId();
         if (string.IsNullOrWhiteSpace(studentId))
-            return Unauthorized(new { error = "Invalid or missing student identity." });
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
             new GetRecommendedMaterialsQuery(studentId), cancellationToken);

@@ -6,6 +6,13 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import { CustomSelect } from "../../components/ui/custom-select";
 import { adminApi } from "../../services/adminApi";
+import {
+  GetCertificateIcon,
+  GetCertificateKind,
+  GetCertificateKindLabel,
+  GetUrlFileName,
+} from "../../utils/certificateFiles";
+import { FormatVietnamDateTime } from "../../utils/dateTime";
 
 const STATUS_LABELS = {
   Pending: "Chờ duyệt",
@@ -19,13 +26,20 @@ const STATUS_BADGE_VARIANTS = {
   Rejected: "error"
 };
 
+// Vietnam time (Asia/Ho_Chi_Minh), so a reviewing Admin sees the same clock reading the teacher
+// sees for the same instant. See utils/dateTime.js for why toLocaleString alone is not enough.
 function formatDateTime(value) {
-  if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString("vi-VN");
-  } catch {
-    return "-";
-  }
+  return FormatVietnamDateTime(value);
+}
+
+// DocumentsUrl holds one or more certificate URLs, newline-separated (BR-05 allows the
+// applicant to upload multiple certificate images).
+function toDocumentUrls(documentsUrl) {
+  if (!documentsUrl) return [];
+  return documentsUrl
+    .split("\n")
+    .map((url) => url.trim())
+    .filter(Boolean);
 }
 
 function resolveErrorMessage(err, fallback) {
@@ -319,16 +333,48 @@ export default function TeacherApplicationsPage() {
 
               <div>
                 <h4 className="text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Chứng chỉ đính kèm</h4>
-                {detail.documentsUrl ? (
-                  <a
-                    href={detail.documentsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-primary font-semibold text-[13px] hover:underline"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">description</span>
-                    Xem tài liệu
-                  </a>
+                {toDocumentUrls(detail.documentsUrl).length > 0 ? (
+                  <ul className="space-y-2">
+                    {toDocumentUrls(detail.documentsUrl).map((url, index) => {
+                      // BR-05 allows JPG/PNG/PDF/Word. Images get a thumbnail; a PDF or Word file
+                      // cannot render inline, so it becomes a typed open/download link.
+                      const kind = GetCertificateKind(url);
+
+                      return (
+                        <li key={url} className="flex items-center gap-2.5">
+                          {kind === "image" ? (
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                              <img
+                                src={url}
+                                alt={`Chứng chỉ ${index + 1}`}
+                                className="w-12 h-12 object-cover rounded-lg border border-whisper-border"
+                              />
+                            </a>
+                          ) : (
+                            <span className="w-12 h-12 rounded-lg border border-whisper-border bg-surface-container flex items-center justify-center shrink-0">
+                              <span className="material-symbols-outlined text-on-surface-variant text-[22px]">
+                                {GetCertificateIcon(kind)}
+                              </span>
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-primary font-semibold text-[13px] hover:underline"
+                            >
+                              {kind === "image" ? `Xem chứng chỉ ${index + 1}` : "Tải chứng chỉ"}
+                              <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                            </a>
+                            <p className="text-[12px] text-on-surface-variant truncate">
+                              {GetCertificateKindLabel(kind)} — {GetUrlFileName(url)}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 ) : (
                   <p className="text-[13px] text-on-surface-variant">Không có tài liệu đính kèm.</p>
                 )}

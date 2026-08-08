@@ -30,9 +30,11 @@ namespace MathInsight.Modules.Identity_Access.Persistence.Configurations
                 .IsUnicode(false)
                 .IsRequired();
 
+            // Newline-separated certificate URLs (BR-05 allows multiple uploads), so the column
+            // is wider than a single URL — see 004_Alter_TeacherApplication_DocumentsUrl.sql.
             builder.Property(application => application.DocumentsUrl)
                 .HasColumnName("DocumentsUrl")
-                .HasMaxLength(255)
+                .HasMaxLength(2000)
                 .IsUnicode(false)
                 .IsRequired();
 

@@ -6,4 +6,6 @@ public class TagTopicReadOnly
     public string TagName { get; set; } = default!;
     public string? ParentTagId { get; set; }
     public int Grade { get; set; }
+    public bool IsActive { get; set; }
+    public int DisplayOrder { get; set; }
 }

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MathInsight.Modules.Learning_Lecture.Commands.Lectures;
 using MathInsight.Modules.Learning_Lecture.Entities;
+using MathInsight.Modules.Learning_Lecture.Errors;
 using MathInsight.Modules.Learning_Lecture.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -16,17 +17,20 @@ public sealed class LectureCommandTests
     {
         // Arrange
         await using var database = await LearningInMemoryContext.CreateAsync();
+        AddActiveTaxonomy(database.Context);
+        await database.Context.SaveChangesAsync();
         var handler = new CreateLectureCommandHandler(database.Context);
-        var command = new CreateLectureCommand("Test Lecture", "Content", null, null, "tag-1", "teacher-1", null);
+        var command = new CreateLectureCommand("Test Lecture", "Content", null, null, "tag-1", "difficulty-1", "teacher-1", null);
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("Draft", result.Status);
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+        Assert.Equal("Draft", result.Value!.Status);
         
-        var lectureInDb = await database.Context.Lectures.FirstOrDefaultAsync(l => l.LectureId == result.LectureId);
+        var lectureInDb = await database.Context.Lectures.FirstOrDefaultAsync(l => l.LectureId == result.Value.LectureId);
         Assert.NotNull(lectureInDb);
         Assert.Equal("Draft", lectureInDb.Status);
         Assert.Equal("teacher-1", lectureInDb.TeacherId);
@@ -44,11 +48,13 @@ public sealed class LectureCommandTests
             Title = "Test",
             Content = "Valid content",
             TagId = "tag-1",
+            DifficultyId = "difficulty-1",
             TeacherId = "teacher-1",
             Status = "Draft",
             CreatedTime = DateTime.UtcNow,
             UpdatedTime = DateTime.UtcNow
         });
+        AddDifficulty(database.Context);
         await database.Context.SaveChangesAsync();
 
         var handler = new PublishLectureCommandHandler(database.Context);
@@ -58,7 +64,8 @@ public sealed class LectureCommandTests
         var result = await handler.Handle(command, CancellationToken.None);
 
         // Assert
-        Assert.True(result);
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value);
         var updatedLecture = await database.Context.Lectures.FirstOrDefaultAsync(l => l.LectureId == lectureId);
         Assert.Equal("Published", updatedLecture!.Status);
     }
@@ -87,8 +94,9 @@ public sealed class LectureCommandTests
         var command = new PublishLectureCommand(lectureId, "teacher-1", false);
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<Exception>(() => handler.Handle(command, CancellationToken.None));
-        Assert.Contains("must have either VideoUrl or Content", ex.Message);
+        var result = await handler.Handle(command, CancellationToken.None);
+        Assert.True(result.IsFailure);
+        Assert.Equal(LearningErrors.LectureContentRequired, result.Error);
     }
 
     [Fact]
@@ -114,7 +122,33 @@ public sealed class LectureCommandTests
         var command = new PublishLectureCommand(lectureId, "teacher-2", false); // Caller is teacher-2
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<Exception>(() => handler.Handle(command, CancellationToken.None));
-        Assert.Contains("Forbidden", ex.Message);
+        var result = await handler.Handle(command, CancellationToken.None);
+        Assert.True(result.IsFailure);
+        Assert.Equal(LearningErrors.LectureForbidden, result.Error);
+    }
+
+    private static void AddActiveTaxonomy(LearningDbContext context)
+    {
+        context.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = "tag-1",
+            TagName = "Topic 1",
+            Grade = 12,
+            IsActive = true,
+            DisplayOrder = 1
+        });
+        AddDifficulty(context);
+    }
+
+    private static void AddDifficulty(LearningDbContext context)
+    {
+        context.TagDifficulties.Add(new TagDifficultyReadOnly
+        {
+            DifficultyId = "difficulty-1",
+            DifficultyName = "Difficulty 1",
+            LevelValue = 1,
+            DisplayOrder = 1,
+            IsActive = true
+        });
     }
 }

@@ -249,7 +249,7 @@ export default function RegisterStudentPage() {
               value={form.email}
               onChange={setField("email")}
               className={inputClass}
-              placeholder="email@fpt.edu.vn"
+              placeholder="email@gmail.com"
               autoComplete="email"
               disabled={loading}
             />
@@ -403,19 +403,22 @@ export default function RegisterStudentPage() {
           </button>
         </form>
 
-        <div className="text-center space-y-2">
-          <p className="text-sm text-slate-500">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500 text-center">
             Đã có tài khoản?{" "}
             <Link to="/login" className="font-bold text-[#2f5fa8] hover:underline">
               Đăng nhập
             </Link>
           </p>
-          <p className="text-xs text-slate-400">
-            Bạn là giáo viên?{" "}
-            <Link to="/register/teacher" className="font-semibold text-[#2f5fa8] hover:underline">
-              Đăng ký với tư cách giáo viên
-            </Link>
-          </p>
+          {/* Teacher path is a distinct flow (admin-approved), so it gets a button-like
+              affordance instead of a faint footnote users scroll past. */}
+          <Link
+            to="/register/teacher"
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-semibold text-[#2f5fa8] bg-[#2f5fa8]/[0.06] border border-[#2f5fa8]/30 rounded-xl hover:bg-[#2f5fa8]/10 hover:border-[#2f5fa8] transition-all"
+          >
+            <span className="material-symbols-outlined text-[20px]">school</span>
+            Bạn là giáo viên? Đăng ký với tư cách giáo viên
+          </Link>
         </div>
       </section>
     </main>

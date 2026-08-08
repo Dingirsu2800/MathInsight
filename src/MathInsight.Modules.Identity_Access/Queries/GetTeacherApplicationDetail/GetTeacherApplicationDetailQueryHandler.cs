@@ -1,4 +1,5 @@
 using MathInsight.Modules.Identity_Access.Contracts.Admin;
+using MathInsight.Modules.Identity_Access.Contracts.Common;
 using MathInsight.Modules.Identity_Access.Errors;
 using MathInsight.Modules.Identity_Access.Persistence;
 using MathInsight.Shared.Results;
@@ -42,8 +43,8 @@ public class GetTeacherApplicationDetailQueryHandler
             application.DocumentsUrl,
             application.Status,
             application.ReviewComments,
-            application.AppliedTime,
-            application.ReviewedTime,
+            UtcTimestamp.AsUtc(application.AppliedTime),
+            UtcTimestamp.AsUtc(application.ReviewedTime),
             application.ReviewedBy));
     }
 }

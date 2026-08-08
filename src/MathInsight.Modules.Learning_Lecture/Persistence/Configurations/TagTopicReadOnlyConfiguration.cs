@@ -8,12 +8,14 @@ public class TagTopicReadOnlyConfiguration : IEntityTypeConfiguration<TagTopicRe
 {
     public void Configure(EntityTypeBuilder<TagTopicReadOnly> builder)
     {
-        builder.ToTable("TagTopic");
+        builder.ToTable("TagTopic", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.TagId);
         
-        builder.Property(x => x.TagId).HasColumnName("TagID").HasMaxLength(36);
+        builder.Property(x => x.TagId).HasColumnName("TagID").IsUnicode(false).HasMaxLength(36);
         builder.Property(x => x.TagName).HasColumnName("TagName").HasMaxLength(50);
-        builder.Property(x => x.ParentTagId).HasColumnName("ParentTagID").HasMaxLength(36);
+        builder.Property(x => x.ParentTagId).HasColumnName("ParentTagID").IsUnicode(false).HasMaxLength(36);
         builder.Property(x => x.Grade).HasColumnName("Grade");
+        builder.Property(x => x.IsActive).HasColumnName("IsActive");
+        builder.Property(x => x.DisplayOrder).HasColumnName("DisplayOrder");
     }
 }
