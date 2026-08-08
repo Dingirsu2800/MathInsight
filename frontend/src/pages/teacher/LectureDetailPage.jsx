@@ -190,11 +190,23 @@ export default function LectureDetailPage() {
           <div className="p-8">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <span className="inline-block px-3 py-1 bg-primary-container/20 text-primary text-[12px] font-semibold uppercase tracking-wider rounded-full mb-3">
-                  {lecture.tagName || "Chủ đề"}
-                </span>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="inline-block px-3 py-1 bg-primary-container/20 text-primary text-[12px] font-semibold uppercase tracking-wider rounded-full">
+                    {lecture.tagName || "Chủ đề"}
+                  </span>
+                  {lecture.difficultyName ? (
+                    <span className="inline-block px-3 py-1 bg-secondary-container/30 text-secondary text-[12px] font-semibold tracking-wider rounded-full">
+                      Mức {lecture.difficultyLevel}: {lecture.difficultyName}
+                    </span>
+                  ) : (
+                    <span className="inline-block px-3 py-1 bg-surface-container-high text-on-surface-variant/70 text-[12px] font-medium tracking-wider rounded-full">
+                      Chưa có độ khó
+                    </span>
+                  )}
+                </div>
                 <h1 className="text-[32px] font-semibold leading-[40px] tracking-[-0.02em] text-on-surface mb-2">{lecture.title}</h1>
               </div>
+
               <div className="flex items-center gap-2">
                 <button className="flex items-center gap-2 px-4 py-2 bg-error-container/20 text-error rounded-lg hover:bg-error-container/30 transition-colors font-medium text-[16px]">
                   <span className="material-symbols-outlined text-error" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>

@@ -8,7 +8,7 @@ public class TagDifficultyReadOnlyConfiguration : IEntityTypeConfiguration<TagDi
 {
     public void Configure(EntityTypeBuilder<TagDifficultyReadOnly> builder)
     {
-        builder.ToTable("TagDifficulty");
+        builder.ToTable("TagDifficulty", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.DifficultyId);
 
         builder.Property(x => x.DifficultyId)
@@ -22,5 +22,8 @@ public class TagDifficultyReadOnlyConfiguration : IEntityTypeConfiguration<TagDi
         builder.Property(x => x.DifficultyName)
             .HasColumnName("DifficultyName")
             .HasMaxLength(50);
+
+        builder.Property(x => x.IsActive)
+            .HasColumnName("IsActive");
     }
 }

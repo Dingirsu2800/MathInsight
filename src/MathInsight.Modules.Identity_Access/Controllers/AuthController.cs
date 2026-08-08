@@ -222,34 +222,59 @@ public class AuthController : ControllerBase
         return Accepted(new { message = "Registration received. Please check your email to confirm your account." });
     }
 
+    // Kestrel's default body cap is 30 MB, which several 10MB certificates (BR-05) would exceed
+    // before model binding runs. 64 MB covers the 6-file client-side cap plus multipart overhead.
     [HttpPost("register/teacher")]
+    [RequestSizeLimit(64L * 1024 * 1024)]
     public async Task<IActionResult> RegisterTeacher(
             [FromForm] TeacherRegisterRequest request,
             CancellationToken cancellationToken)
     {
-        // Stream stays open for the duration of the upload inside the handler.
-        await using var certificateStream = request.Certificate.OpenReadStream();
+        // Streams stay open for the duration of the uploads inside the handler; SizeInBytes must
+        // come from IFormFile.Length so the per-file 10MB gate is enforced (BR-05).
+        var certificateStreams = new List<Stream>(request.Certificates.Count);
 
-        var result = await _mediator.Send(
-            new TeacherRegisterCommand(
-                request.Username,
-                request.Email,
-                request.Password,
-                request.FirstName,
-                request.LastName,
-                request.Biography,
-                certificateStream,
-                request.Certificate.FileName,
-                request.Certificate.ContentType,
-                request.Certificate.Length),
-            cancellationToken);
-
-        if (result.IsFailure)
+        try
         {
-            return ToAuthErrorResult(result.Error!);
-        }
+            var certificates = new List<CertificateUploadRequest>(request.Certificates.Count);
 
-        return Accepted(new { message = "Registration received. Please check your email to confirm your account." });
+            foreach (var file in request.Certificates)
+            {
+                var stream = file.OpenReadStream();
+                certificateStreams.Add(stream);
+                certificates.Add(new CertificateUploadRequest(
+                    stream,
+                    file.FileName,
+                    file.ContentType,
+                    file.Length));
+            }
+
+            var result = await _mediator.Send(
+                new TeacherRegisterCommand(
+                    request.Username,
+                    request.Email,
+                    request.Password,
+                    request.FirstName,
+                    request.LastName,
+                    request.PhoneNumber,
+                    request.Biography,
+                    certificates),
+                cancellationToken);
+
+            if (result.IsFailure)
+            {
+                return ToAuthErrorResult(result.Error!);
+            }
+
+            return Accepted(new { message = "Registration received. Please check your email to confirm your account." });
+        }
+        finally
+        {
+            foreach (var stream in certificateStreams)
+            {
+                await stream.DisposeAsync();
+            }
+        }
     }
 
     [HttpPost("confirm-email")]
@@ -346,7 +371,8 @@ public class AuthController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(error));
         }
 
-        if (error.Code == AuthErrorCodes.EmailAlreadyConfirmed)
+        if (error.Code == AuthErrorCodes.EmailAlreadyConfirmed ||
+            error.Code == AuthErrorCodes.PhoneNumberAlreadyUsed)
         {
             return Conflict(new ApiErrorResponse(error));
         }

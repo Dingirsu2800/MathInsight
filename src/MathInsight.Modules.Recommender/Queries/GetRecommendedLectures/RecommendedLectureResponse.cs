@@ -1,14 +1,20 @@
 namespace MathInsight.Modules.Recommender.Queries.GetRecommendedLectures;
 
 /// <summary>
-/// Response DTO for recommended lectures.
+/// A difficulty-aware, auditable lecture recommendation.
 /// </summary>
 public sealed record RecommendedLectureResponse(
     string LectureId,
     string Title,
-    string? Description,
+    string? ThumbnailUrl,
     string TagId,
     string TagName,
-    decimal OfficialPoint,
-    bool IsRemedial,
-    byte DifficultyLevel);
+    string DifficultyId,
+    string DifficultyName,
+    int DifficultyLevel,
+    byte TargetDifficultyLevel,
+    decimal? OfficialPoint,
+    int EvidenceCount,
+    int Likes,
+    bool IsDifficultyFallback,
+    string Reason);

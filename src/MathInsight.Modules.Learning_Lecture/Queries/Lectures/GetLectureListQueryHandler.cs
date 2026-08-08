@@ -75,6 +75,9 @@ public class GetLectureListQueryHandler : IRequestHandler<GetLectureListQuery, P
                 TeacherName = _dbContext.AccountProfileViews.Where(a => a.AccountId == x.TeacherId).Select(a => a.AuthorName).FirstOrDefault(),
                 TagId = x.TagId,
                 TagName = _dbContext.TagTopics.Where(t => t.TagId == x.TagId).Select(t => t.TagName).FirstOrDefault(),
+                DifficultyId = x.DifficultyId,
+                DifficultyName = _dbContext.TagDifficulties.Where(d => d.DifficultyId == x.DifficultyId).Select(d => d.DifficultyName).FirstOrDefault(),
+                DifficultyLevel = _dbContext.TagDifficulties.Where(d => d.DifficultyId == x.DifficultyId).Select(d => (int?)d.LevelValue).FirstOrDefault(),
                 Status = x.Status,
                 CreatedTime = x.CreatedTime,
                 UpdatedTime = x.UpdatedTime

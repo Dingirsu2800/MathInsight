@@ -9,16 +9,37 @@ export const STORAGE_KEYS = {
   refreshToken: "refresh_token",
   roleName: "role_name",
   accountId: "account_id",
+  // BR-06. Teacher only: "pending" | "rejected" | "approved" | "none". Advisory — it decides
+  // where the client routes, never what the caller may do; the backend re-checks approval on
+  // every request via the "TeacherApproved" policy.
+  applicationStatus: "application_status",
 };
 
 // Keys used by older builds. Cleared on logout so stale tokens never linger.
 const LEGACY_KEYS = ["token", "AccountId", "RoleName"];
 
-export function setAuthSession({ accessToken, refreshToken, roleName, accountId }) {
+export function setAuthSession({ accessToken, refreshToken, roleName, accountId, applicationStatus }) {
   if (accessToken != null) localStorage.setItem(STORAGE_KEYS.accessToken, accessToken);
   if (refreshToken != null) localStorage.setItem(STORAGE_KEYS.refreshToken, refreshToken);
   if (roleName != null) localStorage.setItem(STORAGE_KEYS.roleName, roleName);
   if (accountId != null) localStorage.setItem(STORAGE_KEYS.accountId, accountId);
+
+  // Absent for non-teachers: clear any value left by a previous session on this browser.
+  if (applicationStatus != null) {
+    localStorage.setItem(STORAGE_KEYS.applicationStatus, applicationStatus);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.applicationStatus);
+  }
+}
+
+// Called after a resubmission flips the application back to pending, so the stored value does
+// not keep saying "rejected" until the next login.
+export function setApplicationStatus(applicationStatus) {
+  if (applicationStatus == null) {
+    localStorage.removeItem(STORAGE_KEYS.applicationStatus);
+    return;
+  }
+  localStorage.setItem(STORAGE_KEYS.applicationStatus, applicationStatus);
 }
 
 // Overwrite only the token pair (used after a refresh rotation).
@@ -41,6 +62,10 @@ export function getRoleName() {
 
 export function getAccountId() {
   return localStorage.getItem(STORAGE_KEYS.accountId);
+}
+
+export function getApplicationStatus() {
+  return localStorage.getItem(STORAGE_KEYS.applicationStatus);
 }
 
 export function clearAuthSession() {

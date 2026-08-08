@@ -51,6 +51,19 @@ public class ConfirmEmailCommandHandler : IRequestHandler<ConfirmEmailCommand, R
             return Result<Unit>.Failure(AuthErrors.EmailAlreadyConfirmed);
         }
 
+        // Same race for the phone number, which is uniquely indexed where not null. Guarded on
+        // null: a null payload phone would otherwise match every account that has none.
+        if (!string.IsNullOrWhiteSpace(payload.PhoneNumber))
+        {
+            var phoneConflict = await _dbContext.Accounts
+                .AnyAsync(account => account.PhoneNumber == payload.PhoneNumber, cancellationToken);
+
+            if (phoneConflict)
+            {
+                return Result<Unit>.Failure(AuthErrors.PhoneNumberAlreadyUsed);
+            }
+        }
+
         var role = await _dbContext.Roles
             .FirstOrDefaultAsync(role => role.RoleName == payload.Role, cancellationToken)
             ?? throw new InvalidOperationException($"Seeded role '{payload.Role}' was not found.");
@@ -65,6 +78,7 @@ public class ConfirmEmailCommandHandler : IRequestHandler<ConfirmEmailCommand, R
             Email = payload.Email,
             FirstName = payload.FirstName,
             LastName = payload.LastName,
+            PhoneNumber = payload.PhoneNumber,
             RoleId = role.RoleId,
             IsActive = true, // every persisted account is email-verified by construction (DD-01)
             CreatedTime = DateTime.UtcNow,
@@ -74,6 +88,15 @@ public class ConfirmEmailCommandHandler : IRequestHandler<ConfirmEmailCommand, R
 
         var isTeacher = string.Equals(payload.Role, "Teacher", StringComparison.OrdinalIgnoreCase);
         string? applicationId = null;
+
+        // Every certificate URL uploaded at registration (BR-05), newline-separated in the single
+        // DocumentsUrl column. DocumentsUrls is null for payloads written before multi-upload,
+        // so fall back to the single DocumentsUrl for registrations still in flight in Redis.
+        var documentsUrl = isTeacher
+            ? string.Join(
+                TeacherApplication.DocumentsUrlSeparator,
+                payload.DocumentsUrls is { Count: > 0 } urls ? urls : [payload.DocumentsUrl!])
+            : null;
 
         if (isTeacher)
         {
@@ -89,7 +112,7 @@ public class ConfirmEmailCommandHandler : IRequestHandler<ConfirmEmailCommand, R
             {
                 ApplicationId = applicationId,
                 TeacherId = accountId,
-                DocumentsUrl = payload.DocumentsUrl!,
+                DocumentsUrl = documentsUrl!,
                 Status = "Pending", // title-case, per CK_TeacherApplication_Status
                 AppliedTime = DateTime.UtcNow,
             });
@@ -126,7 +149,7 @@ public class ConfirmEmailCommandHandler : IRequestHandler<ConfirmEmailCommand, R
                 ApplicationId = applicationId!,
                 TeacherId = accountId,
                 Email = payload.Email,
-                DocumentsUrl = payload.DocumentsUrl!,
+                DocumentsUrl = documentsUrl!,
             }, cancellationToken);
         }
 

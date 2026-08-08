@@ -546,7 +546,8 @@ GO
 CREATE TABLE [TeacherApplication] (
     [ApplicationID] VARCHAR(36) NOT NULL,
     [TeacherID] VARCHAR(36) NOT NULL,
-    [DocumentsUrl] VARCHAR(255) NOT NULL,
+    -- Newline-separated list of certificate image URLs (BR-05 allows multiple uploads).
+    [DocumentsUrl] VARCHAR(2000) NOT NULL,
     [Status] VARCHAR(20) NOT NULL DEFAULT 'Pending',
     [ReviewComments] NVARCHAR(255) NULL,
     [AppliedTime] DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),

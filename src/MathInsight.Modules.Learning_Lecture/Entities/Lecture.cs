@@ -13,6 +13,7 @@ public class Lecture
     public int Likes { get; set; }
     public string TeacherId { get; set; } = default!;
     public string TagId { get; set; } = default!;
+    public string? DifficultyId { get; set; }
     public string Status { get; set; } = "Draft";
     public DateTime CreatedTime { get; set; }
     public DateTime UpdatedTime { get; set; }

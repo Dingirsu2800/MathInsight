@@ -1,4 +1,6 @@
+using MathInsight.Modules.Identity_Access.Authorization;
 using MathInsight.Modules.Identity_Access.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +29,11 @@ public static class IdentityModuleExtensions
         });
 
         services.AddScoped<ITokenService, TokenService>();
+
+        // BR-06 gate for the "TeacherApproved" policy. Scoped because it reads IdentityDbContext
+        // on each request; the policy itself is registered by the host via
+        // AuthorizationOptions.AddIdentityAuthorizationPolicies().
+        services.AddScoped<IAuthorizationHandler, TeacherApprovedHandler>();
 
         // Teacher certificates are stored via the shared blob/image storage (BR-05).
         services.AddScoped<ICertificateStorage, BlobCertificateStorage>();

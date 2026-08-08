@@ -15,6 +15,9 @@ public class LectureDto
     public string? TeacherName { get; set; }
     public string TagId { get; set; } = default!;
     public string? TagName { get; set; }
+    public string? DifficultyId { get; set; }
+    public string? DifficultyName { get; set; }
+    public int? DifficultyLevel { get; set; }
     public bool IsLiked { get; set; }
     public string Status { get; set; } = default!;
     public DateTime CreatedTime { get; set; }

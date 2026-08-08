@@ -5,10 +5,11 @@ using MediatR;
 using MathInsight.Modules.Learning_Lecture.Contracts;
 using MathInsight.Modules.Learning_Lecture.Entities;
 using MathInsight.Modules.Learning_Lecture.Persistence;
+using MathInsight.Shared.Results;
 
 namespace MathInsight.Modules.Learning_Lecture.Commands.Lectures;
 
-public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand, LectureDto>
+public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand, Result<LectureDto>>
 {
     private readonly LearningDbContext _dbContext;
 
@@ -17,10 +18,17 @@ public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand,
         _dbContext = dbContext;
     }
 
-    public async Task<LectureDto> Handle(CreateLectureCommand request, CancellationToken cancellationToken)
+    public async Task<Result<LectureDto>> Handle(CreateLectureCommand request, CancellationToken cancellationToken)
     {
-        // Validation: TagId existence should technically be validated, assuming it is valid for MVP or validated at gateway.
-        
+        var validationError = await LectureTaxonomyValidator.ValidateAssignmentAsync(
+            _dbContext,
+            request.TagId,
+            request.DifficultyId,
+            cancellationToken);
+
+        if (validationError is not null)
+            return Result<LectureDto>.Failure(validationError);
+
         var lecture = new Lecture
         {
             LectureId = Guid.NewGuid().ToString(),
@@ -29,6 +37,7 @@ public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand,
             VideoUrl = request.VideoUrl,
             ThumbnailUrl = request.ThumbnailUrl,
             TagId = request.TagId,
+            DifficultyId = request.DifficultyId,
             TeacherId = request.TeacherId,
             Status = "Draft",
             CreatedTime = DateTime.UtcNow,
@@ -48,15 +57,16 @@ public class CreateLectureCommandHandler : IRequestHandler<CreateLectureCommand,
         _dbContext.Lectures.Add(lecture);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new LectureDto 
-        { 
+        return Result<LectureDto>.Success(new LectureDto
+        {
             LectureId = lecture.LectureId, 
             Title = lecture.Title, 
             Status = lecture.Status,
             TeacherId = lecture.TeacherId,
             TagId = lecture.TagId,
+            DifficultyId = lecture.DifficultyId,
             CreatedTime = lecture.CreatedTime,
             UpdatedTime = lecture.UpdatedTime
-        };
+        });
     }
 }

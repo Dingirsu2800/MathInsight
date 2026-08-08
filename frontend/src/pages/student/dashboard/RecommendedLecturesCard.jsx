@@ -1,24 +1,47 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
-import { getRecommendedLectures } from '../../../services/recommenderApi';
+import { getRecommendedLectures, getRecommenderErrorMessage } from '../../../services/recommenderApi';
+
+function getRecommendationExplanation(lecture) {
+  if (lecture.isDifficultyFallback || (lecture.reason && lecture.reason.includes('LowerDifficultyFallback'))) {
+    return `Bài giảng nền tảng để ôn lại trước mức ${lecture.targetDifficultyLevel}.`;
+  }
+  switch (lecture.reason) {
+    case 'WeakTopicExactDifficulty':
+      return 'Đề xuất vì bạn đang cần củng cố chủ đề này.';
+    case 'ProgressionExactDifficulty':
+      return 'Mức học tiếp theo phù hợp với tiến độ hiện tại của bạn.';
+    case 'ColdStartGradeFoundation':
+      return 'Bài giảng khởi đầu phù hợp với khối lớp của bạn.';
+    default:
+      return lecture.reason || 'Bài giảng được đề xuất cho bạn.';
+  }
+}
 
 export default function RecommendedLecturesCard() {
   const [lectures, setLectures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
+  const fetchRecommendations = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(false);
+    setErrorMessage('');
 
     getRecommendedLectures()
       .then((data) => {
-        if (!cancelled) setLectures(data);
+        if (!cancelled) {
+          setLectures(Array.isArray(data) ? data : []);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setError(true);
+      .catch((err) => {
+        if (!cancelled) {
+          setError(true);
+          setErrorMessage(getRecommenderErrorMessage(err));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -26,6 +49,11 @@ export default function RecommendedLecturesCard() {
 
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const cleanup = fetchRecommendations();
+    return cleanup;
+  }, [fetchRecommendations]);
 
   return (
     <div className="bg-pure-surface border border-whisper-border rounded-2xl p-6 shadow-sm">
@@ -49,11 +77,21 @@ export default function RecommendedLecturesCard() {
         </div>
       )}
 
-      {/* Error state */}
+      {/* Technical error state with retry button */}
       {!loading && error && (
-        <p className="text-sm text-outline text-center py-6">
-          Không thể tải bài giảng đề xuất. Vui lòng thử lại sau.
-        </p>
+        <div className="text-center py-6 space-y-3">
+          <p className="text-sm text-outline">
+            {errorMessage || 'Không thể tải bài giảng đề xuất. Vui lòng thử lại sau.'}
+          </p>
+          <button
+            type="button"
+            onClick={fetchRecommendations}
+            className="px-4 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-xs font-bold transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none inline-flex items-center gap-1.5"
+          >
+            <MaterialIcon name="refresh" size={16} />
+            Thử lại
+          </button>
+        </div>
       )}
 
       {/* Empty state */}
@@ -63,14 +101,15 @@ export default function RecommendedLecturesCard() {
         </p>
       )}
 
-      {/* Data */}
+      {/* Data Grid */}
       {!loading && !error && lectures.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {lectures.map((lecture) => {
-            const chipColor = lecture.isRemedial ? 'bg-deep-rose' : 'bg-primary';
-            const chipLabel = lecture.isRemedial
-              ? `Phụ đạo: ${lecture.tagName}`
-              : lecture.tagName;
+            const explanation = getRecommendationExplanation(lecture);
+            const isColdStart = lecture.reason === 'ColdStartGradeFoundation';
+            const isRemedial = lecture.reason?.startsWith('WeakTopic') === true;
+            const chipColor = isRemedial ? 'bg-deep-rose' : 'bg-primary';
+            const chipLabel = isRemedial ? `Phụ đạo: ${lecture.tagName}` : lecture.tagName;
 
             const difficultyMeta = {
               1: { label: 'Cơ bản',   color: 'bg-emerald-500' },
@@ -84,28 +123,69 @@ export default function RecommendedLecturesCard() {
               <Link
                 key={lecture.lectureId}
                 to={`/student/lectures/${lecture.lectureId}`}
-                className="group block rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 transition-all"
+                className="group block rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none transition-all bg-pure-surface flex flex-col justify-between"
               >
-                {/* Thumbnail placeholder */}
-                <div className="relative w-full h-[180px] bg-surface-container overflow-hidden">
-                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary-container/30">
-                    <MaterialIcon name="play_circle" size={48} className="text-primary/40 group-hover:text-primary/70 transition-colors" />
+                <div>
+                  {/* Thumbnail / Header Area */}
+                  <div className="relative w-full h-[180px] bg-surface-container overflow-hidden">
+                    {lecture.thumbnailUrl ? (
+                      <img
+                        src={lecture.thumbnailUrl}
+                        alt={lecture.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary-container/30">
+                        <MaterialIcon name="play_circle" size={48} className="text-primary/40" />
+                      </div>
+                    )}
+
+                    {/* Topic & Difficulty Chips */}
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[85%]">
+                      <span className={`${chipColor} text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm`}>
+                        {chipLabel}
+                      </span>
+                      {lecture.difficultyName && (
+                        <span className="bg-surface-container-highest/90 text-on-surface text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm shadow-sm border border-whisper-border">
+                          {lecture.difficultyName}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className={`absolute top-3 left-3 ${chipColor} text-white text-[10px] font-bold px-2.5 py-1 rounded`}>
-                    {chipLabel}
+
+                  {/* Body Content */}
+                  <div className="p-3.5 space-y-2">
+                    <h4 className="text-sm font-bold text-on-surface line-clamp-2 group-hover:text-primary transition-colors">
+                      {lecture.title}
+                    </h4>
+
+                    {/* Explanation */}
+                    <p className="text-xs text-outline leading-relaxed flex items-start gap-1">
+                      <MaterialIcon name="info" size={14} className="text-primary/70 shrink-0 mt-0.5" />
+                      <span>{explanation}</span>
+                    </p>
                   </div>
                   <div className={`absolute top-3 right-3 ${diff.color} text-white text-[10px] font-bold px-2.5 py-1 rounded`}>
                     {diff.label}
                   </div>
                 </div>
-                <div className="p-3">
-                  <h4 className="text-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">
-                    {lecture.title}
-                  </h4>
-                  {lecture.description && (
-                    <p className="text-xs text-outline mt-1 line-clamp-2">
-                      {lecture.description}
-                    </p>
+
+                {/* Footer Score (Mastery-based only) */}
+                <div className="px-3.5 pb-3.5 pt-1 border-t border-whisper-border/50 flex items-center justify-between text-[11px] text-on-surface-variant">
+                  {lecture.officialPoint != null && !isColdStart ? (
+                    <span className="font-semibold text-primary">
+                      Điểm chủ đề: {Number(lecture.officialPoint).toFixed(1)}/10
+                    </span>
+                  ) : (
+                    <span className="italic text-outline">
+                      Bài giảng nền tảng
+                    </span>
+                  )}
+                  {lecture.likes > 0 && (
+                    <span className="flex items-center gap-1 font-medium">
+                      <MaterialIcon name="favorite" size={12} className="text-deep-rose" />
+                      {lecture.likes}
+                    </span>
                   )}
                 </div>
               </Link>
@@ -116,4 +196,3 @@ export default function RecommendedLecturesCard() {
     </div>
   );
 }
-

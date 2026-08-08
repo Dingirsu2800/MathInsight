@@ -14,6 +14,7 @@ export const AUTH_ERROR_MESSAGES = {
   AUTH_TOKEN_EXPIRED: "Liên kết đã hết hạn. Vui lòng thử lại.",
   AUTH_TOKEN_INVALID: "Liên kết không hợp lệ.",
   AUTH_EMAIL_ALREADY_CONFIRMED: "Email này đã được xác nhận. Vui lòng đăng nhập.",
+  AUTH_PHONE_ALREADY_USED: "Số điện thoại này đã được sử dụng.",
   AUTH_CERTIFICATE_INVALID: "Chứng chỉ không hợp lệ.",
   AUTH_GOOGLE_FAILED: "Đăng nhập bằng Google thất bại. Vui lòng thử lại.",
   // UC-03 (đổi mật khẩu)

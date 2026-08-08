@@ -1,5 +1,9 @@
 namespace MathInsight.Modules.Identity_Access.Contracts.Admin;
 
+/// <summary>
+/// <paramref name="DocumentsUrl"/> carries one or more certificate URLs separated by
+/// <see cref="Entities.TeacherApplication.DocumentsUrlSeparator"/> (BR-05 allows multiple uploads).
+/// </summary>
 public sealed record TeacherApplicationDetailResponse(
     string ApplicationId,
     string TeacherId,

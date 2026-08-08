@@ -12,5 +12,10 @@ public record TeacherApplicationSubmittedEvent : INotification
     public string ApplicationId { get; init; } = default!;
     public string TeacherId { get; init; } = default!;
     public string Email { get; init; } = default!;
+
+    /// <summary>
+    /// One or more certificate URLs, separated by
+    /// <see cref="Entities.TeacherApplication.DocumentsUrlSeparator"/>.
+    /// </summary>
     public string DocumentsUrl { get; init; } = default!;
 }

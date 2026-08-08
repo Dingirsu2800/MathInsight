@@ -35,6 +35,7 @@ public class TeacherRegisterCommandHandler : IRequestHandler<TeacherRegisterComm
     {
         var email = request.Email.Trim();
         var username = request.Username.Trim();
+        var phoneNumber = request.PhoneNumber.Trim();
 
         var exists = await _dbContext.Accounts
             .AnyAsync(account => account.Email == email || account.Username == username, cancellationToken);
@@ -44,18 +45,31 @@ public class TeacherRegisterCommandHandler : IRequestHandler<TeacherRegisterComm
             return Result<Unit>.Failure(AuthErrors.EmailAlreadyConfirmed);
         }
 
-        // SizeInBytes comes from the controller's IFormFile.Length; if it were 0 the 10MB gate in
-        // BlobCertificateStorage would be silently skipped (BR-05).
-        var certificateRequest = new CertificateUploadRequest(
-            request.CertificateContent,
-            request.CertificateFileName,
-            request.CertificateContentType,
-            request.CertificateSizeInBytes);
+        // Separate check, and before the uploads: the phone number has its own unique index, so a
+        // duplicate would otherwise only fail at confirmation — after the certificates were stored.
+        var phoneTaken = await _dbContext.Accounts
+            .AnyAsync(account => account.PhoneNumber == phoneNumber, cancellationToken);
 
-        string documentsUrl;
+        if (phoneTaken)
+        {
+            return Result<Unit>.Failure(AuthErrors.PhoneNumberAlreadyUsed);
+        }
+
+        if (request.Certificates.Count == 0)
+        {
+            return Result<Unit>.Failure(AuthErrors.CertificateInvalid("At least one certificate image is required."));
+        }
+
+        // Each request's SizeInBytes comes from the controller's IFormFile.Length; if it were 0 the
+        // 10MB gate in BlobCertificateStorage would be silently skipped (BR-05). Uploads run
+        // sequentially so the first rejected file short-circuits the rest.
+        var documentsUrls = new List<string>(request.Certificates.Count);
         try
         {
-            documentsUrl = await _certificateStorage.UploadAsync(certificateRequest, cancellationToken);
+            foreach (var certificate in request.Certificates)
+            {
+                documentsUrls.Add(await _certificateStorage.UploadAsync(certificate, cancellationToken));
+            }
         }
         catch (InvalidCertificateException exception)
         {
@@ -71,8 +85,12 @@ public class TeacherRegisterCommandHandler : IRequestHandler<TeacherRegisterComm
             Role = "Teacher",
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
+            PhoneNumber = phoneNumber,
             Biography = request.Biography,
-            DocumentsUrl = documentsUrl,
+            // DocumentsUrl stays populated with the first URL for the existing single-URL
+            // TeacherApplication column; DocumentsUrls carries the full set.
+            DocumentsUrl = documentsUrls[0],
+            DocumentsUrls = documentsUrls,
         };
 
         var token = await _pendingRegistrations.SaveAsync(payload, cancellationToken);

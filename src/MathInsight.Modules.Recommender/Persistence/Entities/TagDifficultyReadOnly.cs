@@ -9,4 +9,5 @@ public class TagDifficultyReadOnly
     public string DifficultyId { get; set; } = string.Empty;
     public int LevelValue { get; set; }
     public string DifficultyName { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
 }

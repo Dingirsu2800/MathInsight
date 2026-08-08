@@ -4,7 +4,7 @@
 
 **Feature Branch**: `005-recommender`
 
-**Created**: 2026-06-23 | **Updated**: 2026-07-04
+**Created**: 2026-06-23 | **Updated**: 2026-08-03
 
 **Status**: Approved
 
@@ -17,7 +17,7 @@
 | UC-ID | Name | Primary Actor | Trigger |
 |-------|------|---------------|---------|
 | UC-52 | View WeakTags | Student | Student views dashboard; backend queries current weak topics |
-| UC-53 | View Recommended Lectures | Student | Based on WeakTags; returns matching lectures |
+| UC-53 | View Recommended Lectures | Student | Based on qualified topic mastery, or grade-based cold start; returns difficulty-aware lectures |
 | UC-54 | View Recommended Materials | Student | Based on WeakTags; returns matching PDFs/materials |
 | - | Update Topic Mastery | System | After a session is graded |
 | - | Provide WeakTag Advice | TestGen module | `IStudentRecommendationProvider.GetWeakTagAdviceAsync()` |
@@ -106,7 +106,7 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 
 - **RCM-08**: `StudentTopicSessionResult` stores the per-session per-topic snapshot used to update `TagsMastery`. This is required for audit and idempotency.
 - **RCM-09**: TestGen reads Recommender advice in-process. No external recommender service is required for MVP.
-- **RCM-10**: Lecture/material recommendations are simple rule-based matches from weak `tag_id` to `Lecture.TagID` and `LectureMaterial`.
+- **RCM-10**: Lecture recommendation is deterministic and covers qualified Weak, Learning, and Mastered-progression topics, not only weak topics. A qualified mastery row requires `NumberDone >= 3` and an active `TagTopic`. Candidate lectures must be `Published`, have an active topic and active difficulty, and have `DifficultyLevel <= RecommendedDifficultyLevel`. Rank topic contexts by Weak, Learning, Mastered-progression; then `OfficialPoint` ascending, `NumberDone` descending, and `TagID` ascending. For each topic, prefer an exact difficulty, otherwise the nearest lower difficulty; then rank by `Likes` descending, `UpdatedTime` descending, and `LectureID` ascending. Return at most two lectures per topic and six overall. Material recommendation remains the existing weak-topic rule and does not receive difficulty ranking in this checkpoint.
 - **RCM-11**: `mastery_status` remains a coarse learning label only: `NotLearned`, `Learning`, `Mastered`. Do not add `WeakTag` to this enum.
 - **RCM-14 (Bottleneck Weak Tag — BR-19)**: A secondary (sub) tag with `official_point < 4.00` is classified as a **Bottleneck Weak Tag**. This is a stricter threshold than the standard weak threshold (`< 5.00`, RCM-03) because a weak secondary tag creates a bottleneck risk for completing questions that require it. `GetStudentWeakTagsAsync` should include bottleneck weak tags with reason `BottleneckSubTag`. `GetStudentWeakTagAdviceAsync` should flag them with `IsBottleneckWeak = true`.
 - **RCM-12 (CompetencyPoint update)**: After each `TagsMastery` update for a student, recalculate `CompetencyPoint` for that student's grade level:
@@ -127,6 +127,9 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   | `number_done = 0` | `NotLearned` |
   | `number_done > 0` AND `official_point < 7.50` | `Learning` |
   | `official_point >= 7.50` | `Mastered` |
+
+- **RCM-15 (lecture recommendation audit)**: Each recommended lecture returns its topic, selected difficulty, target difficulty, nullable `OfficialPoint`, evidence count, fallback flag, and one reason: `WeakTopicExactDifficulty`, `WeakTopicLowerDifficultyFallback`, `ProgressionExactDifficulty`, `ProgressionLowerDifficultyFallback`, or `ColdStartGradeFoundation`. Weak means `OfficialPoint < 5.00`; learning and mastered progression use the `Progression*` reasons.
+- **RCM-16 (cold start)**: When no active topic mastery row has `NumberDone >= 3`, read `Student.CurrentGrade`. Return up to six `Published`, active-topic, active-difficulty, level-1 lectures in that grade, ordered by `Likes` descending, `UpdatedTime` descending, and `LectureID` ascending. Set `OfficialPoint = null`, evidence count `0`, target level `1`, no fallback, and reason `ColdStartGradeFoundation`. A missing grade or no eligible lecture returns an empty successful list.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -202,6 +205,7 @@ The provider returns only active qualified rows where `OfficialPoint < 5.00` and
 - `official_point`, `practice_point`, `exam_anchor`, and `CompetencyPoint.point` never exceed `0.00..10.00`.
 - No separate `rcm` schema is created for MVP; backend maps to current DB script tables.
 - No Python/SAR service or Redis is required for MVP operation.
+- Lecture recommendation returns no lecture above its target difficulty and remains deterministic for equal candidate data.
 
 ## Assumptions
 
