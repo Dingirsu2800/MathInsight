@@ -1,4 +1,5 @@
 using MathInsight.Modules.Identity_Access.Contracts.Auth;
+using MathInsight.Modules.Identity_Access.Contracts.Common;
 using MathInsight.Modules.Identity_Access.Contracts.Teacher;
 using MathInsight.Modules.Identity_Access.Entities;
 using MathInsight.Modules.Identity_Access.Errors;
@@ -136,8 +137,8 @@ public class UpdateMyTeacherApplicationCommandHandler
             documentsUrls,
             application.Status,
             application.ReviewComments,
-            application.AppliedTime,
-            application.ReviewedTime,
+            UtcTimestamp.AsUtc(application.AppliedTime),
+            UtcTimestamp.AsUtc(application.ReviewedTime),
             CanEdit: true));
     }
 

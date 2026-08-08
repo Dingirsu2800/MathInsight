@@ -2,6 +2,12 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import client from "../services/questionBankApiClient";
 import { mapAuthError, getAuthErrorCode } from "../services/authErrors";
+import CertificateUploader from "../components/teacher/CertificateUploader";
+import {
+  CERT_COUNT_ERROR,
+  CERT_MAX_FILES,
+  CERT_REQUIRED_ERROR,
+} from "../utils/certificateFiles";
 
 // BR-08: 8–128 chars incl. uppercase, lowercase, number, special char. Mirrors
 // AuthValidation.PasswordPattern on the backend so most 400s are caught client-side.
@@ -15,26 +21,8 @@ const PASSWORD_HINT =
 
 const REGISTER_FALLBACK_ERROR = "Đăng ký thất bại. Vui lòng thử lại sau.";
 
-// Certificate constraints (BR-05): JPG/PNG only, ≤ 10 MB per file. Multiple files allowed.
-const CERT_ACCEPT = "image/jpeg,image/png";
-const CERT_ALLOWED_TYPES = ["image/jpeg", "image/png"];
-const CERT_MAX_BYTES = 10 * 1024 * 1024;
-const CERT_TYPE_ERROR = "Chứng chỉ phải là ảnh JPG hoặc PNG.";
-const CERT_SIZE_ERROR = "Mỗi chứng chỉ không được vượt quá 10MB.";
-// Keeps the multipart body inside the endpoint's 64MB RequestSizeLimit.
-const CERT_MAX_FILES = 6;
-const CERT_COUNT_ERROR = `Chỉ được tải lên tối đa ${CERT_MAX_FILES} ảnh chứng chỉ.`;
-
-// Same name + size + mtime is treated as the same file, so re-picking is idempotent.
-function toCertificateId(file) {
-  return `${file.name}-${file.size}-${file.lastModified}`;
-}
-
-function formatFileSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+// Certificate rules (BR-05 — accepted types, size and count) live in utils/certificateFiles.js
+// and are enforced by the shared CertificateUploader, so registration and resubmit agree.
 
 // ASP.NET ValidationProblemDetails keys the errors dict by PascalCase property
 // name; our field state uses camelCase. Lowercasing the first char lines them up.
@@ -74,7 +62,7 @@ export default function RegisterTeacherPage() {
     confirmPassword: "",
     biography: "",
   });
-  // One entry per selected image: { id, file, previewUrl }.
+  // One entry per selected file: { id, file, previewUrl } — previewUrl is null for PDF/Word.
   const [certificates, setCertificates] = React.useState([]);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
@@ -83,18 +71,6 @@ export default function RegisterTeacherPage() {
   const [loading, setLoading] = React.useState(false);
   const [submittedEmail, setSubmittedEmail] = React.useState("");
 
-  // Release every preview object URL on unmount. The ref keeps this effect from re-running
-  // on each list change, which would revoke URLs that are still on screen.
-  const certificatesRef = React.useRef(certificates);
-  React.useEffect(() => {
-    certificatesRef.current = certificates;
-  }, [certificates]);
-  React.useEffect(() => {
-    return () => {
-      certificatesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    };
-  }, []);
-
   const setField = (name) => (e) => {
     const value = e.target.value;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -102,62 +78,11 @@ export default function RegisterTeacherPage() {
     setErrors((prev) => (prev[name] ? { ...prev, [name]: undefined } : prev));
   };
 
-  const handleCertChange = (e) => {
-    const selected = Array.from(e.target.files ?? []);
-    // Clear the input so removing a file and re-picking it still fires onChange.
-    e.target.value = "";
-
-    if (selected.length === 0) return;
-
-    // Client-side rejection before submit (BR-05), per file — valid files are still kept.
-    const existingIds = new Set(certificates.map((item) => item.id));
-    const added = [];
-    const rejectedType = [];
-    const rejectedSize = [];
-    let rejectedCount = false;
-
-    selected.forEach((file) => {
-      if (!CERT_ALLOWED_TYPES.includes(file.type)) {
-        rejectedType.push(file.name);
-        return;
-      }
-      if (file.size > CERT_MAX_BYTES) {
-        rejectedSize.push(file.name);
-        return;
-      }
-
-      const id = toCertificateId(file);
-      if (existingIds.has(id)) return;
-
-      if (existingIds.size >= CERT_MAX_FILES) {
-        rejectedCount = true;
-        return;
-      }
-
-      existingIds.add(id);
-      added.push({ id, file, previewUrl: URL.createObjectURL(file) });
-    });
-
-    if (added.length > 0) {
-      setCertificates((prev) => [...prev, ...added]);
-    }
-
-    const messages = [];
-    if (rejectedType.length > 0) messages.push(`${CERT_TYPE_ERROR} (${rejectedType.join(", ")})`);
-    if (rejectedSize.length > 0) messages.push(`${CERT_SIZE_ERROR} (${rejectedSize.join(", ")})`);
-    if (rejectedCount) messages.push(CERT_COUNT_ERROR);
-    setErrors((prev) => ({
-      ...prev,
-      certificates: messages.length > 0 ? messages.join(" ") : undefined,
-    }));
-  };
-
-  const handleCertRemove = (id) => {
-    const target = certificates.find((item) => item.id === id);
-    if (target) URL.revokeObjectURL(target.previewUrl);
-
-    setCertificates((prev) => prev.filter((item) => item.id !== id));
-    setErrors((prev) => (prev.certificates ? { ...prev, certificates: undefined } : prev));
+  // The uploader owns picking, per-file validation and preview lifetimes; the page only stores
+  // the resulting list and surfaces the error it reports.
+  const handleCertificatesChange = (files, uploaderError) => {
+    setCertificates(files);
+    setErrors((prev) => ({ ...prev, certificates: uploaderError }));
   };
 
   function validate() {
@@ -192,7 +117,9 @@ export default function RegisterTeacherPage() {
     }
 
     if (certificates.length === 0) {
-      next.certificates = "Vui lòng tải lên ít nhất một chứng chỉ giảng dạy (JPG hoặc PNG).";
+      next.certificates = CERT_REQUIRED_ERROR;
+    } else if (certificates.length > CERT_MAX_FILES) {
+      next.certificates = CERT_COUNT_ERROR;
     }
 
     return next;
@@ -475,67 +402,13 @@ export default function RegisterTeacherPage() {
           </div>
 
           {/* Chứng chỉ giảng dạy */}
-          <div className="space-y-1.5">
-            <label htmlFor="certificate" className="block text-sm font-semibold text-[#1e2a4a]">
-              Chứng chỉ giảng dạy
-            </label>
-            <label
-              htmlFor="certificate"
-              className="flex items-center gap-3 px-4 py-3 bg-white border border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-[#2f5fa8] hover:bg-[#2f5fa8]/[0.03] transition-all"
-            >
-              <span className="material-symbols-outlined text-slate-400 text-[22px]">upload_file</span>
-              <span className="text-sm text-slate-500 truncate">
-                {certificates.length > 0
-                  ? `Đã chọn ${certificates.length}/${CERT_MAX_FILES} ảnh — bấm để thêm`
-                  : "Chọn một hoặc nhiều ảnh JPG/PNG (tối đa 10MB mỗi ảnh)"}
-              </span>
-              <input
-                id="certificate"
-                type="file"
-                accept={CERT_ACCEPT}
-                multiple
-                onChange={handleCertChange}
-                className="hidden"
-                disabled={loading}
-              />
-            </label>
-            {certificates.length > 0 && (
-              <ul className="mt-2 space-y-2">
-                {certificates.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-center gap-3 p-2 border border-slate-200 rounded-lg"
-                  >
-                    <img
-                      src={item.previewUrl}
-                      alt={`Xem trước ${item.file.name}`}
-                      className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-[#1e2a4a] font-medium truncate">{item.file.name}</p>
-                      <p className="text-xs text-slate-400">{formatFileSize(item.file.size)}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCertRemove(item.id)}
-                      className="shrink-0 text-slate-400 hover:text-deep-rose transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                      aria-label={`Xóa ${item.file.name}`}
-                      disabled={loading}
-                    >
-                      <span className="material-symbols-outlined text-[20px]">close</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {errors.certificates ? (
-              <p className="text-xs text-deep-rose font-medium">{errors.certificates}</p>
-            ) : (
-              <p className="text-xs text-slate-400">
-                Có thể tải lên tối đa {CERT_MAX_FILES} ảnh. Chỉ chấp nhận JPG/PNG, dung lượng tối đa 10MB mỗi ảnh.
-              </p>
-            )}
-          </div>
+          <CertificateUploader
+            files={certificates}
+            onFilesChange={handleCertificatesChange}
+            error={errors.certificates}
+            disabled={loading}
+            inputId="certificate"
+          />
 
           <button
             type="submit"

@@ -1,45 +1,43 @@
 import * as React from "react";
+import {
+  CERT_ACCEPT,
+  CERT_COUNT_ERROR,
+  CERT_HELPER_TEXT,
+  CERT_MAX_BYTES,
+  CERT_MAX_FILES,
+  CERT_SIZE_ERROR,
+  CERT_TYPE_ERROR,
+  FormatFileSize,
+  GetCertificateIcon,
+  GetCertificateKind,
+  GetCertificateKindLabel,
+  GetUrlFileName,
+  IsAcceptedCertificateFile,
+  IsImageFile,
+  ToCertificateId,
+} from "../../utils/certificateFiles";
 
-// Certificate constraints (BR-05): JPG/PNG only, ≤ 10 MB per file, at most 6 images.
-// Mirrors TeacherRegisterRequest / UpdateMyApplicationRequest on the backend.
-export const CERT_ACCEPT = "image/jpeg,image/png";
-export const CERT_ALLOWED_TYPES = ["image/jpeg", "image/png"];
-export const CERT_MAX_BYTES = 10 * 1024 * 1024;
-export const CERT_MAX_FILES = 6;
-
-export const CERT_TYPE_ERROR = "Chứng chỉ phải là ảnh JPG hoặc PNG.";
-export const CERT_SIZE_ERROR = "Mỗi chứng chỉ không được vượt quá 10MB.";
-export const CERT_COUNT_ERROR = `Chỉ được tải lên tối đa ${CERT_MAX_FILES} ảnh chứng chỉ.`;
-export const CERT_REQUIRED_ERROR =
-  "Vui lòng giữ lại hoặc tải lên ít nhất một chứng chỉ giảng dạy (JPG hoặc PNG).";
-
-// Same name + size + mtime is treated as the same file, so re-picking is idempotent.
-export function ToCertificateId(file) {
-  return `${file.name}-${file.size}-${file.lastModified}`;
-}
-
-export function FormatFileSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// Last path segment of a Cloudinary URL, used as a display name for an already-stored image.
-function ToUrlLabel(url) {
-  try {
-    const parts = String(url).split("/");
-    return parts[parts.length - 1] || url;
-  } catch {
-    return url;
-  }
+// Square tile shown for a non-image file, in place of a thumbnail.
+function FileTypeTile({ kind }) {
+  return (
+    <div className="w-12 h-12 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+      <span className="material-symbols-outlined text-slate-500 text-[24px]">
+        {GetCertificateIcon(kind)}
+      </span>
+    </div>
+  );
 }
 
 /**
- * Multi-image certificate picker shared by the teacher application screens.
+ * Multi-file certificate picker shared by the teacher application screens (BR-05).
  *
- * Handles BOTH sides of an edit: `existingUrls` are images already stored on the application
- * (removable, never re-uploaded) and `files` are newly picked File objects (uploaded on save).
- * The parent owns both lists so it can send "kept URLs + new files" in one multipart request.
+ * Accepts JPG, PNG, PDF, DOC and DOCX. Handles BOTH sides of an edit: `existingUrls` are files
+ * already stored on the application (removable, never re-uploaded) and `files` are newly picked
+ * File objects (uploaded on save). The parent owns both lists so it can send "kept URLs + new
+ * files" in one multipart request.
+ *
+ * Images render as a thumbnail; documents render as an icon tile plus an open/download link,
+ * because a PDF or Word file cannot be shown inline.
  */
 export default function CertificateUploader({
   existingUrls = [],
@@ -49,6 +47,7 @@ export default function CertificateUploader({
   error,
   disabled = false,
   inputId = "certificates",
+  helperText = CERT_HELPER_TEXT,
 }) {
   const totalCount = existingUrls.length + files.length;
 
@@ -60,7 +59,9 @@ export default function CertificateUploader({
   }, [files]);
   React.useEffect(() => {
     return () => {
-      filesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      filesRef.current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
     };
   }, []);
 
@@ -80,7 +81,7 @@ export default function CertificateUploader({
     let slotsLeft = CERT_MAX_FILES - totalCount;
 
     selected.forEach((file) => {
-      if (!CERT_ALLOWED_TYPES.includes(file.type)) {
+      if (!IsAcceptedCertificateFile(file)) {
         rejectedType.push(file.name);
         return;
       }
@@ -99,7 +100,12 @@ export default function CertificateUploader({
 
       existingIds.add(id);
       slotsLeft -= 1;
-      added.push({ id, file, previewUrl: URL.createObjectURL(file) });
+      added.push({
+        id,
+        file,
+        // Only images get an object URL; there is nothing to preview for a PDF or Word file.
+        previewUrl: IsImageFile(file) ? URL.createObjectURL(file) : null,
+      });
     });
 
     const messages = [];
@@ -112,7 +118,7 @@ export default function CertificateUploader({
 
   const handleRemoveFile = (id) => {
     const target = files.find((item) => item.id === id);
-    if (target) URL.revokeObjectURL(target.previewUrl);
+    if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
 
     onFilesChange(
       files.filter((item) => item.id !== id),
@@ -137,8 +143,8 @@ export default function CertificateUploader({
         <span className="material-symbols-outlined text-slate-400 text-[22px]">upload_file</span>
         <span className="text-sm text-slate-500 truncate">
           {totalCount > 0
-            ? `Đã có ${totalCount}/${CERT_MAX_FILES} ảnh — bấm để thêm`
-            : "Chọn một hoặc nhiều ảnh JPG/PNG (tối đa 10MB mỗi ảnh)"}
+            ? `Đã có ${totalCount}/${CERT_MAX_FILES} file — bấm để thêm`
+            : "Chọn một hoặc nhiều file JPG/PNG/PDF/Word (tối đa 10MB mỗi file)"}
         </span>
         <input
           id={inputId}
@@ -153,70 +159,88 @@ export default function CertificateUploader({
 
       {(existingUrls.length > 0 || files.length > 0) && (
         <ul className="mt-2 space-y-2">
-          {existingUrls.map((url) => (
-            <li key={url} className="flex items-center gap-3 p-2 border border-slate-200 rounded-lg">
-              <img
-                src={url}
-                alt={`Chứng chỉ ${ToUrlLabel(url)}`}
-                className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-[#2f5fa8] font-medium truncate hover:underline block"
-                >
-                  {ToUrlLabel(url)}
-                </a>
-                <p className="text-xs text-slate-400">Đã tải lên trước đó</p>
-              </div>
-              {onRemoveExisting && (
+          {existingUrls.map((url) => {
+            const kind = GetCertificateKind(url);
+            const fileName = GetUrlFileName(url);
+
+            return (
+              <li key={url} className="flex items-center gap-3 p-2 border border-slate-200 rounded-lg">
+                {kind === "image" ? (
+                  <img
+                    src={url}
+                    alt={`Chứng chỉ ${fileName}`}
+                    className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
+                  />
+                ) : (
+                  <FileTypeTile kind={kind} />
+                )}
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-[#2f5fa8] font-medium truncate hover:underline block"
+                  >
+                    {fileName}
+                  </a>
+                  <p className="text-xs text-slate-400">
+                    {GetCertificateKindLabel(kind)} — đã tải lên trước đó
+                  </p>
+                </div>
+                {onRemoveExisting && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveExisting(url)}
+                    className="shrink-0 text-slate-400 hover:text-deep-rose transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    aria-label={`Xóa ${fileName}`}
+                    disabled={disabled}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                )}
+              </li>
+            );
+          })}
+
+          {files.map((item) => {
+            const kind = GetCertificateKind(item.file.name);
+
+            return (
+              <li key={item.id} className="flex items-center gap-3 p-2 border border-slate-200 rounded-lg">
+                {item.previewUrl ? (
+                  <img
+                    src={item.previewUrl}
+                    alt={`Xem trước ${item.file.name}`}
+                    className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
+                  />
+                ) : (
+                  <FileTypeTile kind={kind} />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-[#1e2a4a] font-medium truncate">{item.file.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {GetCertificateKindLabel(kind)} — {FormatFileSize(item.file.size)}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => onRemoveExisting(url)}
+                  onClick={() => handleRemoveFile(item.id)}
                   className="shrink-0 text-slate-400 hover:text-deep-rose transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  aria-label={`Xóa ${ToUrlLabel(url)}`}
+                  aria-label={`Xóa ${item.file.name}`}
                   disabled={disabled}
                 >
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
-              )}
-            </li>
-          ))}
-
-          {files.map((item) => (
-            <li key={item.id} className="flex items-center gap-3 p-2 border border-slate-200 rounded-lg">
-              <img
-                src={item.previewUrl}
-                alt={`Xem trước ${item.file.name}`}
-                className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-[#1e2a4a] font-medium truncate">{item.file.name}</p>
-                <p className="text-xs text-slate-400">{FormatFileSize(item.file.size)} — ảnh mới</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemoveFile(item.id)}
-                className="shrink-0 text-slate-400 hover:text-deep-rose transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                aria-label={`Xóa ${item.file.name}`}
-                disabled={disabled}
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
       {error ? (
         <p className="text-xs text-deep-rose font-medium">{error}</p>
       ) : (
-        <p className="text-xs text-slate-400">
-          Có thể giữ lại ảnh cũ hoặc tải lên ảnh mới, tối đa {CERT_MAX_FILES} ảnh. Chỉ chấp nhận
-          JPG/PNG, dung lượng tối đa 10MB mỗi ảnh.
-        </p>
+        <p className="text-xs text-slate-400">{helperText}</p>
       )}
     </div>
   );

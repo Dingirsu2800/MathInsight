@@ -2,13 +2,16 @@ import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import client from "../../services/questionBankApiClient";
 import { mapAuthError, toFieldKey } from "../../services/authErrors";
+import { logout } from "../../services/auth";
 import { setApplicationStatus } from "../../services/authStorage";
 import { resolveHomePath } from "../../utils/roleRoutes";
-import CertificateUploader, {
-  CERT_MAX_FILES,
+import { FormatVietnamDateTime } from "../../utils/dateTime";
+import CertificateUploader from "../../components/teacher/CertificateUploader";
+import {
   CERT_COUNT_ERROR,
-  CERT_REQUIRED_ERROR,
-} from "../../components/teacher/CertificateUploader";
+  CERT_KEEP_REQUIRED_ERROR,
+  CERT_MAX_FILES,
+} from "../../utils/certificateFiles";
 
 // Mirrors AuthValidation.PhoneNumberPattern on the backend (VN number, 10 digits from 0).
 const PHONE_PATTERN = /^0\d{9}$/;
@@ -25,13 +28,10 @@ function IsStatus(status, expected) {
   return String(status || "").toLowerCase() === expected;
 }
 
+// Vietnam time (Asia/Ho_Chi_Minh), so the teacher and the reviewing Admin see the same clock
+// reading for the same instant. See utils/dateTime.js for why toLocaleString alone is not enough.
 function FormatDateTime(value) {
-  if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString("vi-VN");
-  } catch {
-    return "-";
-  }
+  return FormatVietnamDateTime(value);
 }
 
 function LabeledInput({ id, label, icon, error, children }) {
@@ -163,7 +163,7 @@ export default function TeacherApplicationPage() {
 
     const totalCertificates = keptUrls.length + newFiles.length;
     if (totalCertificates === 0) {
-      next.certificates = CERT_REQUIRED_ERROR;
+      next.certificates = CERT_KEEP_REQUIRED_ERROR;
     } else if (totalCertificates > CERT_MAX_FILES) {
       next.certificates = CERT_COUNT_ERROR;
     }
@@ -460,6 +460,19 @@ export default function TeacherApplicationPage() {
             Vào không gian giáo viên
           </button>
         )}
+
+        {/* Signs out through the shared logout() (BR-10: revokes the session server-side, clears
+            local storage, then hard-redirects to /login) rather than just navigating away, which
+            would leave a valid token behind on a shared machine. */}
+        <button
+          type="button"
+          onClick={() => logout()}
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <span className="material-symbols-outlined text-[18px]">logout</span>
+          Quay lại đăng nhập
+        </button>
 
         <p className="text-center text-xs text-slate-400">
           Cần hỗ trợ? Liên hệ quản trị viên để được hướng dẫn thêm.

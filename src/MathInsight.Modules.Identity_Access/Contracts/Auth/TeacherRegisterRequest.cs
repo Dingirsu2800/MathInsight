@@ -40,7 +40,7 @@ public class TeacherRegisterRequest
     public string? Biography { get; set; }
 
     /// <summary>
-    /// The teacher credential files (JPG/PNG only, ≤ 10 MB each — enforced in storage, BR-05).
+    /// The teacher credential files (JPG/PNG/PDF/DOC/DOCX, ≤ 10 MB each — enforced in storage, BR-05).
     /// At least one is required; the client sends repeated <c>Certificates</c> form entries.
     /// </summary>
     [Required]
