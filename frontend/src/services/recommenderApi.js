@@ -17,7 +17,7 @@ export async function getWeakTags() {
 /**
  * UC-53: Lấy bài giảng đề xuất dựa theo chủ đề yếu.
  * @returns {Promise<RecommendedLectureResponse[]>}
- * Array of { lectureId, title, description, tagId, tagName, officialPoint, isRemedial }
+ * Array of { lectureId, title, description, tagId, tagName, officialPoint, isRemedial, difficultyLevel }
  */
 export async function getRecommendedLectures() {
   const response = await api.get('/recommender/lectures');
