@@ -88,4 +88,39 @@ public class GetLeaderboardQueryHandlerTests : IDisposable
 
         _cache.Verify(c => c.SetAsync(10, It.Is<IReadOnlyList<LeaderboardEntryDto>>(e => e.Count == 3), It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
+    public async Task Handle_BoundaryValidGrades_AreAllAccepted(int grade)
+    {
+        _cache.Setup(c => c.GetAsync(grade, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<LeaderboardEntryDto>?)null);
+        var handler = new GetLeaderboardQueryHandler(_db, _cache.Object);
+
+        var result = await handler.Handle(new GetLeaderboardQuery(grade), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(NotificationErrors.LeaderboardGradeInvalid, result.Error);
+    }
+
+    [Fact]
+    public async Task Handle_TopParameter_LimitsResultOnCacheMiss()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            SeedStudent($"s{i}", "S", i.ToString(), 10, i);
+        }
+        await _db.SaveChangesAsync();
+        _cache.Setup(c => c.GetAsync(10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<LeaderboardEntryDto>?)null);
+        var handler = new GetLeaderboardQueryHandler(_db, _cache.Object);
+
+        var result = await handler.Handle(new GetLeaderboardQuery(10, Top: 3), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(3, result.Value!.Count);
+        Assert.Equal(new[] { 9m, 8m, 7m }, result.Value.Select(e => e.Point));
+    }
 }

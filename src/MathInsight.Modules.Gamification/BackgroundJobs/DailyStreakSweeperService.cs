@@ -54,7 +54,7 @@ public class DailyStreakSweeperService : BackgroundService
         }
     }
 
-    private async Task SweepExpiredStreaksAsync(CancellationToken cancellationToken)
+    public async Task SweepExpiredStreaksAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<GamificationDbContext>();

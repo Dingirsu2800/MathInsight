@@ -10,6 +10,7 @@ using MathInsight.Modules.Grading_Analytics;
 // using MathInsight.Modules.Recommender.Consumers;
 using MathInsight.Modules.Grading_Analytics.Handlers;
 using MathInsight.Modules.Identity_Access;
+using MathInsight.Modules.Identity_Access.Authorization;
 using MathInsight.Modules.Identity_Access.Services.Auth;
 using MathInsight.Modules.Learning_Lecture;
 using MathInsight.Modules.Notification_Report;
@@ -385,6 +386,10 @@ builder.Services
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+
+    // BR-06: "TeacherApproved" (role Teacher + approved application, checked against the DB per
+    // request) and "TeacherApplicant" (any Teacher, for the self-service application endpoints).
+    options.AddIdentityAuthorizationPolicies();
 });
 
 var app = builder.Build();

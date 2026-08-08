@@ -1,4 +1,5 @@
 using MathInsight.Modules.Identity_Access.Contracts.Auth;
+using MathInsight.Modules.Identity_Access.Entities;
 using MathInsight.Modules.Identity_Access.Errors;
 using MathInsight.Modules.Identity_Access.Persistence;
 using MathInsight.Modules.Identity_Access.Services;
@@ -65,26 +66,23 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
             return Result<LoginResponse>.Failure(AuthErrors.AccountDeactivated);
         }
 
-        // BR-06: a confirmed Teacher cannot log in until Admin approves the application.
+        // BR-06. Login itself no longer depends on approval: a Pending or Rejected Teacher signs in
+        // and reaches ONLY the self-service application endpoints. Real teacher features are gated
+        // per request by the "TeacherApproved" policy, which re-reads the status from the database
+        // — so the token issued here grants nothing an unapproved teacher should not have.
+        string? applicationStatus = null;
+
         if (IsRole(account, "Teacher"))
         {
-            var application = await _dbContext.TeacherApplications
+            // DB stores title-case status values: 'Pending', 'Approved', 'Rejected'.
+            var status = await _dbContext.TeacherApplications
+                .AsNoTracking()
                 .Where(application => application.TeacherId == account.AccountId)
                 .OrderByDescending(application => application.AppliedTime)
+                .Select(application => application.Status)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            // DB stores title-case status values: 'Pending', 'Approved', 'Rejected'.
-            if (IsStatus(application?.Status, "Rejected"))
-            {
-                return Result<LoginResponse>.Failure(
-                    AuthErrors.ApplicationRejected(application!.ReviewComments));
-            }
-
-            // Anything that is not explicitly Approved (Pending, or a missing row) blocks login.
-            if (!IsStatus(application?.Status, "Approved"))
-            {
-                return Result<LoginResponse>.Failure(AuthErrors.ApplicationPending);
-            }
+            applicationStatus = ToLoginApplicationStatus(status);
         }
 
         // BR-02: a Student may only hold one session — drop any previous refresh token(s) first.
@@ -108,7 +106,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
             RoleName = account.Role.RoleName,
             AccessToken = accessToken,
             RefreshToken = refreshToken,
-            ExpiresAt = expiresAt
+            ExpiresAt = expiresAt,
+            ApplicationStatus = applicationStatus
         });
     }
 
@@ -117,4 +116,20 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
 
     private static bool IsStatus(string? status, string expected) =>
         string.Equals(status, expected, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Maps the stored title-case status onto the lowercase wire vocabulary. A missing row means
+    /// the Teacher was created by an Admin (UC-11) and never filed an application — "none", which
+    /// the client treats as a normal login.
+    /// </summary>
+    private static string ToLoginApplicationStatus(string? status)
+    {
+        if (status is null) return LoginApplicationStatus.None;
+        if (IsStatus(status, TeacherApplication.StatusApproved)) return LoginApplicationStatus.Approved;
+        if (IsStatus(status, TeacherApplication.StatusRejected)) return LoginApplicationStatus.Rejected;
+        if (IsStatus(status, TeacherApplication.StatusPending)) return LoginApplicationStatus.Pending;
+
+        // CK_TeacherApplication_Status permits nothing else; treat any surprise as unapproved.
+        return LoginApplicationStatus.Pending;
+    }
 }

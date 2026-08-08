@@ -40,6 +40,19 @@ public static class IdentityErrors
         "APPLICATION_ALREADY_RESOLVED",
         "This application has already been resolved.");
 
+    /// <summary>UC-08: the application exists but belongs to another teacher. HTTP 403.</summary>
+    public static readonly Error ApplicationForbidden = new(
+        "APPLICATION_FORBIDDEN",
+        "This application belongs to another account.");
+
+    /// <summary>
+    /// UC-08: edit/resubmit attempted on an application that is not Rejected. A Pending one is
+    /// awaiting review and a Approved one is settled; neither may be changed. HTTP 409.
+    /// </summary>
+    public static readonly Error ApplicationNotEditable = new(
+        "APPLICATION_NOT_EDITABLE",
+        "Only a rejected application can be edited or resubmitted.");
+
     public static readonly Error RejectReasonRequired = new(
         "REJECT_REASON_REQUIRED",
         "A review comment is required when rejecting an application.");

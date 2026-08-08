@@ -91,3 +91,7 @@ export const deleteComment = (id, isQuestion) =>
 // ── Topics ────────────────────────────────────────────
 export const getTopics = (grade) =>
   client.get('/api/v1/topics', { params: { grade } });
+
+// ── Difficulties ──────────────────────────────────────
+export const getDifficulties = () =>
+  client.get('/api/v1/difficulties');

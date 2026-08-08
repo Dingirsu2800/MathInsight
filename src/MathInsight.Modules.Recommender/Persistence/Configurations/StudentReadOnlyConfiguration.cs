@@ -8,12 +8,13 @@ public class StudentReadOnlyConfiguration : IEntityTypeConfiguration<StudentRead
 {
     public void Configure(EntityTypeBuilder<StudentReadOnly> builder)
     {
-        builder.ToTable("Student");
+        builder.ToTable("Student", table => table.ExcludeFromMigrations());
         builder.HasKey(x => x.StudentId);
 
         builder.Property(x => x.StudentId)
             .HasColumnName("StudentID")
-            .HasMaxLength(36);
+            .HasMaxLength(36)
+            .IsUnicode(false);
 
         builder.Property(x => x.CurrentGrade)
             .HasColumnName("CurrentGrade");

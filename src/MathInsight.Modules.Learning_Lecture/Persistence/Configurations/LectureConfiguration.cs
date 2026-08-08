@@ -12,20 +12,22 @@ public class LectureConfiguration : IEntityTypeConfiguration<Lecture>
 
         builder.HasKey(x => x.LectureId);
         
-        builder.Property(x => x.LectureId).HasMaxLength(36);
+        builder.Property(x => x.LectureId).HasColumnName("LectureID").IsUnicode(false).HasMaxLength(36);
         builder.Property(x => x.Title).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Content);
-        builder.Property(x => x.VideoUrl).HasMaxLength(255);
-        builder.Property(x => x.ThumbnailUrl).HasMaxLength(255);
+        builder.Property(x => x.VideoUrl).IsUnicode(false).HasMaxLength(255);
+        builder.Property(x => x.ThumbnailUrl).IsUnicode(false).HasMaxLength(255);
         builder.Property(x => x.Likes);
-        builder.Property(x => x.TeacherId).HasMaxLength(36).IsRequired();
-        builder.Property(x => x.TagId).HasMaxLength(36).IsRequired();
-        builder.Property(x => x.Status).HasMaxLength(20).IsRequired().HasDefaultValue("Draft");
+        builder.Property(x => x.TeacherId).HasColumnName("TeacherID").IsUnicode(false).HasMaxLength(36).IsRequired();
+        builder.Property(x => x.TagId).HasColumnName("TagID").IsUnicode(false).HasMaxLength(36).IsRequired();
+        builder.Property(x => x.DifficultyId).HasColumnName("DifficultyID").IsUnicode(false).HasMaxLength(36);
+        builder.Property(x => x.Status).IsUnicode(false).HasMaxLength(20).IsRequired().HasDefaultValue("Draft");
         builder.Property(x => x.CreatedTime);
         builder.Property(x => x.UpdatedTime);
 
-        builder.HasIndex(x => new { x.Status, x.TagId });
-        
+        builder.HasIndex(x => new { x.Status, x.TagId, x.DifficultyId })
+            .HasDatabaseName("IX_Lecture_Status_TagID_DifficultyID");
+            
         // PRD Business Rule: Title is unique under the same Teacher and Course/Subject (TagId) context.
         builder.HasIndex(x => new { x.Title, x.TeacherId, x.TagId }).IsUnique();
 
@@ -41,7 +43,7 @@ public class LectureConfiguration : IEntityTypeConfiguration<Lecture>
             .WithOne(x => x.Lecture)
             .HasForeignKey(x => x.LectureId);
 
-        builder.Property(x => x.NextLectureId).IsUnicode(false).HasMaxLength(36);
+        builder.Property(x => x.NextLectureId).HasColumnName("NextLectureID").IsUnicode(false).HasMaxLength(36);
 
         builder.HasOne(x => x.NextLecture)
             .WithMany()

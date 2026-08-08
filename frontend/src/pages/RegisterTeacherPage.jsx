@@ -2,22 +2,27 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import client from "../services/questionBankApiClient";
 import { mapAuthError, getAuthErrorCode } from "../services/authErrors";
+import CertificateUploader from "../components/teacher/CertificateUploader";
+import {
+  CERT_COUNT_ERROR,
+  CERT_MAX_FILES,
+  CERT_REQUIRED_ERROR,
+} from "../utils/certificateFiles";
 
 // BR-08: 8–128 chars incl. uppercase, lowercase, number, special char. Mirrors
 // AuthValidation.PasswordPattern on the backend so most 400s are caught client-side.
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\da-zA-Z]).{8,128}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Vietnamese phone number as dialled domestically: 10 digits starting with 0. Mirrors
+// AuthValidation.PhoneNumberPattern on the backend.
+const PHONE_PATTERN = /^0\d{9}$/;
 const PASSWORD_HINT =
   "Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.";
 
 const REGISTER_FALLBACK_ERROR = "Đăng ký thất bại. Vui lòng thử lại sau.";
 
-// Certificate constraints (BR-05): JPG/PNG only, ≤ 10 MB.
-const CERT_ACCEPT = "image/jpeg,image/png";
-const CERT_ALLOWED_TYPES = ["image/jpeg", "image/png"];
-const CERT_MAX_BYTES = 10 * 1024 * 1024;
-const CERT_TYPE_ERROR = "Chứng chỉ phải là ảnh JPG hoặc PNG.";
-const CERT_SIZE_ERROR = "Chứng chỉ không được vượt quá 10MB.";
+// Certificate rules (BR-05 — accepted types, size and count) live in utils/certificateFiles.js
+// and are enforced by the shared CertificateUploader, so registration and resubmit agree.
 
 // ASP.NET ValidationProblemDetails keys the errors dict by PascalCase property
 // name; our field state uses camelCase. Lowercasing the first char lines them up.
@@ -52,25 +57,19 @@ export default function RegisterTeacherPage() {
     firstName: "",
     username: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
     biography: "",
   });
-  const [certificate, setCertificate] = React.useState(null);
-  const [certPreview, setCertPreview] = React.useState("");
+  // One entry per selected file: { id, file, previewUrl } — previewUrl is null for PDF/Word.
+  const [certificates, setCertificates] = React.useState([]);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [errors, setErrors] = React.useState({});
   const [formError, setFormError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [submittedEmail, setSubmittedEmail] = React.useState("");
-
-  // Release the object URL used for the certificate preview when it changes or unmounts.
-  React.useEffect(() => {
-    return () => {
-      if (certPreview) URL.revokeObjectURL(certPreview);
-    };
-  }, [certPreview]);
 
   const setField = (name) => (e) => {
     const value = e.target.value;
@@ -79,34 +78,11 @@ export default function RegisterTeacherPage() {
     setErrors((prev) => (prev[name] ? { ...prev, [name]: undefined } : prev));
   };
 
-  const handleCertChange = (e) => {
-    const file = e.target.files?.[0];
-    // Reset any previous preview/URL and cert error.
-    setCertPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return "";
-    });
-    setErrors((prev) => (prev.certificate ? { ...prev, certificate: undefined } : prev));
-
-    if (!file) {
-      setCertificate(null);
-      return;
-    }
-
-    // Client-side rejection before submit (BR-05).
-    if (!CERT_ALLOWED_TYPES.includes(file.type)) {
-      setCertificate(null);
-      setErrors((prev) => ({ ...prev, certificate: CERT_TYPE_ERROR }));
-      return;
-    }
-    if (file.size > CERT_MAX_BYTES) {
-      setCertificate(null);
-      setErrors((prev) => ({ ...prev, certificate: CERT_SIZE_ERROR }));
-      return;
-    }
-
-    setCertificate(file);
-    setCertPreview(URL.createObjectURL(file));
+  // The uploader owns picking, per-file validation and preview lifetimes; the page only stores
+  // the resulting list and surfaces the error it reports.
+  const handleCertificatesChange = (files, uploaderError) => {
+    setCertificates(files);
+    setErrors((prev) => ({ ...prev, certificates: uploaderError }));
   };
 
   function validate() {
@@ -122,6 +98,12 @@ export default function RegisterTeacherPage() {
       next.email = "Email không hợp lệ.";
     }
 
+    if (!form.phoneNumber.trim()) {
+      next.phoneNumber = "Vui lòng nhập số điện thoại.";
+    } else if (!PHONE_PATTERN.test(form.phoneNumber.trim())) {
+      next.phoneNumber = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.";
+    }
+
     if (!form.password) {
       next.password = "Vui lòng nhập mật khẩu.";
     } else if (!PASSWORD_PATTERN.test(form.password)) {
@@ -134,8 +116,10 @@ export default function RegisterTeacherPage() {
       next.confirmPassword = "Mật khẩu xác nhận không khớp.";
     }
 
-    if (!certificate) {
-      next.certificate = "Vui lòng tải lên chứng chỉ giảng dạy (JPG hoặc PNG).";
+    if (certificates.length === 0) {
+      next.certificates = CERT_REQUIRED_ERROR;
+    } else if (certificates.length > CERT_MAX_FILES) {
+      next.certificates = CERT_COUNT_ERROR;
     }
 
     return next;
@@ -160,13 +144,15 @@ export default function RegisterTeacherPage() {
     const formData = new FormData();
     formData.append("Username", form.username.trim());
     formData.append("Email", form.email.trim());
+    formData.append("PhoneNumber", form.phoneNumber.trim());
     formData.append("Password", form.password);
     formData.append("FirstName", form.firstName.trim());
     formData.append("LastName", form.lastName.trim());
     if (form.biography.trim()) {
       formData.append("Biography", form.biography.trim());
     }
-    formData.append("Certificate", certificate);
+    // Repeated "Certificates" entries bind to the DTO's List<IFormFile>.
+    certificates.forEach((item) => formData.append("Certificates", item.file));
 
     try {
       // Override the client's default application/json content-type: with FormData,
@@ -184,7 +170,7 @@ export default function RegisterTeacherPage() {
 
       if (status === 400 && code === "AUTH_CERTIFICATE_INVALID") {
         // Certificate-specific rejection from the backend — surface under the file input.
-        setErrors({ certificate: "Chứng chỉ không hợp lệ. Vui lòng tải lên ảnh JPG/PNG rõ ràng." });
+        setErrors({ certificates: "Chứng chỉ không hợp lệ. Vui lòng tải lên ảnh JPG/PNG rõ ràng." });
         setFormError("Vui lòng kiểm tra lại chứng chỉ đã tải lên.");
       } else if (status === 400 && err.response?.data?.errors) {
         // Surface backend field errors under the matching inputs.
@@ -195,6 +181,10 @@ export default function RegisterTeacherPage() {
           mapped[toFieldKey(key)] = Array.isArray(messages) ? messages[0] : String(messages);
         });
         setErrors(mapped);
+        setFormError("Vui lòng kiểm tra lại các thông tin được đánh dấu.");
+      } else if (status === 409 && code === "AUTH_PHONE_ALREADY_USED") {
+        // Distinct 409 from the email/username one — surface it under the phone input.
+        setErrors({ phoneNumber: "Số điện thoại này đã được sử dụng." });
         setFormError("Vui lòng kiểm tra lại các thông tin được đánh dấu.");
       } else if (status === 409) {
         setFormError("Email hoặc tên đăng nhập đã được sử dụng.");
@@ -309,6 +299,21 @@ export default function RegisterTeacherPage() {
             />
           </LabeledInput>
 
+          {/* Số điện thoại */}
+          <LabeledInput id="phoneNumber" label="Số điện thoại" icon="call" error={errors.phoneNumber}>
+            <input
+              id="phoneNumber"
+              type="tel"
+              value={form.phoneNumber}
+              onChange={setField("phoneNumber")}
+              className={inputClass}
+              placeholder="0912345678"
+              autoComplete="tel"
+              maxLength={20}
+              disabled={loading}
+            />
+          </LabeledInput>
+
           {/* Mật khẩu */}
           <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm font-semibold text-[#1e2a4a]">
@@ -397,43 +402,13 @@ export default function RegisterTeacherPage() {
           </div>
 
           {/* Chứng chỉ giảng dạy */}
-          <div className="space-y-1.5">
-            <label htmlFor="certificate" className="block text-sm font-semibold text-[#1e2a4a]">
-              Chứng chỉ giảng dạy
-            </label>
-            <label
-              htmlFor="certificate"
-              className="flex items-center gap-3 px-4 py-3 bg-white border border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-[#2f5fa8] hover:bg-[#2f5fa8]/[0.03] transition-all"
-            >
-              <span className="material-symbols-outlined text-slate-400 text-[22px]">upload_file</span>
-              <span className="text-sm text-slate-500 truncate">
-                {certificate ? certificate.name : "Chọn ảnh JPG hoặc PNG (tối đa 10MB)"}
-              </span>
-              <input
-                id="certificate"
-                type="file"
-                accept={CERT_ACCEPT}
-                onChange={handleCertChange}
-                className="hidden"
-                disabled={loading}
-              />
-            </label>
-            {certPreview && (
-              <div className="mt-2 flex items-center gap-3">
-                <img
-                  src={certPreview}
-                  alt="Xem trước chứng chỉ"
-                  className="w-16 h-16 object-cover rounded-lg border border-slate-200"
-                />
-                <span className="text-xs text-slate-500 truncate">{certificate?.name}</span>
-              </div>
-            )}
-            {errors.certificate ? (
-              <p className="text-xs text-deep-rose font-medium">{errors.certificate}</p>
-            ) : (
-              <p className="text-xs text-slate-400">Chỉ chấp nhận ảnh JPG/PNG, dung lượng tối đa 10MB.</p>
-            )}
-          </div>
+          <CertificateUploader
+            files={certificates}
+            onFilesChange={handleCertificatesChange}
+            error={errors.certificates}
+            disabled={loading}
+            inputId="certificate"
+          />
 
           <button
             type="submit"

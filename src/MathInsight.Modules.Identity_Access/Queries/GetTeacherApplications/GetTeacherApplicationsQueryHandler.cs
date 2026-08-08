@@ -40,18 +40,32 @@ public class GetTeacherApplicationsQueryHandler
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        var items = await query
+        // Projected anonymously first: UtcTimestamp.AsUtc has no SQL translation, so the kind is
+        // stamped in memory afterwards. The SQL emitted is unchanged.
+        var rows = await query
             .OrderByDescending(application => application.AppliedTime)
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
-            .Select(application => new TeacherApplicationListItemResponse(
+            .Select(application => new
+            {
                 application.ApplicationId,
                 application.TeacherId,
-                application.Teacher.Account.FirstName + " " + application.Teacher.Account.LastName,
+                FullName = application.Teacher.Account.FirstName + " " + application.Teacher.Account.LastName,
                 application.Teacher.Account.Email,
                 application.Status,
-                application.AppliedTime))
+                application.AppliedTime,
+            })
             .ToListAsync(cancellationToken);
+
+        var items = rows
+            .Select(row => new TeacherApplicationListItemResponse(
+                row.ApplicationId,
+                row.TeacherId,
+                row.FullName,
+                row.Email,
+                row.Status,
+                UtcTimestamp.AsUtc(row.AppliedTime)))
+            .ToList();
 
         return Result<PagedResponse<TeacherApplicationListItemResponse>>.Success(
             new PagedResponse<TeacherApplicationListItemResponse>(items, pageIndex, pageSize, totalCount, totalPages));

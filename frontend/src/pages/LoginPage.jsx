@@ -68,12 +68,14 @@ export default function LoginPage() {
       const refreshToken = data.refreshToken || data.RefreshToken;
       const roleName = data.roleName || data.RoleName || "";
       const accountId = data.accountId || data.AccountId || data.id || data.Id || "";
+      // BR-06. Teacher only; null for every other role.
+      const applicationStatus = data.applicationStatus || data.ApplicationStatus || null;
 
       if (!accessToken) {
         throw new Error("missing-token");
       }
 
-      setAuthSession({ accessToken, refreshToken, roleName, accountId });
+      setAuthSession({ accessToken, refreshToken, roleName, accountId, applicationStatus });
 
       if (rememberMe) {
         localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
@@ -81,7 +83,8 @@ export default function LoginPage() {
         localStorage.removeItem(REMEMBERED_EMAIL_KEY);
       }
 
-      navigate(resolveHomePath(roleName), { replace: true });
+      // A pending/rejected teacher lands on their application screen instead of the app.
+      navigate(resolveHomePath(roleName, applicationStatus), { replace: true });
     } catch (err) {
       console.error(err);
       // A network/parse error (no response) still gets the generic fallback.

@@ -96,4 +96,37 @@ public class NotificationServiceTests : IDisposable
         Assert.True(result.IsFailure);
         Assert.Equal(NotificationErrors.NotificationNotFound, result.Error);
     }
+
+    [Fact]
+    public async Task SendAsync_LinkOmitted_DefaultsToNull()
+    {
+        var id = await _service.SendAsync("account-1", "Title", "Content");
+
+        var stored = await _db.Notifications.AsNoTracking().FirstAsync(n => n.NotificationId == id);
+        Assert.Null(stored.Link);
+    }
+
+    [Fact]
+    public async Task SendAsync_RecipientHasNoActiveConnection_NotificationStillPersisted()
+    {
+        // The mocked IClientProxy always completes, mirroring SignalR's real behavior of a no-op
+        // push for a user with no active connection (BR-22 offline delivery relies on the DB row).
+        var id = await _service.SendAsync("offline-account", "Title", "Content");
+
+        var stored = await _db.Notifications.AsNoTracking().FirstOrDefaultAsync(n => n.NotificationId == id);
+        Assert.NotNull(stored);
+    }
+
+    [Fact]
+    public async Task MarkReadAsync_AlreadyRead_IsIdempotent()
+    {
+        var id = await _service.SendAsync("account-1", "Title", "Content");
+        await _service.MarkReadAsync(id, "account-1");
+
+        var result = await _service.MarkReadAsync(id, "account-1");
+
+        Assert.True(result.IsSuccess);
+        var stored = await _db.Notifications.AsNoTracking().FirstAsync(n => n.NotificationId == id);
+        Assert.True(stored.IsRead);
+    }
 }

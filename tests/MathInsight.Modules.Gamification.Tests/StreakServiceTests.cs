@@ -41,7 +41,7 @@ public class StreakServiceTests : IDisposable
     [Fact]
     public async Task Practice_FreshStudent_CreatesRowAtOne()
     {
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(1));
 
         var streak = await LoadAsync();
         Assert.NotNull(streak);
@@ -53,7 +53,7 @@ public class StreakServiceTests : IDisposable
     [Fact]
     public async Task Exam_FreshStudent_Qualifies()
     {
-        await _service.UpdateStreakAsync(StudentId, ActivityType.EXAM, 0, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.EXAM, 1, Day(1));
 
         var streak = await LoadAsync();
         Assert.NotNull(streak);
@@ -97,8 +97,8 @@ public class StreakServiceTests : IDisposable
     [Fact]
     public async Task ConsecutiveDays_IncrementsToTwo()
     {
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(1));
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(2));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(2));
 
         var streak = await LoadAsync();
         Assert.Equal(2, streak!.CurrentStreak);
@@ -109,8 +109,8 @@ public class StreakServiceTests : IDisposable
     [Fact]
     public async Task SameDayRepeat_IsIdempotent_StaysAtOne()
     {
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(1));
-        await _service.UpdateStreakAsync(StudentId, ActivityType.EXAM, 0, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.EXAM, 1, Day(1));
 
         var streak = await LoadAsync();
         Assert.Equal(1, streak!.CurrentStreak);
@@ -121,11 +121,11 @@ public class StreakServiceTests : IDisposable
     public async Task GapOfTwoDays_ResetsToOne_LongestPreserved()
     {
         // Build a 2-day run (longest becomes 2), then skip a day.
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(1));
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(2));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(2));
 
         // Day 3 skipped; next activity on Day 4 → gap > 1 day.
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(4));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(4));
 
         var streak = await LoadAsync();
         Assert.Equal(1, streak!.CurrentStreak);   // reset to 1, not 0, not continued
@@ -136,19 +136,26 @@ public class StreakServiceTests : IDisposable
     [Fact]
     public async Task StreakOfThree_ThenBreak_LongestStaysThree_CurrentBecomesOne()
     {
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(1));
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(2));
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(3));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(1));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(2));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(3));
 
         var mid = await LoadAsync();
         Assert.Equal(3, mid!.CurrentStreak);
         Assert.Equal(3, mid.LongestStreak);
 
         // Break: skip Day 4 and Day 5, resume on Day 6.
-        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 0, Day(6));
+        await _service.UpdateStreakAsync(StudentId, ActivityType.PRACTICE, 1, Day(6));
 
         var after = await LoadAsync();
         Assert.Equal(1, after!.CurrentStreak);
         Assert.Equal(3, after.LongestStreak);
+    }
+
+    [Fact]
+    public async Task ZeroSecondExploit_DoesNotQualify_ReturnsEarly()
+    {
+        await _service.UpdateStreakAsync(StudentId, ActivityType.EXAM, 0, Day(1));
+        Assert.Null(await LoadAsync()); // Blocked by security fix
     }
 }
