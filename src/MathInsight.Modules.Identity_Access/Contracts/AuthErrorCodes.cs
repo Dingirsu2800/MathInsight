@@ -32,6 +32,13 @@ public static class AuthErrorCodes
     /// <summary>Confirmation attempted, but the email now belongs to a confirmed account. HTTP 409.</summary>
     public const string EmailAlreadyConfirmed = "AUTH_EMAIL_ALREADY_CONFIRMED";
 
+    /// <summary>
+    /// The phone number already belongs to a confirmed account. Account.PhoneNumber carries a
+    /// unique filtered index (UX_Account_PhoneNumber_NotNull), so this must be caught before
+    /// the insert. HTTP 409.
+    /// </summary>
+    public const string PhoneNumberAlreadyUsed = "AUTH_PHONE_ALREADY_USED";
+
     /// <summary>Teacher certificate rejected (wrong type or too large, BR-05). HTTP 400.</summary>
     public const string CertificateInvalid = "AUTH_CERTIFICATE_INVALID";
 

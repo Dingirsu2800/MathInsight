@@ -13,11 +13,12 @@ public class InvalidCertificateException : Exception
     }
 }
 
-/// <summary>The certificate's content type is not one of the accepted image types (BR-05).</summary>
+/// <summary>Neither the content type nor the file extension is an accepted format (BR-05).</summary>
 public sealed class UnsupportedCertificateTypeException : InvalidCertificateException
 {
-    public UnsupportedCertificateTypeException(string? contentType)
-        : base($"Unsupported certificate content type '{contentType}'. Only image/jpeg and image/png are accepted.")
+    public UnsupportedCertificateTypeException(string? contentType, string? fileName)
+        : base($"Unsupported certificate '{fileName}' (content type '{contentType}'). " +
+               "Only JPG, PNG, PDF, DOC and DOCX files are accepted.")
     {
     }
 }

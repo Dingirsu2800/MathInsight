@@ -34,7 +34,7 @@ import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AccountManagementPage from './pages/admin/AccountManagementPage.jsx';
 import TeacherApplicationsPage from './pages/admin/TeacherApplicationsPage.jsx';
 import RolesPermissionsPage from './pages/admin/RolesPermissionsPage.jsx';
-import { getAccessToken, getRoleName } from './services/authStorage.js';
+import { getAccessToken, getRoleName, getApplicationStatus } from './services/authStorage.js';
 import { resolveHomePath } from './utils/roleRoutes.js';
 import { NavigationGuardProvider } from './contexts/NavigationGuardContext.jsx';
 
@@ -44,12 +44,14 @@ import LectureEditorPage from './pages/teacher/LectureEditorPage.jsx';
 import LectureDetailPage from './pages/teacher/LectureDetailPage.jsx';
 import MaterialListPage from './pages/teacher/MaterialListPage.jsx';
 import ModerationPage from './pages/teacher/ModerationPage.jsx';
+import TeacherApplicationPage from './pages/teacher/TeacherApplicationPage.jsx';
 
 // "/" shows the marketing landing page for visitors, but sends an already
 // authenticated user straight to their role home so they skip the marketing page.
 function HomeRoute() {
   if (getAccessToken()) {
-    const home = resolveHomePath(getRoleName());
+    // BR-06: a pending/rejected teacher goes to their application screen, not the app.
+    const home = resolveHomePath(getRoleName(), getApplicationStatus());
     // resolveHomePath falls back to "/" for unknown roles — guard against a redirect loop.
     if (home !== '/') {
       return <Navigate to={home} replace />;
@@ -111,6 +113,8 @@ export default function App() {
         <Route path="/expert/tests/:testId/preview" element={<GeneratedTestPreviewPage />} />
 
         {/* Teacher Routes */}
+        {/* UC-08 — reachable by an unapproved teacher; every route below needs approval. */}
+        <Route path="/teacher/application" element={<TeacherApplicationPage />} />
         <Route path="/teacher/lectures" element={<LectureListPage />} />
         <Route path="/teacher/lectures/new" element={<LectureEditorPage />} />
         <Route path="/teacher/lectures/:id/edit" element={<LectureEditorPage />} />
