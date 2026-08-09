@@ -202,26 +202,34 @@ export default function TopicMasteryGrid() {
                   {style.isUnpracticed ? 'Chưa làm bài tập/bài thi' : 'Năng lực chuyên đề'}
                 </p>
 
-                <div className="flex items-center gap-4 mt-auto">
-                  <div className="flex-1">
-                    <div className="flex justify-between font-mono text-xs mb-1">
-                      <span>Năng lực</span>
-                      <span className={`font-bold ${style.badgeText}`}>{score}/10</span>
+                {/* Score + progress bar — only for tags with data */}
+                {style.isUnpracticed ? (
+                  <div className="mt-auto pt-2 border-t border-whisper-border">
+                    <p className="text-xs text-on-surface-variant italic">Chưa có điểm năng lực</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4 mt-auto">
+                    <div className="flex-1">
+                      <div className="flex justify-between font-mono text-xs mb-1">
+                        <span>Năng lực</span>
+                        <span className={`font-bold ${style.badgeText}`}>{score}/10</span>
+                      </div>
+                      <ProgressBar
+                        value={score}
+                        max={10}
+                        height="h-2"
+                        colorClass={style.barColor}
+                        trackClass="bg-surface-container"
+                      />
                     </div>
-                    <ProgressBar
-                      value={score}
-                      max={10}
-                      height="h-2"
-                      colorClass={style.barColor}
-                      trackClass="bg-surface-container"
-                    />
+                    <div className={`w-10 h-10 border-2 ${style.badgeBorder} rounded-full flex items-center justify-center`}>
+                      <span className={`font-mono text-xs ${style.badgeText}`}>
+                        {Math.round(score * 10)}%
+                      </span>
+                    </div>
                   </div>
-                  <div className={`w-10 h-10 border-2 ${style.badgeBorder} rounded-full flex items-center justify-center`}>
-                    <span className={`font-mono text-xs ${style.badgeText}`}>
-                      {Math.round(score * 10)}%
-                    </span>
-                  </div>
-                </div>
+                )}
+
               </div>
             );
           })}

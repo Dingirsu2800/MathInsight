@@ -108,11 +108,11 @@ export default function RadarChartCard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Ensure at least 3 axes for a valid radar
+  // Filter to practiced tags only (numberDone > 0 — exclude lazy-created neutrals)
+  // Show all of them on the radar — no axis cap
   const axes = useMemo(() => {
     if (tags.length < 3) return [];
-    // Take up to 8 tags for readability
-    return tags.slice(0, 8);
+    return tags.filter((t) => t.numberDone > 0);
   }, [tags]);
 
   const currentValues = axes.map((t) => Math.min(Number(t.officialPoint || 0) / 10, 1));
@@ -178,7 +178,7 @@ export default function RadarChartCard() {
 
         {!loading && n < 3 && (
           <p className="text-sm text-outline text-center">
-            Cần ít nhất 3 chủ đề để hiển thị biểu đồ radar.
+            Cần ít nhất 3 chủ đề đã học để hiển thị biểu đồ radar.
           </p>
         )}
 

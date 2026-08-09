@@ -54,6 +54,7 @@ function InfoPopover({ content }) {
 
 export default function CompetencySummaryCard() {
   const [score, setScore] = useState(0);
+  const [unpracticedCount, setUnpracticedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -64,8 +65,10 @@ export default function CompetencySummaryCard() {
     getAllTagsMastery()
       .then((data) => {
         if (cancelled) return;
-        // Exclude lazy-created tags (numberDone === 0) — they start at 5.00 and are not real scores
-        const practiced = (data ?? []).filter((t) => t.numberDone > 0);
+        const all = data ?? [];
+        // Score only from practiced topics (numberDone > 0)
+        const practiced = all.filter((t) => t.numberDone > 0);
+        setUnpracticedCount(all.length - practiced.length);
         if (practiced.length > 0) {
           const avg = practiced.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / practiced.length;
           setScore(Math.round(avg * 10) / 10);
@@ -159,6 +162,16 @@ export default function CompetencySummaryCard() {
             Năng lực của bạn đang ở mức{' '}
             <span className={`font-bold ${masteryClass}`}>{masteryLabel}</span>.
           </p>
+
+          {/* Unpracticed topics badge */}
+          {unpracticedCount > 0 && (
+            <div className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container border border-whisper-border">
+              <span className="w-2 h-2 rounded-full bg-on-surface-variant/40 flex-shrink-0" />
+              <span className="text-xs text-on-surface-variant">
+                {unpracticedCount} chủ đề chưa bắt đầu
+              </span>
+            </div>
+          )}
         </>
       )}
     </div>
