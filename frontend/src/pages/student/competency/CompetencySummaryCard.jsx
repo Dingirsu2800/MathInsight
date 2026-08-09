@@ -1,9 +1,11 @@
 /**
  * Overall competency summary card with radial progress gauge.
- * Data: derived from recommenderApi.getWeakTags() — average of officialPoint values.
+ * Data: recommenderApi.getAllTagsMastery() — average of officialPoint across all topics
+ * that have been practised (numberDone > 0). Tags with numberDone === 0 are lazy-created
+ * neutrals (official_point = 5.00) and are excluded to avoid skewing the real average.
  */
 import { useEffect, useRef, useState } from 'react';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery } from '../../../services/recommenderApi';
 
 function InfoPopover({ content }) {
   const [open, setOpen] = useState(false);
@@ -59,11 +61,13 @@ export default function CompetencySummaryCard() {
     let cancelled = false;
     setLoading(true);
 
-    getWeakTags()
+    getAllTagsMastery()
       .then((data) => {
         if (cancelled) return;
-        if (data && data.length > 0) {
-          const avg = data.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / data.length;
+        // Exclude lazy-created tags (numberDone === 0) — they start at 5.00 and are not real scores
+        const practiced = (data ?? []).filter((t) => t.numberDone > 0);
+        if (practiced.length > 0) {
+          const avg = practiced.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / practiced.length;
           setScore(Math.round(avg * 10) / 10);
         }
       })

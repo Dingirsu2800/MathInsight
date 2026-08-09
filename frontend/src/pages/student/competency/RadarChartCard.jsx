@@ -1,10 +1,11 @@
 /**
  * Multi-dimensional competency radar chart (SVG-based).
- * Data: recommenderApi.getWeakTags() — officialPoint per tag.
- * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to 8.5).
+ * Data: recommenderApi.getAllTagsMastery() — officialPoint across all topics (UC-55).
+ * Takes the first 8 tags sorted by officialPoint ascending (weakest first for visibility).
+ * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to no line).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery } from '../../../services/recommenderApi';
 import { getTargets } from '../../../services/gamificationApi';
 
 function InfoPopover({ content }) {
@@ -92,11 +93,11 @@ export default function RadarChartCard() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      getWeakTags().catch(() => []),
+      getAllTagsMastery().catch(() => []),
       getTargets().catch(() => []),
-    ]).then(([weakData, targetData]) => {
+    ]).then(([masteryData, targetData]) => {
       if (cancelled) return;
-      if (weakData?.length > 0) setTags(weakData);
+      if (masteryData?.length > 0) setTags(masteryData);
       // Build a map: tagId -> targetPoint (0-10)
       const map = {};
       if (Array.isArray(targetData)) {

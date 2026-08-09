@@ -15,6 +15,16 @@ export async function getWeakTags() {
 }
 
 /**
+ * UC-55: Lấy toàn bộ TagsMastery của học sinh (bao gồm cả tag đang ổn và thành thạo).
+ * Dùng cho Competency page — TopicMasteryGrid, CompetencySummaryCard, RadarChartCard.
+ * @returns {Promise<TagMasteryDto[]>} Array of { tagId, tagName, officialPoint, numberDone, masteryStatus, recommendedDifficultyLevel }
+ */
+export async function getAllTagsMastery() {
+  const response = await api.get('/recommender/topic-mastery');
+  return response.data;
+}
+
+/**
  * UC-53: Lấy bài giảng đề xuất dựa theo chủ đề yếu.
  * @returns {Promise<RecommendedLectureResponse[]>}
  * Array of { lectureId, title, description, tagId, tagName, officialPoint, isRemedial, difficultyLevel }

@@ -36,6 +36,7 @@ src/MathInsight.Modules.Recommender/
 │   └── DifficultyMappingService.cs
 ├── Queries/
 │   ├── GetWeakTags/
+│   ├── GetAllTagsMastery/
 │   ├── GetRecommendedLectures/
 │   └── GetRecommendedMaterials/
 ├── Persistence/
@@ -76,6 +77,17 @@ TestGen uses `WeakTagAdviceDto.RecommendedDifficultyLevel` to select questions. 
 > **Resolution required**: `RecommendedDifficultyLevel` is a level integer `1..4`, **not** a `difficulty_id` PK.
 > TestGen must resolve it via: `SELECT DifficultyID FROM TagDifficulty WHERE LevelValue = RecommendedDifficultyLevel`
 > before filtering `Question.DifficultyID`. This is documented as a task for `DifficultyMappingService` (module 005).
+
+### All-Tag Mastery Query (UC-55 / RCM-17)
+
+`GET /api/v1/recommender/topic-mastery` returns ALL `TagsMastery` rows for the authenticated student,
+ordered by `OfficialPoint ascending, TagId ascending`.
+
+Unlike `GET /weak-tags` (OfficialPoint < 5.00 only), this endpoint covers all mastery statuses
+(`NotLearned`, `Learning`, `Mastered`) and is consumed by the Competency page components:
+- **TopicMasteryGrid** — shows a card per topic with server-authoritative `MasteryStatus`.
+- **CompetencySummaryCard** — computes average score from all practiced topics (`numberDone > 0`).
+- **RadarChartCard** — renders up to 8 axes using all topics (weakest first for visibility).
 
 ### Ptag Update Pipeline (Unified Multi-Tag v4.1)
 
@@ -140,3 +152,6 @@ When no qualified context exists, grade-based cold start returns active, `Publis
    - SQL-only recommender works without Redis/SAR.
    - Personalized exact/lower difficulty matching never returns a harder lecture.
    - Cold start returns only active level-1 lectures in the student's grade.
+   - `GetStudentAllTagsMasteryAsync` returns all mastery rows without score filter.
+   - Student with mixed topics (weak + learning + mastered) → `GET /topic-mastery` returns all of them.
+   - `GET /topic-mastery` returns `401` for unauthenticated requests.

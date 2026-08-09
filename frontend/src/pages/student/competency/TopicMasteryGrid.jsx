@@ -1,11 +1,12 @@
 /**
  * Topic mastery grid — one card per tag with score, status, and progress bar.
- * Data: recommenderApi.getWeakTags() replaces the old MOCK_TOPICS array.
+ * Data: recommenderApi.getAllTagsMastery() — returns ALL topics (not only weak ones).
+ * UC-55 / RCM-17
  */
 import { useEffect, useState } from 'react';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import ProgressBar from '../../../components/ui/ProgressBar';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery } from '../../../services/recommenderApi';
 
 // Icon pool cycled per index (no icon field in DTO)
 const ICON_POOL = [
@@ -17,9 +18,12 @@ const ICON_POOL = [
   { name: 'schema', bg: 'bg-emerald-success/20', color: 'text-emerald-success' },
 ];
 
-/** Derive visual style from officialPoint (0–10) and numberDone */
-function getTopicStyle(score, numberDone = 0) {
-  if (numberDone === 0) {
+/**
+ * Derive visual style from masteryStatus (server-authoritative) and numberDone.
+ * masteryStatus: "NotLearned" | "Learning" | "Mastered"
+ */
+function getTopicStyle(masteryStatus, officialPoint) {
+  if (masteryStatus === 'NotLearned') {
     return {
       status: 'Chưa làm',
       statusClass: 'bg-surface-container-high text-on-surface-variant',
@@ -30,6 +34,7 @@ function getTopicStyle(score, numberDone = 0) {
       isUnpracticed: true,
     };
   }
+  const score = Number(officialPoint);
   if (score < 5) {
     return {
       status: 'Cần cải thiện',
@@ -41,7 +46,7 @@ function getTopicStyle(score, numberDone = 0) {
       isUnpracticed: false,
     };
   }
-  if (score < 7.5) {
+  if (masteryStatus === 'Learning') {
     return {
       status: 'Đang học',
       statusClass: 'bg-surface-container-high text-on-surface-variant',
@@ -73,7 +78,7 @@ export default function TopicMasteryGrid() {
     let cancelled = false;
     setLoading(true);
 
-    getWeakTags()
+    getAllTagsMastery()
       .then((data) => { if (!cancelled) setTopics(data || []); })
       .catch(() => { if (!cancelled) setError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -84,7 +89,7 @@ export default function TopicMasteryGrid() {
   // Sort
   const sorted = [...topics].sort((a, b) => {
     if (sortBy === 'score') return Number(b.officialPoint) - Number(a.officialPoint);
-    // progress: flagged first, then ascending score
+    // progress: flagged (weak) first, then ascending score
     const sa = Number(a.officialPoint);
     const sb = Number(b.officialPoint);
     if (sa < 5 && sb >= 5) return -1;
@@ -153,8 +158,7 @@ export default function TopicMasteryGrid() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {sorted.map((topic, idx) => {
             const score = Number(topic.officialPoint || 0);
-            const numberDone = Number(topic.numberDone ?? 0);
-            const style = getTopicStyle(score, numberDone);
+            const style = getTopicStyle(topic.masteryStatus, score);
             const icon = ICON_POOL[idx % ICON_POOL.length];
 
             return (
