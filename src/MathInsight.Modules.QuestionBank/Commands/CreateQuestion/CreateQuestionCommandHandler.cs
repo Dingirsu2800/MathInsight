@@ -29,6 +29,13 @@ public sealed class CreateQuestionCommandHandler
         if (validationError is not null)
             return Result<CreateQuestionResponse>.Failure(validationError);
 
+        var referenceValidationError = await QuestionReferenceValidator.ValidateAsync(
+            _context,
+            command.Request,
+            cancellationToken);
+        if (referenceValidationError is not null)
+            return Result<CreateQuestionResponse>.Failure(referenceValidationError);
+
         var question = QuestionImportQuestionFactory.Create(
             command.Request,
             command.ExpertId,

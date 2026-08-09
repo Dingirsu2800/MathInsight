@@ -1,3 +1,4 @@
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Tags;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
@@ -47,8 +48,12 @@ public sealed class CreateTagTopicCommandHandler
             if (parent is null)
                 return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagParentNotFound);
 
-            if (parent.Grade != request.Grade)
-                return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagParentInvalid);
+            if (parent.Grade != request.Grade ||
+                await TagTopicHierarchyRules.HasInactiveOrMissingAncestorAsync(
+                    _context,
+                    parent.TagId,
+                    cancellationToken))
+            return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagParentInvalid);
         }
 
         var topic = new TagTopic

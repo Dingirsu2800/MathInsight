@@ -62,6 +62,9 @@ export default function TagManagementPage() {
 
   const [isConfirmDisableOpen, setIsConfirmDisableOpen] = React.useState(false);
   const [disableTarget, setDisableTarget] = React.useState(null); // { type: "topic"|"difficulty", item }
+  const [isDeleteTagOpen, setIsDeleteTagOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState(null); // { type: "topic"|"difficulty", item }
+  const [isDeletingTag, setIsDeletingTag] = React.useState(false);
 
   // Form states - Topic
   const [formTopicName, setFormTopicName] = React.useState("");
@@ -184,6 +187,54 @@ export default function TagManagementPage() {
         setError("Lỗi cập nhật trạng thái hoạt động của tag.");
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const openDeleteTagDialog = (item, type) => {
+    setError("");
+    setSuccessMessage("");
+    setDeleteTarget({ type, item });
+    setIsDeleteTagOpen(true);
+  };
+
+  const confirmDeleteTag = async () => {
+    if (!deleteTarget || isDeletingTag) return;
+
+    setError("");
+    setSuccessMessage("");
+    setIsDeletingTag(true);
+
+    try {
+      if (deleteTarget.type === "topic") {
+        await questionBankApi.deleteTopic(deleteTarget.item.tagId || deleteTarget.item.id);
+      } else {
+        await questionBankApi.deleteDifficulty(deleteTarget.item.difficultyId || deleteTarget.item.id);
+      }
+
+      setSuccessMessage(
+        deleteTarget.type === "topic"
+          ? "Đã ngừng sử dụng chủ đề. Các câu hỏi cũ vẫn giữ dữ liệu lịch sử của chủ đề này."
+          : "Đã ngừng sử dụng độ khó. Các câu hỏi cũ vẫn giữ dữ liệu lịch sử của độ khó này."
+      );
+      setIsDeleteTagOpen(false);
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      const status = err.response?.status;
+      if (status === 409) {
+        setError(err.response?.data?.message || "Không thể xóa chủ đề khi vẫn còn chủ đề con đang hoạt động.");
+      } else if (status === 404) {
+        await loadData();
+        setSuccessMessage("Tag không còn tồn tại; danh sách đã được làm mới.");
+        setIsDeleteTagOpen(false);
+        setDeleteTarget(null);
+      } else {
+        setError(err.response?.data?.message || "Không thể ngừng sử dụng tag. Vui lòng thử lại.");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally {
+      setIsDeletingTag(false);
     }
   };
 
@@ -713,14 +764,26 @@ export default function TagManagementPage() {
                             </div>
                           </td>
                           <td className="p-4 text-right">
-                            <button
-                              onClick={() => handleOpenEditTopic(t)}
-                              className="p-1.5 rounded text-primary hover:bg-primary/5 transition-colors cursor-pointer"
-                              aria-label={`Chỉnh sửa chủ đề ${t.tagName}`}
-                              title="Chỉnh sửa chủ đề"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">edit</span>
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditTopic(t)}
+                                className="p-1.5 rounded text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                                aria-label={`Chỉnh sửa chủ đề ${t.tagName}`}
+                                title="Chỉnh sửa chủ đề"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              {isAct && (
+                                <button
+                                  onClick={() => openDeleteTagDialog(t, "topic")}
+                                  className="p-1.5 rounded text-error hover:bg-error/10 transition-colors cursor-pointer"
+                                  aria-label={`Xóa chủ đề ${t.tagName}`}
+                                  title="Xóa chủ đề"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -845,14 +908,26 @@ export default function TagManagementPage() {
                             </div>
                           </td>
                           <td className="p-4 text-right">
-                            <button
-                              onClick={() => handleOpenEditDiff(d)}
-                              className="p-1.5 rounded text-primary hover:bg-primary/5 transition-colors cursor-pointer"
-                              aria-label={`Chỉnh sửa độ khó ${d.difficultyName}`}
-                              title="Chỉnh sửa độ khó"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">edit</span>
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditDiff(d)}
+                                className="p-1.5 rounded text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                                aria-label={`Chỉnh sửa độ khó ${d.difficultyName}`}
+                                title="Chỉnh sửa độ khó"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              {isAct && (
+                                <button
+                                  onClick={() => openDeleteTagDialog(d, "difficulty")}
+                                  className="p-1.5 rounded text-error hover:bg-error/10 transition-colors cursor-pointer"
+                                  aria-label={`Xóa độ khó ${d.difficultyName}`}
+                                  title="Xóa độ khó"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1120,6 +1195,58 @@ export default function TagManagementPage() {
                       }}
                     >
                       Ngừng sử dụng
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* DIALOG: CONFIRM SOFT DELETE TAG */}
+        <Dialog
+          isOpen={isDeleteTagOpen}
+          onClose={() => {
+            if (!isDeletingTag) {
+              setIsDeleteTagOpen(false);
+              setDeleteTarget(null);
+            }
+          }}
+          isCloseDisabled={isDeletingTag}
+        >
+          <DialogContent className="p-0">
+            {deleteTarget && (
+              <div className="flex gap-4 items-start p-6">
+                <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-error text-[28px]">warning</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-on-surface mb-2">Ngừng sử dụng tag?</h3>
+                  <p className="text-sm text-on-surface-variant leading-relaxed mb-3">
+                    Tag <span className="font-bold text-on-surface">“{deleteTarget.type === "topic"
+                      ? deleteTarget.item.tagName || deleteTarget.item.name
+                      : deleteTarget.item.difficultyName || deleteTarget.item.name}”</span> sẽ không còn được chọn cho câu hỏi mới.
+                  </p>
+                  <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
+                    Đây là thao tác ngừng sử dụng, không xóa lịch sử: các câu hỏi đã gắn tag vẫn giữ nguyên dữ liệu. Chủ đề có chủ đề con đang hoạt động sẽ bị từ chối.
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      disabled={isDeletingTag}
+                      onClick={() => {
+                        setIsDeleteTagOpen(false);
+                        setDeleteTarget(null);
+                      }}
+                    >
+                      Hủy thao tác
+                    </Button>
+                    <Button
+                      className="bg-error hover:bg-deep-rose text-white"
+                      disabled={isDeletingTag}
+                      onClick={confirmDeleteTag}
+                    >
+                      {isDeletingTag ? "Đang xử lý..." : "Ngừng sử dụng"}
                     </Button>
                   </div>
                 </div>
