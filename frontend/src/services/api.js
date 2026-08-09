@@ -13,7 +13,7 @@ function normalizeApiBaseUrl(value) {
   return `${baseUrl}/api/v1`;
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(RAW_API_BASE_URL);
+export const API_BASE_URL = normalizeApiBaseUrl(RAW_API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,

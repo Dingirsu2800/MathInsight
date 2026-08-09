@@ -77,4 +77,56 @@ public class GetNotificationsQueryHandlerTests : IDisposable
         Assert.Equal(3, result.Value.TotalPages);
         Assert.Equal(2, result.Value.Items.Count);
     }
+
+    [Fact]
+    public async Task Handle_PageIndexZeroOrLess_DefaultsToOne()
+    {
+        Seed("account-1", 3, read: false);
+
+        var result = await _handler.Handle(new GetNotificationsQuery("account-1", false, 0, 20), CancellationToken.None);
+
+        Assert.Equal(1, result.Value!.PageIndex);
+        Assert.Equal(3, result.Value.Items.Count);
+    }
+
+    [Fact]
+    public async Task Handle_PageSizeZeroOrLess_DefaultsToTwenty()
+    {
+        Seed("account-1", 25, read: false);
+
+        var result = await _handler.Handle(new GetNotificationsQuery("account-1", false, 1, 0), CancellationToken.None);
+
+        Assert.Equal(20, result.Value!.Items.Count);
+    }
+
+    [Fact]
+    public async Task Handle_PageSizeAboveMax_IsCappedAtOneHundred()
+    {
+        Seed("account-1", 150, read: false);
+
+        var result = await _handler.Handle(new GetNotificationsQuery("account-1", false, 1, 500), CancellationToken.None);
+
+        Assert.Equal(100, result.Value!.Items.Count);
+    }
+
+    [Fact]
+    public async Task Handle_UnreadOnlyFalse_ReturnsBothReadAndUnread()
+    {
+        Seed("account-1", 2, read: true);
+        Seed("account-1", 3, read: false);
+
+        var result = await _handler.Handle(new GetNotificationsQuery("account-1", false, 1, 20), CancellationToken.None);
+
+        Assert.Equal(5, result.Value!.TotalCount);
+    }
+
+    [Fact]
+    public async Task Handle_NoResults_TotalPagesIsZeroNotOne()
+    {
+        var result = await _handler.Handle(new GetNotificationsQuery("account-with-no-notifications", false, 1, 20), CancellationToken.None);
+
+        Assert.Equal(0, result.Value!.TotalCount);
+        Assert.Equal(0, result.Value.TotalPages);
+        Assert.Empty(result.Value.Items);
+    }
 }

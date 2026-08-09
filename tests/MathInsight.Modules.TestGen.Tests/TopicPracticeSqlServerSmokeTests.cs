@@ -141,18 +141,25 @@ public sealed class TopicPracticeSqlServerSmokeTests
 
     private static async Task ApplyCurrentSchemaAsync(string connectionString)
     {
-        var schemaPath = Path.Combine(AppContext.BaseDirectory, "Database", "001_Create_MathInsight_Azure.sql");
-        var script = await File.ReadAllTextAsync(schemaPath);
-        var batches = Regex.Split(script, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
-        foreach (var batch in batches.Where(value => !string.IsNullOrWhiteSpace(value)))
+        foreach (var scriptName in new[]
+                 {
+                     "001_Create_MathInsight_Azure.sql",
+                     "005_Align_TestGen_QuestionBank_Contract.sql"
+                 })
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = batch;
-            command.CommandTimeout = 120;
-            await command.ExecuteNonQueryAsync();
+            var schemaPath = Path.Combine(AppContext.BaseDirectory, "Database", scriptName);
+            var script = await File.ReadAllTextAsync(schemaPath);
+            var batches = Regex.Split(script, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+            foreach (var batch in batches.Where(value => !string.IsNullOrWhiteSpace(value)))
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = batch;
+                command.CommandTimeout = 120;
+                await command.ExecuteNonQueryAsync();
+            }
         }
     }
 

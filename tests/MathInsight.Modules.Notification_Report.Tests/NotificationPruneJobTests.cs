@@ -59,4 +59,49 @@ public class NotificationPruneJobTests : IDisposable
 
         Assert.Equal(0, deletedCount);
     }
+
+    [Fact]
+    public async Task RunAsync_NotificationJustUnderNinetyDaysOld_IsKept()
+    {
+        // The job computes its own cutoff = DateTime.UtcNow.AddDays(-90) at run time, which is
+        // necessarily a few milliseconds after this seed's UtcNow snapshot — an exact-tick tie
+        // can't be constructed against a live clock (RunAsync takes no injectable clock). A few
+        // seconds' margin on the "just inside retention" side is enough to prove the strict `<`
+        // boundary (not `<=`) without racing the clock.
+        _db.Notifications.Add(new Entities.Notification
+        {
+            NotificationId = "just-under-90",
+            UserId = "account-1",
+            Title = "Title",
+            Content = "Content",
+            IsRead = false,
+            CreatedTime = DateTime.UtcNow.AddDays(-90).AddSeconds(5)
+        });
+        await _db.SaveChangesAsync();
+
+        var deletedCount = await _job.RunAsync();
+
+        Assert.Equal(0, deletedCount);
+        Assert.NotNull(await _db.Notifications.FindAsync("just-under-90"));
+    }
+
+    [Fact]
+    public async Task RunAsync_NotificationJustOverNinetyDaysOld_IsDeleted()
+    {
+        _db.Notifications.Add(new Entities.Notification
+        {
+            NotificationId = "just-over-90",
+            UserId = "account-1",
+            Title = "Title",
+            Content = "Content",
+            IsRead = false,
+            CreatedTime = DateTime.UtcNow.AddDays(-90).AddSeconds(-5)
+        });
+        await _db.SaveChangesAsync();
+
+        var deletedCount = await _job.RunAsync();
+
+        Assert.Equal(1, deletedCount);
+        Assert.Null(await _db.Notifications.FindAsync("just-over-90"));
+    }
 }

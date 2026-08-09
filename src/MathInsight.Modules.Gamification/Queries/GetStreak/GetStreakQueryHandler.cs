@@ -36,7 +36,8 @@ public class GetStreakQueryHandler : IRequestHandler<GetStreakQuery, Result<Stre
         // means the streak has lapsed: we surface CurrentStreak = 0 — exactly the spec's "reset to 0"
         // display semantics — WITHOUT mutating the row. The real reset-to-1/continue happens later,
         // when StreakService processes the next qualifying activity.
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // NOTE: UTC+7 is used to ensure calendar day aligns with Vietnam time.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var isActive = streak.LastActivityDate == today
                        || streak.LastActivityDate == today.AddDays(-1);
 

@@ -7,6 +7,7 @@ using MathInsight.Modules.Recommender.Queries.GetWeakTags;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -32,7 +33,7 @@ public sealed class RecommenderControllerTests
             ? new[] { new Claim(ClaimTypes.NameIdentifier, StudentId) }
             : Array.Empty<Claim>();
 
-        return new RecommenderController(mediator)
+        return new RecommenderController(mediator, NullLogger<RecommenderController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -135,12 +136,18 @@ public sealed class RecommenderControllerTests
             new RecommendedLectureResponse(
                 LectureId:       "LEC-001",
                 Title:           "Bài 1: Đạo hàm cơ bản",
-                Description:     null,
+                ThumbnailUrl:    null,
                 TagId:           "TAG-001",
                 TagName:         "Đạo hàm",
-                OfficialPoint:   2.5m,
-                IsRemedial:      true,
-                DifficultyLevel: 1)
+                DifficultyId:         "DIFF-001",
+                DifficultyName:       "Basic",
+                DifficultyLevel:      1,
+                TargetDifficultyLevel: 1,
+                OfficialPoint:        2.5m,
+                EvidenceCount:        5,
+                Likes:                0,
+                IsDifficultyFallback: false,
+                Reason:               "WeakTopicExactDifficulty")
         ];
 
         var mediator = new Mock<IMediator>();

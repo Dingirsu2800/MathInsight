@@ -34,7 +34,23 @@ public class EventHandlersTests
         await handler.Handle(evt, CancellationToken.None);
 
         mock.Verify(s => s.SendAsync(
-            "student-1", It.IsAny<string>(), It.Is<string>(c => c.Contains("8.5")), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            "student-1", "Test Graded", "Your test has been graded: 8.5/10.", "/student/test-result/session-1", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory]
+    [InlineData(10, "10")]
+    [InlineData(0, "0")]
+    public async Task GradeCalculatedHandler_ScoreFormatting_DropsTrailingZeros(decimal score, string expected)
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new GradeCalculatedHandler(mock.Object);
+
+        var evt = new GradeCalculatedEvent { SessionId = "session-1", StudentId = "student-1", Score = score };
+        await handler.Handle(evt, CancellationToken.None);
+
+        mock.Verify(s => s.SendAsync(
+            "student-1", It.IsAny<string>(), $"Your test has been graded: {expected}/10.", It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -53,6 +69,20 @@ public class EventHandlersTests
     }
 
     [Fact]
+    public async Task BadgeAwardedHandler_BadgeNameContainingQuotes_IsEmbeddedAsIs()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new BadgeAwardedHandler(mock.Object);
+
+        var evt = new BadgeAwardedEvent("student-1", "badge-1", "Master of \"Algebra\"", DateTime.UtcNow);
+        await handler.Handle(evt, CancellationToken.None);
+
+        mock.Verify(s => s.SendAsync(
+            "student-1", It.IsAny<string>(), "You earned the \"Master of \"Algebra\"\" badge!", It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task StreakReminderHandler_SendsToStudent()
     {
         var mock = NewNotificationServiceMock();
@@ -63,6 +93,20 @@ public class EventHandlersTests
 
         mock.Verify(s => s.SendAsync(
             "student-1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task StreakReminderHandler_CurrentStreakBoundaryOne_IncludesCountInContent()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new StreakReminderHandler(mock.Object);
+
+        var evt = new StreakReminderEvent("student-1", 1, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)));
+        await handler.Handle(evt, CancellationToken.None);
+
+        mock.Verify(s => s.SendAsync(
+            "student-1", It.IsAny<string>(), "Complete a lesson today to keep your 1-day streak alive.", It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -106,7 +150,35 @@ public class EventHandlersTests
         await handler.Handle(evt, CancellationToken.None);
 
         mock.Verify(s => s.SendAsync(
-            "teacher-1", expectedTitle, It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            "teacher-1", expectedTitle, expectedTitle, "/profile", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplicationResolvedHandler_ApprovedWithComment_UsesCommentAsContent()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new ApplicationResolvedHandler(mock.Object);
+
+        var evt = new ApplicationResolvedEvent("app-1", "teacher-1", true, "Welcome aboard!");
+        await handler.Handle(evt, CancellationToken.None);
+
+        mock.Verify(s => s.SendAsync(
+            "teacher-1", "Application Approved", "Welcome aboard!", "/profile", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplicationResolvedHandler_RejectedWithComment_UsesCommentAsContent()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new ApplicationResolvedHandler(mock.Object);
+
+        var evt = new ApplicationResolvedEvent("app-1", "teacher-1", false, "Certificate unreadable");
+        await handler.Handle(evt, CancellationToken.None);
+
+        mock.Verify(s => s.SendAsync(
+            "teacher-1", "Application Rejected", "Certificate unreadable", "/profile", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -129,8 +201,36 @@ public class EventHandlersTests
         await handler.Handle(evt, CancellationToken.None);
 
         notificationMock.Verify(s => s.SendAsync(
-            "account-1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            "account-1", It.IsAny<string>(), It.IsAny<string>(), "/student/dashboard", It.IsAny<CancellationToken>()),
             Times.Once);
         emailMock.Verify(e => e.SendWelcomeEmailAsync("student@example.com", "An", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("Teacher", "/teacher/lectures")]
+    [InlineData("Expert", "/expert/questions")]
+    [InlineData("Admin", "/admin/accounts")]
+    [InlineData("Guardian", "/")]
+    [InlineData("STUDENT", "/student/dashboard")]
+    public async Task AccountCreatedHandler_ResolvesHomeLinkPerRole(string roleName, string expectedLink)
+    {
+        var notificationMock = NewNotificationServiceMock();
+        var emailMock = new Mock<IEmailService>();
+        var handler = new AccountCreatedHandler(notificationMock.Object, emailMock.Object);
+
+        var evt = new AccountCreatedEvent
+        {
+            AccountId = "account-1",
+            Email = "user@example.com",
+            Username = "user1",
+            RoleName = roleName,
+            FirstName = "An",
+            LastName = "Nguyen"
+        };
+        await handler.Handle(evt, CancellationToken.None);
+
+        notificationMock.Verify(s => s.SendAsync(
+            "account-1", It.IsAny<string>(), It.IsAny<string>(), expectedLink, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

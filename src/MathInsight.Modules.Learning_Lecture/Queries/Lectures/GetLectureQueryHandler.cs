@@ -35,18 +35,6 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
         bool isLiked = false;
         if (!string.IsNullOrEmpty(request.StudentId))
         {
-            if (lecture.Status == "Published")
-            {
-                // Background event publish for activity logging
-                _ = _mediator.Publish(new ActivityLoggedEvent(
-                    StudentId: request.StudentId,
-                    ActivityType: "VIEW_LECTURE",
-                    LectureId: request.LectureId,
-                    MaterialId: null,
-                    DurationSeconds: 0
-                ), cancellationToken);
-            }
-
             isLiked = await _dbContext.LectureLikes
                 .AnyAsync(l => l.LectureId == request.LectureId && l.StudentId == request.StudentId, cancellationToken);
         }
@@ -62,6 +50,7 @@ public class GetLectureQueryHandler : IRequestHandler<GetLectureQuery, LectureDt
             TeacherId = lecture.TeacherId,
             TeacherName = await _dbContext.AccountProfileViews.Where(a => a.AccountId == lecture.TeacherId).Select(a => a.AuthorName).FirstOrDefaultAsync(cancellationToken),
             TagId = lecture.TagId,
+            TagName = await _dbContext.TagTopics.Where(t => t.TagId == lecture.TagId).Select(t => t.TagName).FirstOrDefaultAsync(cancellationToken),
             DifficultyId = lecture.DifficultyId,
             DifficultyName = await _dbContext.TagDifficulties.Where(d => d.DifficultyId == lecture.DifficultyId).Select(d => d.DifficultyName).FirstOrDefaultAsync(cancellationToken),
             DifficultyLevel = await _dbContext.TagDifficulties.Where(d => d.DifficultyId == lecture.DifficultyId).Select(d => (int?)d.LevelValue).FirstOrDefaultAsync(cancellationToken),

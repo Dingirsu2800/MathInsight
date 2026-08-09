@@ -58,7 +58,7 @@ public class GetStreakQueryHandlerTests : IDisposable
     [Fact]
     public async Task LastActivityToday_IsActive_CurrentAsStored()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = VietnamToday();
         await SeedAsync(current: 5, longest: 7, lastActivity: today);
 
         var dto = (await _handler.Handle(new GetStreakQuery(StudentId), CancellationToken.None)).Value!;
@@ -71,7 +71,7 @@ public class GetStreakQueryHandlerTests : IDisposable
     [Fact]
     public async Task LastActivityYesterday_IsActive_CurrentAsStored()
     {
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        var yesterday = VietnamToday().AddDays(-1);
         await SeedAsync(current: 3, longest: 9, lastActivity: yesterday);
 
         var dto = (await _handler.Handle(new GetStreakQuery(StudentId), CancellationToken.None)).Value!;
@@ -84,7 +84,7 @@ public class GetStreakQueryHandlerTests : IDisposable
     [Fact]
     public async Task LastActivityThreeDaysAgo_BrokenInResponse_StoredRowUnchanged()
     {
-        var threeDaysAgo = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-3);
+        var threeDaysAgo = VietnamToday().AddDays(-3);
         await SeedAsync(current: 4, longest: 6, lastActivity: threeDaysAgo);
 
         var dto = (await _handler.Handle(new GetStreakQuery(StudentId), CancellationToken.None)).Value!;
@@ -100,4 +100,6 @@ public class GetStreakQueryHandlerTests : IDisposable
         Assert.Equal(4, stored.CurrentStreak);
         Assert.Equal(threeDaysAgo, stored.LastActivityDate);
     }
+    private static DateOnly VietnamToday()
+        => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 }

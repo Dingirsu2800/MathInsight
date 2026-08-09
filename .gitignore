@@ -3,6 +3,7 @@ bin/
 obj/
 **/bin/
 **/obj/
+**/TestResults/
 
 # Visual Studio / Rider / VS Code local state
 .vs/
@@ -35,6 +36,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.l3.example
 appsettings.Development.json
 appsettings.Local.json
 TEAM_SECRETS.local.md
@@ -44,6 +46,7 @@ TEAM_SECRETS.local.md
 logs/
 tmp/
 temp/
+.worktrees/
 *.tmp
 
 # OS generated files

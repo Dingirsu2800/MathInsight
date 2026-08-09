@@ -38,6 +38,9 @@ public static class GamificationModuleExtensions
         // it does nothing unless Gamification:StreakReminder:Enabled = true in configuration.
         services.AddScoped<IStreakReminderService, StreakReminderService>();
         services.AddHostedService<StreakReminderBackgroundService>();
+        
+        // JOB-02 Daily Streak Sweeper
+        services.AddHostedService<DailyStreakSweeperService>();
 
         return services;
     }
