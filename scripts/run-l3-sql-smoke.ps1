@@ -122,7 +122,7 @@ try {
     }
 
     Write-Host 'Running TestGen SQL Server smoke tests...'
-    & dotnet test $testGenProject --no-restore --filter 'FullyQualifiedName~BlueprintSqlServerSmokeTests|FullyQualifiedName~TopicPracticeSqlServerSmokeTests' --logger 'console;verbosity=minimal'
+    & dotnet test $testGenProject --no-restore --filter 'FullyQualifiedName~BlueprintSqlServerSmokeTests|FullyQualifiedName~BlueprintApiSystemTests|FullyQualifiedName~TopicPracticeSqlServerSmokeTests' --logger 'console;verbosity=minimal'
     if ($LASTEXITCODE -ne 0) {
         throw 'TestGen SQL Server smoke tests failed.'
     }

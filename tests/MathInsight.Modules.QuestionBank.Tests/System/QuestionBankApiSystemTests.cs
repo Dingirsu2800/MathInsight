@@ -163,6 +163,65 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
         Assert.Equal(HttpStatusCode.OK, handleResponse.StatusCode);
         await _factory.AssertReportWasResolvedAsync(reportId!, questionId);
     }
+
+    [QuestionBankSqlServerFact]
+    public async Task DeleteDifficulty_ReferencedByQuestion_SoftDeletesTagAndPreservesQuestionHistory()
+    {
+        var questionId = await _factory.SeedQuestionWithReferencedDifficultyAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/api/question-bank/tags/difficulties/l3-referenced-difficulty");
+        request.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await _factory.AssertReferencedDifficultyWasSoftDeletedAsync(questionId);
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task DeleteTopic_WithActiveDescendant_ReturnsConflictAndDoesNotMutateTopic()
+    {
+        await _factory.SeedTopicWithActiveDescendantAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/api/question-bank/tags/topics/l3-parent-topic");
+        request.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await _factory.AssertTopicRemainsActiveAsync("l3-parent-topic");
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task AdminReport_CanBeSubmittedByOwnerAndApprovedByReportingAdmin()
+    {
+        var questionId = await _factory.SeedReportableQuestionAsync();
+
+        using var reportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
+        {
+            Content = new StringContent("{ \"reportReason\": \"Please review the official wording.\" }", Encoding.UTF8, "application/json")
+        };
+        reportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        reportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var reportResponse = await _client.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.Created, reportResponse.StatusCode);
+        using var reportJson = JsonDocument.Parse(await reportResponse.Content.ReadAsStringAsync());
+        var reportId = reportJson.RootElement.GetProperty("reportId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(reportId));
+
+        using var submitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/reports/{reportId}/submit-review");
+        submitRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+        var submitResponse = await _client.SendAsync(submitRequest);
+        Assert.Equal(HttpStatusCode.OK, submitResponse.StatusCode);
+
+        using var approveRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/admin/reports/{reportId}/approve");
+        approveRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        approveRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var approveResponse = await _client.SendAsync(approveRequest);
+
+        Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
+        await _factory.AssertAdminReportWasApprovedAsync(reportId!, questionId);
+    }
 }
 
 public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
@@ -185,14 +244,19 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "005_Align_TestGen_QuestionBank_Contract.sql")).GetAwaiter().GetResult();
         ApplyAzureQuestionReportSchemaAsync(_sqlConnectionString).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
-            INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-expert-l3', N'Expert', N'L3 test role');
+            INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
+                ('role-expert-l3', N'Expert', N'L3 test role'),
+                ('role-admin-l3', N'Admin', N'L3 test role');
             INSERT INTO dbo.Account (AccountID, Username, PasswordHash, Email, FirstName, LastName, RoleID, isActive)
             VALUES
                 ('expert_l3', N'expert_l3', 'hash', 'expert_l3@example.test', N'Expert', N'L3', 'role-expert-l3', 1),
-                ('expert_reporter_l3', N'expert_reporter_l3', 'hash', 'expert_reporter_l3@example.test', N'Reporter', N'L3', 'role-expert-l3', 1);
+                ('expert_reporter_l3', N'expert_reporter_l3', 'hash', 'expert_reporter_l3@example.test', N'Reporter', N'L3', 'role-expert-l3', 1),
+                ('admin_l3', N'admin_l3', 'hash', 'admin_l3@example.test', N'Admin', N'L3', 'role-admin-l3', 1);
             INSERT INTO dbo.Expert (ExpertID, Specialty) VALUES
                 ('expert_l3', N'L3 test owner'),
                 ('expert_reporter_l3', N'L3 test reporter');
+            INSERT INTO dbo.TagDifficulty (DifficultyID, DifficultyName, Description, LevelValue, DisplayOrder, IsActive)
+            VALUES ('l3-report-difficulty', N'L3 Report Difficulty', N'Shared report-test difficulty', 2, 2, 1);
             """).GetAwaiter().GetResult();
     }
 
@@ -269,11 +333,10 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
 
     public async Task<string> SeedReportableQuestionAsync()
     {
-        const string questionId = "l3-report-question";
+        var suffix = Guid.NewGuid().ToString("N")[..16];
+        var questionId = $"l3-rq-{suffix}";
         await SeedAsync(db =>
         {
-            db.TagDifficulties.Add(new TagDifficulty { DifficultyId = "l3-report-difficulty", DifficultyName = "L3 Report Difficulty", LevelValue = 2, DisplayOrder = 2, IsActive = true });
-            db.TagTopics.Add(new TagTopic { TagId = "l3-report-topic", TagName = "L3 Report Topic", Grade = 10, DisplayOrder = 2, IsActive = true });
             db.Questions.Add(new Question
             {
                 QuestionId = questionId,
@@ -301,6 +364,70 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         var question = await db.Questions.SingleAsync(item => item.QuestionId == questionId);
 
         Assert.Equal("Resolved", report.Status);
+        Assert.Equal("Approved", question.Status);
+    }
+
+    public async Task<string> SeedQuestionWithReferencedDifficultyAsync()
+    {
+        const string questionId = "l3-referenced-difficulty-question";
+        await SeedAsync(db =>
+        {
+            db.TagDifficulties.Add(new TagDifficulty { DifficultyId = "l3-referenced-difficulty", DifficultyName = "Referenced difficulty", LevelValue = 3, DisplayOrder = 3, IsActive = true });
+            db.TagTopics.Add(new TagTopic { TagId = "l3-referenced-topic", TagName = "Referenced topic", Grade = 10, DisplayOrder = 3, IsActive = true });
+            db.Questions.Add(new Question
+            {
+                QuestionId = questionId,
+                QuestionContent = "Question retaining its soft-deleted difficulty",
+                SolutionContent = "solution",
+                DifficultyId = "l3-referenced-difficulty",
+                Grade = 10,
+                Status = "Approved",
+                QuestionType = "SingleChoice",
+                ExpertId = "expert_l3",
+                DefaultWeight = 1m,
+                IsActive = true,
+                CreatedTime = DateTime.UtcNow,
+                UpdatedTime = DateTime.UtcNow
+            });
+        });
+        return questionId;
+    }
+
+    public async Task AssertReferencedDifficultyWasSoftDeletedAsync(string questionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var difficulty = await db.TagDifficulties.SingleAsync(item => item.DifficultyId == "l3-referenced-difficulty");
+        var question = await db.Questions.SingleAsync(item => item.QuestionId == questionId);
+        Assert.False(difficulty.IsActive);
+        Assert.Equal("l3-referenced-difficulty", question.DifficultyId);
+    }
+
+    public async Task SeedTopicWithActiveDescendantAsync()
+    {
+        await SeedAsync(db =>
+        {
+            db.TagTopics.AddRange(
+                new TagTopic { TagId = "l3-parent-topic", TagName = "L3 parent", Grade = 10, DisplayOrder = 4, IsActive = true },
+                new TagTopic { TagId = "l3-child-topic", ParentTagId = "l3-parent-topic", TagName = "L3 child", Grade = 10, DisplayOrder = 5, IsActive = true });
+        });
+    }
+
+    public async Task AssertTopicRemainsActiveAsync(string tagId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        Assert.True((await db.TagTopics.SingleAsync(item => item.TagId == tagId)).IsActive);
+    }
+
+    public async Task AssertAdminReportWasApprovedAsync(string reportId, string questionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var report = await db.QuestionReports.SingleAsync(item => item.ReportId == reportId);
+        var question = await db.Questions.SingleAsync(item => item.QuestionId == questionId);
+        Assert.Equal("Resolved", report.Status);
+        Assert.Equal("admin_l3", report.ReviewedBy);
         Assert.Equal("Approved", question.Status);
     }
 
@@ -380,6 +507,7 @@ public sealed class QuestionBankTestAuthHandler : AuthenticationHandler<Authenti
 {
     public const string SchemeName = "QuestionBankL3Test";
     public const string AccountHeader = "X-Test-Account-Id";
+    public const string RoleHeader = "X-Test-Role";
 
     public QuestionBankTestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : base(options, logger, encoder) { }
@@ -390,8 +518,10 @@ public sealed class QuestionBankTestAuthHandler : AuthenticationHandler<Authenti
         if (string.IsNullOrWhiteSpace(accountId))
             return Task.FromResult(AuthenticateResult.NoResult());
 
+        var role = Request.Headers[RoleHeader].FirstOrDefault() ?? "Expert";
+
         var identity = new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, accountId), new Claim(ClaimTypes.Role, "Expert")],
+            [new Claim(ClaimTypes.NameIdentifier, accountId), new Claim(ClaimTypes.Role, role)],
             SchemeName);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using MathInsight.Modules.Recommender.Persistence;
 using MathInsight.Modules.Recommender.Persistence.Entities;
 using MathInsight.Modules.Recommender.Tests.Integration;
@@ -97,6 +98,118 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Geometry worksheet", await response.Content.ReadAsStringAsync());
     }
+
+    [RecommenderSqlServerFact]
+    public async Task GetLectures_WithExactAndLowerDifficulty_ReturnsExactFirstAndNeverHarder()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var topicId = $"l3-exact-{suffix}";
+        await _factory.SeedAsync(db =>
+        {
+            db.TagTopics.Add(new TagTopicReadOnly { TagId = topicId, TagName = "L3 exact topic", Grade = 12, IsActive = true });
+            db.TagsMasteries.Add(new TagsMastery
+            {
+                TagsMasteryId = $"m-{suffix}", StudentId = "student_01", TagId = topicId,
+                OfficialPoint = 2m, PracticePoint = 2m, ExamAnchor = 2m, ExamHistory = "[]",
+                MasteryStatus = "Learning", NumberDone = 3, RecommendedDifficultyLevel = 3
+            });
+        });
+        await _factory.AddLectureAsync($"l3-exact-l2-{suffix}", "L3 lower lecture", topicId, "diff-l2");
+        await _factory.AddLectureAsync($"l3-exact-l3-{suffix}", "L3 exact lecture", topicId, "diff-l3");
+        await _factory.AddLectureAsync($"l3-exact-l4-{suffix}", "L3 harder lecture", topicId, "diff-l4");
+
+        var recommendations = await GetLectureRecommendationsAsync("student_01");
+        var matching = recommendations.Where(item => item.TagId == topicId).ToList();
+
+        Assert.Equal(new[] { $"l3-exact-l3-{suffix}", $"l3-exact-l2-{suffix}" }, matching.Select(item => item.LectureId));
+        Assert.Equal("WeakTopicExactDifficulty", matching[0].Reason);
+        Assert.Equal("WeakTopicLowerDifficultyFallback", matching[1].Reason);
+        Assert.All(matching, item => Assert.True(item.DifficultyLevel <= item.TargetDifficultyLevel));
+    }
+
+    [RecommenderSqlServerFact]
+    public async Task GetLectures_WithoutExactDifficulty_UsesOnlyLowerDifficultyFallbacks()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var topicId = $"l3-fallback-{suffix}";
+        await _factory.SeedAsync(db =>
+        {
+            db.TagTopics.Add(new TagTopicReadOnly { TagId = topicId, TagName = "L3 fallback topic", Grade = 12, IsActive = true });
+            db.TagsMasteries.Add(new TagsMastery
+            {
+                TagsMasteryId = $"m-{suffix}", StudentId = "student_01", TagId = topicId,
+                OfficialPoint = 2m, PracticePoint = 2m, ExamAnchor = 2m, ExamHistory = "[]",
+                MasteryStatus = "Learning", NumberDone = 3, RecommendedDifficultyLevel = 3
+            });
+        });
+        await _factory.AddLectureAsync($"l3-fallback-l1-{suffix}", "L3 foundation lecture", topicId, "diff-l1");
+        await _factory.AddLectureAsync($"l3-fallback-l2-{suffix}", "L3 lower lecture", topicId, "diff-l2");
+        await _factory.AddLectureAsync($"l3-fallback-l4-{suffix}", "L3 harder lecture", topicId, "diff-l4");
+
+        var recommendations = await GetLectureRecommendationsAsync("student_01");
+        var matching = recommendations.Where(item => item.TagId == topicId).ToList();
+
+        Assert.Equal(new[] { $"l3-fallback-l2-{suffix}", $"l3-fallback-l1-{suffix}" }, matching.Select(item => item.LectureId));
+        Assert.All(matching, item =>
+        {
+            Assert.True(item.IsDifficultyFallback);
+            Assert.Equal("WeakTopicLowerDifficultyFallback", item.Reason);
+            Assert.True(item.DifficultyLevel < item.TargetDifficultyLevel);
+        });
+    }
+
+    [RecommenderSqlServerFact]
+    public async Task GetLectures_WithoutQualifiedMastery_ReturnsSixGradeFoundationLecturesWithTopicCap()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var expectedLectureIds = new List<string>();
+        for (var topicNumber = 1; topicNumber <= 3; topicNumber++)
+        {
+            var topicId = $"l3-cold-{suffix}-{topicNumber}";
+            await _factory.SeedAsync(db => db.TagTopics.Add(new TagTopicReadOnly
+            {
+                TagId = topicId, TagName = $"L3 cold topic {topicNumber}", Grade = 12, IsActive = true
+            }));
+            for (var lectureNumber = 1; lectureNumber <= 2; lectureNumber++)
+            {
+                var lectureId = $"l3-cold-{suffix}-{topicNumber}-{lectureNumber}";
+                expectedLectureIds.Add(lectureId);
+                await _factory.AddLectureAsync(lectureId, $"L3 cold lecture {topicNumber}-{lectureNumber}", topicId, "diff-l1", 100 - (topicNumber * 10 + lectureNumber));
+            }
+            await _factory.AddLectureAsync($"l3-cold-hard-{suffix}-{topicNumber}", "L3 ignored harder lecture", topicId, "diff-l2", 200);
+        }
+
+        var recommendations = await GetLectureRecommendationsAsync("student_cold");
+
+        Assert.Equal(6, recommendations.Count);
+        Assert.Equal(expectedLectureIds.OrderBy(id => id), recommendations.Select(item => item.LectureId).OrderBy(id => id));
+        Assert.All(recommendations, item =>
+        {
+            Assert.Equal(1, item.DifficultyLevel);
+            Assert.Equal((byte)1, item.TargetDifficultyLevel);
+            Assert.False(item.IsDifficultyFallback);
+            Assert.Equal("ColdStartGradeFoundation", item.Reason);
+        });
+        Assert.All(recommendations.GroupBy(item => item.TagId), group => Assert.True(group.Count() <= 2));
+    }
+
+    private async Task<IReadOnlyList<RecommendationDto>> GetLectureRecommendationsAsync(string studentId)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/recommender/lectures");
+        request.Headers.Add("X-Test-Student-Id", studentId);
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<List<RecommendationDto>>(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    }
+
+    private sealed record RecommendationDto(
+        string LectureId,
+        string TagId,
+        int DifficultyLevel,
+        byte TargetDifficultyLevel,
+        bool IsDifficultyFallback,
+        string Reason);
 }
 
 public sealed class RecommenderApiFactory : WebApplicationFactory<Program>
@@ -168,18 +281,18 @@ public sealed class RecommenderApiFactory : WebApplicationFactory<Program>
         await db.SaveChangesAsync();
     }
 
-    public async Task AddLectureAsync(string lectureId, string title, string tagId, string difficultyId)
+    public async Task AddLectureAsync(string lectureId, string title, string tagId, string difficultyId, int likes = 0)
     {
         if (_sqlConnectionString is not null)
         {
             await LectureRecommendationSqlServerSmokeTests.ExecuteNonQueryAsync(_sqlConnectionString,
-                $"INSERT INTO dbo.Lecture (LectureID, Title, Content, Likes, TeacherID, TagID, DifficultyID, Status, CreatedTime, UpdatedTime) VALUES ('{lectureId}', N'{title}', N'test', 0, 'teacher_01', '{tagId}', '{difficultyId}', 'Published', SYSUTCDATETIME(), SYSUTCDATETIME())");
+                $"INSERT INTO dbo.Lecture (LectureID, Title, Content, Likes, TeacherID, TagID, DifficultyID, Status, CreatedTime, UpdatedTime) VALUES ('{lectureId}', N'{title}', N'test', {likes}, 'teacher_01', '{tagId}', '{difficultyId}', 'Published', SYSUTCDATETIME(), SYSUTCDATETIME())");
             return;
         }
 
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<RecommenderDbContext>();
-        db.Lectures.Add(new LectureReadOnly { LectureId = lectureId, Title = title, TagId = tagId, DifficultyId = difficultyId, Status = "Published" });
+        db.Lectures.Add(new LectureReadOnly { LectureId = lectureId, Title = title, TagId = tagId, DifficultyId = difficultyId, Likes = likes, Status = "Published" });
         await db.SaveChangesAsync();
     }
 
@@ -226,5 +339,14 @@ public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationScheme
         if (string.IsNullOrWhiteSpace(studentId)) return Task.FromResult(AuthenticateResult.NoResult());
         var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, studentId), new Claim(ClaimTypes.Role, "Student") }, SchemeName);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
+    }
+}
+
+public sealed class RecommenderSqlServerFactAttribute : FactAttribute
+{
+    public RecommenderSqlServerFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RECOMMENDER_SQLSERVER_CONNECTION")))
+            Skip = "Set RECOMMENDER_SQLSERVER_CONNECTION to run the disposable SQL Server system tests.";
     }
 }
