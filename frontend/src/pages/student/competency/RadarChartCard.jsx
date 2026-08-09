@@ -1,10 +1,11 @@
 /**
  * Multi-dimensional competency radar chart (SVG-based).
- * Data: recommenderApi.getWeakTags() — officialPoint per tag.
- * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to 8.5).
+ * Data: recommenderApi.getAllTagsMastery() — officialPoint across all topics (UC-55).
+ * Takes the first 8 tags sorted by officialPoint ascending (weakest first for visibility).
+ * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to no line).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery } from '../../../services/recommenderApi';
 import { getTargets } from '../../../services/gamificationApi';
 
 function InfoPopover({ content }) {
@@ -92,11 +93,11 @@ export default function RadarChartCard() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      getWeakTags().catch(() => []),
+      getAllTagsMastery().catch(() => []),
       getTargets().catch(() => []),
-    ]).then(([weakData, targetData]) => {
+    ]).then(([masteryData, targetData]) => {
       if (cancelled) return;
-      if (weakData?.length > 0) setTags(weakData);
+      if (masteryData?.length > 0) setTags(masteryData);
       // Build a map: tagId -> targetPoint (0-10)
       const map = {};
       if (Array.isArray(targetData)) {
@@ -107,11 +108,11 @@ export default function RadarChartCard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Ensure at least 3 axes for a valid radar
+  // Filter to practiced tags only (numberDone > 0 — exclude lazy-created neutrals)
+  // Show all of them on the radar — no axis cap
   const axes = useMemo(() => {
     if (tags.length < 3) return [];
-    // Take up to 8 tags for readability
-    return tags.slice(0, 8);
+    return tags.filter((t) => t.numberDone > 0);
   }, [tags]);
 
   const currentValues = axes.map((t) => Math.min(Number(t.officialPoint || 0) / 10, 1));
@@ -177,7 +178,7 @@ export default function RadarChartCard() {
 
         {!loading && n < 3 && (
           <p className="text-sm text-outline text-center">
-            Cần ít nhất 3 chủ đề để hiển thị biểu đồ radar.
+            Cần ít nhất 3 chủ đề đã học để hiển thị biểu đồ radar.
           </p>
         )}
 

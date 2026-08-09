@@ -19,4 +19,11 @@ public interface IRecommenderService
     /// remedial flag, and reason. Used by TestGen to select questions.
     /// </summary>
     Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(string studentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// UC-55: Returns ALL <c>TagsMastery</c> rows for the given student, regardless of score.
+    /// Includes NotLearned, Learning, and Mastered topics.
+    /// Used by the Competency page to show a complete picture of the student's mastery (RCM-17).
+    /// </summary>
+    Task<IReadOnlyList<TagMasteryDto>> GetStudentAllTagsMasteryAsync(string studentId, CancellationToken cancellationToken = default);
 }
