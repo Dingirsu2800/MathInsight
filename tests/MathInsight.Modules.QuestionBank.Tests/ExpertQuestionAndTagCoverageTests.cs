@@ -4,6 +4,7 @@ using MathInsight.Modules.QuestionBank.Commands.CreateTagTopic;
 using MathInsight.Modules.QuestionBank.Commands.DeleteTagDifficulty;
 using MathInsight.Modules.QuestionBank.Commands.DeleteTagTopic;
 using MathInsight.Modules.QuestionBank.Commands.RetryScoreAdjustment;
+using MathInsight.Modules.QuestionBank.Commands.ToggleQuestionActive;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagDifficulty;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
 using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
@@ -205,6 +206,153 @@ public sealed class ExpertQuestionAndTagCoverageTests
         var version = Assert.Single(await database.Context.QuestionVersions.ToListAsync());
         Assert.Equal(question.QuestionId, version.QuestionId);
         Assert.Equal(1, version.VersionNumber);
+    }
+
+    [Fact]
+    public async Task CreateQuestion_MultipleChoice_PersistsAllAnswersAndMappedType()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var request = CreateQuestionRequest("difficulty-1", "topic-1");
+        request.QuestionType = "MULTIPLE_CHOICE";
+        request.Answers =
+        [
+            new CreateAnswerRequest { AnswerContent = "A", IsCorrect = true },
+            new CreateAnswerRequest { AnswerContent = "B", IsCorrect = true },
+            new CreateAnswerRequest { AnswerContent = "C", IsCorrect = false }
+        ];
+
+        var result = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(request, "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var question = Assert.Single(await database.Context.Questions.Include(item => item.Answers).ToListAsync());
+        Assert.Equal("MultipleChoice", question.QuestionType);
+        Assert.Equal(3, question.Answers.Count);
+        Assert.Equal(2, question.Answers.Count(answer => answer.IsCorrect));
+    }
+
+    [Fact]
+    public async Task CreateQuestion_Composite_PersistsPartsWithoutTopLevelAnswers()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var request = CreateQuestionRequest("difficulty-1", "topic-1");
+        request.QuestionType = "COMPOSITE";
+        request.Answers = [];
+        request.Parts =
+        [
+            new CreateQuestionPartRequest
+            {
+                PartOrder = 1,
+                PartLabel = "a",
+                PartContent = "Calculate 2 + 2",
+                PartType = "NUMERIC_ANSWER",
+                CorrectNumeric = 4m,
+                NumericTolerance = 0m,
+                DefaultWeight = 1m
+            }
+        ];
+
+        var result = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(request, "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var question = Assert.Single(await database.Context.Questions
+            .Include(item => item.Parts)
+            .Include(item => item.Answers)
+            .ToListAsync());
+        Assert.Equal("Composite", question.QuestionType);
+        Assert.Empty(question.Answers);
+        var part = Assert.Single(question.Parts);
+        Assert.Equal("NumericAnswer", part.PartType);
+        Assert.Equal(4m, part.CorrectNumeric);
+    }
+
+    [Fact]
+    public async Task CreateQuestion_TrueFalseWithWrongAnswerCount_ReturnsValidationErrorWithoutWrite()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var request = CreateQuestionRequest("difficulty-1", "topic-1");
+        request.QuestionType = "TRUE_FALSE";
+        request.Answers = [new CreateAnswerRequest { AnswerContent = "True", IsCorrect = true }];
+
+        var result = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(request, "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionTrueFalseAnswerCountInvalid, result.Error);
+        Assert.Empty(await database.Context.Questions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task UpdateQuestion_ByAnotherExpert_ReturnsForbiddenWithoutNewVersion()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var createResult = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(CreateQuestionRequest("difficulty-1", "topic-1"), "expert-1"), CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        var request = ToUpdateQuestionRequest(CreateQuestionRequest("difficulty-1", "topic-1"));
+        request.QuestionContent = "Unauthorized update";
+        var result = await new UpdateQuestionCommandHandler(database.Context)
+            .Handle(new UpdateQuestionCommand(createResult.Value!.QuestionId, request, "expert-2"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionUpdateForbidden, result.Error);
+        var question = Assert.Single(await database.Context.Questions.ToListAsync());
+        Assert.Equal("What is 2 + 2?", question.QuestionContent);
+        var version = Assert.Single(await database.Context.QuestionVersions.ToListAsync());
+        Assert.Equal(1, version.VersionNumber);
+    }
+
+    [Fact]
+    public async Task ToggleQuestionActive_ByOwner_DeactivatesThenReactivatesQuestion()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var createResult = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(CreateQuestionRequest("difficulty-1", "topic-1"), "expert-1"), CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        var handler = new ToggleQuestionActiveCommandHandler(database.Context);
+        var deactivated = await handler.Handle(
+            new ToggleQuestionActiveCommand(createResult.Value!.QuestionId, false, "expert-1"),
+            CancellationToken.None);
+        var reactivated = await handler.Handle(
+            new ToggleQuestionActiveCommand(createResult.Value.QuestionId, true, "expert-1"),
+            CancellationToken.None);
+
+        Assert.True(deactivated.IsSuccess);
+        Assert.Equal("Deactivated", deactivated.Value!.Status);
+        Assert.True(reactivated.IsSuccess);
+        Assert.Equal("Approved", reactivated.Value!.Status);
+        Assert.True((await database.Context.Questions.SingleAsync()).IsActive);
+    }
+
+    [Fact]
+    public async Task ToggleQuestionActive_ByAnotherExpert_ReturnsForbiddenWithoutMutation()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var createResult = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(CreateQuestionRequest("difficulty-1", "topic-1"), "expert-1"), CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        var result = await new ToggleQuestionActiveCommandHandler(database.Context)
+            .Handle(new ToggleQuestionActiveCommand(createResult.Value!.QuestionId, false, "expert-2"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionMutationForbidden, result.Error);
+        Assert.True((await database.Context.Questions.SingleAsync()).IsActive);
     }
 
     [Fact]

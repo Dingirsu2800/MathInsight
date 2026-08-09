@@ -36,6 +36,9 @@ public sealed class UpdateQuestionCommandHandler
         if (validationError is not null)
             return Result<UpdateQuestionResponse>.Failure(validationError);
 
+        // The configured strategy executes once; no automatic retry may replay this versioned mutation.
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = _context.Database.IsRelational()
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -149,6 +152,7 @@ public sealed class UpdateQuestionCommandHandler
 
         return Result<UpdateQuestionResponse>.Success(
             new UpdateQuestionResponse(question.QuestionId, question.Status, true));
+        });
     }
 
     private static CreateQuestionRequest ToCreateQuestionRequest(UpdateQuestionRequest request) => new()

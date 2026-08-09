@@ -49,6 +49,8 @@ public sealed class HandleQuestionReportCommandHandler
         if (reportReference is null)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportNotFound);
 
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -159,6 +161,7 @@ public sealed class HandleQuestionReportCommandHandler
             report.QuestionVersionId,
             report.ResolutionAction,
             report.ScoreAdjustedTime));
+        });
     }
 
     private static string? NormalizeHandledStatus(string? status)
