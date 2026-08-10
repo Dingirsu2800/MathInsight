@@ -19,6 +19,7 @@
 | UC-52 | View WeakTags | Student | Student views dashboard; backend queries current weak topics |
 | UC-53 | View Recommended Lectures | Student | Based on qualified topic mastery, or grade-based cold start; returns difficulty-aware lectures |
 | UC-54 | View Recommended Materials | Student | Based on WeakTags; returns matching PDFs/materials |
+| UC-55 | View All Tag Mastery | Student | Student views Competency page; backend returns full TagsMastery picture regardless of score |
 | - | Update Topic Mastery | System | After a session is graded |
 | - | Provide WeakTag Advice | TestGen module | `IStudentRecommendationProvider.GetWeakTagAdviceAsync()` |
 
@@ -130,6 +131,7 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 
 - **RCM-15 (lecture recommendation audit)**: Each recommended lecture returns its topic, selected difficulty, target difficulty, nullable `OfficialPoint`, evidence count, fallback flag, and one reason: `WeakTopicExactDifficulty`, `WeakTopicLowerDifficultyFallback`, `ProgressionExactDifficulty`, `ProgressionLowerDifficultyFallback`, or `ColdStartGradeFoundation`. Weak means `OfficialPoint < 5.00`; learning and mastered progression use the `Progression*` reasons.
 - **RCM-16 (cold start)**: When no active topic mastery row has `NumberDone >= 3`, read `Student.CurrentGrade`. Return up to six `Published`, active-topic, active-difficulty, level-1 lectures in that grade, ordered by `Likes` descending, `UpdatedTime` descending, and `LectureID` ascending. Set `OfficialPoint = null`, evidence count `0`, target level `1`, no fallback, and reason `ColdStartGradeFoundation`. A missing grade or no eligible lecture returns an empty successful list.
+- **RCM-17 (All-Tag Mastery — UC-55)**: `GetStudentAllTagsMasteryAsync` returns ALL `TagsMastery` rows for a student, without filtering by `OfficialPoint`. Includes topics with `MasteryStatus` of `NotLearned`, `Learning`, and `Mastered`. Results are ordered by `OfficialPoint ascending, TagId ascending` (weakest first for UI priority). The response uses `TagMasteryDto` which exposes `MasteryStatus` and `RecommendedDifficultyLevel` in addition to the fields in `WeakTagDto`. This endpoint is used by the Competency page's `TopicMasteryGrid`, `CompetencySummaryCard`, and `RadarChartCard` components.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -152,7 +154,19 @@ public interface IRecommenderService
 {
     Task<IReadOnlyList<WeakTagDto>> GetStudentWeakTagsAsync(string studentId);
     Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(string studentId);
+    Task<IReadOnlyList<TagMasteryDto>> GetStudentAllTagsMasteryAsync(string studentId);
 }
+```
+
+```csharp
+public sealed record TagMasteryDto(
+    string TagId,
+    string TagName,
+    decimal OfficialPoint,
+    int NumberDone,
+    string MasteryStatus,           // "NotLearned" | "Learning" | "Mastered"
+    byte RecommendedDifficultyLevel
+);
 ```
 
 ```csharp
