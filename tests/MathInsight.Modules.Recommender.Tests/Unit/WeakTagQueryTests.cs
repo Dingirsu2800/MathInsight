@@ -15,6 +15,7 @@ namespace MathInsight.Modules.Recommender.Tests.Unit;
 /// </summary>
 public class WeakTagQueryTests : IDisposable
 {
+    private const string RootTagId = "root-topic";
     private readonly RecommenderDbContext _db;
     private readonly RecommenderService _sut;
 
@@ -25,12 +26,19 @@ public class WeakTagQueryTests : IDisposable
             .Options;
         _db  = new RecommenderDbContext(options);
         _sut = new RecommenderService(_db, new DifficultyMappingService());
+        _db.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = RootTagId,
+            TagName = "Root topic",
+            Grade = 0,
+            IsActive = true
+        });
     }
 
     public void Dispose() => _db.Dispose();
 
     private static TagTopicReadOnly MakeTagTopic(Guid tagId, string name) =>
-        new() { TagId = tagId.ToString(), TagName = name };
+        new() { TagId = tagId.ToString(), ParentTagId = RootTagId, TagName = name, Grade = 0, IsActive = true };
 
     private static TagsMastery MakeMastery(Guid studentId, Guid tagId, decimal officialPoint) =>
         new()
@@ -118,5 +126,43 @@ public class WeakTagQueryTests : IDisposable
         Assert.Equal(1.00m, result[0].OfficialPoint);
         Assert.Equal(3.00m, result[1].OfficialPoint);
         Assert.Equal(4.50m, result[2].OfficialPoint);
+    }
+
+    [Fact]
+    public async Task GetStudentAllTagsMasteryAsync_ReturnsOnlyActiveDirectChildrenWithValidRoot()
+    {
+        var studentId = Guid.NewGuid();
+        var validTagId = Guid.NewGuid();
+        var inactiveTagId = Guid.NewGuid();
+        var nestedTagId = Guid.NewGuid();
+
+        _db.TagTopics.AddRange(
+            MakeTagTopic(validTagId, "Valid child"),
+            new TagTopicReadOnly
+            {
+                TagId = inactiveTagId.ToString(),
+                ParentTagId = RootTagId,
+                TagName = "Inactive child",
+                Grade = 0,
+                IsActive = false
+            },
+            new TagTopicReadOnly
+            {
+                TagId = nestedTagId.ToString(),
+                ParentTagId = validTagId.ToString(),
+                TagName = "Nested legacy topic",
+                Grade = 0,
+                IsActive = true
+            });
+        _db.TagsMasteries.AddRange(
+            MakeMastery(studentId, validTagId, 8.00m),
+            MakeMastery(studentId, inactiveTagId, 3.00m),
+            MakeMastery(studentId, nestedTagId, 2.00m));
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.GetStudentAllTagsMasteryAsync(studentId.ToString());
+
+        var mastery = Assert.Single(result);
+        Assert.Equal(validTagId.ToString(), mastery.TagId);
     }
 }

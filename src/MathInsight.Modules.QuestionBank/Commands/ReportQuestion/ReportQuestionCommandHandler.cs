@@ -40,6 +40,8 @@ public sealed class ReportQuestionCommandHandler
         if ((command.SessionId is null) != (command.QuestionVersionId is null))
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
 
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -137,6 +139,7 @@ public sealed class ReportQuestionCommandHandler
             question.IsActive,
             report.SessionId,
             report.QuestionVersionId));
+        });
     }
 
     private static string? NormalizeReporterRole(string? role)

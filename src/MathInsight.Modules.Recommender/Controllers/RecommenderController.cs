@@ -52,7 +52,7 @@ public class RecommenderController : ControllerBase
     }
 
     /// <summary>
-    /// UC-55: Returns ALL topic mastery rows for the authenticated student (RCM-17).
+    /// UC-55: Returns all eligible direct-child topic mastery rows for the authenticated student (RCM-17).
     /// Unlike weak-tags, this endpoint includes NotLearned, Learning, and Mastered topics.
     /// Used by the Competency page to show a complete picture of the student's performance.
     /// </summary>

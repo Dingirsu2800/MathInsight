@@ -141,6 +141,20 @@ public sealed class BlueprintCreateAndReadTests
         Assert.Equal(BlueprintErrors.TaxonomyInvalid, result.Error);
     }
 
+    [Fact]
+    public async Task Validator_RootTopic_ReturnsTaxonomyInvalid()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = ValidRequest();
+        request.Sections[0].Details[0].TagId = "root-grade-12";
+
+        var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.TaxonomyInvalid, result.Error);
+    }
+
     [Theory]
     [InlineData(Grade11TopicId, EasyDifficultyId)]
     [InlineData(InactiveTopicId, EasyDifficultyId)]
@@ -369,7 +383,16 @@ public sealed class BlueprintCreateAndReadTests
         testContext.Context.TagTopics.AddRange(
             new TagTopicReadModel
             {
+                TagId = "root-grade-12",
+                TagName = "Grade 12 root",
+                Grade = 12,
+                IsActive = true,
+                DisplayOrder = 1
+            },
+            new TagTopicReadModel
+            {
                 TagId = Grade12TopicId,
+                ParentTagId = "root-grade-12",
                 TagName = "Calculus",
                 Grade = 12,
                 IsActive = true,
@@ -377,7 +400,16 @@ public sealed class BlueprintCreateAndReadTests
             },
             new TagTopicReadModel
             {
+                TagId = "root-grade-11",
+                TagName = "Grade 11 root",
+                Grade = 11,
+                IsActive = true,
+                DisplayOrder = 2
+            },
+            new TagTopicReadModel
+            {
                 TagId = Grade11TopicId,
+                ParentTagId = "root-grade-11",
                 TagName = "Algebra 11",
                 Grade = 11,
                 IsActive = true,
@@ -386,6 +418,7 @@ public sealed class BlueprintCreateAndReadTests
             new TagTopicReadModel
             {
                 TagId = InactiveTopicId,
+                ParentTagId = "root-grade-12",
                 TagName = "Inactive topic",
                 Grade = 12,
                 IsActive = false,

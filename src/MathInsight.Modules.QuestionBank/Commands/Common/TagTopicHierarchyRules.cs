@@ -46,5 +46,51 @@ internal static class TagTopicHierarchyRules
         return false;
     }
 
+    /// <summary>
+    /// An active child under an inactive (or orphaned) ancestor cannot be reached from
+    /// the active topic tree. Treat that lineage as invalid for create/reactivation.
+    /// </summary>
+    public static async Task<bool> HasInactiveOrMissingAncestorAsync(
+        QuestionBankDbContext context,
+        string parentTagId,
+        CancellationToken cancellationToken)
+    {
+        return await AnyHasInactiveOrMissingAncestorAsync(
+            context,
+            [parentTagId],
+            cancellationToken);
+    }
+
+    public static async Task<bool> AnyHasInactiveOrMissingAncestorAsync(
+        QuestionBankDbContext context,
+        IEnumerable<string> tagIds,
+        CancellationToken cancellationToken)
+    {
+        var topicsById = await context.TagTopics
+            .AsNoTracking()
+            .Select(topic => new TopicNode(topic.TagId, topic.ParentTagId, topic.IsActive))
+            .ToDictionaryAsync(topic => topic.TagId, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        foreach (var tagId in tagIds)
+        {
+            var visitedTagIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? currentTagId = tagId;
+
+            while (currentTagId is not null)
+            {
+                if (!visitedTagIds.Add(currentTagId) ||
+                    !topicsById.TryGetValue(currentTagId, out var currentTopic) ||
+                    !currentTopic.IsActive)
+                {
+                    return true;
+                }
+
+                currentTagId = currentTopic.ParentTagId;
+            }
+        }
+
+        return false;
+    }
+
     private sealed record TopicNode(string TagId, string? ParentTagId, bool IsActive);
 }

@@ -104,8 +104,22 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
         var activeTopics = await _context.TagTopics
             .AsNoTracking()
             .Where(topic => tagIdValues.Contains(topic.TagId) && topic.IsActive)
-            .Select(topic => new { topic.TagId, topic.Grade })
+            .Select(topic => new { topic.TagId, topic.Grade, topic.ParentTagId })
             .ToListAsync(cancellationToken);
+
+        var parentTagIds = activeTopics
+            .Where(topic => !string.IsNullOrWhiteSpace(topic.ParentTagId))
+            .Select(topic => topic.ParentTagId!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var activeParents = await _context.TagTopics
+            .AsNoTracking()
+            .Where(topic => parentTagIds.Contains(topic.TagId) && topic.IsActive)
+            .Select(topic => new { topic.TagId, topic.Grade, topic.ParentTagId })
+            .ToListAsync(cancellationToken);
+
+        var parentsById = activeParents.ToDictionary(topic => topic.TagId, StringComparer.OrdinalIgnoreCase);
 
         var activeDifficulties = await _context.TagDifficulties
             .AsNoTracking()
@@ -115,6 +129,10 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
 
         if (activeTopics.Count != tagIds.Count ||
             activeTopics.Any(topic => topic.Grade != request.Grade) ||
+            activeTopics.Any(topic => string.IsNullOrWhiteSpace(topic.ParentTagId) ||
+                !parentsById.TryGetValue(topic.ParentTagId!, out var parent) ||
+                !string.IsNullOrWhiteSpace(parent.ParentTagId) ||
+                parent.Grade != topic.Grade) ||
             activeDifficulties.Count != difficultyIds.Count)
         {
             return Result<ValidatedBlueprintAggregate>.Failure(BlueprintErrors.TaxonomyInvalid);

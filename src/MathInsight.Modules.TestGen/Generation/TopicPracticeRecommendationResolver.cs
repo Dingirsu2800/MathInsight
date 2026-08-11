@@ -59,27 +59,19 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
                 TestGenerationErrors.TopicPracticeRecommendationInvalid);
         }
 
-        var topicById = activeTopics.ToDictionary(topic => topic.TagId, StringComparer.OrdinalIgnoreCase);
         var contexts = new Dictionary<string, TopicPracticeRecommendationContext>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var selectedTopic in activeTopics)
         {
-            var subtree = TopicTreeResolver.ResolveActiveSubtree(selectedTopic.TagId, activeTopics);
             var representative = advice
-                .Where(item => subtree.Contains(item.TagId))
-                .OrderBy(item => item.OfficialPoint)
-                .ThenBy(item => item.RecommendedDifficultyLevel)
-                .ThenByDescending(item => GetDepth(item.TagId, selectedTopic.TagId, topicById))
-                .ThenBy(item => topicById[item.TagId].DisplayOrder)
-                .ThenBy(item => item.TagId, StringComparer.Ordinal)
-                .FirstOrDefault();
+                .SingleOrDefault(item => string.Equals(item.TagId, selectedTopic.TagId, StringComparison.OrdinalIgnoreCase));
 
             contexts[selectedTopic.TagId] = representative is null
                 ? TopicPracticeRecommendationContext.Baseline
                 : new TopicPracticeRecommendationContext(
                     true,
                     representative,
-                    TopicTreeResolver.ResolveActiveSubtree(representative.TagId, activeTopics));
+                    new HashSet<string>([selectedTopic.TagId], StringComparer.OrdinalIgnoreCase));
         }
 
         return Result<IReadOnlyDictionary<string, TopicPracticeRecommendationContext>>.Success(contexts);
@@ -108,27 +100,4 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
             !string.IsNullOrWhiteSpace(item.Reason));
     }
 
-    private static int GetDepth(
-        string tagId,
-        string selectedTagId,
-        IReadOnlyDictionary<string, TagTopicReadModel> topicById)
-    {
-        var depth = 0;
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var currentTagId = tagId;
-
-        while (topicById.TryGetValue(currentTagId, out var topic) && visited.Add(currentTagId))
-        {
-            if (string.Equals(currentTagId, selectedTagId, StringComparison.OrdinalIgnoreCase))
-                return depth;
-
-            if (string.IsNullOrWhiteSpace(topic.ParentTagId))
-                break;
-
-            currentTagId = topic.ParentTagId;
-            depth++;
-        }
-
-        return -1;
-    }
 }

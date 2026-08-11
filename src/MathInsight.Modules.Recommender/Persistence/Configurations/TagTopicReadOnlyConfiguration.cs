@@ -21,6 +21,11 @@ public class TagTopicReadOnlyConfiguration : IEntityTypeConfiguration<TagTopicRe
             .HasMaxLength(36)
             .IsUnicode(false);
 
+        builder.Property(x => x.ParentTagId)
+            .HasColumnName("ParentTagID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
         builder.Property(x => x.TagName)
             .HasColumnName("TagName")
             .HasMaxLength(50);

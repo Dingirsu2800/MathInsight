@@ -52,9 +52,21 @@ public static class TestGenerationErrors
         "GENERATED_TEST_NOT_FOUND",
         "The generated test was not found or is unavailable.");
 
+    public static readonly Error FixedTestBlueprintNotApproved = new("FIXED_TEST_BLUEPRINT_NOT_APPROVED", "The blueprint must be approved or active before a fixed test can be created.");
+    public static readonly Error FixedTestQuestionDuplicated = new("FIXED_TEST_QUESTION_DUPLICATED", "A question can only appear once in a fixed test.");
+    public static readonly Error FixedTestOrderInvalid = new("FIXED_TEST_ORDER_INVALID", "Question order must be unique and continuous from one.");
+    public static readonly Error FixedTestDetailQuantityMismatch = new("FIXED_TEST_DETAIL_QUANTITY_MISMATCH", "Selected question quantities do not fulfill every blueprint detail.");
+    public static readonly Error FixedTestQuestionNotEligible = new("FIXED_TEST_QUESTION_NOT_ELIGIBLE", "A selected question does not satisfy its assigned blueprint detail.");
+    public static readonly Error FixedTestQuestionVersionUnavailable = new("FIXED_TEST_QUESTION_VERSION_UNAVAILABLE", "A selected question does not have a usable latest version snapshot.");
+    public static readonly Error TestAlreadyArchived = new("TEST_ALREADY_ARCHIVED", "The test has already been archived.");
+
     public static readonly Error TopicPracticeStudentNotFound = new("TOPIC_PRACTICE_STUDENT_NOT_FOUND", "A usable Student profile was not found.");
+    public static readonly Error StudentGradeRequired = new("STUDENT_GRADE_REQUIRED", "The Student profile must have a valid current grade before Topic Practice can be generated.");
     public static readonly Error TopicPracticeTopicNotFound = new("TOPIC_PRACTICE_TOPIC_NOT_FOUND", "The requested topic was not found.");
     public static readonly Error TopicPracticeTopicUnavailable = new("TOPIC_PRACTICE_TOPIC_UNAVAILABLE", "The requested topic is inactive or does not match the Student grade.");
+    public static readonly Error TopicPracticeGradeNotAllowed = new("TOPIC_PRACTICE_GRADE_NOT_ALLOWED", "The selected topic belongs to a grade above the Student's current grade.");
+    public static readonly Error TopicParentGradeMismatch = new("TOPIC_PARENT_GRADE_MISMATCH", "The selected topic and its parent must belong to the same grade.");
+    public static readonly Error TopicParentNotAssignable = new("TOPIC_PARENT_NOT_ASSIGNABLE", "Only an active direct child of an active root topic can be selected for Topic Practice.");
     public static readonly Error TopicPracticeInsufficientQuestions = new("TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS", "The selected topic does not contain ten valid questions.");
     public static readonly Error TopicPracticeGenerationConflict = new("TOPIC_PRACTICE_GENERATION_CONFLICT", "The generated test could not be verified after a persistence conflict.");
     public static readonly Error TopicPracticeRecommenderUnavailable = new("TOPIC_PRACTICE_RECOMMENDER_UNAVAILABLE", "Recommendation advice is temporarily unavailable.");

@@ -131,6 +131,8 @@ public sealed class GetExpertTestPreviewQueryHandler
             test.TestName,
             test.TestCode,
             test.TestStatus,
+            GeneratedTestValues.ToGenerationType(
+                test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason)),
             test.DurationMinutes,
             test.TotalQuestions,
             test.MaxScore,

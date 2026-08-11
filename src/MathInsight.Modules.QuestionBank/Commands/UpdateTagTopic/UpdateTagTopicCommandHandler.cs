@@ -71,6 +71,15 @@ public sealed class UpdateTagTopicCommandHandler
             if (parent.Grade != request.Grade)
                 return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagParentInvalid);
 
+            if (request.IsActive &&
+                await TagTopicHierarchyRules.HasInactiveOrMissingAncestorAsync(
+                    _context,
+                    parent.TagId,
+                    cancellationToken))
+            {
+                return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagParentInvalid);
+            }
+
             var topicLinks = await _context.TagTopics
                 .AsNoTracking()
                 .Select(existing => new { existing.TagId, existing.ParentTagId })

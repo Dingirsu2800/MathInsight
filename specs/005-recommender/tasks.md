@@ -72,9 +72,9 @@
     - `series_answer_count = 0`
 
 - [x] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
-  - [x] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level. Query `Student.current_grade` from the Identity module cross-schema (F5 resolution).
+  - [x] After each `TagsMastery` upsert, query only active direct-child topic rows with an active root parent where both tags match `Student.CurrentGrade`.
   - [x] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
-  - [x] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
+  - [x] Upsert `CompetencyPoint` by unique key `(student_id, grade)` only when at least one eligible mastery row exists; never fall back to another grade.
 
 - [x] **DifficultyMappingService**:
   - [x] `MapFromOfficialPoint(officialPoint)` returns level `1..4` (RCM-07).
@@ -205,7 +205,7 @@
 
 - [x] **`Contracts/TagMasteryDto.cs`** — New DTO with `TagId`, `TagName`, `OfficialPoint`, `NumberDone`, `MasteryStatus`, `RecommendedDifficultyLevel`.
 - [x] **`Services/IRecommenderService.cs`** — Added `GetStudentAllTagsMasteryAsync(studentId)` method.
-- [x] **`Services/RecommenderService.cs`** — Implement `GetStudentAllTagsMasteryAsync`: join `TagsMastery` + `TagTopic`, no OfficialPoint filter, order `OfficialPoint ascending, TagId ascending`.
+- [x] **`Services/RecommenderService.cs`** — Implement `GetStudentAllTagsMasteryAsync`: return active direct-child mastery with an active same-grade root parent, no OfficialPoint filter, ordered by `OfficialPoint ascending, TagId ascending`.
 - [x] **`Queries/GetAllTagsMastery/GetAllTagsMasteryQuery.cs`** — MediatR query record.
 - [x] **`Queries/GetAllTagsMastery/GetAllTagsMasteryQueryHandler.cs`** — Handler delegates to `IRecommenderService.GetStudentAllTagsMasteryAsync`.
 - [x] **`Controllers/RecommenderController.cs`** — Added `GET /api/v1/recommender/topic-mastery` endpoint (UC-55, `[Authorize(Roles = "Student")]`).

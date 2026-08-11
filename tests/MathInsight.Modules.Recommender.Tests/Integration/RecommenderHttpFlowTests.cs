@@ -53,11 +53,21 @@ public sealed class RecommenderHttpFlowTests : IDisposable
         var tagId     = Guid.NewGuid();
 
         // Seed TagTopic
-        _db.TagTopics.Add(new TagTopicReadOnly
+        _db.TagTopics.AddRange(
+            new TagTopicReadOnly
+            {
+                TagId = "root-topic",
+                TagName = "Root topic",
+                Grade = 10,
+                IsActive = true
+            },
+            new TagTopicReadOnly
         {
             TagId   = tagId.ToString(),
+            ParentTagId = "root-topic",
             TagName = "Đạo hàm",
-            Grade   = 10
+            Grade   = 10,
+            IsActive = true
         });
         await _db.SaveChangesAsync();
 
@@ -130,7 +140,15 @@ public sealed class RecommenderHttpFlowTests : IDisposable
         _db.TagTopics.AddRange(
             new TagTopicReadOnly
             {
+                TagId = "root-topic",
+                TagName = "Root topic",
+                Grade = 10,
+                IsActive = true
+            },
+            new TagTopicReadOnly
+            {
                 TagId = tagRemedial,
+                ParentTagId = "root-topic",
                 TagName = "Remedial Topic",
                 Grade = 10,
                 IsActive = true
@@ -138,6 +156,7 @@ public sealed class RecommenderHttpFlowTests : IDisposable
             new TagTopicReadOnly
             {
                 TagId = tagNonRemedial,
+                ParentTagId = "root-topic",
                 TagName = "Non-Remedial Topic",
                 Grade = 10,
                 IsActive = true

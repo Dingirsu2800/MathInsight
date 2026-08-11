@@ -212,9 +212,18 @@ public sealed class RecommendedLectureQueryTests : IDisposable
 
     private void AddActiveTopic(string tagId, int grade, bool isActive = true)
     {
+        var rootTagId = $"root-{tagId}";
+        _db.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = rootTagId,
+            TagName = rootTagId,
+            Grade = grade,
+            IsActive = true
+        });
         _db.TagTopics.Add(new TagTopicReadOnly
         {
             TagId = tagId,
+            ParentTagId = rootTagId,
             TagName = tagId,
             Grade = grade,
             IsActive = isActive

@@ -82,9 +82,11 @@ public sealed class LectureRecommendationSqlServerSmokeTests
                 ('diff-l3', N'Level 3', 3, 3, 1),
                 ('diff-l4', N'Level 4', 4, 4, 1);
 
-            INSERT INTO dbo.TagTopic (TagID, TagName, Grade, IsActive, DisplayOrder) VALUES
-                ('topic-personalized', N'Personalized topic', 12, 1, 1),
-                ('topic-foundation', N'Foundation topic', 12, 1, 2);
+            INSERT INTO dbo.TagTopic (TagID, ParentTagID, TagName, Grade, IsActive, DisplayOrder) VALUES
+                ('root-personalized', NULL, N'Personalized root', 12, 1, 1),
+                ('topic-personalized', 'root-personalized', N'Personalized topic', 12, 1, 2),
+                ('root-foundation', NULL, N'Foundation root', 12, 1, 3),
+                ('topic-foundation', 'root-foundation', N'Foundation topic', 12, 1, 4);
 
             INSERT INTO dbo.TagsMastery
                 (TagsMasteryID, StudentID, TagID, OfficialPoint, PracticePoint, ExamAnchor, ExamHistory,

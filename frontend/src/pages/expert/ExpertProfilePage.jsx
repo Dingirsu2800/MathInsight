@@ -2,11 +2,13 @@ import * as React from "react";
 import ExpertLayout from "./ExpertLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import useCurrentUser from "../../hooks/useCurrentUser";
+import { getRoleLabel } from "../../utils/expertLabels";
 
 export default function ExpertProfilePage() {
   const { profile, displayName, initials, loading } = useCurrentUser("Expert");
-  const roleName = profile?.roleName || "Expert";
+  const roleName = getRoleLabel(profile?.roleName || "Expert");
   const specialty = profile?.expert?.specialty || "Chưa cập nhật";
+
 
   return (
     <ExpertLayout>

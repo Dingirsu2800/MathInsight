@@ -39,7 +39,7 @@ public sealed class TopicPracticeRecommendationResolverTests
     }
 
     [Fact]
-    public async Task ResolveForTopicsAsync_MapsAdviceOnlyToSelectedTopicSubtrees()
+    public async Task ResolveForTopicsAsync_MapsAdviceOnlyToTheExactSelectedTopic()
     {
         _provider
             .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
@@ -51,14 +51,15 @@ public sealed class TopicPracticeRecommendationResolverTests
             "student_01", Topics(), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.True(result.Value!["parent"].IsAdaptive);
+        Assert.Equal(3, result.Value!.Count);
+        Assert.False(result.Value!["parent"].IsAdaptive);
         Assert.True(result.Value!["child"].IsAdaptive);
+        Assert.Equal("child", result.Value!["child"].RepresentativeAdvice!.TagId);
         Assert.False(result.Value!["sibling"].IsAdaptive);
-        Assert.Equal("child", result.Value!["parent"].RepresentativeAdvice!.TagId);
     }
 
     [Fact]
-    public async Task ResolveForTopicsAsync_SelectsLowestPointThenDeepestRepresentative()
+    public async Task ResolveForTopicsAsync_MapsAdviceOnlyByExactTagId()
     {
         var topics = new[]
         {
@@ -78,8 +79,11 @@ public sealed class TopicPracticeRecommendationResolverTests
             "student_01", topics, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("deep", result.Value!["parent"].RepresentativeAdvice!.TagId);
-        Assert.Contains("deep", result.Value!["parent"].FocusTagIds);
+        Assert.Equal(4, result.Value!.Count);
+        Assert.False(result.Value!["parent"].IsAdaptive);
+        Assert.True(result.Value!["shallow"].IsAdaptive);
+        Assert.False(result.Value!["middle"].IsAdaptive);
+        Assert.True(result.Value!["deep"].IsAdaptive);
     }
 
     [Fact]

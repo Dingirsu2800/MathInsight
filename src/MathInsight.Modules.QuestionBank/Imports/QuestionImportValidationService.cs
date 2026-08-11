@@ -84,7 +84,7 @@ public sealed class QuestionImportValidationService
                 null));
         }
 
-        var activeTopicsById = activeTopics.ToDictionary(topic => topic.TagId, StringComparer.OrdinalIgnoreCase);
+        var activeTopicsById = GetAssignableDirectChildren(activeTopics);
         var difficultyByLevel = activeDifficulties.ToDictionary(difficulty => difficulty.LevelValue);
         var items = new List<QuestionImportPreviewItemResponse>();
 
@@ -143,10 +143,11 @@ public sealed class QuestionImportValidationService
         var difficultyIds = candidates.Select(candidate => candidate.Draft.DifficultyId)
             .Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        var activeTopics = await _context.TagTopics
+        var allActiveTopics = await _context.TagTopics
             .AsNoTracking()
-            .Where(topic => topic.IsActive && topicIds.Contains(topic.TagId))
-            .ToDictionaryAsync(topic => topic.TagId, StringComparer.OrdinalIgnoreCase, cancellationToken);
+            .Where(topic => topic.IsActive)
+            .ToListAsync(cancellationToken);
+        var activeTopics = GetAssignableDirectChildren(allActiveTopics);
         var activeDifficulties = await _context.TagDifficulties
             .AsNoTracking()
             .Where(difficulty => difficulty.IsActive && difficultyIds.Contains(difficulty.DifficultyId))
@@ -335,6 +336,20 @@ public sealed class QuestionImportValidationService
     }
 
     private static string NormalizeKey(string key) => key.Trim();
+
+    private static IReadOnlyDictionary<string, Entities.TagTopic> GetAssignableDirectChildren(
+        IReadOnlyCollection<Entities.TagTopic> activeTopics)
+    {
+        var topicsById = activeTopics.ToDictionary(topic => topic.TagId, StringComparer.OrdinalIgnoreCase);
+
+        return activeTopics
+            .Where(topic =>
+                !string.IsNullOrWhiteSpace(topic.ParentTagId) &&
+                topicsById.TryGetValue(topic.ParentTagId, out var parent) &&
+                string.IsNullOrWhiteSpace(parent.ParentTagId) &&
+                parent.Grade == topic.Grade)
+            .ToDictionary(topic => topic.TagId, StringComparer.OrdinalIgnoreCase);
+    }
 
     private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

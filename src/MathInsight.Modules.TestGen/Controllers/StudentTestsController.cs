@@ -98,7 +98,11 @@ public sealed class StudentTestsController : ControllerBase
 
         if (error == TestGenerationErrors.BlueprintUnavailable ||
             error == TestGenerationErrors.GradeMismatch ||
-            error == TestGenerationErrors.TopicPracticeTopicUnavailable)
+            error == TestGenerationErrors.TopicPracticeTopicUnavailable ||
+            error == TestGenerationErrors.StudentGradeRequired ||
+            error == TestGenerationErrors.TopicPracticeGradeNotAllowed ||
+            error == TestGenerationErrors.TopicParentGradeMismatch ||
+            error == TestGenerationErrors.TopicParentNotAssignable)
         {
             return UnprocessableEntity(new ApiErrorResponse(error));
         }

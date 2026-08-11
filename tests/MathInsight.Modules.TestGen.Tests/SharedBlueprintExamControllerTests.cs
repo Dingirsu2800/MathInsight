@@ -2,11 +2,13 @@ using System.Security.Claims;
 using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Commands.ArchiveSharedBlueprintExam;
 using MathInsight.Modules.TestGen.Commands.GenerateSharedBlueprintExam;
+using MathInsight.Modules.TestGen.Commands.GenerateFixedBlueprintExam;
 using MathInsight.Modules.TestGen.Contracts.Tests;
 using MathInsight.Modules.TestGen.Controllers;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetExpertTestPreview;
 using MathInsight.Modules.TestGen.Queries.ResolveSharedTestCode;
+using MathInsight.Modules.TestGen.Queries.GetFixedTestCandidates;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +21,53 @@ public sealed class SharedBlueprintExamControllerTests
 {
     private const string ExpertId = "controller-expert";
     private const string StudentId = "controller-student";
+
+    [Fact]
+    public async Task GenerateFixedBlueprintExam_UsesExpertClaimAndReturns201()
+    {
+        var response = GenerationResponse() with { GeneratedBy = "Expert" };
+        var mediator = new Mock<IMediator>();
+        mediator.Setup(x => x.Send(
+                It.Is<GenerateFixedBlueprintExamCommand>(command =>
+                    command.BlueprintId == "controller-blueprint" &&
+                    command.ExpertId == ExpertId && command.Questions.Count == 1),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateSharedBlueprintExamResponse>.Success(response));
+        var controller = CreateBlueprintController(mediator.Object);
+
+        var result = await controller.GenerateFixedBlueprintExam(
+            "controller-blueprint",
+            new GenerateFixedBlueprintExamRequest
+            {
+                TestName = "Fixed exam",
+                DurationMinutes = 50,
+                Questions = [new() { QuestionId = "q-1", BlueprintDetailId = "detail-1", QuestionOrder = 1 }]
+            },
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status201Created, Assert.IsType<ObjectResult>(result).StatusCode);
+        mediator.VerifyAll();
+    }
+
+    [Fact]
+    public async Task GetFixedTestCandidates_UsesExpertClaim()
+    {
+        var response = new PagedFixedTestCandidateResponse(1, 20, 0, []);
+        var mediator = new Mock<IMediator>();
+        mediator.Setup(x => x.Send(
+                It.Is<GetFixedTestCandidatesQuery>(query =>
+                    query.BlueprintId == "controller-blueprint" && query.ExpertId == ExpertId &&
+                    query.BlueprintDetailId == "detail-1" && query.Search == "derivative"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedFixedTestCandidateResponse>.Success(response));
+        var controller = CreateBlueprintController(mediator.Object);
+
+        var result = await controller.GetFixedTestCandidates(
+            "controller-blueprint", "detail-1", "derivative", 1, 20, CancellationToken.None);
+
+        Assert.Same(response, Assert.IsType<OkObjectResult>(result).Value);
+        mediator.VerifyAll();
+    }
 
     [Fact]
     public async Task GenerateSharedBlueprintExam_UsesExpertClaimAndReturns201()
@@ -98,6 +147,7 @@ public sealed class SharedBlueprintExamControllerTests
             "Controller exam",
             "CTRL2345",
             "Active",
+            "Random",
             30,
             1,
             1m,

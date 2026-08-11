@@ -10,7 +10,8 @@ $environmentFile = Join-Path $repositoryRoot '.env.l3'
 $projectName = 'mathinsight-l3-smoke'
 $connectionVariables = @(
     'RECOMMENDER_SQLSERVER_CONNECTION',
-    'TESTGEN_SQLSERVER_CONNECTION'
+    'TESTGEN_SQLSERVER_CONNECTION',
+    'QUESTIONBANK_SQLSERVER_CONNECTION'
 )
 
 function Get-L3SqlServerPassword {
@@ -106,6 +107,7 @@ try {
 
     $recommenderProject = Join-Path $repositoryRoot 'tests\MathInsight.Modules.Recommender.Tests\MathInsight.Modules.Recommender.Tests.csproj'
     $testGenProject = Join-Path $repositoryRoot 'tests\MathInsight.Modules.TestGen.Tests\MathInsight.Modules.TestGen.Tests.csproj'
+    $questionBankProject = Join-Path $repositoryRoot 'tests\MathInsight.Modules.QuestionBank.Tests\MathInsight.Modules.QuestionBank.Tests.csproj'
 
     Write-Host 'Running Recommender SQL Server smoke test...'
     & dotnet test $recommenderProject --no-restore --filter 'FullyQualifiedName~LectureRecommendationSqlServerSmokeTests|FullyQualifiedName~RecommenderApiSystemTests' --logger 'console;verbosity=minimal'
@@ -113,8 +115,14 @@ try {
         throw 'Recommender SQL Server smoke test failed.'
     }
 
+    Write-Host 'Running QuestionBank hosted API SQL Server smoke tests...'
+    & dotnet test $questionBankProject --no-restore --filter 'FullyQualifiedName~QuestionBankApiSystemTests' --logger 'console;verbosity=minimal'
+    if ($LASTEXITCODE -ne 0) {
+        throw 'QuestionBank hosted API SQL Server smoke test failed.'
+    }
+
     Write-Host 'Running TestGen SQL Server smoke tests...'
-    & dotnet test $testGenProject --no-restore --filter 'FullyQualifiedName~BlueprintSqlServerSmokeTests|FullyQualifiedName~TopicPracticeSqlServerSmokeTests' --logger 'console;verbosity=minimal'
+    & dotnet test $testGenProject --no-restore --filter 'FullyQualifiedName~BlueprintSqlServerSmokeTests|FullyQualifiedName~BlueprintApiSystemTests|FullyQualifiedName~TopicPracticeSqlServerSmokeTests' --logger 'console;verbosity=minimal'
     if ($LASTEXITCODE -ne 0) {
         throw 'TestGen SQL Server smoke tests failed.'
     }

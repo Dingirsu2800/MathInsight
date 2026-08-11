@@ -137,7 +137,8 @@ public sealed class TestGenModelMetadataTests
 
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "UQ_TestQuestion_Test_Order" && x.IsUnique);
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "IX_TestQuestion_RecommendedTag_Difficulty");
-        Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_TestQuestion_SelectionReason");
+        Assert.Contains(entity.GetCheckConstraints(), x =>
+            x.Name == "CK_TestQuestion_SelectionReason" && x.Sql!.Contains("'FixedExam'"));
         Assert.Contains(
             entity.GetForeignKeys(),
             foreignKey => foreignKey.GetConstraintName() == "FK_TestQuestion_Question_QuestionID" &&

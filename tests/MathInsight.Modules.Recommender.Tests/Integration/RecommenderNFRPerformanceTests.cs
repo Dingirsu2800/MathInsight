@@ -51,6 +51,13 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
                 LevelValue = 2,
                 IsActive = true
             });
+        _db.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = "root-topic",
+            TagName = "Root topic",
+            Grade = 10,
+            IsActive = true
+        });
 
         for (int i = 0; i < weakTagCount; i++)
         {
@@ -65,6 +72,7 @@ public sealed class RecommenderNFRPerformanceTests : IDisposable
             _db.TagTopics.Add(new TagTopicReadOnly
             {
                 TagId   = tagId,
+                ParentTagId = "root-topic",
                 TagName = $"Topic_{i:D3}",
                 Grade   = 10,
                 IsActive = true

@@ -1,0 +1,102 @@
+﻿name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: rg-mathinsight
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # -- 1. Checkout -------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -- 2. Login Azure ----------------------------------------------------
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # -- 3. Login ACR ------------------------------------------------------
+      - name: Login to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # -- 4. Docker Buildx --------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # -- 5. Build & Push Backend -------------------------------------------
+      - name: Build and push WebAPI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/webapi:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/webapi:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # -- 6. Build & Push Frontend ------------------------------------------
+      # VITE_API_BASE_URL duoc bake vao luc build (Vite khong co runtime env).
+      # Gia tri lay tu secret WEBAPI_FQDN (FQDN cua mathinsight-webapi tren Azure).
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=https://${{ secrets.WEBAPI_FQDN }}
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # -- 7. Deploy Backend -------------------------------------------------
+      # Secrets nhay cam (connection string, JWT key, API keys...) KHONG co o day.
+      # Chung duoc inject tu Azure Key Vault qua Managed Identity (da setup thu cong).
+      # Pipeline chi cap nhat image tag moi -- secrets da co san trong Container App.
+      - name: Deploy WebAPI to Container Apps
+        run: |
+          az containerapp update \
+            --name mathinsight-webapi \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/webapi:${{ github.sha }}
+
+      # -- 8. Deploy Frontend ------------------------------------------------
+      - name: Deploy Frontend to Container Apps
+        run: |
+          az containerapp update \
+            --name mathinsight-frontend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ github.sha }}
+
+      # -- 9. Print URLs -----------------------------------------------------
+      - name: Print deployment URLs
+        run: |
+          WEBAPI_URL=$(az containerapp show \
+            --name mathinsight-webapi \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+
+          FRONTEND_URL=$(az containerapp show \
+            --name mathinsight-frontend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+
+          echo "WebAPI:   https://$WEBAPI_URL"
+          echo "Frontend: https://$FRONTEND_URL"

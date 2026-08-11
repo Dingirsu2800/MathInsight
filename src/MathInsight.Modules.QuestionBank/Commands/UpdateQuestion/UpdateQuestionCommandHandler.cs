@@ -36,6 +36,9 @@ public sealed class UpdateQuestionCommandHandler
         if (validationError is not null)
             return Result<UpdateQuestionResponse>.Failure(validationError);
 
+        // The configured strategy executes once; no automatic retry may replay this versioned mutation.
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = _context.Database.IsRelational()
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -55,7 +58,10 @@ public sealed class UpdateQuestionCommandHandler
         if (!string.Equals(question.ExpertId, command.ExpertId, StringComparison.OrdinalIgnoreCase))
             return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionUpdateForbidden);
 
-        var referenceValidationError = await ValidateReferencesAsync(request, cancellationToken);
+        var referenceValidationError = await QuestionReferenceValidator.ValidateAsync(
+            _context,
+            ToCreateQuestionRequest(request),
+            cancellationToken);
         if (referenceValidationError is not null)
             return Result<UpdateQuestionResponse>.Failure(referenceValidationError);
 
@@ -146,6 +152,7 @@ public sealed class UpdateQuestionCommandHandler
 
         return Result<UpdateQuestionResponse>.Success(
             new UpdateQuestionResponse(question.QuestionId, question.Status, true));
+        });
     }
 
     private static CreateQuestionRequest ToCreateQuestionRequest(UpdateQuestionRequest request) => new()
@@ -161,32 +168,6 @@ public sealed class UpdateQuestionCommandHandler
         Answers = request.Answers,
         Parts = request.Parts
     };
-
-    private async Task<Error?> ValidateReferencesAsync(
-        UpdateQuestionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var difficultyExists = await _context.TagDifficulties
-            .AnyAsync(
-                difficulty => difficulty.DifficultyId == request.DifficultyId,
-                cancellationToken);
-
-        if (!difficultyExists)
-            return QuestionBankErrors.QuestionDifficultyNotFound;
-
-        var topicIds = request.Topics
-            .Select(topic => topic.TagId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var existingTopicCount = await _context.TagTopics
-            .CountAsync(topic => topicIds.Contains(topic.TagId), cancellationToken);
-
-        if (existingTopicCount != topicIds.Count)
-            return QuestionBankErrors.QuestionTopicNotFound;
-
-        return null;
-    }
 
     private static Error? ValidateRequest(UpdateQuestionRequest request, string dbQuestionType)
     {

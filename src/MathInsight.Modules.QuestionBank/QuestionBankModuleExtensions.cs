@@ -12,13 +12,11 @@ public static class QuestionBankModuleExtensions
 {
     public static IServiceCollection AddQuestionBankModule(this IServiceCollection services, IConfiguration configuration)
     {
+        // Question-bank mutations use explicit serializable transactions and SQL locks. Do not
+        // configure automatic EF retries here: these commands are not request-idempotent, so a
+        // retry after an unknown commit outcome could replay a successful mutation.
         services.AddDbContext<QuestionBankDbContext>(options =>
-            options.UseSqlServer(
-                configuration.GetConnectionString("DefaultConnection"),
-                sqlOptions => sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
-                    errorNumbersToAdd: null)));
+            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
         services
             .AddOptions<MistralOcrOptions>()

@@ -130,15 +130,15 @@ MathInsight.Modules.TestGen/
 
 ### Checkpoint 6C: TopicPractice
 
-- Return active topics for the Student current grade, including descendant capacity in a flat tree response.
-- Generate exactly 10 unique questions for one selected active topic/subtree using `TestMode = TopicPractice`, baseline level quota 3/4/2/1, nearest fallback, at most two Composite questions, and unseen-then-oldest preference.
+- Return active direct-child topics at or below the Student grade, with exact-topic candidate capacity in a flat response.
+- Generate exactly 10 unique questions for one selected active direct-child topic using `TestMode = TopicPractice`, baseline level quota 3/4/2/1, nearest fallback, at most two Composite questions, and unseen-then-oldest preference.
 - Keep BlueprintID null, persist `DurationMinutes = 0` and `NormalizedWeight`, then hand the generated Test to Testing for a Practice TestSession.
 - Extract immutable candidate validation so BlueprintExam and TopicPractice share the same QuestionVersion V2 gate.
 
 ### Checkpoint 6D: WeakTag-Aware TopicPractice
 
 - Keep the completed TopicPractice request and baseline behavior, then consume `IStudentRecommendationProvider` only through `MathInsight.Shared`.
-- Resolve one qualified WeakTag inside the selected active subtree, choose the approved level-1 or level-2 profile, and preserve parent breadth when the candidate pool permits it.
+- Resolve qualified WeakTag advice only for the exact selected active direct-child topic, then choose the approved level-1 or level-2 profile.
 - Store recommendation audit in existing `TestQuestion` fields; no schema change, Recommender project reference, REST call, Redis, or Adaptive BlueprintExam implementation is permitted.
 - Return additive option/generation metadata and stable `503` errors; frontend remains a display client and sends only `tagId`.
 
@@ -154,6 +154,14 @@ MathInsight.Modules.TestGen/
 - Add paged Student shared-Test discovery and generic, rate-limited TestCode resolution filtered by exact Student grade and active Blueprint state.
 - Keep authorization and transaction orchestration separate for Student and Expert flows. Extract only pure requirement, selection, ordering, score-allocation, and TestQuestion-construction logic after characterization coverage exists.
 - Do not add durable HTTP idempotency, a Draft Test status, Adaptive generation, Diagnostic, or Recommender integration.
+
+### Phase 10: Expert Fixed BlueprintExam
+
+- Add owner-only candidate search per BlueprintDetail and exact-question generation from Approved or Active Blueprints.
+- Enforce unique questions, continuous global order, exact detail quantities, and full topic/difficulty/type/scoring/part-count eligibility on the server.
+- Reuse immutable QuestionVersion V2 validation and section score allocation; persist `GeneratedBy = Expert` and `SelectionReason = FixedExam`.
+- Derive additive `generationType` metadata for Expert list and preview. Random and fixed tests coexist under one Blueprint and archive independently.
+- Add only the SelectionReason check-constraint migration; no new table, column, TestSession, frontend-owned validation, or Adaptive behavior.
 
 ## API Design
 
@@ -184,6 +192,8 @@ Phase 9 adds Expert and shared-discovery routes without replacing these endpoint
 
 ```text
 POST  /api/test-generator/blueprints/{blueprintId}/tests
+GET   /api/test-generator/blueprints/{blueprintId}/fixed-test-candidates
+POST  /api/test-generator/blueprints/{blueprintId}/fixed-tests
 GET   /api/test-generator/blueprints/{blueprintId}/tests
 GET   /api/test-generator/tests/{testId}/expert-preview
 PATCH /api/test-generator/tests/{testId}/status
