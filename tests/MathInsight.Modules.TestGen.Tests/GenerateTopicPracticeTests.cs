@@ -27,7 +27,9 @@ public sealed class GenerateTopicPracticeTests
     {
         await using var fixture = TestGenInMemoryContext.Create();
         fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
-        fixture.Context.TagTopics.Add(new TagTopicReadModel { TagId = "topic", TagName = "Topic", Grade = 12, IsActive = true });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "topic", ParentTagId = "root", TagName = "Topic", Grade = 12, IsActive = true });
         fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true });
         for (var index = 0; index < 10; index++) AddQuestion(fixture, $"q-{index}");
         await fixture.Context.SaveChangesAsync();
@@ -49,34 +51,34 @@ public sealed class GenerateTopicPracticeTests
         await using var fixture = TestGenInMemoryContext.Create();
         fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
         fixture.Context.TagTopics.AddRange(
-            new TagTopicReadModel { TagId = "topic", TagName = "Parent", Grade = 12, IsActive = true },
-            new TagTopicReadModel { TagId = "weak-child", ParentTagId = "topic", TagName = "Weak child", Grade = 12, IsActive = true, DisplayOrder = 1 });
+            new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "topic", ParentTagId = "root", TagName = "Topic", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "weak-child", ParentTagId = "root", TagName = "Weak child", Grade = 12, IsActive = true, DisplayOrder = 1 });
         fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true });
-        for (var index = 0; index < 8; index++) AddQuestion(fixture, $"focus-{index}", "weak-child");
-        for (var index = 0; index < 2; index++) AddQuestion(fixture, $"general-{index}", "topic");
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"focus-{index}", "topic");
         await fixture.Context.SaveChangesAsync();
 
-        var advice = new WeakTagAdvice("weak-child", "Weak child", 2.40m, 5, 1, "BottleneckSubTag");
+        var advice = new WeakTagAdvice("topic", "Topic", 2.40m, 5, 1, "BottleneckSubTag");
         var result = await CreateHandler(
             fixture,
             new AdviceRecommendationResolver("topic", new TopicPracticeRecommendationContext(
                 true,
                 advice,
-                new HashSet<string>(["weak-child"], StringComparer.OrdinalIgnoreCase))))
+                new HashSet<string>(["topic"], StringComparer.OrdinalIgnoreCase))))
             .Handle(new GenerateTopicPracticeCommand("student", "topic"), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.True(result.Value!.WasAdaptive);
-        Assert.Equal("weak-child", result.Value.WeakTagId);
-        Assert.Equal(8, result.Value.AdaptiveQuestionCount);
-        Assert.Equal(2, result.Value.FallbackQuestionCount);
+        Assert.Equal("topic", result.Value.WeakTagId);
+        Assert.Equal(10, result.Value.AdaptiveQuestionCount);
+        Assert.Equal(0, result.Value.FallbackQuestionCount);
         var test = Assert.Single(fixture.Context.Tests);
         var focusRows = test.Questions.Where(question => question.IsAdaptiveSelected).ToList();
-        Assert.Equal(8, focusRows.Count);
+        Assert.Equal(10, focusRows.Count);
         Assert.All(focusRows, question =>
         {
             Assert.Equal("WeakTagPractice", question.SelectionReason);
-            Assert.Equal("weak-child", question.RecommendedForTagId);
+            Assert.Equal("topic", question.RecommendedForTagId);
             Assert.Equal("d-1", question.RecommendedDifficultyId);
             Assert.Equal(2.40m, question.PtagAtSelection);
             Assert.Equal("TopicPractice-WeakTag-v1", question.RuleVersion);
@@ -96,7 +98,9 @@ public sealed class GenerateTopicPracticeTests
     {
         await using var fixture = TestGenInMemoryContext.Create();
         fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
-        fixture.Context.TagTopics.Add(new TagTopicReadModel { TagId = "topic", TagName = "Topic", Grade = 12, IsActive = true });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "topic", ParentTagId = "root", TagName = "Topic", Grade = 12, IsActive = true });
         await fixture.Context.SaveChangesAsync();
 
         var result = await CreateHandler(
@@ -109,11 +113,78 @@ public sealed class GenerateTopicPracticeTests
         Assert.Empty(fixture.Context.Tests);
     }
 
-    private static void AddQuestion(TestGenInMemoryContext fixture, string id, string tagId = "topic")
+    [Fact]
+    public async Task Generate_GradeTwelveStudent_CanGenerateSelectedGradeTenDirectChildOnly()
     {
-        fixture.Context.Questions.Add(new QuestionReadModel { QuestionId = id, Grade = 12, DifficultyId = "d-1", QuestionType = "SingleChoice", Status = "Approved", IsActive = true, DefaultWeight = 1m });
+        await using var fixture = TestGenInMemoryContext.Create();
+        fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root-10", TagName = "Root 10", Grade = 10, IsActive = true },
+            new TagTopicReadModel { TagId = "child-10", ParentTagId = "root-10", TagName = "Child 10", Grade = 10, IsActive = true },
+            new TagTopicReadModel { TagId = "other-10", ParentTagId = "root-10", TagName = "Other 10", Grade = 10, IsActive = true });
+        fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true });
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"child-{index}", "child-10", 10);
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"other-{index}", "other-10", 10);
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(fixture).Handle(new GenerateTopicPracticeCommand("student", "child-10"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("child-10", result.Value!.SelectedTagId);
+        Assert.All(Assert.Single(fixture.Context.Tests).Questions, question => Assert.StartsWith("child-", question.QuestionId));
+    }
+
+    [Fact]
+    public async Task Generate_GradeElevenStudent_IsBlockedFromGradeTwelveTopic()
+    {
+        await using var fixture = TestGenInMemoryContext.Create();
+        fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 11 });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root-12", TagName = "Root 12", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "child-12", ParentTagId = "root-12", TagName = "Child 12", Grade = 12, IsActive = true });
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(fixture).Handle(new GenerateTopicPracticeCommand("student", "child-12"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TOPIC_PRACTICE_GRADE_NOT_ALLOWED", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task Generate_RootTopic_IsNotAssignable()
+    {
+        await using var fixture = TestGenInMemoryContext.Create();
+        fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
+        fixture.Context.TagTopics.Add(new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true });
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(fixture).Handle(new GenerateTopicPracticeCommand("student", "root"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TOPIC_PARENT_NOT_ASSIGNABLE", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task Generate_TopicWithInactiveParent_IsNotAssignable()
+    {
+        await using var fixture = TestGenInMemoryContext.Create();
+        fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = false },
+            new TagTopicReadModel { TagId = "child", ParentTagId = "root", TagName = "Child", Grade = 12, IsActive = true });
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(fixture).Handle(new GenerateTopicPracticeCommand("student", "child"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("TOPIC_PARENT_NOT_ASSIGNABLE", result.Error!.Code);
+    }
+
+    private static void AddQuestion(TestGenInMemoryContext fixture, string id, string tagId = "topic", int grade = 12)
+    {
+        fixture.Context.Questions.Add(new QuestionReadModel { QuestionId = id, Grade = grade, DifficultyId = "d-1", QuestionType = "SingleChoice", Status = "Approved", IsActive = true, DefaultWeight = 1m });
         fixture.Context.QuestionTopics.Add(new QuestionTopicReadModel { QuestionTopicId = $"{id}-topic", QuestionId = id, TagId = tagId, IsPrimary = true });
-        fixture.Context.QuestionVersions.Add(new QuestionVersionReadModel { VersionId = $"{id}-v", QuestionId = id, VersionNumber = 1, SnapshotSchemaVersion = 2, AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(id, "SingleChoice", "d-1", 12, 1m, [new QuestionTopicSnapshot(tagId, true)], [new QuestionAnswerSnapshot($"{id}-answer", "A", true)], [], "content", "solution")), CreatedTime = DateTime.UtcNow });
+        fixture.Context.QuestionVersions.Add(new QuestionVersionReadModel { VersionId = $"{id}-v", QuestionId = id, VersionNumber = 1, SnapshotSchemaVersion = 2, AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(id, "SingleChoice", "d-1", grade, 1m, [new QuestionTopicSnapshot(tagId, true)], [new QuestionAnswerSnapshot($"{id}-answer", "A", true)], [], "content", "solution")), CreatedTime = DateTime.UtcNow });
         fixture.Context.Answers.Add(new AnswerReadModel { AnswerId = $"{id}-answer", QuestionId = id, IsCorrect = true });
     }
 

@@ -248,7 +248,16 @@ public sealed class BlueprintUpdateAndSubmitTests
         testContext.Context.TagTopics.AddRange(
             new TagTopicReadModel
             {
+                TagId = "root-topic",
+                TagName = "Root topic",
+                Grade = 12,
+                IsActive = true,
+                DisplayOrder = 1
+            },
+            new TagTopicReadModel
+            {
                 TagId = ActiveTopicId,
+                ParentTagId = "root-topic",
                 TagName = "Active topic",
                 Grade = 12,
                 IsActive = true,
@@ -257,6 +266,7 @@ public sealed class BlueprintUpdateAndSubmitTests
             new TagTopicReadModel
             {
                 TagId = InactiveTopicId,
+                ParentTagId = "root-topic",
                 TagName = "Inactive topic",
                 Grade = 12,
                 IsActive = false,

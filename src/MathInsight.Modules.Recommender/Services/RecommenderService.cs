@@ -30,7 +30,13 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
         var weakTags = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
-            where tm.StudentId == studentId && tm.OfficialPoint < WeakThreshold
+            join parent in _db.TagTopics.AsNoTracking() on tt.ParentTagId equals parent.TagId
+            where tm.StudentId == studentId
+                && tm.OfficialPoint < WeakThreshold
+                && tt.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == tt.Grade
             orderby tm.OfficialPoint ascending
             select new WeakTagDto(
                 tm.TagId,
@@ -74,7 +80,13 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
         var masteryRows = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
-            where tm.StudentId == studentId && tm.OfficialPoint < WeakThreshold
+            join parent in _db.TagTopics.AsNoTracking() on tt.ParentTagId equals parent.TagId
+            where tm.StudentId == studentId
+                && tm.OfficialPoint < WeakThreshold
+                && tt.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == tt.Grade
             orderby tm.OfficialPoint ascending
             select new
             {
@@ -122,10 +134,14 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
         return await (
             from mastery in _db.TagsMasteries.AsNoTracking()
             join topic in _db.TagTopics.AsNoTracking() on mastery.TagId equals topic.TagId
+            join parent in _db.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
             where mastery.StudentId == studentId
                 && mastery.OfficialPoint < WeakThreshold
                 && mastery.NumberDone >= 3
                 && topic.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == topic.Grade
             orderby mastery.OfficialPoint, mastery.TagId
             select new WeakTagAdvice(
                 mastery.TagId,

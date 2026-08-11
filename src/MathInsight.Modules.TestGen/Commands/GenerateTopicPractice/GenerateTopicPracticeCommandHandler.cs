@@ -65,25 +65,34 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
         if (string.IsNullOrWhiteSpace(command.TagId))
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.RequestInvalid);
 
-        var grade = await _context.Students.AsNoTracking()
-            .Where(student => student.StudentId == command.StudentId)
-            .Select(student => student.CurrentGrade)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (grade is not (10 or 11 or 12))
+        var student = await _context.Students.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.StudentId == command.StudentId, cancellationToken);
+        if (student is null)
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeStudentNotFound);
+        if (student.CurrentGrade is not (10 or 11 or 12))
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.StudentGradeRequired);
 
-        var studentGrade = grade.Value;
+        var studentGrade = student.CurrentGrade.Value;
         var selected = await _context.TagTopics.AsNoTracking()
             .FirstOrDefaultAsync(topic => topic.TagId == command.TagId, cancellationToken);
         if (selected is null)
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeTopicNotFound);
-        if (!selected.IsActive || selected.Grade != studentGrade)
+        if (!selected.IsActive)
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeTopicUnavailable);
+        if (selected.Grade > studentGrade)
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeGradeNotAllowed);
 
-        var topics = await _context.TagTopics.AsNoTracking()
-            .Where(topic => topic.Grade == studentGrade && topic.IsActive)
-            .ToListAsync(cancellationToken);
-        var subtree = TopicTreeResolver.ResolveActiveSubtree(selected.TagId, topics);
+        if (string.IsNullOrWhiteSpace(selected.ParentTagId))
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicParentNotAssignable);
+
+        var parent = await _context.TagTopics.AsNoTracking()
+            .SingleOrDefaultAsync(topic => topic.TagId == selected.ParentTagId, cancellationToken);
+        if (parent is null || !parent.IsActive || !string.IsNullOrWhiteSpace(parent.ParentTagId))
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicParentNotAssignable);
+        if (parent.Grade != selected.Grade)
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicParentGradeMismatch);
+
+        var topics = new[] { selected };
 
         var resolvedRecommendations = await _recommendationResolver.ResolveForTopicsAsync(
             command.StudentId,
@@ -137,8 +146,8 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
 
         var pool = await _catalog.GetCandidatesAsync(
             new QuestionCandidateCatalogFilter(
-                studentGrade,
-                subtree.ToList(),
+                selected.Grade,
+                [selected.TagId],
                 difficultyLevels.Keys.ToList(),
                 ["SingleChoice", "Composite", "ShortAnswer"]),
             cancellationToken);
@@ -148,7 +157,7 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             .Select(group => new { QuestionId = group.Key, LastSeen = group.Max(question => question.Test!.CreatedTime) })
             .ToDictionaryAsync(item => item.QuestionId, item => (DateTime?)item.LastSeen, StringComparer.OrdinalIgnoreCase, cancellationToken);
         var candidates = pool.Candidates
-            .Where(candidate => candidate.TagIds.Overlaps(subtree) && difficultyLevels.ContainsKey(candidate.DifficultyId))
+            .Where(candidate => candidate.TagIds.Contains(selected.TagId) && difficultyLevels.ContainsKey(candidate.DifficultyId))
             .Select(candidate => new TopicPracticeCandidate(
                 candidate,
                 difficultyLevels[candidate.DifficultyId],

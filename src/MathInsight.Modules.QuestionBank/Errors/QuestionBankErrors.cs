@@ -116,6 +116,10 @@ public static class QuestionBankErrors
         "QUESTION_TOPIC_NOT_FOUND",
         "Question topic was not found.");
 
+    public static readonly Error QuestionTopicMustBeDirectChild = new(
+        "TOPIC_MUST_BE_DIRECT_CHILD",
+        "Questions can only be assigned to a direct child topic.");
+
     public static readonly Error QuestionPrimaryTopicRequired = new(
         "QUESTION_PRIMARY_TOPIC_REQUIRED",
         "Primary topic is required.");
@@ -259,6 +263,10 @@ public static class QuestionBankErrors
     public static readonly Error TagParentInvalid = new(
         "TAG_PARENT_INVALID",
         "Parent topic tag is invalid.");
+
+    public static readonly Error TagDepthLimitExceeded = new(
+        "TOPIC_DEPTH_LIMIT_EXCEEDED",
+        "Topic hierarchy supports only a root topic and its direct children.");
 
     public static readonly Error TagStructureImmutable = new(
         "TAG_STRUCTURE_IMMUTABLE",

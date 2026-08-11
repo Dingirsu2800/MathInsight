@@ -177,6 +177,35 @@ public sealed class StudentTestsControllerTests
         Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
     }
 
+    [Theory]
+    [InlineData("grade-required")]
+    [InlineData("higher-grade")]
+    [InlineData("root")]
+    [InlineData("parent-grade")]
+    public async Task TopicPractice_MapsTaxonomyAndGradeContractsTo422(string errorKind)
+    {
+        var error = errorKind switch
+        {
+            "grade-required" => TestGenerationErrors.StudentGradeRequired,
+            "higher-grade" => TestGenerationErrors.TopicPracticeGradeNotAllowed,
+            "root" => TestGenerationErrors.TopicParentNotAssignable,
+            _ => TestGenerationErrors.TopicParentGradeMismatch
+        };
+        var mediator = new Mock<IMediator>();
+        mediator.Setup(instance => instance.Send(
+                It.IsAny<GenerateTopicPracticeCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateTopicPracticeResponse>.Failure(error));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GenerateTopicPractice(
+            new GenerateTopicPracticeRequest { TagId = "topic" },
+            CancellationToken.None);
+
+        var objectResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
+    }
+
     private static StudentTestsController CreateController(IMediator mediator)
     {
         var identity = new ClaimsIdentity(

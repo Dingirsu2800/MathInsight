@@ -168,8 +168,8 @@
 
 ## Phase 8C: TopicPractice
 
-- [x] Expose current-grade active topic options with descendant capacity and `canGenerate`.
-- [x] Implement baseline `TopicPractice` generation for exactly 10 Questions on one selected active topic/subtree without Recommender.
+- [x] Expose active direct-child topic options at or below the Student grade, batch candidate capacity by grade, and return `canGenerate`.
+- [x] Implement baseline `TopicPractice` generation for exactly 10 Questions on one selected active direct-child topic without Recommender.
 - [x] Enforce quota 3/4/2/1, nearest-level fallback, Composite cap, unseen-then-oldest preference, and no partial writes.
 - [x] Persist personal Test/TestQuestion immutable scoring snapshots with BlueprintID null, duration zero, and NormalizedWeight.
 - [x] Reuse a stable TestID across relational retries and verify the complete persisted TopicPractice aggregate after an ambiguous commit.
@@ -179,7 +179,7 @@
 ## Phase 8D: WeakTag-Aware TopicPractice
 
 - [x] Add the Shared provider contract and qualified evidence gate in Recommender.
-- [x] Add feature-flagged representative WeakTag resolution for active topic subtrees.
+- [x] Add feature-flagged qualified WeakTag resolution for the selected active direct-child topic.
 - [x] Add level-1/level-2 focus selection profiles while preserving baseline selection.
 - [ ] Persist and verify adaptive `TestQuestion` audit fields across SQL retries.
 - [x] Add additive TopicPractice option and generation response fields with stable 503 mappings.

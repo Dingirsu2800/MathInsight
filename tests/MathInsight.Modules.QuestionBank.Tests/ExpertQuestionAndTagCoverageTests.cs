@@ -88,6 +88,21 @@ public sealed class ExpertQuestionAndTagCoverageTests
     }
 
     [Fact]
+    public async Task CreateQuestion_WhenTopicIsRootGrouping_RejectsAssignment()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "root-topic", 10, isRoot: true);
+
+        var result = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(CreateQuestionRequest("difficulty-1", "root-topic"), "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionTopicMustBeDirectChild, result.Error);
+        Assert.Empty(await database.Context.Questions.ToListAsync());
+    }
+
+    [Fact]
     public async Task CreateQuestion_WhenTopicHasInactiveAncestor_ReturnsNotFoundAndWritesNothing()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
@@ -142,7 +157,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await AddDifficultyAsync(database, "difficulty-1", 1);
-        await AddTopicAsync(database, "parent", 10);
+        await AddTopicAsync(database, "parent", 10, isRoot: true);
         await AddTopicAsync(database, "child", 10, parentTagId: "parent");
         var createResult = await new CreateQuestionCommandHandler(database.Context)
             .Handle(new CreateQuestionCommand(CreateQuestionRequest("difficulty-1", "child"), "expert-1"), CancellationToken.None);
@@ -359,7 +374,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     public async Task CreateTagTopic_WithSameGradeParent_CreatesActiveChild()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
-        await AddTopicAsync(database, "parent", 11);
+        await AddTopicAsync(database, "parent", 11, isRoot: true);
 
         var result = await new CreateTagTopicCommandHandler(database.Context)
             .Handle(
@@ -384,7 +399,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     public async Task CreateTagTopic_WithDifferentGradeParent_ReturnsParentInvalid()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
-        await AddTopicAsync(database, "parent", 10);
+        await AddTopicAsync(database, "parent", 10, isRoot: true);
 
         var result = await new CreateTagTopicCommandHandler(database.Context)
             .Handle(
@@ -406,7 +421,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     public async Task CreateTagTopic_WithInactiveParent_ReturnsParentInvalidWithoutWrite()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
-        await AddTopicAsync(database, "inactive-parent", 10, isActive: false);
+        await AddTopicAsync(database, "inactive-parent", 10, isActive: false, isRoot: true);
 
         var result = await new CreateTagTopicCommandHandler(database.Context)
             .Handle(
@@ -449,7 +464,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     public async Task UpdateTagTopic_WhenReactivatingChildUnderInactiveParent_ReturnsParentInvalidWithoutMutation()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
-        await AddTopicAsync(database, "inactive-parent", 10, isActive: false);
+        await AddTopicAsync(database, "inactive-parent", 10, isActive: false, isRoot: true);
         await AddTopicAsync(database, "inactive-child", 10, isActive: false, parentTagId: "inactive-parent");
 
         var result = await new UpdateTagTopicCommandHandler(database.Context)
@@ -474,7 +489,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     public async Task CreateTagTopic_WithInactiveAncestor_ReturnsParentInvalidWithoutWrite()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
-        await AddTopicAsync(database, "inactive-grandparent", 10, isActive: false);
+        await AddTopicAsync(database, "inactive-grandparent", 10, isActive: false, isRoot: true);
         await AddTopicAsync(database, "active-parent", 10, parentTagId: "inactive-grandparent");
 
         var result = await new CreateTagTopicCommandHandler(database.Context)
@@ -672,7 +687,9 @@ public sealed class ExpertQuestionAndTagCoverageTests
         Assert.True(result.IsSuccess);
         var questionTopic = Assert.Single(await database.Context.QuestionTopics.ToListAsync());
         Assert.Equal("topic-1", questionTopic.TagId);
-        Assert.Empty(activeTopics);
+        var root = Assert.Single(activeTopics);
+        Assert.Equal("root-topic-1", root.TagId);
+        Assert.Empty(root.Children);
     }
 
     [Fact]
@@ -831,8 +848,23 @@ public sealed class ExpertQuestionAndTagCoverageTests
         string tagId,
         int grade,
         bool isActive = true,
-        string? parentTagId = null)
+        string? parentTagId = null,
+        bool isRoot = false)
     {
+        if (parentTagId is null && !isRoot)
+        {
+            var rootId = $"root-{tagId}";
+            database.Context.TagTopics.Add(new TagTopic
+            {
+                TagId = rootId,
+                TagName = rootId,
+                Grade = grade,
+                DisplayOrder = 1,
+                IsActive = true
+            });
+            parentTagId = rootId;
+        }
+
         database.Context.TagTopics.Add(new TagTopic
         {
             TagId = tagId,

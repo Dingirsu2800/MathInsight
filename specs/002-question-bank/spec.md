@@ -57,7 +57,7 @@
 - **BR-50**: Each `SINGLE_CHOICE` question must have **exactly one** correct answer. `MULTIPLE_SELECT` must have **at least one** correct answer.
 - **BR-61**: The correct answer for a `SHORT_ANSWER` question must be plain text or numeric (max 100 chars), without rich-text formatting or images.
 - **BR-62**: `TRUE_FALSE` questions must have **exactly 2** options (True / False) with **exactly 1** correct answer.
-- **BR-52**: Topic tags are cascading: selecting a parent tag automatically filters child subtopics only.
+- **BR-52**: Topic taxonomy has exactly two assignable levels: an active root (`ParentTagID = NULL`) and its active direct children. A direct child must have the same `Grade` as its root. Creating a grandchild is rejected. Questions, Excel import, Blueprint details, Lecture, Recommender, and TopicPractice use only active direct children; roots remain grouping labels and are never assignable.
 - **BR-54**: Changes to `APPROVED` or `REPORTED` questions must capture a `QuestionVersion` snapshot **before** applying the update.
 - **BR-55**: Expert-created questions are **published/approved by default** (`status = APPROVED`) and do not enter an Admin approval queue.
 - **BR-56**: Admin review applies only to an Admin-initiated report. The original Expert fixes and submits the Admin report for review; the Question remains `REPORTED` while waiting for review. Admin approval returns the Question to `APPROVED`; Admin rejection sets it to `REJECTED` and returns the report to `PENDING_FIX`.

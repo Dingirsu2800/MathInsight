@@ -14,9 +14,9 @@ The module is delivered in explicit slices:
 1. **Expert Blueprint MVP (complete)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
 2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
 3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
-4. **Checkpoint 6C (complete)**: generate a 10-question baseline `TopicPractice` test for one Student-selected active topic in the Student's current grade.
-5. **Checkpoint 6D (current)**: apply one qualified WeakTag from the selected active subtree to TopicPractice without changing the request shape, database schema, or Adaptive BlueprintExam behavior.
-5. **Expert Shared BlueprintExam (current additive checkpoint)**: let the owning Expert generate, preview, publish immediately, and archive shared BlueprintExam variants while preserving the completed Student personal generation flow.
+4. **Checkpoint 6C (complete)**: generate a 10-question baseline `TopicPractice` test for one Student-selected active direct-child topic at or below the Student's current grade.
+5. **Checkpoint 6D (current)**: apply one qualified WeakTag from the selected active direct-child topic to TopicPractice without changing the request shape, database schema, or Adaptive BlueprintExam behavior.
+6. **Expert Shared BlueprintExam (current additive checkpoint)**: let the owning Expert generate, preview, publish immediately, and archive shared BlueprintExam variants while preserving the completed Student personal generation flow.
 
 TestGen creates `Test` and `TestQuestion` records only. Testing owns `TestSession` creation and the answer-taking workflow. EF migrations remain out of scope; approved SQL migration 005 changes the existing `Test.DurationMinutes` check to permit unlimited TopicPractice Tests.
 
@@ -175,10 +175,10 @@ Frontend localizes these codes; backend messages remain developer-facing English
   - **Easy-Level Protection**: when `official_point < 5.00` at `Easy`, bias probability is reduced to 10%, no further downscaling is applied, and foundational learning content is prioritized.
 - **Student Practice and Exam Flow**: student endpoints expose two initial formats across separate checkpoints:
   - **Exam Mode**: a full-length session generated from an approved blueprint.
-  - **Practice Mode**: exactly 10 questions from one Student-selected active topic/subtree. The baseline difficulty profile is 3/4/2/1 across levels 1-4; it does not call Recommender.
+  - **Practice Mode**: exactly 10 questions from one Student-selected active direct-child topic. Students may select topics from their current or a lower grade; the baseline difficulty profile is 3/4/2/1 across levels 1-4.
 - **BR-54 Student Practice and Exam Flow**: a Student may choose:
   - **Format A (Tiếp tục làm bài với cấu trúc đề giữ nguyên)**: generate a new `Test` from the original blueprint structure. Testing subsequently creates an `Exam` TestSession for that Test. Checkpoint 6A preserves exact section/detail slots; Checkpoint 6B adds adaptive adjustments based on the student's latest results.
-  - **Format B (Luyện tập theo chủ đề)**: generate a `TopicPractice` Test of exactly 10 unique questions for one selected active topic, including active descendants. Testing subsequently creates an unlimited `Practice` TestSession. Questions use level quota 3/4/2/1, nearest-level fallback preferring the lower level on ties, at most two Composite questions, and unseen-then-oldest reuse preference.
+  - **Format B (Luyện tập theo chủ đề)**: generate a `TopicPractice` Test of exactly 10 unique questions for one selected active direct-child topic. A Student may select a topic from their grade or any lower grade, but never a higher grade. Testing subsequently creates an unlimited `Practice` TestSession. Questions use level quota 3/4/2/1, nearest-level fallback preferring the lower level on ties, at most two Composite questions, and unseen-then-oldest reuse preference.
 
 ## Checkpoint 6C: TopicPractice
 
@@ -188,14 +188,15 @@ Base route: `/api/test-generator/tests`
 
 | Method | Route | Behavior |
 |---|---|---|
-| `GET` | `/topic-practice-options` | Return active current-grade topics as a flat tree list with valid selectable question count and `canGenerate` |
+| `GET` | `/topic-practice-options` | Return active direct-child topics at or below the Student grade with valid selectable question count and `canGenerate` |
 | `POST` | `/topic-practices` | Create one personal 10-question TopicPractice Test for the requested topic |
 
-The POST body contains only `tagId`. The backend derives Student ID, topic subtree, question count, quota, duration, score, and audit data. It returns 409 before writing when fewer than ten selectable valid candidates exist.
+The POST body contains only `tagId`. The backend derives Student ID, selected topic grade, question count, quota, duration, score, and audit data. It returns 409 before writing when fewer than ten selectable valid candidates exist.
 
 ### TopicPractice Rules
 
-- Candidate Questions are `Approved`, active, in the Student grade, tagged to the selected active subtree, use an active level 1-4 difficulty, and have a latest valid immutable QuestionVersion V2.
+- Only an active direct child of an active root parent with matching grade is selectable. Root topics, descendants below level two, inactive parents, and parent/child grade mismatches are rejected.
+- Candidate Questions are `Approved`, active, in the selected topic's grade, tagged to that exact selected direct-child topic, use an active level 1-4 difficulty, and have a latest valid immutable QuestionVersion V2.
 - Question types are `SingleChoice`, `Composite`, and `ShortAnswer`; a generated Test may contain at most two Composite Questions.
 - The default level profile is three level-1, four level-2, two level-3, and one level-4 Question. Missing slots use the nearest available level and prefer lower level on equal distance.
 - Selection prefers Questions the Student has never received in a personal Test, then the oldest previously seen Question. Candidate ties are randomized.
@@ -206,7 +207,7 @@ The POST body contains only `tagId`. The backend derives Student ID, topic subtr
 
 When `TopicPractice:WeakTagAdaptiveEnabled` is `false`, TestGen does not call Recommender and keeps the baseline `3/4/2/1` level profile. When enabled, it resolves qualified advice (`OfficialPoint < 5.00`, `EvidenceCount >= 3`) from `IStudentRecommendationProvider`. Empty advice keeps the baseline; provider failure or invalid advice returns a stable `503` before Test/TestQuestion writes.
 
-For the selected active topic subtree, TestGen deterministically selects one representative WeakTag by lowest point, then lowest recommended level, deepest descendant, `DisplayOrder`, and ordinal Tag ID. The profiles are:
+For the selected active direct-child topic, TestGen uses qualified advice for that exact topic only. The profiles are:
 
 | Recommended level | Level 1 | Level 2 | Level 3 | Level 4 | Focus slots |
 |---|---:|---:|---:|---:|---|
@@ -214,7 +215,7 @@ For the selected active topic subtree, TestGen deterministically selects one rep
 | 1 | 8 | 2 | 0 | 0 | 5xL1 + 1xL2 |
 | 2 | 2 | 7 | 1 | 0 | 1xL1 + 4xL2 + 1xL3 |
 
-Selecting an ancestor targets at least six Questions from the representative WeakTag subtree and preserves two outside-focus Questions where the pool permits, normally capping focus at eight. The cap may relax only to avoid a false insufficient-pool result. Direct selection of the representative WeakTag does not apply the breadth cap. Existing nearest-level fallback, lower-level tie preference, unique Question, Composite cap, and unseen-then-oldest rules remain in force.
+All adaptive candidates remain within the exact selected direct-child topic. Existing nearest-level fallback, lower-level tie preference, unique Question, Composite cap, and unseen-then-oldest rules remain in force.
 
 Option responses add `isWeakRecommended`, representative tag data, point, evidence count, recommended level, and reason. Generation responses add `wasAdaptive`, representative tag data, level, adaptive/fallback counts, and rule version. The client still submits only `{ tagId }`.
 
@@ -233,8 +234,12 @@ Adaptive focus rows persist `SelectionReason = WeakTagPractice`, `IsAdaptiveSele
 | Code | HTTP | Meaning |
 |---|---:|---|
 | `TOPIC_PRACTICE_STUDENT_NOT_FOUND` | 404 | Authenticated account has no usable Student profile |
+| `STUDENT_GRADE_REQUIRED` | 422 | Student profile has no valid current grade (10, 11, or 12) |
 | `TOPIC_PRACTICE_TOPIC_NOT_FOUND` | 404 | Requested topic does not exist |
-| `TOPIC_PRACTICE_TOPIC_UNAVAILABLE` | 422 | Topic is inactive or outside the Student grade |
+| `TOPIC_PRACTICE_TOPIC_UNAVAILABLE` | 422 | Topic is inactive |
+| `TOPIC_PRACTICE_GRADE_NOT_ALLOWED` | 422 | Topic belongs to a grade above the Student grade |
+| `TOPIC_PARENT_NOT_ASSIGNABLE` | 422 | Topic is a root, has an inactive/missing parent, or is below the direct-child level |
+| `TOPIC_PARENT_GRADE_MISMATCH` | 422 | Topic and root parent do not have the same grade |
 | `TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS` | 409 | Valid selectable pool cannot fulfill ten questions |
 | `TOPIC_PRACTICE_GENERATION_CONFLICT` | 409 | Persisted aggregate cannot be verified after a transient conflict |
 

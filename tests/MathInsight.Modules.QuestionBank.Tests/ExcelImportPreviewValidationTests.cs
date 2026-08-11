@@ -78,6 +78,9 @@ public sealed class ExcelImportPreviewValidationTests
         );
 
         database.Context.TagTopics.AddRange(
+            new Entities.TagTopic { TagId = "ROOT-G10", TagName = "Grade 10 root", Grade = 10, DisplayOrder = 1, IsActive = true },
+            new Entities.TagTopic { TagId = "ROOT-G11", TagName = "Grade 11 root", Grade = 11, DisplayOrder = 1, IsActive = true },
+            new Entities.TagTopic { TagId = "ROOT-G12", TagName = "Grade 12 root", Grade = 12, DisplayOrder = 1, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G10-QUAD", TagName = "Grade 10 quadratic functions", Grade = 10, DisplayOrder = 3, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G10-PROB", TagName = "Grade 10 probability", Grade = 10, DisplayOrder = 4, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G10-EQSYS", TagName = "Grade 10 systems of equations", Grade = 10, DisplayOrder = 5, IsActive = true },
@@ -101,6 +104,13 @@ public sealed class ExcelImportPreviewValidationTests
             new Entities.TagTopic { TagId = "TOPIC-G12-CONPROB", TagName = "Lớp 12 - Xác suất có điều kiện", Grade = 12, DisplayOrder = 10, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G12-DATA", TagName = "Lớp 12 - Thống kê", Grade = 12, DisplayOrder = 11, IsActive = true }
         );
+
+        foreach (var topic in database.Context.ChangeTracker.Entries<Entities.TagTopic>()
+                     .Select(entry => entry.Entity)
+                     .Where(topic => !topic.TagId.StartsWith("ROOT-", StringComparison.Ordinal)))
+        {
+            topic.ParentTagId = $"ROOT-G{topic.Grade}";
+        }
 
         await database.Context.SaveChangesAsync();
 

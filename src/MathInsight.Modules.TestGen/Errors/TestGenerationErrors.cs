@@ -53,8 +53,12 @@ public static class TestGenerationErrors
         "The generated test was not found or is unavailable.");
 
     public static readonly Error TopicPracticeStudentNotFound = new("TOPIC_PRACTICE_STUDENT_NOT_FOUND", "A usable Student profile was not found.");
+    public static readonly Error StudentGradeRequired = new("STUDENT_GRADE_REQUIRED", "The Student profile must have a valid current grade before Topic Practice can be generated.");
     public static readonly Error TopicPracticeTopicNotFound = new("TOPIC_PRACTICE_TOPIC_NOT_FOUND", "The requested topic was not found.");
     public static readonly Error TopicPracticeTopicUnavailable = new("TOPIC_PRACTICE_TOPIC_UNAVAILABLE", "The requested topic is inactive or does not match the Student grade.");
+    public static readonly Error TopicPracticeGradeNotAllowed = new("TOPIC_PRACTICE_GRADE_NOT_ALLOWED", "The selected topic belongs to a grade above the Student's current grade.");
+    public static readonly Error TopicParentGradeMismatch = new("TOPIC_PARENT_GRADE_MISMATCH", "The selected topic and its parent must belong to the same grade.");
+    public static readonly Error TopicParentNotAssignable = new("TOPIC_PARENT_NOT_ASSIGNABLE", "Only an active direct child of an active root topic can be selected for Topic Practice.");
     public static readonly Error TopicPracticeInsufficientQuestions = new("TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS", "The selected topic does not contain ten valid questions.");
     public static readonly Error TopicPracticeGenerationConflict = new("TOPIC_PRACTICE_GENERATION_CONFLICT", "The generated test could not be verified after a persistence conflict.");
     public static readonly Error TopicPracticeRecommenderUnavailable = new("TOPIC_PRACTICE_RECOMMENDER_UNAVAILABLE", "Recommendation advice is temporarily unavailable.");

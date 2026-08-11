@@ -86,7 +86,7 @@ Migration `003_Admin_QuestionReport_Review_Workflow.sql` extends `QuestionReport
 | `Answer` | `QuestionID` FK |
 | `QuestionVersion` | `QuestionID` FK |
 | `QuestionReport` | `QuestionID`, `ReporterAccountID` |
-| `TagTopic` | `ParentTagID` self-FK; `TagName` unique |
+| `TagTopic` | `ParentTagID` self-FK; `TagName` unique; exactly root plus one direct-child level; child grade must match its root |
 | `TagDifficulty` | `DifficultyName` unique; `LevelValue` unique/stable for Recommender/TestGen v2 mapping |
 | `QuestionTopic` | Question-topic junction |
 

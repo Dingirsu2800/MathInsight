@@ -15,6 +15,7 @@ namespace MathInsight.Modules.Recommender.Tests.Unit;
 /// </summary>
 public class WeakTagQueryTests : IDisposable
 {
+    private const string RootTagId = "root-topic";
     private readonly RecommenderDbContext _db;
     private readonly RecommenderService _sut;
 
@@ -25,12 +26,19 @@ public class WeakTagQueryTests : IDisposable
             .Options;
         _db  = new RecommenderDbContext(options);
         _sut = new RecommenderService(_db, new DifficultyMappingService());
+        _db.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = RootTagId,
+            TagName = "Root topic",
+            Grade = 0,
+            IsActive = true
+        });
     }
 
     public void Dispose() => _db.Dispose();
 
     private static TagTopicReadOnly MakeTagTopic(Guid tagId, string name) =>
-        new() { TagId = tagId.ToString(), TagName = name };
+        new() { TagId = tagId.ToString(), ParentTagId = RootTagId, TagName = name, Grade = 0, IsActive = true };
 
     private static TagsMastery MakeMastery(Guid studentId, Guid tagId, decimal officialPoint) =>
         new()
