@@ -12,6 +12,8 @@ using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintDetail;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintList;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintGeneratedTests;
+using MathInsight.Modules.TestGen.Commands.GenerateFixedBlueprintExam;
+using MathInsight.Modules.TestGen.Queries.GetFixedTestCandidates;
 using MathInsight.Modules.TestGen.Queries.GetPendingBlueprints;
 using MathInsight.Shared.Results;
 using MediatR;
@@ -229,6 +231,41 @@ public sealed class BlueprintsController : ControllerBase
             : StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [HttpGet("{blueprintId}/fixed-test-candidates")]
+    public async Task<IActionResult> GetFixedTestCandidates(
+        string blueprintId,
+        [FromQuery] string blueprintDetailId,
+        [FromQuery] string? search,
+        [FromQuery] int pageIndex,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+        var result = await _mediator.Send(new GetFixedTestCandidatesQuery(
+            blueprintId, currentExpertId, blueprintDetailId, search, pageIndex, pageSize), cancellationToken);
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [HttpPost("{blueprintId}/fixed-tests")]
+    public async Task<IActionResult> GenerateFixedBlueprintExam(
+        string blueprintId,
+        [FromBody] GenerateFixedBlueprintExamRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(TestGenerationErrors.RequestInvalid));
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+        var result = await _mediator.Send(new GenerateFixedBlueprintExamCommand(
+            blueprintId, currentExpertId, request.TestName, request.DurationMinutes, request.Questions), cancellationToken);
+        return result.IsFailure
+            ? ToErrorResult(result.Error!)
+            : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
     [HttpGet("{blueprintId}/tests")]
     public async Task<IActionResult> GetGeneratedTests(
         string blueprintId,
@@ -280,13 +317,19 @@ public sealed class BlueprintsController : ControllerBase
             return Conflict(new ApiErrorResponse(error));
 
         if (error == TestGenerationErrors.QuestionPoolInsufficient ||
-            error == TestGenerationErrors.GenerationConflict)
+            error == TestGenerationErrors.GenerationConflict ||
+            error == TestGenerationErrors.FixedTestQuestionDuplicated ||
+            error == TestGenerationErrors.FixedTestDetailQuantityMismatch ||
+            error == TestGenerationErrors.FixedTestQuestionNotEligible)
         {
             return Conflict(new ApiErrorResponse(error));
         }
 
         if (error == TestGenerationErrors.ScoreBudgetMismatch ||
-            error == TestGenerationErrors.QuestionVersionMissing)
+            error == TestGenerationErrors.QuestionVersionMissing ||
+            error == TestGenerationErrors.FixedTestBlueprintNotApproved ||
+            error == TestGenerationErrors.FixedTestOrderInvalid ||
+            error == TestGenerationErrors.FixedTestQuestionVersionUnavailable)
         {
             return UnprocessableEntity(new ApiErrorResponse(error));
         }
