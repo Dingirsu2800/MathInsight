@@ -20,7 +20,7 @@ export const expertNavItems = [
     icon: "description"
   },
   {
-    label: "Quản lý Tag",
+    label: "Quản lý chủ đề và độ khó",
     path: "/expert/tags",
     icon: "category"
   },

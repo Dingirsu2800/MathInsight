@@ -131,7 +131,7 @@ describe("TagManagementPage deletion", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Xóa chủ đề Đại số" }));
     fireEvent.click(screen.getByRole("button", { name: "Ngừng sử dụng" }));
 
-    expect(await screen.findByText("Tag không còn tồn tại; danh sách đã được làm mới.")).toBeVisible();
+    expect(await screen.findByText("Dữ liệu không còn tồn tại; danh sách đã được làm mới.")).toBeVisible();
     expect(questionBankApi.getTopicTags).toHaveBeenCalledTimes(2);
   });
 });

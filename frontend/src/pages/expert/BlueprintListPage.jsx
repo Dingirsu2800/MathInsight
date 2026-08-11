@@ -489,7 +489,7 @@ export default function BlueprintListPage() {
                                       className="w-full px-4 py-2.5 text-[11px] font-bold text-on-surface-variant hover:bg-surface-container-low hover:text-primary transition-colors flex items-center gap-2 border-b border-whisper-border/30 cursor-pointer"
                                     >
                                       <span className="material-symbols-outlined text-[16px]">edit</span>
-                                      CHỈNH SỬA
+                                      Chỉnh sửa
                                     </button>
                                   )}
                                   {actions.canClone && (
@@ -503,7 +503,7 @@ export default function BlueprintListPage() {
                                       className="w-full px-4 py-2.5 text-[11px] font-bold text-on-surface-variant hover:bg-surface-container-low hover:text-primary transition-colors flex items-center gap-2 cursor-pointer"
                                     >
                                       <span className="material-symbols-outlined text-[16px]">content_copy</span>
-                                      SAO CHÉP (CLONE)
+                                      Sao chép
                                     </button>
                                   )}
                                 </div>

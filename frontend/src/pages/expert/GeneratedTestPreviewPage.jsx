@@ -107,7 +107,7 @@ export default function GeneratedTestPreviewPage() {
         {/* Page Header */}
         <DashboardPageHeader
           title={testData.testName}
-          subtitle="Kiểm duyệt nội dung câu hỏi, mã nguồn đáp án, lời giải chi tiết và các tham số chốt."
+          subtitle="Kiểm duyệt nội dung câu hỏi, mã nguồn đáp án, lời giải chi tiết và các chỉ tiêu ma trận."
         >
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
@@ -144,10 +144,10 @@ export default function GeneratedTestPreviewPage() {
           <div className="p-3.5 bg-primary/10 border border-primary/20 rounded-xl text-primary flex items-center justify-between gap-3 text-xs font-bold">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
-              <span>Chế độ kiểm duyệt Expert (Xem toàn bộ đáp án, lời giải & trọng số chốt)</span>
+              <span>Chế độ xem dành cho chuyên gia (Xem toàn bộ đáp án, lời giải & trọng số)</span>
             </div>
             <span className="bg-primary text-on-primary text-[10px] font-extrabold px-2.5 py-0.5 rounded uppercase tracking-wider">
-              Chỉ dành cho Expert
+              Dành cho chuyên gia
             </span>
           </div>
 
@@ -192,10 +192,15 @@ export default function GeneratedTestPreviewPage() {
           {/* Status */}
           <div className="flex flex-col gap-1 border-r border-whisper-border/50 pr-3">
             <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trạng thái</span>
-            <div>
+            <div className="flex flex-col gap-1 items-start">
               <Badge variant={isArchived ? "secondary" : "success"}>
                 {isArchived ? "Đã lưu trữ" : "Đang hoạt động"}
               </Badge>
+              {testData.generationType && (
+                <span className="text-[10px] font-bold text-on-surface-variant">
+                  Loại: {testData.generationType === "Fixed" ? "Cố định" : "Ngẫu nhiên"}
+                </span>
+              )}
             </div>
           </div>
 
@@ -225,12 +230,13 @@ export default function GeneratedTestPreviewPage() {
 
           {/* Created Time */}
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Ngày sinh đề</span>
+            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Ngày tạo đề</span>
             <span className="text-xs font-semibold text-on-surface">
               {testData.createdTime ? new Date(testData.createdTime).toLocaleString("vi-VN") : "N/A"}
             </span>
           </div>
         </div>
+
 
         {/* Section Quick Navigator */}
         {sections.length > 1 && (

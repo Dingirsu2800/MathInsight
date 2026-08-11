@@ -99,5 +99,21 @@ export const testGeneratorApi = {
 
   generateTopicPractice(tagId) {
     return client.post('/api/test-generator/tests/topic-practices', { tagId });
+  },
+
+  getFixedTestCandidates(blueprintId, params, config = {}) {
+    const queryParams = {};
+    if (params) {
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== "") {
+          queryParams[key] = params[key];
+        }
+      });
+    }
+    return client.get(`/api/test-generator/blueprints/${blueprintId}/fixed-test-candidates`, { params: queryParams, ...config });
+  },
+
+  generateFixedBlueprintExam(blueprintId, payload) {
+    return client.post(`/api/test-generator/blueprints/${blueprintId}/fixed-tests`, payload);
   }
 };

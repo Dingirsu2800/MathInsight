@@ -67,6 +67,7 @@ export default function TagManagementPage() {
   const [isDeletingTag, setIsDeletingTag] = React.useState(false);
 
   // Form states - Topic
+  const [formTopicLevel, setFormTopicLevel] = React.useState("root"); // "root" or "child"
   const [formTopicName, setFormTopicName] = React.useState("");
   const [formTopicDescription, setFormTopicDescription] = React.useState("");
   const [formTopicGrade, setFormTopicGrade] = React.useState("12");
@@ -139,7 +140,7 @@ export default function TagManagementPage() {
       if (type === "topic") {
         const topicId = item.tagId || item.id;
         if (hasActiveDescendants(topicId, topics)) {
-          setError("Không thể ngừng sử dụng chủ đề này vì vẫn còn các chủ đề con đang hoạt động.");
+          setError("Không thể ngừng sử dụng nhóm chủ đề này vì vẫn còn các chủ đề con đang hoạt động.");
           window.scrollTo({ top: 0, behavior: "smooth" });
           return;
         }
@@ -182,9 +183,9 @@ export default function TagManagementPage() {
     } catch (err) {
       console.error(err);
       if (err.response?.status === 409) {
-        setError(err.response?.data?.message || "Không thể ngừng sử dụng vì tag này đang được sử dụng.");
+        setError(err.response?.data?.message || "Không thể ngừng sử dụng vì chủ đề này đang được sử dụng.");
       } else {
-        setError("Lỗi cập nhật trạng thái hoạt động của tag.");
+        setError("Lỗi cập nhật trạng thái hoạt động.");
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -223,14 +224,14 @@ export default function TagManagementPage() {
       console.error(err);
       const status = err.response?.status;
       if (status === 409) {
-        setError(err.response?.data?.message || "Không thể xóa chủ đề khi vẫn còn chủ đề con đang hoạt động.");
+        setError(err.response?.data?.message || "Không thể ngừng sử dụng nhóm chủ đề khi vẫn còn chủ đề con đang hoạt động.");
       } else if (status === 404) {
         await loadData();
-        setSuccessMessage("Tag không còn tồn tại; danh sách đã được làm mới.");
+        setSuccessMessage("Dữ liệu không còn tồn tại; danh sách đã được làm mới.");
         setIsDeleteTagOpen(false);
         setDeleteTarget(null);
       } else {
-        setError(err.response?.data?.message || "Không thể ngừng sử dụng tag. Vui lòng thử lại.");
+        setError(err.response?.data?.message || "Không thể ngừng sử dụng. Vui lòng thử lại.");
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
@@ -244,6 +245,7 @@ export default function TagManagementPage() {
     setSuccessMessage("");
     if (activeTab === "topic") {
       setTopicDialogMode("create");
+      setFormTopicLevel("root");
       setFormTopicName("");
       setFormTopicDescription("");
       setFormTopicGrade("12");
@@ -268,6 +270,8 @@ export default function TagManagementPage() {
     setSuccessMessage("");
     setTopicDialogMode("edit");
     setCurrentTopic(topic);
+    const hasParent = Boolean(topic.parentTagId || topic.parentId);
+    setFormTopicLevel(hasParent ? "child" : "root");
     setFormTopicName(topic.tagName || topic.name || "");
     setFormTopicDescription(topic.description || "");
     setFormTopicGrade(topic.grade ? topic.grade.toString() : "12");
@@ -290,6 +294,18 @@ export default function TagManagementPage() {
     setIsDiffDialogOpen(true);
   };
 
+  // Get active root parent options filtered to selected grade (only active root topics can be parents)
+  const getTopicParentOptions = () => {
+    const gradeVal = parseInt(formTopicGrade);
+    return topics.filter(t => {
+      const isAct = t.isActive !== undefined ? t.isActive : true;
+      const sameGrade = t.grade === gradeVal;
+      const isRoot = !t.parentTagId && !t.parentId;
+      const isNotSelf = topicDialogMode === "create" || (t.tagId || t.id) !== (currentTopic?.tagId || currentTopic?.id);
+      return isAct && sameGrade && isRoot && isNotSelf;
+    });
+  };
+
   // Form submit handlers
   const handleSaveTopic = async (e) => {
     e.preventDefault();
@@ -304,19 +320,24 @@ export default function TagManagementPage() {
       return;
     }
 
+    if (formTopicLevel === "child" && !formTopicParentId) {
+      setFormTopicValidation("Vui lòng chọn nhóm chủ đề cha cho chủ đề con.");
+      return;
+    }
+
     const payload = {
       tagName: formTopicName.trim(),
       description: formTopicDescription.trim(),
       displayOrder: orderNum,
       grade: parseInt(formTopicGrade),
-      parentTagId: formTopicParentId ? formTopicParentId : null,
+      parentTagId: formTopicLevel === "child" && formTopicParentId ? formTopicParentId : null,
       isActive: topicDialogMode === "create" ? true : (currentTopic.isActive !== undefined ? currentTopic.isActive : true)
     };
 
     try {
       if (topicDialogMode === "create") {
         await questionBankApi.createTopic(payload);
-        setSuccessMessage("Tạo chủ đề mới thành công.");
+        setSuccessMessage(formTopicLevel === "child" ? "Tạo chủ đề con mới thành công." : "Tạo nhóm chủ đề mới thành công.");
       } else {
         const id = currentTopic.tagId || currentTopic.id;
         await questionBankApi.updateTopic(id, payload);
@@ -326,7 +347,16 @@ export default function TagManagementPage() {
       loadData();
     } catch (err) {
       console.error(err);
-      setFormTopicValidation(err.response?.data?.message || "Lỗi lưu thông tin chủ đề. Vui lòng kiểm tra lại.");
+      const code = err.response?.data?.code;
+      if (code === "TOPIC_PARENT_NOT_ASSIGNABLE") {
+        setFormTopicValidation("Nhóm chủ đề cha được chọn không khả dụng.");
+      } else if (code === "TOPIC_MUST_BE_DIRECT_CHILD") {
+        setFormTopicValidation("Cấu trúc chủ đề chỉ hỗ trợ 2 cấp: Nhóm chủ đề và Chủ đề con trực tiếp.");
+      } else if (code === "TOPIC_PARENT_GRADE_MISMATCH") {
+        setFormTopicValidation("Khối lớp của chủ đề không khớp với nhóm chủ đề cha.");
+      } else {
+        setFormTopicValidation(err.response?.data?.message || "Lỗi lưu thông tin chủ đề. Vui lòng kiểm tra lại.");
+      }
     }
   };
 
@@ -373,7 +403,6 @@ export default function TagManagementPage() {
     const map = {};
     const roots = [];
 
-    // Convert all items to standardized format
     const normalized = flatList.map(item => ({
       tagId: item.tagId || item.id,
       id: item.tagId || item.id,
@@ -399,7 +428,6 @@ export default function TagManagementPage() {
       }
     });
 
-    // Sort by DisplayOrder
     roots.sort((a, b) => a.displayOrder - b.displayOrder);
     const sortChildren = (node) => {
       if (node.children) {
@@ -415,10 +443,7 @@ export default function TagManagementPage() {
   const flattenParsedTree = (nodes, depth = 0) => {
     let result = [];
     for (const node of nodes) {
-      result.push({
-        ...node,
-        depth
-      });
+      result.push({ ...node, depth });
       if (node.children && node.children.length > 0) {
         result.push(...flattenParsedTree(node.children, depth + 1));
       }
@@ -426,11 +451,9 @@ export default function TagManagementPage() {
     return result;
   };
 
-  // Filter topics lists
   const getFilteredTopics = () => {
     let matchedIds = new Set();
 
-    // 1. Find all items matching search, grade, status
     topics.forEach(t => {
       let matchesSearch = true;
       if (topicSearch.trim()) {
@@ -454,7 +477,6 @@ export default function TagManagementPage() {
       }
     });
 
-    // 2. Add all ancestors of matched items to avoid visual truncation
     let finalSet = new Set(matchedIds);
     matchedIds.forEach(id => {
       let current = topics.find(t => (t.tagId || t.id) === id);
@@ -464,15 +486,11 @@ export default function TagManagementPage() {
       }
     });
 
-    // 3. Build list of matched items from the master normalized topics list
     const filteredFlat = topics.filter(t => finalSet.has(t.tagId || t.id));
-
-    // 4. Build tree hierarchy & flatten it
     const tree = buildTopicTree(filteredFlat);
     return flattenParsedTree(tree);
   };
 
-  // Filter difficulties lists
   const getFilteredDifficulties = () => {
     let list = difficulties.map(item => ({
       difficultyId: item.difficultyId || item.id,
@@ -495,16 +513,14 @@ export default function TagManagementPage() {
       list = list.filter(d => d.isActive === activeOnly);
     }
 
-    // Sort by display order
     return list.sort((a, b) => a.displayOrder - b.displayOrder);
   };
 
   const filteredTopicsList = getFilteredTopics();
   const filteredDifficultiesList = getFilteredDifficulties();
 
-  // Helper check visible nodes on Expand/Collapse
   const isTopicVisible = (topic) => {
-    if (topicSearch.trim() || topicGrade !== "ALL" || topicStatus !== "ALL") return true; // Show all when any filter is active
+    if (topicSearch.trim() || topicGrade !== "ALL" || topicStatus !== "ALL") return true;
     let current = topic;
     while (current.parentTagId) {
       const parent = topics.find(t => (t.tagId || t.id) === current.parentTagId);
@@ -521,24 +537,13 @@ export default function TagManagementPage() {
     return true;
   };
 
-  // Get active parent options filtered to selected grade
-  const getTopicParentOptions = () => {
-    const gradeVal = parseInt(formTopicGrade);
-    return topics.filter(t => {
-      const isAct = t.isActive !== undefined ? t.isActive : true;
-      const sameGrade = t.grade === gradeVal;
-      const isNotSelf = topicDialogMode === "create" || (t.tagId || t.id) !== (currentTopic?.tagId || currentTopic?.id);
-      return isAct && sameGrade && isNotSelf;
-    });
-  };
-
   return (
     <ExpertLayout>
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto">
 
         {/* Page Header */}
         <DashboardPageHeader
-          title="Quản lý Tag"
+          title="Quản lý chủ đề và độ khó"
           subtitle="Quản lý hệ thống chủ đề và độ khó dùng để phân loại, sinh đề và gợi ý bài luyện."
         >
           <Button onClick={handleOpenCreateDialog}>
@@ -724,7 +729,7 @@ export default function TagManagementPage() {
                               </span>
                               {hasChildren && (
                                 <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-bold ml-1 font-mono">
-                                  {t.children.length} con
+                                  {t.children.length} chủ đề con
                                 </span>
                               )}
                             </div>
@@ -947,7 +952,7 @@ export default function TagManagementPage() {
             </DialogTitle>
             <DialogDescription>
               {topicDialogMode === "create"
-                ? "Nhập các thông tin bắt buộc dưới đây để thêm chủ đề phân loại mới."
+                ? "Chọn phân loại cấp chủ đề và nhập thông tin để tạo mới."
                 : "Cập nhật các thông tin chỉnh sửa hiển thị cho chủ đề đã chọn."}
             </DialogDescription>
           </DialogHeader>
@@ -959,13 +964,53 @@ export default function TagManagementPage() {
               </div>
             )}
             <form onSubmit={handleSaveTopic} className="space-y-4">
+              {topicDialogMode === "create" && (
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">
+                    Phân cấp chủ đề <span className="text-error">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-surface-container border border-outline-variant/60 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormTopicLevel("root");
+                        setFormTopicParentId("");
+                      }}
+                      className={cn(
+                        "py-2 px-3 text-xs font-bold rounded-lg transition-all text-center",
+                        formTopicLevel === "root"
+                          ? "bg-pure-surface text-primary shadow-sm"
+                          : "text-on-surface-variant hover:text-on-surface"
+                      )}
+                    >
+                      Nhóm chủ đề (Cấp 1)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormTopicLevel("child")}
+                      className={cn(
+                        "py-2 px-3 text-xs font-bold rounded-lg transition-all text-center",
+                        formTopicLevel === "child"
+                          ? "bg-pure-surface text-primary shadow-sm"
+                          : "text-on-surface-variant hover:text-on-surface"
+                      )}
+                    >
+                      Chủ đề con (Cấp 2)
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">Khối lớp</label>
                   {topicDialogMode === "create" ? (
                     <CustomSelect
                       value={formTopicGrade}
-                      onValueChange={setFormTopicGrade}
+                      onValueChange={(val) => {
+                        setFormTopicGrade(val);
+                        setFormTopicParentId("");
+                      }}
                       items={[
                         { value: "10", label: "Lớp 10" },
                         { value: "11", label: "Lớp 11" },
@@ -985,46 +1030,61 @@ export default function TagManagementPage() {
                     </div>
                   )}
                 </div>
+
                 <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">Chủ đề cha</label>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                    {formTopicLevel === "child" ? "Thuộc nhóm" : "Thuộc nhóm chủ đề"}
+                  </label>
                   {topicDialogMode === "create" ? (
-                    <CustomSelect
-                      value={formTopicParentId}
-                      onValueChange={setFormTopicParentId}
-                      items={[
-                        { value: "", label: "Không có chủ đề cha" },
-                        ...getTopicParentOptions().map(t => ({
-                          value: (t.tagId || t.id).toString(),
-                          label: t.tagName || t.name
-                        }))
-                      ]}
-                      className="w-full text-xs font-semibold"
-                    />
+                    formTopicLevel === "root" ? (
+                      <div>
+                        <input
+                          type="text"
+                          value="Nhóm gốc (Cấp 1)"
+                          disabled
+                          className="w-full px-3 py-2 bg-surface-container border border-outline-variant/50 rounded-lg text-xs text-on-surface-variant cursor-not-allowed font-semibold"
+                        />
+                      </div>
+                    ) : (
+                      <CustomSelect
+                        value={formTopicParentId}
+                        onValueChange={setFormTopicParentId}
+                        items={[
+                          { value: "", label: "Chọn nhóm chủ đề cha..." },
+                          ...getTopicParentOptions().map(t => ({
+                            value: (t.tagId || t.id).toString(),
+                            label: t.tagName || t.name
+                          }))
+                        ]}
+                        className="w-full text-xs font-semibold"
+                      />
+                    )
                   ) : (
                     <div>
                       <input
                         type="text"
                         value={
-                          topics.find(t => (t.tagId || t.id) === currentTopic.parentTagId)?.tagName ||
-                          topics.find(t => (t.tagId || t.id) === currentTopic.parentId)?.tagName ||
-                          "Không có chủ đề cha"
+                          topics.find(t => (t.tagId || t.id) === currentTopic?.parentTagId)?.tagName ||
+                          topics.find(t => (t.tagId || t.id) === currentTopic?.parentId)?.tagName ||
+                          "Nhóm gốc (Cấp 1)"
                         }
                         disabled
                         className="w-full px-3 py-2 bg-surface-container border border-outline-variant/50 rounded-lg text-xs text-on-surface-variant cursor-not-allowed font-semibold"
                       />
-                      <p className="text-[10px] text-on-surface-variant/70 mt-1 italic">Chủ đề cha là cố định sau khi tạo.</p>
                     </div>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">Tên chủ đề <span className="text-error">*</span></label>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                  {formTopicLevel === "root" ? "Tên nhóm chủ đề" : "Tên chủ đề con"} <span className="text-error">*</span>
+                </label>
                 <input
                   type="text"
                   value={formTopicName}
                   onChange={(e) => setFormTopicName(e.target.value)}
-                  placeholder="Ví dụ: Khảo sát hàm số"
+                  placeholder={formTopicLevel === "root" ? "Ví dụ: Giải tích & Hàm số" : "Ví dụ: Khảo sát hàm số"}
                   className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
                   required
                 />
@@ -1171,9 +1231,9 @@ export default function TagManagementPage() {
                   <span className="material-symbols-outlined text-error text-[28px]">warning</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-on-surface mb-2">Ngừng sử dụng tag?</h3>
+                  <h3 className="text-lg font-bold text-on-surface mb-2">Ngừng sử dụng chủ đề?</h3>
                   <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
-                    Bạn đang chuẩn bị ngừng sử dụng tag{" "}
+                    Bạn đang chuẩn bị ngừng sử dụng chủ đề{" "}
                     <span className="font-bold text-on-surface">
                       &ldquo;
                       {disableTarget.type === "topic"
@@ -1181,7 +1241,7 @@ export default function TagManagementPage() {
                         : disableTarget.item.difficultyName || disableTarget.item.name}
                       &rdquo;
                     </span>
-                    . Các câu hỏi hiện tại đang gắn tag này vẫn được giữ nguyên, nhưng hệ thống sẽ không cho phép chọn tag này cho các câu hỏi mới.
+                    . Các câu hỏi hiện tại đang gắn chủ đề này vẫn được giữ nguyên, nhưng hệ thống sẽ không cho phép chọn chủ đề này cho các câu hỏi mới.
                   </p>
                   <div className="flex justify-end gap-3">
                     <Button variant="outline" onClick={() => setIsConfirmDisableOpen(false)}>
@@ -1221,14 +1281,14 @@ export default function TagManagementPage() {
                   <span className="material-symbols-outlined text-error text-[28px]">warning</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-on-surface mb-2">Ngừng sử dụng tag?</h3>
+                  <h3 className="text-lg font-bold text-on-surface mb-2">Ngừng sử dụng chủ đề?</h3>
                   <p className="text-sm text-on-surface-variant leading-relaxed mb-3">
-                    Tag <span className="font-bold text-on-surface">“{deleteTarget.type === "topic"
+                    Chủ đề <span className="font-bold text-on-surface">“{deleteTarget.type === "topic"
                       ? deleteTarget.item.tagName || deleteTarget.item.name
                       : deleteTarget.item.difficultyName || deleteTarget.item.name}”</span> sẽ không còn được chọn cho câu hỏi mới.
                   </p>
                   <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
-                    Đây là thao tác ngừng sử dụng, không xóa lịch sử: các câu hỏi đã gắn tag vẫn giữ nguyên dữ liệu. Chủ đề có chủ đề con đang hoạt động sẽ bị từ chối.
+                    Đây là thao tác ngừng sử dụng, không xóa lịch sử: các câu hỏi đã gắn chủ đề vẫn giữ nguyên dữ liệu. Nhóm chủ đề có chủ đề con đang hoạt động sẽ bị từ chối.
                   </p>
                   <div className="flex justify-end gap-3">
                     <Button

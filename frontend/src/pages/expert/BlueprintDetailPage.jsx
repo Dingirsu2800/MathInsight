@@ -12,7 +12,10 @@ import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { validateBlueprintForSubmit } from "../../utils/blueprintValidation";
 import { getAccountId } from "../../services/authStorage";
 import GenerateSharedTestDialog from "../../components/expert/GenerateSharedTestDialog";
+import FixedExamComposerDialog from "../../components/expert/FixedExamComposerDialog";
+import { getGenerationTypeLabel } from "../../utils/expertLabels";
 import { cn } from "../../utils/cn";
+
 
 export default function BlueprintDetailPage() {
   const navigate = useNavigate();
@@ -36,6 +39,8 @@ export default function BlueprintDetailPage() {
   const [isCloneOpen, setIsCloneOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
+  const [isFixedComposerOpen, setIsFixedComposerOpen] = useState(false);
+
 
   // Review states
   const [rejectNote, setRejectNote] = useState("");
@@ -333,14 +338,24 @@ export default function BlueprintDetailPage() {
             </Button>
 
             {actions.canGenerate && (
-              <Button
-                variant="primary"
-                disabled={isMutating}
-                onClick={() => setIsGenerateOpen(true)}
-              >
-                <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">auto_awesome</span>
-                Sinh đề mới
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  disabled={isMutating}
+                  onClick={() => setIsGenerateOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">auto_awesome</span>
+                  Tạo đề ngẫu nhiên
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={isMutating}
+                  onClick={() => setIsFixedComposerOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[16px] mr-1.5 font-bold">playlist_add_check</span>
+                  Tạo đề cố định
+                </Button>
+              </div>
             )}
 
             {actions.canEdit && (
@@ -650,13 +665,13 @@ export default function BlueprintDetailPage() {
 
         </div>
 
-        {/* Section: Đề đã sinh (Only for Owner) */}
+        {/* Section: Các đề đã tạo (Only for Owner) */}
         {isOwner && (
           <div className="flex flex-col gap-4 mt-2 select-none">
             <div className="flex items-center justify-between border-b border-whisper-border pb-3">
               <div>
-                <h2 className="text-base font-bold text-on-surface">Đề đã sinh</h2>
-                <p className="text-xs text-on-surface-variant">Các biến thể đề thi dùng chung cố định được sinh từ cấu trúc đề này.</p>
+                <h2 className="text-base font-bold text-on-surface">Các đề đã tạo</h2>
+                <p className="text-xs text-on-surface-variant">Các đề thi ngẫu nhiên và cố định được tạo từ cấu trúc đề này.</p>
               </div>
               {testsTotalCount > 0 && (
                 <span className="text-xs font-bold text-on-surface-variant font-mono">
@@ -679,7 +694,7 @@ export default function BlueprintDetailPage() {
               </div>
             ) : generatedTests.length === 0 && !testsError ? (
               <div className="p-8 text-center text-xs text-on-surface-variant bg-surface-container-low/50 rounded-xl border border-dashed">
-                Chưa có biến thể đề thi nào được sinh từ cấu trúc này.
+                Chưa có đề thi nào được tạo từ cấu trúc đề này.
               </div>
             ) : (
               <div className="bg-pure-surface border border-whisper-border rounded-xl shadow-sm overflow-hidden select-text">
@@ -689,21 +704,28 @@ export default function BlueprintDetailPage() {
                       <tr>
                         <th className="p-3.5">Tên đề thi</th>
                         <th className="p-3.5">Mã đề</th>
+                        <th className="p-3.5">Loại đề</th>
                         <th className="p-3.5">Trạng thái</th>
                         <th className="p-3.5">Thời gian</th>
                         <th className="p-3.5">Số câu</th>
                         <th className="p-3.5">Điểm tối đa</th>
-                        <th className="p-3.5">Ngày tạo</th>
+                        <th className="p-3.5">Ngày tạo đề</th>
                         <th className="p-3.5 text-right">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-whisper-border/60 font-medium">
                       {generatedTests.map((t) => {
-                        const isArchived = t.testStatus === "Archived";
+                        const isArchived = t.testStatus === "Archived" || t.status === "Archived";
+                        const genType = t.generationType || "Random";
                         return (
                           <tr key={t.testId} className="hover:bg-surface-container-low/40 transition-colors">
                             <td className="p-3.5 font-bold text-on-surface">{t.testName}</td>
                             <td className="p-3.5 font-mono text-primary font-bold">{t.testCode}</td>
+                            <td className="p-3.5">
+                              <Badge variant={genType === "Fixed" ? "primary" : "secondary"}>
+                                {getGenerationTypeLabel(genType)}
+                              </Badge>
+                            </td>
                             <td className="p-3.5">
                               <Badge variant={isArchived ? "secondary" : "success"}>
                                 {isArchived ? "Đã lưu trữ" : "Đang hoạt động"}
@@ -724,7 +746,7 @@ export default function BlueprintDetailPage() {
                                   className="h-8 text-xs font-bold"
                                 >
                                   <span className="material-symbols-outlined text-[16px] mr-1">visibility</span>
-                                  Xem bản đề thi
+                                  Xem đề
                                 </Button>
                                 {!isArchived && (
                                   <Button
@@ -737,7 +759,7 @@ export default function BlueprintDetailPage() {
                                     }}
                                     className="h-8 text-xs font-bold"
                                   >
-                                    Lưu trữ
+                                    Lưu trữ đề
                                   </Button>
                                 )}
                               </div>
@@ -983,7 +1005,7 @@ export default function BlueprintDetailPage() {
         </DialogFooter>
       </Dialog>
 
-      {/* Generate Shared Test Dialog */}
+      {/* Generate Shared Test Dialog (Random) */}
       <GenerateSharedTestDialog
         isOpen={isGenerateOpen}
         onClose={() => {
@@ -991,6 +1013,19 @@ export default function BlueprintDetailPage() {
           fetchGeneratedTests();
         }}
         blueprint={blueprint}
+      />
+
+      {/* Fixed Exam Composer Dialog */}
+      <FixedExamComposerDialog
+        isOpen={isFixedComposerOpen}
+        onClose={() => setIsFixedComposerOpen(false)}
+        blueprint={blueprint}
+        onSuccess={(newTest) => {
+          fetchGeneratedTests();
+          if (newTest?.testId) {
+            navigate(`/expert/tests/${newTest.testId}/preview`);
+          }
+        }}
       />
 
       {/* Archive Generated Test Dialog */}
@@ -1001,12 +1036,12 @@ export default function BlueprintDetailPage() {
             Xác nhận lưu trữ đề thi
           </DialogTitle>
           <DialogDescription>
-            Lưu trữ biến thể đề thi <span className="font-bold text-on-surface">"{selectedArchiveTest?.testName}"</span> (Mã: {selectedArchiveTest?.testCode}).
+            Lưu trữ đề thi <span className="font-bold text-on-surface">"{selectedArchiveTest?.testName}"</span> (Mã: {selectedArchiveTest?.testCode}).
           </DialogDescription>
         </DialogHeader>
         <DialogContent>
           <p className="text-xs text-on-surface-variant leading-relaxed select-text">
-            Mã đề sẽ không thể dùng để bắt đầu phiên mới; các phiên đang làm vẫn có thể tiếp tục. Phiên bản này không thể kích hoạt lại.
+            Mã đề sẽ không thể dùng để bắt đầu phiên làm bài mới; các phiên làm bài cũ vẫn được giữ nguyên dữ liệu lịch sử. Đề thi đã lưu trữ không thể kích hoạt lại.
           </p>
           {archiveTestError && (
             <div role="alert" className="mt-3 p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold select-text">
@@ -1019,7 +1054,7 @@ export default function BlueprintDetailPage() {
             Hủy
           </Button>
           <Button variant="destructive" disabled={archiveTestLoading} onClick={handleArchiveGeneratedTest}>
-            {archiveTestLoading ? "Đang lưu trữ..." : "Xác nhận Lưu trữ"}
+            {archiveTestLoading ? "Đang lưu trữ..." : "Lưu trữ đề"}
           </Button>
         </DialogFooter>
       </Dialog>
