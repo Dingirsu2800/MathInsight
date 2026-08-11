@@ -56,6 +56,11 @@ public class GetLectureListQueryHandler : IRequestHandler<GetLectureListQuery, P
             query = query.Where(x => validTagIds.Contains(x.TagId));
         }
 
+        if (!string.IsNullOrEmpty(request.Difficulty))
+        {
+            query = query.Where(x => x.DifficultyId == request.Difficulty);
+        }
+
         var totalCount = await query.CountAsync(cancellationToken);
 
         var skip = (request.Page - 1) * request.PageSize;
