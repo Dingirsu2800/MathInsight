@@ -193,6 +193,72 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
         Assert.All(recommendations.GroupBy(item => item.TagId), group => Assert.True(group.Count() <= 2));
     }
 
+    [RecommenderSqlServerFact]
+    public async Task Student_ViewsWeakTopic_ThenReceivesLinkedLectureAndMaterial_ThroughHostedApi()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var topicId = $"l3-study-{suffix}";
+        var topicName = $"L3 study topic {suffix}";
+        var lectureId = $"l3-study-lecture-{suffix}";
+        var lectureTitle = $"L3 study lecture {suffix}";
+        var materialId = $"l3-study-material-{suffix}";
+        var materialName = $"L3 study material {suffix}";
+
+        await _factory.SeedAsync(db =>
+        {
+            db.TagTopics.Add(new TagTopicReadOnly
+            {
+                TagId = topicId,
+                TagName = topicName,
+                Grade = 10,
+                IsActive = true
+            });
+            db.TagsMasteries.Add(new TagsMastery
+            {
+                TagsMasteryId = $"l3-study-mastery-{suffix}",
+                StudentId = "student_01",
+                TagId = topicId,
+                OfficialPoint = 2m,
+                PracticePoint = 2m,
+                ExamAnchor = 2m,
+                MasteryStatus = "Learning",
+                NumberDone = 3,
+                RecommendedDifficultyLevel = 1,
+                ExamHistory = "[]"
+            });
+        });
+        await _factory.AddLectureAsync(lectureId, lectureTitle, topicId, "diff-l1");
+        await _factory.AddMaterialAsync(materialId, materialName);
+        await _factory.LinkMaterialAsync(lectureId, materialId);
+
+        using var weakTagsRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/recommender/weak-tags");
+        weakTagsRequest.Headers.Add("X-Test-Student-Id", "student_01");
+        var weakTagsResponse = await _client.SendAsync(weakTagsRequest);
+
+        Assert.Equal(HttpStatusCode.OK, weakTagsResponse.StatusCode);
+        var weakTagsPayload = await weakTagsResponse.Content.ReadAsStringAsync();
+        Assert.Contains(topicId, weakTagsPayload);
+        Assert.Contains(topicName, weakTagsPayload);
+
+        using var lecturesRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/recommender/lectures");
+        lecturesRequest.Headers.Add("X-Test-Student-Id", "student_01");
+        var lecturesResponse = await _client.SendAsync(lecturesRequest);
+
+        Assert.Equal(HttpStatusCode.OK, lecturesResponse.StatusCode);
+        var lecturesPayload = await lecturesResponse.Content.ReadAsStringAsync();
+        Assert.Contains(lectureId, lecturesPayload);
+        Assert.Contains(lectureTitle, lecturesPayload);
+
+        using var materialsRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/recommender/materials");
+        materialsRequest.Headers.Add("X-Test-Student-Id", "student_01");
+        var materialsResponse = await _client.SendAsync(materialsRequest);
+
+        Assert.Equal(HttpStatusCode.OK, materialsResponse.StatusCode);
+        var materialsPayload = await materialsResponse.Content.ReadAsStringAsync();
+        Assert.Contains(materialId, materialsPayload);
+        Assert.Contains(materialName, materialsPayload);
+    }
+
     private async Task<IReadOnlyList<RecommendationDto>> GetLectureRecommendationsAsync(string studentId)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/recommender/lectures");

@@ -1,8 +1,11 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using ClosedXML.Excel;
+using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Persistence;
 using Microsoft.AspNetCore.Authentication;
@@ -42,7 +45,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     }
 
     [QuestionBankSqlServerFact]
-    public async Task CreateQuestion_WithExpertIdentity_PersistsQuestionThroughHostedApi()
+    public async Task Expert_Creates_Revises_ThenDeactivatesOwnQuestion_ThroughHostedApi()
     {
         await _factory.SeedAsync(db =>
         {
@@ -221,6 +224,84 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
 
         Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
         await _factory.AssertAdminReportWasApprovedAsync(reportId!, questionId);
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task Expert_PreviewsThenConfirmsValidWorkbook_ThroughHostedApi()
+    {
+        await _factory.SeedAsync(db =>
+        {
+            db.TagTopics.Add(new TagTopic { TagId = "l3-import-topic", TagName = "L3 import topic", Grade = 10, DisplayOrder = 11, IsActive = true });
+        });
+
+        using var form = new MultipartFormDataContent();
+        using var workbookContent = new ByteArrayContent(CreateValidImportWorkbook());
+        workbookContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        form.Add(workbookContent, "file", "l3-question-import.xlsx");
+        using var previewRequest = new HttpRequestMessage(HttpMethod.Post, "/api/question-bank/questions/import-preview") { Content = form };
+        previewRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+
+        var previewResponse = await _client.SendAsync(previewRequest);
+
+        Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+        var preview = JsonSerializer.Deserialize<QuestionImportPreviewResponse>(
+            await previewResponse.Content.ReadAsStringAsync(),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(preview);
+        var previewItem = Assert.Single(preview!.Items);
+        Assert.True(previewItem.IsValid);
+        Assert.NotNull(previewItem.Draft);
+
+        var confirm = new ConfirmQuestionImportRequest
+        {
+            ImportId = preview.ImportId,
+            Items = [new ConfirmQuestionImportItemRequest { QuestionKey = previewItem.QuestionKey, Draft = previewItem.Draft }]
+        };
+        using var confirmRequest = new HttpRequestMessage(HttpMethod.Post, "/api/question-bank/questions/import-confirm")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(confirm), Encoding.UTF8, "application/json")
+        };
+        confirmRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+
+        var confirmResponse = await _client.SendAsync(confirmRequest);
+
+        Assert.Equal(HttpStatusCode.Created, confirmResponse.StatusCode);
+        await _factory.AssertQuestionWasPersistedAsync("Imported L3 question", "expert_l3");
+    }
+
+    private static byte[] CreateValidImportWorkbook()
+    {
+        using var workbook = new XLWorkbook();
+        workbook.Worksheets.Add("_Meta").Cell(1, 1).Value = "TemplateVersion";
+        workbook.Worksheet("_Meta").Cell(1, 2).Value = "3";
+        workbook.Worksheets.Add("Instructions");
+        AddSheet(workbook, "Questions", ["QuestionKey", "QuestionContent", "SolutionContent", "QuestionType", "Grade", "DifficultyLevel", "DefaultWeight", "PictureUrl"]);
+        var questions = workbook.Worksheet("Questions");
+        questions.Cell(2, 1).Value = "L3-IMPORT-001";
+        questions.Cell(2, 2).Value = "Imported L3 question";
+        questions.Cell(2, 3).Value = "The import was confirmed.";
+        questions.Cell(2, 4).Value = "SINGLE_CHOICE";
+        questions.Cell(2, 5).Value = 10;
+        questions.Cell(2, 6).Value = 2;
+        questions.Cell(2, 7).Value = 1;
+        AddSheet(workbook, "Answers", ["QuestionKey", "AnswerContent", "IsCorrect"]);
+        var answers = workbook.Worksheet("Answers");
+        answers.Cell(2, 1).Value = "L3-IMPORT-001"; answers.Cell(2, 2).Value = "Confirmed"; answers.Cell(2, 3).Value = true;
+        answers.Cell(3, 1).Value = "L3-IMPORT-001"; answers.Cell(3, 2).Value = "Rejected"; answers.Cell(3, 3).Value = false;
+        AddSheet(workbook, "Parts", ["QuestionKey", "PartOrder", "PartLabel", "PartContent", "PartType", "CorrectBoolean", "CorrectText", "CorrectNumeric", "NumericTolerance", "Explanation", "DefaultWeight"]);
+        AddSheet(workbook, "Topics", ["QuestionKey", "TopicCode", "IsPrimary"]);
+        var topics = workbook.Worksheet("Topics");
+        topics.Cell(2, 1).Value = "L3-IMPORT-001"; topics.Cell(2, 2).Value = "l3-import-topic"; topics.Cell(2, 3).Value = true;
+        workbook.Worksheets.Add("Catalogs");
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static void AddSheet(XLWorkbook workbook, string name, IReadOnlyList<string> headers)
+    {
+        var sheet = workbook.Worksheets.Add(name);
+        for (var index = 0; index < headers.Count; index++) sheet.Cell(1, index + 1).Value = headers[index];
     }
 }
 
