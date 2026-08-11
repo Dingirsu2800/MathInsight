@@ -204,3 +204,16 @@
 - [x] Extend the opt-in SQL smoke with shared generation and archive against the canonical sibling schema when available.
 - [ ] Add fault-injected unknown-commit, SQL unique-collision, and concurrent archive/start smoke coverage when the disposable SQL harness supports deterministic fault injection.
 - [x] Do not create TestSession/TestAnswer records in TestGen and do not add schema or EF migrations.
+
+## Phase 10: Expert Fixed BlueprintExam
+
+- [x] Add owner-only paged candidate search per BlueprintDetail using the existing immutable candidate gate.
+- [x] Validate unique question IDs, continuous global order, exact detail quantities, and full BlueprintDetail eligibility.
+- [x] Persist exact Expert order with QuestionVersion, weight, allocated score, scoring rule, and `SelectionReason = FixedExam` snapshots.
+- [x] Create shared Active tests with `GeneratedBy = Expert`, null Student owner, and a unique TestCode.
+- [x] Keep fixed and random variants together and expose additive `generationType` in Expert list and preview.
+- [x] Preserve independent idempotent archive behavior and defer TestSession creation until a Student starts the test.
+- [x] Extend EF and canonical SQL SelectionReason constraints and add idempotent migration `007_Fixed_Blueprint_Exam.sql`.
+- [x] Add planner and handler regression tests for order, duplicate, eligibility, persistence, and scoring.
+- [ ] Run opt-in SQL Server smoke against a disposable database after applying migration 007.
+- [ ] Add the Expert fixed-test builder UI and browser smoke evidence.

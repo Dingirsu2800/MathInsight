@@ -155,6 +155,14 @@ MathInsight.Modules.TestGen/
 - Keep authorization and transaction orchestration separate for Student and Expert flows. Extract only pure requirement, selection, ordering, score-allocation, and TestQuestion-construction logic after characterization coverage exists.
 - Do not add durable HTTP idempotency, a Draft Test status, Adaptive generation, Diagnostic, or Recommender integration.
 
+### Phase 10: Expert Fixed BlueprintExam
+
+- Add owner-only candidate search per BlueprintDetail and exact-question generation from Approved or Active Blueprints.
+- Enforce unique questions, continuous global order, exact detail quantities, and full topic/difficulty/type/scoring/part-count eligibility on the server.
+- Reuse immutable QuestionVersion V2 validation and section score allocation; persist `GeneratedBy = Expert` and `SelectionReason = FixedExam`.
+- Derive additive `generationType` metadata for Expert list and preview. Random and fixed tests coexist under one Blueprint and archive independently.
+- Add only the SelectionReason check-constraint migration; no new table, column, TestSession, frontend-owned validation, or Adaptive behavior.
+
 ## API Design
 
 `BlueprintsController` uses `[Authorize(Roles = "Expert")]` and route `api/test-generator/blueprints`.
@@ -184,6 +192,8 @@ Phase 9 adds Expert and shared-discovery routes without replacing these endpoint
 
 ```text
 POST  /api/test-generator/blueprints/{blueprintId}/tests
+GET   /api/test-generator/blueprints/{blueprintId}/fixed-test-candidates
+POST  /api/test-generator/blueprints/{blueprintId}/fixed-tests
 GET   /api/test-generator/blueprints/{blueprintId}/tests
 GET   /api/test-generator/tests/{testId}/expert-preview
 PATCH /api/test-generator/tests/{testId}/status
