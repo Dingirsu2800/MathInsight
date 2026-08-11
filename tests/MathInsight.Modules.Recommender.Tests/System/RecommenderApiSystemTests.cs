@@ -202,13 +202,7 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
 
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.Add(new TagTopicReadOnly
-            {
-                TagId = topicId,
-                TagName = topicName,
-                Grade = 10,
-                IsActive = true
-            });
+            AddDirectChildTopic(db, topicId, topicName, 10);
             db.TagsMasteries.Add(new TagsMastery
             {
                 TagsMasteryId = $"l3-study-mastery-{suffix}",

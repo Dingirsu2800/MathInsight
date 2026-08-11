@@ -80,8 +80,8 @@ TestGen uses `WeakTagAdviceDto.RecommendedDifficultyLevel` to select questions. 
 
 ### All-Tag Mastery Query (UC-55 / RCM-17)
 
-`GET /api/v1/recommender/topic-mastery` returns ALL `TagsMastery` rows for the authenticated student,
-ordered by `OfficialPoint ascending, TagId ascending`.
+`GET /api/v1/recommender/topic-mastery` returns all eligible mastery rows on active direct-child topics
+with an active same-grade root parent, ordered by `OfficialPoint ascending, TagId ascending`.
 
 Unlike `GET /weak-tags` (OfficialPoint < 5.00 only), this endpoint covers all mastery statuses
 (`NotLearned`, `Learning`, `Mastered`) and is consumed by the Competency page components:

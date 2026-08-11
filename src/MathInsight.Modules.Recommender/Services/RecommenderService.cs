@@ -55,7 +55,12 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
         var allMastery = await (
             from tm in _db.TagsMasteries.AsNoTracking()
             join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
+            join parent in _db.TagTopics.AsNoTracking() on tt.ParentTagId equals parent.TagId
             where tm.StudentId == studentId
+                && tt.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == tt.Grade
             orderby tm.OfficialPoint ascending, tm.TagId ascending
             select new TagMasteryDto(
                 tm.TagId,

@@ -205,7 +205,7 @@
 
 - [x] **`Contracts/TagMasteryDto.cs`** — New DTO with `TagId`, `TagName`, `OfficialPoint`, `NumberDone`, `MasteryStatus`, `RecommendedDifficultyLevel`.
 - [x] **`Services/IRecommenderService.cs`** — Added `GetStudentAllTagsMasteryAsync(studentId)` method.
-- [x] **`Services/RecommenderService.cs`** — Implement `GetStudentAllTagsMasteryAsync`: join `TagsMastery` + `TagTopic`, no OfficialPoint filter, order `OfficialPoint ascending, TagId ascending`.
+- [x] **`Services/RecommenderService.cs`** — Implement `GetStudentAllTagsMasteryAsync`: return active direct-child mastery with an active same-grade root parent, no OfficialPoint filter, ordered by `OfficialPoint ascending, TagId ascending`.
 - [x] **`Queries/GetAllTagsMastery/GetAllTagsMasteryQuery.cs`** — MediatR query record.
 - [x] **`Queries/GetAllTagsMastery/GetAllTagsMasteryQueryHandler.cs`** — Handler delegates to `IRecommenderService.GetStudentAllTagsMasteryAsync`.
 - [x] **`Controllers/RecommenderController.cs`** — Added `GET /api/v1/recommender/topic-mastery` endpoint (UC-55, `[Authorize(Roles = "Student")]`).
