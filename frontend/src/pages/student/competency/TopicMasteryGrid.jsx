@@ -1,11 +1,12 @@
 /**
  * Topic mastery grid — one card per tag with score, status, and progress bar.
- * Data: recommenderApi.getWeakTags() replaces the old MOCK_TOPICS array.
+ * Data: recommenderApi.getAllTagsMastery() — returns ALL topics (not only weak ones).
+ * UC-55 / RCM-17
  */
 import { useEffect, useState } from 'react';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import ProgressBar from '../../../components/ui/ProgressBar';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery } from '../../../services/recommenderApi';
 
 // Icon pool cycled per index (no icon field in DTO)
 const ICON_POOL = [
@@ -17,9 +18,12 @@ const ICON_POOL = [
   { name: 'schema', bg: 'bg-emerald-success/20', color: 'text-emerald-success' },
 ];
 
-/** Derive visual style from officialPoint (0–10) and numberDone */
-function getTopicStyle(score, numberDone = 0) {
-  if (numberDone === 0) {
+/**
+ * Derive visual style from masteryStatus (server-authoritative) and numberDone.
+ * masteryStatus: "NotLearned" | "Learning" | "Mastered"
+ */
+function getTopicStyle(masteryStatus, officialPoint) {
+  if (masteryStatus === 'NotLearned') {
     return {
       status: 'Chưa làm',
       statusClass: 'bg-surface-container-high text-on-surface-variant',
@@ -30,6 +34,7 @@ function getTopicStyle(score, numberDone = 0) {
       isUnpracticed: true,
     };
   }
+  const score = Number(officialPoint);
   if (score < 5) {
     return {
       status: 'Cần cải thiện',
@@ -41,7 +46,7 @@ function getTopicStyle(score, numberDone = 0) {
       isUnpracticed: false,
     };
   }
-  if (score < 7.5) {
+  if (masteryStatus === 'Learning') {
     return {
       status: 'Đang học',
       statusClass: 'bg-surface-container-high text-on-surface-variant',
@@ -73,7 +78,7 @@ export default function TopicMasteryGrid() {
     let cancelled = false;
     setLoading(true);
 
-    getWeakTags()
+    getAllTagsMastery()
       .then((data) => { if (!cancelled) setTopics(data || []); })
       .catch(() => { if (!cancelled) setError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -84,7 +89,7 @@ export default function TopicMasteryGrid() {
   // Sort
   const sorted = [...topics].sort((a, b) => {
     if (sortBy === 'score') return Number(b.officialPoint) - Number(a.officialPoint);
-    // progress: flagged first, then ascending score
+    // progress: flagged (weak) first, then ascending score
     const sa = Number(a.officialPoint);
     const sb = Number(b.officialPoint);
     if (sa < 5 && sb >= 5) return -1;
@@ -153,8 +158,7 @@ export default function TopicMasteryGrid() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {sorted.map((topic, idx) => {
             const score = Number(topic.officialPoint || 0);
-            const numberDone = Number(topic.numberDone ?? 0);
-            const style = getTopicStyle(score, numberDone);
+            const style = getTopicStyle(topic.masteryStatus, score);
             const icon = ICON_POOL[idx % ICON_POOL.length];
 
             return (
@@ -198,26 +202,34 @@ export default function TopicMasteryGrid() {
                   {style.isUnpracticed ? 'Chưa làm bài tập/bài thi' : 'Năng lực chuyên đề'}
                 </p>
 
-                <div className="flex items-center gap-4 mt-auto">
-                  <div className="flex-1">
-                    <div className="flex justify-between font-mono text-xs mb-1">
-                      <span>Năng lực</span>
-                      <span className={`font-bold ${style.badgeText}`}>{score}/10</span>
+                {/* Score + progress bar — only for tags with data */}
+                {style.isUnpracticed ? (
+                  <div className="mt-auto pt-2 border-t border-whisper-border">
+                    <p className="text-xs text-on-surface-variant italic">Chưa có điểm năng lực</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4 mt-auto">
+                    <div className="flex-1">
+                      <div className="flex justify-between font-mono text-xs mb-1">
+                        <span>Năng lực</span>
+                        <span className={`font-bold ${style.badgeText}`}>{score}/10</span>
+                      </div>
+                      <ProgressBar
+                        value={score}
+                        max={10}
+                        height="h-2"
+                        colorClass={style.barColor}
+                        trackClass="bg-surface-container"
+                      />
                     </div>
-                    <ProgressBar
-                      value={score}
-                      max={10}
-                      height="h-2"
-                      colorClass={style.barColor}
-                      trackClass="bg-surface-container"
-                    />
+                    <div className={`w-10 h-10 border-2 ${style.badgeBorder} rounded-full flex items-center justify-center`}>
+                      <span className={`font-mono text-xs ${style.badgeText}`}>
+                        {Math.round(score * 10)}%
+                      </span>
+                    </div>
                   </div>
-                  <div className={`w-10 h-10 border-2 ${style.badgeBorder} rounded-full flex items-center justify-center`}>
-                    <span className={`font-mono text-xs ${style.badgeText}`}>
-                      {Math.round(score * 10)}%
-                    </span>
-                  </div>
-                </div>
+                )}
+
               </div>
             );
           })}

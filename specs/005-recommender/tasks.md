@@ -196,3 +196,29 @@
 - [x] Rank lectures for qualified Weak, Learning, and Mastered contexts using exact-or-lower difficulty only, two per topic and six overall.
 - [x] Implement grade-based level-1 cold start with nullable point and explicit audit reason.
 - [x] Add SQL Server smoke coverage with legacy migration/idempotency checks; the opt-in smoke test is explicitly skipped when no disposable SQL Server connection is configured.
+
+---
+
+## Phase 7: All-Tag Mastery Endpoint (UC-55 / RCM-17)
+
+> **Added**: 2026-08-09 — Competency page requires full mastery data, not only weak tags.
+
+- [x] **`Contracts/TagMasteryDto.cs`** — New DTO with `TagId`, `TagName`, `OfficialPoint`, `NumberDone`, `MasteryStatus`, `RecommendedDifficultyLevel`.
+- [x] **`Services/IRecommenderService.cs`** — Added `GetStudentAllTagsMasteryAsync(studentId)` method.
+- [x] **`Services/RecommenderService.cs`** — Implement `GetStudentAllTagsMasteryAsync`: join `TagsMastery` + `TagTopic`, no OfficialPoint filter, order `OfficialPoint ascending, TagId ascending`.
+- [x] **`Queries/GetAllTagsMastery/GetAllTagsMasteryQuery.cs`** — MediatR query record.
+- [x] **`Queries/GetAllTagsMastery/GetAllTagsMasteryQueryHandler.cs`** — Handler delegates to `IRecommenderService.GetStudentAllTagsMasteryAsync`.
+- [x] **`Controllers/RecommenderController.cs`** — Added `GET /api/v1/recommender/topic-mastery` endpoint (UC-55, `[Authorize(Roles = "Student")]`).
+
+### Frontend
+
+- [x] **`recommenderApi.js`** — Added `getAllTagsMastery()` calling `GET /recommender/topic-mastery`.
+- [x] **`TopicMasteryGrid.jsx`** — Switch from `getWeakTags()` to `getAllTagsMastery()`; style derivation uses server-authoritative `masteryStatus` field from `TagMasteryDto`.
+- [x] **`CompetencySummaryCard.jsx`** — Switch from `getWeakTags()` to `getAllTagsMastery()`; filter `numberDone === 0` before computing average to exclude lazy-created neutral rows.
+- [x] **`RadarChartCard.jsx`** — Switch from `getWeakTags()` to `getAllTagsMastery()`; radar shows all topics (up to 8, weakest first).
+
+### Verification
+
+- [x] `dotnet build` — 0 errors.
+- [x] `npm run build` — built successfully (pre-existing chunk size warning unrelated to this change).
+

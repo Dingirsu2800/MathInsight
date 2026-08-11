@@ -43,6 +43,27 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<TagMasteryDto>> GetStudentAllTagsMasteryAsync(
+        string studentId, CancellationToken cancellationToken = default)
+    {
+        var allMastery = await (
+            from tm in _db.TagsMasteries.AsNoTracking()
+            join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
+            where tm.StudentId == studentId
+            orderby tm.OfficialPoint ascending, tm.TagId ascending
+            select new TagMasteryDto(
+                tm.TagId,
+                tt.TagName,
+                tm.OfficialPoint,
+                tm.NumberDone,
+                tm.MasteryStatus,
+                tm.RecommendedDifficultyLevel)
+        ).ToListAsync(cancellationToken);
+
+        return allMastery;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<WeakTagAdviceDto>> GetStudentWeakTagAdviceAsync(
         string studentId, CancellationToken cancellationToken = default)
     {

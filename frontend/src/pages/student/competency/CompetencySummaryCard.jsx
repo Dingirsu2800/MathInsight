@@ -1,9 +1,11 @@
 /**
  * Overall competency summary card with radial progress gauge.
- * Data: derived from recommenderApi.getWeakTags() — average of officialPoint values.
+ * Data: recommenderApi.getAllTagsMastery() — average of officialPoint across all topics
+ * that have been practised (numberDone > 0). Tags with numberDone === 0 are lazy-created
+ * neutrals (official_point = 5.00) and are excluded to avoid skewing the real average.
  */
 import { useEffect, useRef, useState } from 'react';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery } from '../../../services/recommenderApi';
 
 function InfoPopover({ content }) {
   const [open, setOpen] = useState(false);
@@ -52,6 +54,7 @@ function InfoPopover({ content }) {
 
 export default function CompetencySummaryCard() {
   const [score, setScore] = useState(0);
+  const [unpracticedCount, setUnpracticedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -59,11 +62,15 @@ export default function CompetencySummaryCard() {
     let cancelled = false;
     setLoading(true);
 
-    getWeakTags()
+    getAllTagsMastery()
       .then((data) => {
         if (cancelled) return;
-        if (data && data.length > 0) {
-          const avg = data.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / data.length;
+        const all = data ?? [];
+        // Score only from practiced topics (numberDone > 0)
+        const practiced = all.filter((t) => t.numberDone > 0);
+        setUnpracticedCount(all.length - practiced.length);
+        if (practiced.length > 0) {
+          const avg = practiced.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / practiced.length;
           setScore(Math.round(avg * 10) / 10);
         }
       })
@@ -155,6 +162,16 @@ export default function CompetencySummaryCard() {
             Năng lực của bạn đang ở mức{' '}
             <span className={`font-bold ${masteryClass}`}>{masteryLabel}</span>.
           </p>
+
+          {/* Unpracticed topics badge */}
+          {unpracticedCount > 0 && (
+            <div className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container border border-whisper-border">
+              <span className="w-2 h-2 rounded-full bg-on-surface-variant/40 flex-shrink-0" />
+              <span className="text-xs text-on-surface-variant">
+                {unpracticedCount} chủ đề chưa bắt đầu
+              </span>
+            </div>
+          )}
         </>
       )}
     </div>
