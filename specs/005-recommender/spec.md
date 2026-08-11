@@ -109,16 +109,16 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
 - **RCM-10**: Lecture recommendation is deterministic and covers qualified Weak, Learning, and Mastered-progression topics, not only weak topics. A qualified mastery row requires `NumberDone >= 3` and an active `TagTopic`. Candidate lectures must be `Published`, have an active topic and active difficulty, and have `DifficultyLevel <= RecommendedDifficultyLevel`. Rank topic contexts by Weak, Learning, Mastered-progression; then `OfficialPoint` ascending, `NumberDone` descending, and `TagID` ascending. For each topic, prefer an exact difficulty, otherwise the nearest lower difficulty; then rank by `Likes` descending, `UpdatedTime` descending, and `LectureID` ascending. Return at most two lectures per topic and six overall. Material recommendation remains the existing weak-topic rule and does not receive difficulty ranking in this checkpoint.
 - **RCM-11**: `mastery_status` remains a coarse learning label only: `NotLearned`, `Learning`, `Mastered`. Do not add `WeakTag` to this enum.
 - **RCM-14 (Bottleneck Weak Tag — BR-19)**: A secondary (sub) tag with `official_point < 4.00` is classified as a **Bottleneck Weak Tag**. This is a stricter threshold than the standard weak threshold (`< 5.00`, RCM-03) because a weak secondary tag creates a bottleneck risk for completing questions that require it. `GetStudentWeakTagsAsync` should include bottleneck weak tags with reason `BottleneckSubTag`. `GetStudentWeakTagAdviceAsync` should flag them with `IsBottleneckWeak = true`.
-- **RCM-12 (CompetencyPoint update)**: After each `TagsMastery` update for a student, recalculate `CompetencyPoint` for that student's grade level:
+- **RCM-12 (CompetencyPoint update)**: After each `TagsMastery` update for a student, recalculate `CompetencyPoint` for the student's `CurrentGrade` using only active, direct-child topics whose active root parent has the same grade. Root topics, inactive topics, nested legacy topics, and topics from other grades never contribute:
 
   ```text
   CompetencyPoint.point = AVERAGE(official_point)
                           for all TagsMastery rows of that student
-                          where the Tag belongs to the student's grade (10, 11, or 12)
+                          where the Tag is an active direct child of an active root
+                          and both topic and root match the student's grade (10, 11, or 12)
   ```
 
-  To determine the student's grade, the Recommender queries the cross-schema `Student` table from the Identity module (`Student.current_grade`) (F5 resolution).
-  Upsert `CompetencyPoint` using `(student_id, grade)`. Clamp result to `0.00..10.00`.
+  To determine the student's grade, the Recommender queries the cross-schema `Student` table from the Identity module (`Student.current_grade`) (F5 resolution). If no eligible mastery exists for that grade, it does not create a new `CompetencyPoint` and must not fall back to mastery from another grade. Otherwise upsert by `(student_id, grade)` and clamp to `0.00..10.00`.
 
 - **RCM-13 (mastery_status thresholds)**: Set `mastery_status` based on the following rules applied after each `TagsMastery` update:
 

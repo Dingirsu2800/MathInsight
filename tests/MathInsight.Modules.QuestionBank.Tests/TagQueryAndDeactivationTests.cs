@@ -1,4 +1,5 @@
 using MathInsight.Modules.QuestionBank.Commands.DeleteTagTopic;
+using MathInsight.Modules.QuestionBank.Commands.CreateTagTopic;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
 using MathInsight.Modules.QuestionBank.Contracts.Tags;
 using MathInsight.Modules.QuestionBank.Entities;
@@ -10,6 +11,31 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 
 public sealed class TagQueryAndDeactivationTests
 {
+    [Fact]
+    public async Task CreateTopic_WhenParentIsAlreadyAChild_RejectsThirdLevelHierarchy()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var root = CreateTopic("root", null, 12, true);
+        var child = CreateTopic("child", root.TagId, 12, true);
+        database.Context.TagTopics.AddRange(root, child);
+        await database.Context.SaveChangesAsync();
+
+        var request = new CreateTagTopicRequest
+        {
+            TagName = "grandchild",
+            ParentTagId = child.TagId,
+            Grade = 12,
+            DisplayOrder = 3
+        };
+
+        var result = await new CreateTagTopicCommandHandler(database.Context)
+            .Handle(new CreateTagTopicCommand(request), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.TagDepthLimitExceeded, result.Error);
+        Assert.Equal(2, database.Context.TagTopics.Count());
+    }
+
     [Fact]
     public async Task TopicQuery_ExcludesInactiveTopicsByDefault_AndIncludesThemWhenRequested()
     {

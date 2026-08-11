@@ -30,14 +30,21 @@ public sealed class GetRecommendedMaterialsQueryHandler
         GetRecommendedMaterialsQuery request, CancellationToken cancellationToken)
     {
         // Step 1: Get weak tag IDs with mastery data
-        var weakTags = await _db.TagsMasteries
-            .AsNoTracking()
-            .Where(tm => tm.StudentId == request.StudentId && tm.OfficialPoint < WeakThreshold)
-            .Select(tm => new
+        var weakTags = await (
+            from mastery in _db.TagsMasteries.AsNoTracking()
+            join topic in _db.TagTopics.AsNoTracking() on mastery.TagId equals topic.TagId
+            join parent in _db.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
+            where mastery.StudentId == request.StudentId
+                && mastery.OfficialPoint < WeakThreshold
+                && topic.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == topic.Grade
+            select new
             {
-                tm.TagId,
-                tm.OfficialPoint,
-                tm.RecommendedDifficultyLevel
+                mastery.TagId,
+                mastery.OfficialPoint,
+                mastery.RecommendedDifficultyLevel
             })
             .ToListAsync(cancellationToken);
 
@@ -53,7 +60,14 @@ public sealed class GetRecommendedMaterialsQueryHandler
             join lm in _db.LectureMaterials.AsNoTracking() on m.MaterialId equals lm.MaterialId
             join l in _db.Lectures.AsNoTracking() on lm.LectureId equals l.LectureId
             join tt in _db.TagTopics.AsNoTracking() on l.TagId equals tt.TagId
-            where weakTagIds.Contains(l.TagId) && l.Status == "Published" && m.Status == "Active"
+            join parent in _db.TagTopics.AsNoTracking() on tt.ParentTagId equals parent.TagId
+            where weakTagIds.Contains(l.TagId)
+                && l.Status == "Published"
+                && m.Status == "Active"
+                && tt.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == tt.Grade
             select new
             {
                 m.MaterialId,

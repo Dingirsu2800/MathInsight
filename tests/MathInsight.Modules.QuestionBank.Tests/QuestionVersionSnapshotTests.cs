@@ -66,9 +66,18 @@ public sealed class QuestionVersionSnapshotTests
             DisplayOrder = 1,
             IsActive = true
         };
+        var rootTopic = new TagTopic
+        {
+            TagId = "root-topic-1",
+            TagName = "Root topic",
+            Grade = 10,
+            DisplayOrder = 1,
+            IsActive = true
+        };
         var topic = new TagTopic
         {
             TagId = "topic-1",
+            ParentTagId = rootTopic.TagId,
             TagName = "Topic",
             Grade = 10,
             DisplayOrder = 1,
@@ -104,6 +113,7 @@ public sealed class QuestionVersionSnapshotTests
             ]
         };
 
+        database.Context.TagTopics.Add(rootTopic);
         database.Context.Questions.Add(question);
         await database.Context.SaveChangesAsync();
         return question;

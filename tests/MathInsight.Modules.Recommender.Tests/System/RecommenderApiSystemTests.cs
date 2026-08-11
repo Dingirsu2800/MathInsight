@@ -43,9 +43,8 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
     {
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.AddRange(
-                new TagTopicReadOnly { TagId = "weak", TagName = "Weak", Grade = 10, IsActive = true },
-                new TagTopicReadOnly { TagId = "strong", TagName = "Strong", Grade = 10, IsActive = true });
+            AddDirectChildTopic(db, "weak", "Weak", 10);
+            AddDirectChildTopic(db, "strong", "Strong", 10);
             db.TagsMasteries.AddRange(
                 new TagsMastery { TagsMasteryId = "m1", StudentId = "student_01", TagId = "weak", OfficialPoint = 2m, PracticePoint = 2m, ExamAnchor = 2m, MasteryStatus = "Learning", RecommendedDifficultyLevel = 1, ExamHistory = "[]" },
                 new TagsMastery { TagsMasteryId = "m2", StudentId = "student_01", TagId = "strong", OfficialPoint = 8m, PracticePoint = 8m, ExamAnchor = 8m, MasteryStatus = "Mastered", RecommendedDifficultyLevel = 1, ExamHistory = "[]" });
@@ -66,7 +65,7 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
     {
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.Add(new TagTopicReadOnly { TagId = "topic-lecture", TagName = "Algebra", Grade = 10, IsActive = true });
+            AddDirectChildTopic(db, "topic-lecture", "Algebra", 10);
             db.TagsMasteries.Add(new TagsMastery { TagsMasteryId = "m3", StudentId = "student_01", TagId = "topic-lecture", OfficialPoint = 2m, PracticePoint = 2m, ExamAnchor = 2m, MasteryStatus = "Learning", NumberDone = 3, RecommendedDifficultyLevel = 1, ExamHistory = "[]" });
         });
         await _factory.AddLectureAsync("lecture-1", "Algebra basics", "topic-lecture", "diff-l1");
@@ -84,7 +83,7 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
     {
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.Add(new TagTopicReadOnly { TagId = "topic-material", TagName = "Geometry", Grade = 10, IsActive = true });
+            AddDirectChildTopic(db, "topic-material", "Geometry", 10);
             db.TagsMasteries.Add(new TagsMastery { TagsMasteryId = "m4", StudentId = "student_01", TagId = "topic-material", OfficialPoint = 2m, PracticePoint = 2m, ExamAnchor = 2m, MasteryStatus = "Learning", NumberDone = 3, RecommendedDifficultyLevel = 1, ExamHistory = "[]" });
         });
         await _factory.AddLectureAsync("lecture-2", "Geometry basics", "topic-material", "diff-l1");
@@ -106,7 +105,7 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
         var topicId = $"l3-exact-{suffix}";
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.Add(new TagTopicReadOnly { TagId = topicId, TagName = "L3 exact topic", Grade = 12, IsActive = true });
+            AddDirectChildTopic(db, topicId, "L3 exact topic", 12);
             db.TagsMasteries.Add(new TagsMastery
             {
                 TagsMasteryId = $"m-{suffix}", StudentId = "student_01", TagId = topicId,
@@ -134,7 +133,7 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
         var topicId = $"l3-fallback-{suffix}";
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.Add(new TagTopicReadOnly { TagId = topicId, TagName = "L3 fallback topic", Grade = 12, IsActive = true });
+            AddDirectChildTopic(db, topicId, "L3 fallback topic", 12);
             db.TagsMasteries.Add(new TagsMastery
             {
                 TagsMasteryId = $"m-{suffix}", StudentId = "student_01", TagId = topicId,
@@ -166,10 +165,7 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
         for (var topicNumber = 1; topicNumber <= 3; topicNumber++)
         {
             var topicId = $"l3-cold-{suffix}-{topicNumber}";
-            await _factory.SeedAsync(db => db.TagTopics.Add(new TagTopicReadOnly
-            {
-                TagId = topicId, TagName = $"L3 cold topic {topicNumber}", Grade = 12, IsActive = true
-            }));
+            await _factory.SeedAsync(db => AddDirectChildTopic(db, topicId, $"L3 cold topic {topicNumber}", 12));
             for (var lectureNumber = 1; lectureNumber <= 2; lectureNumber++)
             {
                 var lectureId = $"l3-cold-{suffix}-{topicNumber}-{lectureNumber}";
@@ -210,6 +206,14 @@ public sealed class RecommenderApiSystemTests : IClassFixture<RecommenderApiFact
         byte TargetDifficultyLevel,
         bool IsDifficultyFallback,
         string Reason);
+
+    private static void AddDirectChildTopic(RecommenderDbContext db, string tagId, string tagName, int grade)
+    {
+        var rootTagId = $"root-{tagId}";
+        db.TagTopics.AddRange(
+            new TagTopicReadOnly { TagId = rootTagId, TagName = $"Root {tagName}", Grade = grade, IsActive = true },
+            new TagTopicReadOnly { TagId = tagId, ParentTagId = rootTagId, TagName = tagName, Grade = grade, IsActive = true });
+    }
 }
 
 public sealed class RecommenderApiFactory : WebApplicationFactory<Program>

@@ -54,6 +54,9 @@ public sealed class CreateTagTopicCommandHandler
                     parent.TagId,
                     cancellationToken))
             return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagParentInvalid);
+
+            if (parent.ParentTagId is not null)
+                return Result<TagTopicTreeResponse>.Failure(QuestionBankErrors.TagDepthLimitExceeded);
         }
 
         var topic = new TagTopic

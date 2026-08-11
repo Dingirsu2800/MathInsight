@@ -264,6 +264,9 @@ public class TopicResultIngestionHandlerTests : IDisposable
 
         // Seed student with grade 11 to test grade resolution
         _db.Students.Add(new StudentReadOnly { StudentId = studentId.ToString(), CurrentGrade = 11 });
+        _db.TagTopics.AddRange(
+            new TagTopicReadOnly { TagId = "root-11", TagName = "Root 11", Grade = 11, IsActive = true },
+            new TagTopicReadOnly { TagId = tagId.ToString(), ParentTagId = "root-11", TagName = "Child 11", Grade = 11, IsActive = true });
         await _db.SaveChangesAsync();
 
         await _handler.Handle(
@@ -276,7 +279,64 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Assert.True(cp.Point >= 0m && cp.Point <= 10m);
     }
 
+    [Fact]
+    public async Task CompetencyEngine_GradeTwelveWithOnlyGradeTenMastery_DoesNotCreateGradeTwelvePoint()
+    {
+        const string studentId = "student-grade-12";
+        _db.TagTopics.AddRange(
+            new TagTopicReadOnly { TagId = "root-10", TagName = "Root 10", Grade = 10, IsActive = true },
+            new TagTopicReadOnly { TagId = "child-10", ParentTagId = "root-10", TagName = "Child 10", Grade = 10, IsActive = true });
+        _db.TagsMasteries.Add(new TagsMastery
+        {
+            TagsMasteryId = "mastery-grade-10",
+            StudentId = studentId,
+            TagId = "child-10",
+            OfficialPoint = 8m
+        });
+        await _db.SaveChangesAsync();
+
+        await new CompetencyEngine(_db).RecalculateAsync(studentId, 12);
+
+        Assert.DoesNotContain(_db.CompetencyPoints, item => item.StudentId == studentId && item.Grade == 12);
+    }
+
     // ── Test: SQL-only recommender works without Redis/SAR ─────────────────────
+
+    [Fact]
+    public async Task CompetencyEngine_AveragesOnlyActiveDirectChildrenOfActiveSameGradeRoots()
+    {
+        const string studentId = "student-competency-filter";
+        _db.TagTopics.AddRange(
+            new TagTopicReadOnly { TagId = "root-valid", TagName = "Valid root", Grade = 12, IsActive = true },
+            new TagTopicReadOnly { TagId = "child-valid", ParentTagId = "root-valid", TagName = "Valid child", Grade = 12, IsActive = true },
+            new TagTopicReadOnly { TagId = "child-inactive", ParentTagId = "root-valid", TagName = "Inactive child", Grade = 12, IsActive = false },
+            new TagTopicReadOnly { TagId = "root-inactive", TagName = "Inactive root", Grade = 12, IsActive = false },
+            new TagTopicReadOnly { TagId = "child-inactive-parent", ParentTagId = "root-inactive", TagName = "Child inactive parent", Grade = 12, IsActive = true },
+            new TagTopicReadOnly { TagId = "nested-legacy", ParentTagId = "child-valid", TagName = "Nested legacy", Grade = 12, IsActive = true },
+            new TagTopicReadOnly { TagId = "root-grade-11", TagName = "Grade 11 root", Grade = 11, IsActive = true },
+            new TagTopicReadOnly { TagId = "child-grade-mismatch", ParentTagId = "root-grade-11", TagName = "Grade mismatch", Grade = 12, IsActive = true });
+        _db.TagsMasteries.AddRange(
+            Mastery("mastery-root", studentId, "root-valid", 10m),
+            Mastery("mastery-valid", studentId, "child-valid", 6m),
+            Mastery("mastery-inactive-child", studentId, "child-inactive", 10m),
+            Mastery("mastery-inactive-parent", studentId, "child-inactive-parent", 10m),
+            Mastery("mastery-nested", studentId, "nested-legacy", 10m),
+            Mastery("mastery-mismatch", studentId, "child-grade-mismatch", 10m));
+        await _db.SaveChangesAsync();
+
+        await new CompetencyEngine(_db).RecalculateAsync(studentId, 12);
+
+        var competency = await _db.CompetencyPoints.SingleAsync(item => item.StudentId == studentId && item.Grade == 12);
+        Assert.Equal(6m, competency.Point);
+    }
+
+    private static TagsMastery Mastery(string id, string studentId, string tagId, decimal officialPoint) => new()
+    {
+        TagsMasteryId = id,
+        StudentId = studentId,
+        TagId = tagId,
+        OfficialPoint = officialPoint
+    };
 
     [Fact]
     public async Task Handle_WorksWithoutExternalDependencies()

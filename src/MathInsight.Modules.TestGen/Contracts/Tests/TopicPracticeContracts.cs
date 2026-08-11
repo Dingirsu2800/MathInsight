@@ -3,7 +3,9 @@ namespace MathInsight.Modules.TestGen.Contracts.Tests;
 public sealed record TopicPracticeTopicResponse(
     string TagId,
     string? ParentTagId,
+    string ParentTagName,
     string TagName,
+    int Grade,
     int DisplayOrder,
     int AvailableQuestionCount,
     bool CanGenerate,

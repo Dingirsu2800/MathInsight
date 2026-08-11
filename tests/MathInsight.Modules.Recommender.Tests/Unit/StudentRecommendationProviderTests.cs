@@ -9,6 +9,7 @@ namespace MathInsight.Modules.Recommender.Tests.Unit;
 
 public sealed class StudentRecommendationProviderTests : IDisposable
 {
+    private const string RootTagId = "root-topic";
     private readonly RecommenderDbContext _db;
     private readonly RecommenderService _sut;
 
@@ -20,6 +21,13 @@ public sealed class StudentRecommendationProviderTests : IDisposable
 
         _db = new RecommenderDbContext(options);
         _sut = new RecommenderService(_db, new DifficultyMappingService());
+        _db.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = RootTagId,
+            TagName = "Root topic",
+            Grade = 12,
+            IsActive = true
+        });
     }
 
     [Fact]
@@ -55,6 +63,28 @@ public sealed class StudentRecommendationProviderTests : IDisposable
         Assert.Equal(["TOPIC-C", "TOPIC-A", "TOPIC-B"], result.Select(item => item.TagId));
     }
 
+    [Fact]
+    public async Task GetWeakTagAdviceAsync_RootTopicIsNotReturnedAsPracticeAdvice()
+    {
+        _db.TagsMasteries.Add(new TagsMastery
+        {
+            TagsMasteryId = "mastery-root-topic",
+            StudentId = "student_01",
+            TagId = RootTagId,
+            OfficialPoint = 1.00m,
+            PracticePoint = 1.00m,
+            ExamAnchor = 1.00m,
+            MasteryStatus = "Learning",
+            NumberDone = 3,
+            RecommendedDifficultyLevel = 1
+        });
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.GetWeakTagAdviceAsync("student_01");
+
+        Assert.Empty(result);
+    }
+
     public void Dispose() => _db.Dispose();
 
     private void Seed(string tagId, decimal point, int numberDone, bool isActive, byte level)
@@ -62,6 +92,7 @@ public sealed class StudentRecommendationProviderTests : IDisposable
         _db.TagTopics.Add(new TagTopicReadOnly
         {
             TagId = tagId,
+            ParentTagId = RootTagId,
             TagName = tagId,
             Grade = 12,
             IsActive = isActive

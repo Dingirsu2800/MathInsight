@@ -72,9 +72,9 @@
     - `series_answer_count = 0`
 
 - [x] **CompetencyEngine — CompetencyPoint recalculation** (G1 — RCM-12):
-  - [x] After each `TagsMastery` upsert, query all `TagsMastery.official_point` rows for `(student_id)` where the Tag's grade matches the student's grade level. Query `Student.current_grade` from the Identity module cross-schema (F5 resolution).
+  - [x] After each `TagsMastery` upsert, query only active direct-child topic rows with an active root parent where both tags match `Student.CurrentGrade`.
   - [x] `CompetencyPoint.point = AVERAGE(official_point)` for that grade. Clamp to `0.00..10.00`.
-  - [x] Upsert `CompetencyPoint` by unique key `(student_id, grade)`.
+  - [x] Upsert `CompetencyPoint` by unique key `(student_id, grade)` only when at least one eligible mastery row exists; never fall back to another grade.
 
 - [x] **DifficultyMappingService**:
   - [x] `MapFromOfficialPoint(officialPoint)` returns level `1..4` (RCM-07).
