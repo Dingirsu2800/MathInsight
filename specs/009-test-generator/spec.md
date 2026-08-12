@@ -364,3 +364,16 @@ Discovery is not an authorization boundary. Testing must revalidate personal own
 - Student generation frontend.
 - Expert CRUD over Test or TestQuestion.
 - Redis, RabbitMQ, background queues, or EF migrations.
+
+## Checkpoint 6E: Student-Selected Topic Practice Difficulty
+
+`POST /api/test-generator/tests/topic-practices` accepts an additive optional `difficultyId` beside `tagId`. Omitting it preserves the existing recommendation-aware behavior. Supplying it switches to manual mode: the selected active difficulty must have level 1 through 4, Recommender is not called, and all ten generated Questions match that exact difficulty. The service never mixes or falls back to another difficulty in manual mode.
+
+`GET /api/test-generator/tests/topic-practice-options` returns `difficultyAvailability` for each assignable direct-child topic. Each item includes `difficultyId`, `difficultyName`, `levelValue`, `availableQuestionCount`, and `canGenerate`; counts use the same supported candidate shape and Composite cap as generation. Inactive or unsupported difficulties are excluded.
+
+Manual generation records `SelectionReason = TopicPractice`, `IsAdaptiveSelected = false`, `RecommendedForTagId = selected topic`, `RecommendedDifficultyId = selected difficulty`, `PtagAtSelection = NULL`, and `RuleVersion = TopicPractice-Manual-v1`. The response adds `difficultySelectionMode`, `selectedDifficultyId`, `selectedDifficultyName`, and `selectedDifficultyLevel`.
+
+| Code | HTTP | Meaning |
+|---|---:|---|
+| `TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND` | 404 | The supplied difficulty does not exist. |
+| `TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE` | 422 | The supplied difficulty is inactive or outside levels 1 through 4. |

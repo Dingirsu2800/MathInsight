@@ -5,6 +5,7 @@ import TopicPracticeConfirmDialog from "./TopicPracticeConfirmDialog";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { startSession } from "../../services/testingApi";
 import { getTopicPracticeErrorMessage } from "../../utils/topicPracticeErrorLocalizer";
+import { getDifficultyLevelName } from "../../utils/questionLabels";
 import { cn } from "../../utils/cn";
 
 function normalizeTopicPracticeOption(topic) {
@@ -39,6 +40,7 @@ export default function PracticeSetupPanel() {
 
   // Data states
   const [grade, setGrade] = useState(null);
+  const [selectedGrade, setSelectedGrade] = useState(null);
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -51,10 +53,19 @@ export default function PracticeSetupPanel() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [pageNotice, setPageNotice] = useState("");
 
   // Submit lock & Retain generated TestId ref
   const generatingRef = useRef(false);
-  const generatedTestRef = useRef({ tagId: null, testId: null });
+  const generatedTestRef = useRef({ tagId: null, difficultyId: null, testId: null });
+
+  // Distinct available grades sorted descending
+  const availableGrades = useMemo(() => {
+    if (!Array.isArray(topics)) return [];
+    const gradeSet = new Set(topics.map((t) => t.grade || grade || 12));
+    if (grade) gradeSet.add(Number(grade));
+    return Array.from(gradeSet).sort((a, b) => b - a);
+  }, [topics, grade]);
 
   // Fetch topic practice options
   const fetchOptions = useCallback(async () => {
@@ -63,11 +74,28 @@ export default function PracticeSetupPanel() {
     try {
       const res = await testGeneratorApi.getTopicPracticeOptions();
       const data = res.data || {};
-      setGrade(data.grade || null);
+      const studentGrade = data.grade || null;
+      setGrade(studentGrade);
+      setSelectedGrade((prev) => prev ?? studentGrade ?? "all");
+
       const rawTopics = Array.isArray(data.topics)
         ? data.topics.map(normalizeTopicPracticeOption)
         : [];
       setTopics(rawTopics);
+
+      // Sync active modal selection with fresh topics data or notify user if closed
+      setSelectedTag((prevTag) => {
+        if (!prevTag) return null;
+        const fresh = rawTopics.find((t) => String(t.tagId) === String(prevTag.tagId));
+        if (fresh && fresh.canGenerate) {
+          setGenerationError("Mức độ khó đã chọn không còn khả dụng. Danh sách các mức độ khó đã được cập nhật.");
+          return fresh;
+        } else {
+          setIsConfirmOpen(false);
+          setPageNotice("Chủ đề đã chọn hiện không còn đủ câu hỏi để luyện tập. Vui lòng chọn chủ đề khác.");
+          return null;
+        }
+      });
 
       // Auto preselect if coming from recommendation card
       if (preselectedTagId) {
@@ -96,6 +124,11 @@ export default function PracticeSetupPanel() {
     const query = search.trim().toLowerCase();
 
     const filtered = topics.filter((t) => {
+      // Grade filtering step
+      const topicGrade = t.grade || grade || 12;
+      if (selectedGrade && selectedGrade !== "all" && Number(topicGrade) !== Number(selectedGrade)) {
+        return false;
+      }
       if (!query) return true;
       const matchChild = (t.tagName || "").toLowerCase().includes(query);
       const matchParent = (t.parentTagName || "").toLowerCase().includes(query);
@@ -133,12 +166,12 @@ export default function PracticeSetupPanel() {
         parentGroups,
       };
     });
-  }, [topics, search, grade]);
+  }, [topics, search, grade, selectedGrade]);
 
   const handleSelectTopic = (node) => {
     if (!node || !node.canGenerate) return;
     if (generatedTestRef.current.tagId !== node.tagId) {
-      generatedTestRef.current = { tagId: null, testId: null };
+      generatedTestRef.current = { tagId: null, difficultyId: null, testId: null };
     }
     setSelectedTag(node);
     setGenerationError("");
@@ -146,36 +179,47 @@ export default function PracticeSetupPanel() {
   };
 
   // Execute Topic Practice Generation
-  const handleConfirmGenerate = async () => {
+  const handleConfirmGenerate = async (confirmPayload) => {
     if (!selectedTag || generatingRef.current) return;
     generatingRef.current = true;
     setGenerating(true);
     setGenerationError("");
 
+    const payload = typeof confirmPayload === "object" && confirmPayload !== null
+      ? confirmPayload
+      : { tagId: selectedTag.tagId };
+
+    const payloadDifficultyId = payload.difficultyId || null;
+
     try {
       let testId = null;
-
-      if (
+      const isSameRequest =
         generatedTestRef.current.tagId === selectedTag.tagId &&
-        generatedTestRef.current.testId
-      ) {
+        generatedTestRef.current.difficultyId === payloadDifficultyId &&
+        Boolean(generatedTestRef.current.testId);
+
+      if (isSameRequest) {
         testId = generatedTestRef.current.testId;
       } else {
-        const genRes = await testGeneratorApi.generateTopicPractice(selectedTag.tagId);
+        const genRes = await testGeneratorApi.generateTopicPractice(payload);
         testId = genRes.data?.testId;
 
         if (!testId) {
           throw new Error("Không nhận được mã đề thi từ hệ thống.");
         }
 
-        generatedTestRef.current = { tagId: selectedTag.tagId, testId };
+        generatedTestRef.current = {
+          tagId: selectedTag.tagId,
+          difficultyId: payloadDifficultyId,
+          testId
+        };
       }
 
       const startData = await startSession(testId);
       const sessionId = startData?.sessionId || startData?.id;
 
       if (sessionId) {
-        generatedTestRef.current = { tagId: null, testId: null };
+        generatedTestRef.current = { tagId: null, difficultyId: null, testId: null };
         setIsConfirmOpen(false);
         navigate(`/student/test/${sessionId}`);
       } else {
@@ -187,11 +231,15 @@ export default function PracticeSetupPanel() {
       if (errCode === "TESTING_SESSION_ALREADY_IN_PROGRESS") {
         const existingSessionId = err.response?.data?.existingSessionId;
         if (existingSessionId && typeof existingSessionId === "string") {
-          generatedTestRef.current = { tagId: null, testId: null };
+          generatedTestRef.current = { tagId: null, difficultyId: null, testId: null };
           setIsConfirmOpen(false);
           navigate(`/student/test/${existingSessionId}`);
           return;
         }
+      }
+
+      if (errCode === "TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND" || errCode === "TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE") {
+        fetchOptions();
       }
 
       setGenerationError(getTopicPracticeErrorMessage(err, "Không thể tạo bài luyện tập. Vui lòng thử lại sau."));
@@ -248,6 +296,60 @@ export default function PracticeSetupPanel() {
         </div>
       </div>
 
+      {/* Step 1: Grade Selection / Filtering Bar */}
+      {!loading && !loadError && availableGrades.length > 0 && (
+        <div className="bg-pure-surface border border-whisper-border rounded-xl p-3.5 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">school</span>
+            <span className="text-xs font-bold text-on-surface">Bước 1: Chọn Khối lớp</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {availableGrades.map((g) => {
+              const isCurrent = Number(g) === Number(grade);
+              const isSelected = selectedGrade === g;
+
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setSelectedGrade(g)}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 select-none",
+                    isSelected
+                      ? "bg-primary text-on-primary shadow-sm"
+                      : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+                  )}
+                >
+                  <span>Khối {g}</span>
+                  {isCurrent && (
+                    <span className={cn(
+                      "px-1.5 py-0.2 text-[9px] rounded font-extrabold uppercase",
+                      isSelected ? "bg-white/25 text-white" : "bg-primary/10 text-primary"
+                    )}>
+                      Hiện tại
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setSelectedGrade("all")}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer select-none",
+                selectedGrade === "all"
+                  ? "bg-primary text-on-primary shadow-sm"
+                  : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+              )}
+            >
+              Tất cả khối
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error State */}
       {loadError && (
         <div role="alert" className="p-4 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center justify-between gap-3 select-text">
@@ -258,6 +360,23 @@ export default function PracticeSetupPanel() {
           <Button variant="outline" size="sm" onClick={fetchOptions} className="h-8 text-xs font-bold min-h-[44px]">
             Thử lại
           </Button>
+        </div>
+      )}
+
+      {/* Page Notice Banner for Stale Topics */}
+      {pageNotice && (
+        <div role="alert" className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 text-xs font-semibold flex items-center justify-between gap-3 select-text">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px] text-amber-600 shrink-0">info</span>
+            <span>{pageNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPageNotice("")}
+            className="text-amber-800 hover:text-amber-950 font-bold text-xs cursor-pointer"
+          >
+            Đóng
+          </button>
         </div>
       )}
 
@@ -343,7 +462,7 @@ export default function PracticeSetupPanel() {
                               </div>
                               {hasWeakRecommendation ? (
                                 <span className="mt-0.5 truncate text-[10px] text-on-surface-variant">
-                                  Trọng tâm: {node.weakTagName} · Mức {node.recommendedDifficultyLevel} · {node.officialPoint.toFixed(2)}/10
+                                  Trọng tâm: {node.weakTagName} · {getDifficultyLevelName(node.recommendedDifficultyLevel)} · {node.officialPoint.toFixed(2)}/10
                                 </span>
                               ) : (
                                 <span className="mt-0.5 text-[10px] text-on-surface-variant">

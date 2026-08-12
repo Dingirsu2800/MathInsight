@@ -80,3 +80,27 @@ export function getQuestionTypeShortLabel(type) {
   const norm = normalizeQuestionType(type);
   return QUESTION_TYPE_SHORT_LABELS[norm] || getQuestionTypeLabel(norm);
 }
+
+export const DIFFICULTY_LEVEL_NAMES = {
+  1: "Nhận biết",
+  2: "Thông hiểu",
+  3: "Vận dụng",
+  4: "Vận dụng cao",
+};
+
+export function getDifficultyLevelName(levelValue, rawName) {
+  const lvl = Number(levelValue);
+  if (lvl >= 1 && lvl <= 4 && DIFFICULTY_LEVEL_NAMES[lvl]) {
+    return DIFFICULTY_LEVEL_NAMES[lvl];
+  }
+
+  if (!rawName) return "Chưa xác định";
+
+  const lower = String(rawName).trim().toLowerCase();
+  if (lower.includes("vận dụng cao") || lower.includes("rất khó") || lower.includes("siêu khó")) return "Vận dụng cao";
+  if (lower.includes("vận dụng") || lower.includes("khó")) return "Vận dụng";
+  if (lower.includes("thông hiểu") || lower.includes("trung bình")) return "Thông hiểu";
+  if (lower.includes("dễ") || lower.includes("nhận biết")) return "Nhận biết";
+
+  return rawName;
+}

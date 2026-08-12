@@ -36,7 +36,9 @@ export const TEST_GENERATION_ERROR_MAP = {
   FIXED_TEST_DETAIL_QUANTITY_MISMATCH: "Số lượng câu hỏi đã chọn không khớp với chỉ tiêu ma trận đề thi.",
   FIXED_TEST_QUESTION_NOT_ELIGIBLE: "Một số câu hỏi được chọn không đáp ứng điều kiện của ma trận đề thi.",
   FIXED_TEST_QUESTION_VERSION_UNAVAILABLE: "Phiên bản câu hỏi được chọn hiện không khả dụng.",
-  TEST_ALREADY_ARCHIVED: "Đề thi này đã ở trạng thái đã lưu trữ."
+  TEST_ALREADY_ARCHIVED: "Đề thi này đã ở trạng thái đã lưu trữ.",
+  TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND: "Mức độ khó được chọn không tồn tại hoặc đã bị xóa.",
+  TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE: "Mức độ khó này hiện không còn khả dụng. Vui lòng chọn mức khác."
 };
 
 export function getTestGenErrorMessage(err, defaultMessage = "Thao tác thất bại. Vui lòng thử lại sau.") {

@@ -2,6 +2,21 @@ namespace MathInsight.Modules.TestGen.Generation;
 
 public static class TopicPracticeSelectionPlanFactory
 {
+    public static TopicPracticeSelectionPlan CreateManual(byte difficultyLevel)
+    {
+        if (difficultyLevel is < 1 or > 4)
+            throw new ArgumentOutOfRangeException(nameof(difficultyLevel));
+
+        return new TopicPracticeSelectionPlan(
+            Enumerable.Repeat(
+                    new TopicPracticeSlot(difficultyLevel, TopicPracticeSlotScope.BreadthPreferred),
+                    TopicPracticePolicy.QuestionCount)
+                .ToList(),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            IsDirectFocusSelection: false,
+            TopicPracticePolicy.ManualRuleVersion);
+    }
+
     public static TopicPracticeSelectionPlan CreateBaseline() => new(
         [
             new(1, TopicPracticeSlotScope.BreadthPreferred),

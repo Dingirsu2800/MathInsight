@@ -206,6 +206,51 @@ public sealed class StudentTestsControllerTests
         Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
     }
 
+    [Fact]
+    public async Task TopicPractice_PassesTrimmedManualDifficultyToCommand()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator.Setup(instance => instance.Send(
+                It.Is<GenerateTopicPracticeCommand>(command =>
+                    command.StudentId == StudentId &&
+                    command.TagId == "topic" &&
+                    command.DifficultyId == "d-3"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateTopicPracticeResponse>.Failure(TestGenerationErrors.TopicPracticeInsufficientQuestions));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GenerateTopicPractice(
+            new GenerateTopicPracticeRequest { TagId = " topic ", DifficultyId = " d-3 " },
+            CancellationToken.None);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        mediator.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData("not-found")]
+    [InlineData("unavailable")]
+    public async Task TopicPractice_MapsManualDifficultyContracts(string errorKind)
+    {
+        var error = errorKind == "not-found"
+            ? TestGenerationErrors.TopicPracticeDifficultyNotFound
+            : TestGenerationErrors.TopicPracticeDifficultyUnavailable;
+        var mediator = new Mock<IMediator>();
+        mediator.Setup(instance => instance.Send(
+                It.IsAny<GenerateTopicPracticeCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateTopicPracticeResponse>.Failure(error));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GenerateTopicPractice(
+            new GenerateTopicPracticeRequest { TagId = "topic", DifficultyId = "d-3" },
+            CancellationToken.None);
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(errorKind == "not-found" ? StatusCodes.Status404NotFound : StatusCodes.Status422UnprocessableEntity, objectResult.StatusCode);
+        Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
+    }
+
     private static StudentTestsController CreateController(IMediator mediator)
     {
         var identity = new ClaimsIdentity(

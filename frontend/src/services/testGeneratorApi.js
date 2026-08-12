@@ -97,8 +97,11 @@ export const testGeneratorApi = {
     return client.get('/api/test-generator/tests/topic-practice-options');
   },
 
-  generateTopicPractice(tagId) {
-    return client.post('/api/test-generator/tests/topic-practices', { tagId });
+  generateTopicPractice(payloadOrTagId, difficultyId) {
+    const body = typeof payloadOrTagId === "object" && payloadOrTagId !== null
+      ? payloadOrTagId
+      : { tagId: payloadOrTagId, ...(difficultyId ? { difficultyId } : {}) };
+    return client.post('/api/test-generator/tests/topic-practices', body);
   },
 
   getFixedTestCandidates(blueprintId, params, config = {}) {

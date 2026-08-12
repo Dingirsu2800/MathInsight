@@ -65,6 +65,39 @@ public sealed class TopicPracticeOptionsTests
     }
 
     [Fact]
+    public async Task Options_ReturnsAvailabilityForEachActiveSupportedDifficulty()
+    {
+        await using var fixture = TestGenInMemoryContext.Create();
+        AddStudent(fixture);
+        AddTopic(fixture, "root", 12);
+        AddTopic(fixture, "topic", 12, "root");
+        AddDifficulty(fixture, "d-1", "Easy", 1);
+        AddDifficulty(fixture, "d-3", "Hard", 3);
+        fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = "d-inactive", DifficultyName = "Inactive", IsActive = false, LevelValue = 2 });
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"easy-{index}", "topic", difficultyId: "d-1");
+        for (var index = 0; index < 9; index++) AddQuestion(fixture, $"hard-{index}", "topic", difficultyId: "d-3");
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await Handler(fixture).Handle(new("student"), CancellationToken.None);
+
+        var availability = Assert.Single(result.Value!.Topics).DifficultyAvailability;
+        Assert.Collection(
+            availability,
+            easy =>
+            {
+                Assert.Equal("d-1", easy.DifficultyId);
+                Assert.Equal(10, easy.AvailableQuestionCount);
+                Assert.True(easy.CanGenerate);
+            },
+            hard =>
+            {
+                Assert.Equal("d-3", hard.DifficultyId);
+                Assert.Equal(9, hard.AvailableQuestionCount);
+                Assert.False(hard.CanGenerate);
+            });
+    }
+
+    [Fact]
     public async Task Options_MarksDirectChildWithOwnWeakRecommendation()
     {
         await using var fixture = TestGenInMemoryContext.Create();
@@ -156,12 +189,12 @@ public sealed class TopicPracticeOptionsTests
         => new(fixture.Context, new QuestionCandidateCatalog(fixture.Context), resolver ?? new StubRecommendationResolver());
     private static void AddStudent(TestGenInMemoryContext fixture) => fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
     private static void AddTopic(TestGenInMemoryContext fixture, string id, int grade, string? parent = null, bool active = true) => fixture.Context.TagTopics.Add(new TagTopicReadModel { TagId = id, Grade = grade, ParentTagId = parent, TagName = id, IsActive = active });
-    private static void AddDifficulty(TestGenInMemoryContext fixture) => fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", IsActive = true, LevelValue = 1 });
-    private static void AddQuestion(TestGenInMemoryContext fixture, string id, string tagId, string type = "SingleChoice")
+    private static void AddDifficulty(TestGenInMemoryContext fixture, string id = "d-1", string name = "Easy", int level = 1) => fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = id, DifficultyName = name, IsActive = true, LevelValue = level });
+    private static void AddQuestion(TestGenInMemoryContext fixture, string id, string tagId, string type = "SingleChoice", string difficultyId = "d-1")
     {
-        fixture.Context.Questions.Add(new QuestionReadModel { QuestionId = id, Grade = 12, DifficultyId = "d-1", QuestionType = type, Status = "Approved", IsActive = true, DefaultWeight = 1m });
+        fixture.Context.Questions.Add(new QuestionReadModel { QuestionId = id, Grade = 12, DifficultyId = difficultyId, QuestionType = type, Status = "Approved", IsActive = true, DefaultWeight = 1m });
         fixture.Context.QuestionTopics.Add(new QuestionTopicReadModel { QuestionTopicId = $"{id}-topic", QuestionId = id, TagId = tagId, IsPrimary = true });
-        fixture.Context.QuestionVersions.Add(new QuestionVersionReadModel { VersionId = $"{id}-v", QuestionId = id, VersionNumber = 1, SnapshotSchemaVersion = 2, AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(id, type, "d-1", 12, 1m, [new QuestionTopicSnapshot(tagId, true)], type == "Composite" ? [] : [new QuestionAnswerSnapshot($"{id}-a", "A", true)], type == "Composite" ? [new QuestionPartSnapshot($"{id}-p", 1, "a", "part", "TrueFalse", true, null, null, null, null, 1m)] : [], "content", "solution")), CreatedTime = DateTime.UtcNow });
+        fixture.Context.QuestionVersions.Add(new QuestionVersionReadModel { VersionId = $"{id}-v", QuestionId = id, VersionNumber = 1, SnapshotSchemaVersion = 2, AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(id, type, difficultyId, 12, 1m, [new QuestionTopicSnapshot(tagId, true)], type == "Composite" ? [] : [new QuestionAnswerSnapshot($"{id}-a", "A", true)], type == "Composite" ? [new QuestionPartSnapshot($"{id}-p", 1, "a", "part", "TrueFalse", true, null, null, null, null, 1m)] : [], "content", "solution")), CreatedTime = DateTime.UtcNow });
         if (type == "Composite") fixture.Context.QuestionParts.Add(new QuestionPartReadModel { PartId = $"{id}-p", QuestionId = id, PartOrder = 1, PartType = "TrueFalse", CorrectBoolean = true, DefaultWeight = 1m }); else fixture.Context.Answers.Add(new AnswerReadModel { AnswerId = $"{id}-a", QuestionId = id, IsCorrect = true });
     }
 
