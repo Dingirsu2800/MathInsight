@@ -11,6 +11,10 @@ internal sealed record PreparedTopicPracticeGeneration(
     DateTime CreatedTime,
     TopicPracticeRecommendationContext Recommendation,
     string? RecommendedDifficultyId,
+    string DifficultySelectionMode,
+    string? SelectedDifficultyId,
+    string? SelectedDifficultyName,
+    byte? SelectedDifficultyLevel,
     IReadOnlyList<PreparedTopicPracticeQuestion> Questions);
 
 internal sealed record PreparedTopicPracticeQuestion(

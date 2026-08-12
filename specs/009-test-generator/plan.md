@@ -142,6 +142,13 @@ MathInsight.Modules.TestGen/
 - Store recommendation audit in existing `TestQuestion` fields; no schema change, Recommender project reference, REST call, Redis, or Adaptive BlueprintExam implementation is permitted.
 - Return additive option/generation metadata and stable `503` errors; frontend remains a display client and sends only `tagId`.
 
+### Checkpoint 6E: Student-Selected Topic Practice Difficulty
+
+- Extend TopicPractice request compatibly with nullable `difficultyId`; absent means the existing recommended path.
+- For a supplied active level 1-4 difficulty, bypass `ITopicPracticeRecommendationResolver`, query only the selected difficulty, and select exactly ten Questions without fallback or mixing.
+- Add per-topic difficulty availability in the options response using the already batched candidate pools; no per-topic or per-difficulty catalog queries.
+- Persist manual audit with `TopicPractice-Manual-v1` and return additive selection metadata. No schema, migration, SQL, or frontend change is part of this checkpoint.
+
 ### Phase 9: Expert Shared BlueprintExam
 
 - Preserve the completed Student personal BlueprintExam API and characterization tests.

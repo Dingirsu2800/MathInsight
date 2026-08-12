@@ -94,6 +94,59 @@ public sealed class GenerateTopicPracticeTests
     }
 
     [Fact]
+    public async Task Generate_ManualDifficulty_UsesExactlySelectedDifficultyWithoutCallingRecommender()
+    {
+        await using var fixture = TestGenInMemoryContext.Create();
+        fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "topic", ParentTagId = "root", TagName = "Topic", Grade = 12, IsActive = true });
+        fixture.Context.TagDifficulties.AddRange(
+            new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true },
+            new TagDifficultyReadModel { DifficultyId = "d-3", DifficultyName = "Hard", LevelValue = 3, IsActive = true });
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"hard-{index}", "topic", 12, "d-3");
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"easy-{index}", "topic", 12, "d-1");
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(fixture, new ThrowingRecommendationResolver())
+            .Handle(new GenerateTopicPracticeCommand("student", "topic", "d-3"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Manual", result.Value!.DifficultySelectionMode);
+        Assert.Equal("d-3", result.Value.SelectedDifficultyId);
+        Assert.All(Assert.Single(fixture.Context.Tests).Questions, question =>
+        {
+            Assert.StartsWith("hard-", question.QuestionId);
+            Assert.Equal("d-3", question.RecommendedDifficultyId);
+            Assert.False(question.IsAdaptiveSelected);
+            Assert.Equal("TopicPractice-Manual-v1", question.RuleVersion);
+        });
+    }
+
+    [Fact]
+    public async Task Generate_ManualDifficultyWithNineCandidates_ReturnsConflictWithoutWrites()
+    {
+        await using var fixture = TestGenInMemoryContext.Create();
+        fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
+        fixture.Context.TagTopics.AddRange(
+            new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true },
+            new TagTopicReadModel { TagId = "topic", ParentTagId = "root", TagName = "Topic", Grade = 12, IsActive = true });
+        fixture.Context.TagDifficulties.AddRange(
+            new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true },
+            new TagDifficultyReadModel { DifficultyId = "d-3", DifficultyName = "Hard", LevelValue = 3, IsActive = true });
+        for (var index = 0; index < 9; index++) AddQuestion(fixture, $"hard-{index}", "topic", 12, "d-3");
+        for (var index = 0; index < 10; index++) AddQuestion(fixture, $"easy-{index}", "topic", 12, "d-1");
+        await fixture.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(fixture, new ThrowingRecommendationResolver())
+            .Handle(new GenerateTopicPracticeCommand("student", "topic", "d-3"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TestGenerationErrors.TopicPracticeInsufficientQuestions.Code, result.Error!.Code);
+        Assert.Empty(fixture.Context.Tests);
+    }
+
+    [Fact]
     public async Task Generate_RecommendationFailure_WritesNothing()
     {
         await using var fixture = TestGenInMemoryContext.Create();
@@ -180,11 +233,11 @@ public sealed class GenerateTopicPracticeTests
         Assert.Equal("TOPIC_PARENT_NOT_ASSIGNABLE", result.Error!.Code);
     }
 
-    private static void AddQuestion(TestGenInMemoryContext fixture, string id, string tagId = "topic", int grade = 12)
+    private static void AddQuestion(TestGenInMemoryContext fixture, string id, string tagId = "topic", int grade = 12, string difficultyId = "d-1")
     {
-        fixture.Context.Questions.Add(new QuestionReadModel { QuestionId = id, Grade = grade, DifficultyId = "d-1", QuestionType = "SingleChoice", Status = "Approved", IsActive = true, DefaultWeight = 1m });
+        fixture.Context.Questions.Add(new QuestionReadModel { QuestionId = id, Grade = grade, DifficultyId = difficultyId, QuestionType = "SingleChoice", Status = "Approved", IsActive = true, DefaultWeight = 1m });
         fixture.Context.QuestionTopics.Add(new QuestionTopicReadModel { QuestionTopicId = $"{id}-topic", QuestionId = id, TagId = tagId, IsPrimary = true });
-        fixture.Context.QuestionVersions.Add(new QuestionVersionReadModel { VersionId = $"{id}-v", QuestionId = id, VersionNumber = 1, SnapshotSchemaVersion = 2, AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(id, "SingleChoice", "d-1", grade, 1m, [new QuestionTopicSnapshot(tagId, true)], [new QuestionAnswerSnapshot($"{id}-answer", "A", true)], [], "content", "solution")), CreatedTime = DateTime.UtcNow });
+        fixture.Context.QuestionVersions.Add(new QuestionVersionReadModel { VersionId = $"{id}-v", QuestionId = id, VersionNumber = 1, SnapshotSchemaVersion = 2, AnswersSnapshot = JsonSerializer.Serialize(new QuestionSnapshotV2(id, "SingleChoice", difficultyId, grade, 1m, [new QuestionTopicSnapshot(tagId, true)], [new QuestionAnswerSnapshot($"{id}-answer", "A", true)], [], "content", "solution")), CreatedTime = DateTime.UtcNow });
         fixture.Context.Answers.Add(new AnswerReadModel { AnswerId = $"{id}-answer", QuestionId = id, IsCorrect = true });
     }
 
@@ -238,6 +291,15 @@ public sealed class GenerateTopicPracticeTests
             IReadOnlyCollection<TagTopicReadModel> activeGradeTopics,
             CancellationToken cancellationToken) =>
             Task.FromResult(Result<IReadOnlyDictionary<string, TopicPracticeRecommendationContext>>.Failure(error));
+    }
+
+    private sealed class ThrowingRecommendationResolver : ITopicPracticeRecommendationResolver
+    {
+        public Task<Result<IReadOnlyDictionary<string, TopicPracticeRecommendationContext>>> ResolveForTopicsAsync(
+            string studentId,
+            IReadOnlyCollection<TagTopicReadModel> activeGradeTopics,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Manual difficulty must not call the recommendation resolver.");
     }
 
     private sealed class NoOpRandomizer : IGenerationRandomizer { public void Shuffle<T>(IList<T> values) { } }

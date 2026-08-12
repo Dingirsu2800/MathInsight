@@ -4,4 +4,7 @@ using MediatR;
 
 namespace MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
 
-public sealed record GenerateTopicPracticeCommand(string StudentId, string TagId) : IRequest<Result<GenerateTopicPracticeResponse>>;
+public sealed record GenerateTopicPracticeCommand(
+    string StudentId,
+    string TagId,
+    string? DifficultyId = null) : IRequest<Result<GenerateTopicPracticeResponse>>;

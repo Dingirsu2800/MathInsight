@@ -48,7 +48,13 @@ public sealed class GetTopicPracticeOptionsQueryHandler : IRequestHandler<GetTop
             return Result<TopicPracticeOptionsResponse>.Failure(recommendationResult.Error!);
 
         var recommendations = recommendationResult.Value!;
-        var difficulties = await _context.TagDifficulties.AsNoTracking().Where(item => item.IsActive && item.LevelValue >= 1 && item.LevelValue <= 4).Select(item => item.DifficultyId).ToListAsync(cancellationToken);
+        var difficulties = await _context.TagDifficulties.AsNoTracking()
+            .Where(item => item.IsActive && item.LevelValue >= 1 && item.LevelValue <= 4)
+            .OrderBy(item => item.LevelValue)
+            .ThenBy(item => item.DisplayOrder)
+            .ThenBy(item => item.DifficultyName)
+            .ToListAsync(cancellationToken);
+        var difficultyIds = difficulties.Select(item => item.DifficultyId).ToList();
         var candidatesByTopic = topics.ToDictionary(
             topic => topic.TagId,
             _ => new Dictionary<string, BlueprintExamCandidate>(StringComparer.OrdinalIgnoreCase),
@@ -57,7 +63,7 @@ public sealed class GetTopicPracticeOptionsQueryHandler : IRequestHandler<GetTop
         {
             var topicIds = gradeGroup.Select(topic => topic.TagId).ToList();
             var pool = await _catalog.GetCandidatesAsync(
-                new QuestionCandidateCatalogFilter(gradeGroup.Key, topicIds, difficulties, ["SingleChoice", "Composite", "ShortAnswer"]),
+                new QuestionCandidateCatalogFilter(gradeGroup.Key, topicIds, difficultyIds, ["SingleChoice", "Composite", "ShortAnswer"]),
                 cancellationToken);
             var groupTopicIds = topicIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var candidate in pool.Candidates)
@@ -72,6 +78,25 @@ public sealed class GetTopicPracticeOptionsQueryHandler : IRequestHandler<GetTop
         {
             var matching = candidatesByTopic[topic.TagId].Values.ToList();
             var count = matching.Count(candidate => !string.Equals(candidate.QuestionType, "Composite", StringComparison.OrdinalIgnoreCase)) + Math.Min(TopicPracticePolicy.MaxCompositeCount, matching.Count(candidate => string.Equals(candidate.QuestionType, "Composite", StringComparison.OrdinalIgnoreCase)));
+            var availability = difficulties
+                .Select(difficulty =>
+                {
+                    var candidatesAtDifficulty = matching
+                        .Where(candidate => string.Equals(candidate.DifficultyId, difficulty.DifficultyId, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    var availableCount = candidatesAtDifficulty.Count(candidate =>
+                        !string.Equals(candidate.QuestionType, "Composite", StringComparison.OrdinalIgnoreCase)) +
+                        Math.Min(
+                            TopicPracticePolicy.MaxCompositeCount,
+                            candidatesAtDifficulty.Count(candidate => string.Equals(candidate.QuestionType, "Composite", StringComparison.OrdinalIgnoreCase)));
+                    return new TopicPracticeDifficultyAvailabilityResponse(
+                        difficulty.DifficultyId,
+                        difficulty.DifficultyName,
+                        checked((byte)difficulty.LevelValue),
+                        availableCount,
+                        availableCount >= TopicPracticePolicy.QuestionCount);
+                })
+                .ToList();
             recommendations.TryGetValue(topic.TagId, out var recommendation);
             var advice = recommendation?.RepresentativeAdvice;
             var parent = topicsById[topic.ParentTagId!];
@@ -90,7 +115,8 @@ public sealed class GetTopicPracticeOptionsQueryHandler : IRequestHandler<GetTop
                 advice?.OfficialPoint,
                 advice?.EvidenceCount,
                 advice?.RecommendedDifficultyLevel,
-                advice?.Reason));
+                advice?.Reason,
+                availability));
         }
         return Result<TopicPracticeOptionsResponse>.Success(new TopicPracticeOptionsResponse(studentGrade, TopicPracticePolicy.QuestionCount, response));
     }

@@ -116,6 +116,10 @@ public sealed class TopicPracticePersistenceVerifierTests
             test.CreatedTime,
             TopicPracticeRecommendationContext.Baseline,
             null,
+            TopicPracticeDifficultySelectionModes.Recommended,
+            null,
+            null,
+            null,
             questions);
     }
 }

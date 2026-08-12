@@ -217,3 +217,12 @@
 - [x] Add planner and handler regression tests for order, duplicate, eligibility, persistence, and scoring.
 - [ ] Run opt-in SQL Server smoke against a disposable database after applying migration 007.
 - [ ] Add the Expert fixed-test builder UI and browser smoke evidence.
+
+## Checkpoint 6E: Student-Selected Topic Practice Difficulty
+
+- [x] Add nullable manual `difficultyId` request and command contract while preserving auto mode.
+- [x] Generate exactly ten Questions at the selected active difficulty without calling Recommender or falling back.
+- [x] Persist and verify manual audit fields and additive response metadata.
+- [x] Return batch-calculated per-topic `difficultyAvailability`.
+- [x] Add handler/options/controller regression coverage for manual selection and stable error mapping.
+- [ ] Frontend: display manual difficulty choices after the backend contract is consumed.

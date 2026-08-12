@@ -23,6 +23,10 @@ internal static class TopicPracticePersistenceVerifier
                 test.CreatedTime,
                 TopicPracticeRecommendationContext.Baseline,
                 null,
+                TopicPracticeDifficultySelectionModes.Recommended,
+                null,
+                null,
+                null,
                 test.Questions
                     .Select(question => new PreparedTopicPracticeQuestion(
                         new BlueprintExamCandidate(
@@ -107,6 +111,18 @@ internal static class TopicPracticePersistenceVerifier
         });
         if (!persistedMatchesPrepared)
             return false;
+
+        if (string.Equals(prepared.DifficultySelectionMode, TopicPracticeDifficultySelectionModes.Manual, StringComparison.Ordinal))
+        {
+            return !string.IsNullOrWhiteSpace(prepared.SelectedDifficultyId) &&
+                questions.All(question =>
+                    string.Equals(question.SelectionReason, "TopicPractice", StringComparison.OrdinalIgnoreCase) &&
+                    !question.IsAdaptiveSelected &&
+                    string.Equals(question.RecommendedForTagId, prepared.SelectedTagId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(question.RecommendedDifficultyId, prepared.SelectedDifficultyId, StringComparison.OrdinalIgnoreCase) &&
+                    question.PtagAtSelection is null &&
+                    string.Equals(question.RuleVersion, TopicPracticePolicy.ManualRuleVersion, StringComparison.Ordinal));
+        }
 
         if (!prepared.Recommendation.IsAdaptive)
         {
