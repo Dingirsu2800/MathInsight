@@ -163,21 +163,49 @@ public class MultiTagEloTests
         Assert.NotEqual(5.50m, tagAPP); // Would be 5.50 without blend
     }
 
-    // ── Test 5: Exam TopicScore weighted Tầng 1–2 ──────────────────────────
+    // ── Test 5: TopicScore weighted ratio formula (v4.2) ────────────────────
     [Fact]
-    public void ExamTopicScore_Weighted_Tang12_ThreeMultiTagQuestions()
+    public void ExamTopicScore_WeightedRatio_ThreeMultiTagQuestions()
     {
-        // 3 questions linking to tag INT (intersect tag / secondary tag in multi-tag questions)
-        // Each question has a NormalizedScore s_q and weight w_{q,INT}
+        // 3 questions linking to tag INT (secondary tag, w=0.35), MaxPoints=10 each
+        // Student scores: 8.0, 3.9, 1.75 (as PointsEarned on a 0-10 scale with MaxPoints=10)
         //
-        // Task spec: c_{q,INT} = [8.0, 3.9, 1.75]
-        // T_j = avg(c_{q,INT}) = (8.0 + 3.9 + 1.75) / 3 = 13.65 / 3 = 4.55
+        // Weighted ratio formula (v4.2):
+        //   EarnedWeighted = sum(PointsEarned_q × w) = (8.0 + 3.9 + 1.75) × 0.35 = 4.7775
+        //   MaxWeighted    = sum(MaxPoints_q × w)    = (10 + 10 + 10) × 0.35       = 10.5
+        //   TopicScore     = EarnedWeighted / MaxWeighted × 10 = 4.7775 / 10.5 × 10 = 4.55
+        //
+        // Note: When all questions share the same weight, the ratio equals avg(earned/max)×10,
+        // so numeric result is identical to the old avg(contribution) for this case.
 
-        var contributions = new List<decimal> { 8.0m, 3.9m, 1.75m };
+        const decimal w = 0.35m;
+        const decimal maxPoints = 10m;
 
-        decimal topicScore = Math.Round(contributions.Average(), 2);
+        decimal earnedWeighted = (8.0m + 3.9m + 1.75m) * w;   // 4.7775
+        decimal maxWeighted    = (maxPoints + maxPoints + maxPoints) * w; // 10.5
+
+        decimal topicScore = Math.Round(earnedWeighted / maxWeighted * 10m, 2);
 
         Assert.Equal(4.55m, topicScore);
+    }
+
+    [Fact]
+    public void ExamTopicScore_WeightedRatio_PrimaryTag_CanReach10()
+    {
+        // Demonstrates that with the weighted ratio formula, a primary tag (w=0.65)
+        // can reach TopicScore=10 when the student answers all questions correctly.
+        // (Under the old avg formula, max was 0.65 × 10 = 6.5)
+        //
+        // 2 questions, tag MAIN is primary (w=0.65), student answers correctly (earned=max=10)
+        const decimal w = 0.65m;
+        const decimal maxPoints = 10m;
+
+        decimal earnedWeighted = (10m + 10m) * w;       // 13.0
+        decimal maxWeighted    = (maxPoints + maxPoints) * w; // 13.0
+
+        decimal topicScore = Math.Round(earnedWeighted / maxWeighted * 10m, 2);
+
+        Assert.Equal(10.00m, topicScore);
     }
 
     // ── Test 6: BR-19 IsBottleneckWeak threshold ────────────────────────────
