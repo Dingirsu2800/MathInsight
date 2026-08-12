@@ -1,6 +1,10 @@
 namespace MathInsight.Modules.TestGen.Contracts.Tests;
 
-public sealed class GenerateTopicPracticeRequest { public string TagId { get; set; } = string.Empty; }
+public sealed class GenerateTopicPracticeRequest
+{
+    public string TagId { get; set; } = string.Empty;
+    public string? DifficultyId { get; set; }
+}
 
 public sealed record GenerateTopicPracticeResponse(
     string TestId,
@@ -19,4 +23,8 @@ public sealed record GenerateTopicPracticeResponse(
     byte? RecommendedDifficultyLevel,
     int AdaptiveQuestionCount,
     int FallbackQuestionCount,
-    string RuleVersion);
+    string RuleVersion,
+    string DifficultySelectionMode,
+    string? SelectedDifficultyId,
+    string? SelectedDifficultyName,
+    byte? SelectedDifficultyLevel);

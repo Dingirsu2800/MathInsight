@@ -168,8 +168,8 @@
 
 ## Phase 8C: TopicPractice
 
-- [x] Expose current-grade active topic options with descendant capacity and `canGenerate`.
-- [x] Implement baseline `TopicPractice` generation for exactly 10 Questions on one selected active topic/subtree without Recommender.
+- [x] Expose active direct-child topic options at or below the Student grade, batch candidate capacity by grade, and return `canGenerate`.
+- [x] Implement baseline `TopicPractice` generation for exactly 10 Questions on one selected active direct-child topic without Recommender.
 - [x] Enforce quota 3/4/2/1, nearest-level fallback, Composite cap, unseen-then-oldest preference, and no partial writes.
 - [x] Persist personal Test/TestQuestion immutable scoring snapshots with BlueprintID null, duration zero, and NormalizedWeight.
 - [x] Reuse a stable TestID across relational retries and verify the complete persisted TopicPractice aggregate after an ambiguous commit.
@@ -179,7 +179,7 @@
 ## Phase 8D: WeakTag-Aware TopicPractice
 
 - [x] Add the Shared provider contract and qualified evidence gate in Recommender.
-- [x] Add feature-flagged representative WeakTag resolution for active topic subtrees.
+- [x] Add feature-flagged qualified WeakTag resolution for the selected active direct-child topic.
 - [x] Add level-1/level-2 focus selection profiles while preserving baseline selection.
 - [ ] Persist and verify adaptive `TestQuestion` audit fields across SQL retries.
 - [x] Add additive TopicPractice option and generation response fields with stable 503 mappings.
@@ -204,3 +204,25 @@
 - [x] Extend the opt-in SQL smoke with shared generation and archive against the canonical sibling schema when available.
 - [ ] Add fault-injected unknown-commit, SQL unique-collision, and concurrent archive/start smoke coverage when the disposable SQL harness supports deterministic fault injection.
 - [x] Do not create TestSession/TestAnswer records in TestGen and do not add schema or EF migrations.
+
+## Phase 10: Expert Fixed BlueprintExam
+
+- [x] Add owner-only paged candidate search per BlueprintDetail using the existing immutable candidate gate.
+- [x] Validate unique question IDs, continuous global order, exact detail quantities, and full BlueprintDetail eligibility.
+- [x] Persist exact Expert order with QuestionVersion, weight, allocated score, scoring rule, and `SelectionReason = FixedExam` snapshots.
+- [x] Create shared Active tests with `GeneratedBy = Expert`, null Student owner, and a unique TestCode.
+- [x] Keep fixed and random variants together and expose additive `generationType` in Expert list and preview.
+- [x] Preserve independent idempotent archive behavior and defer TestSession creation until a Student starts the test.
+- [x] Extend EF and canonical SQL SelectionReason constraints and add idempotent migration `007_Fixed_Blueprint_Exam.sql`.
+- [x] Add planner and handler regression tests for order, duplicate, eligibility, persistence, and scoring.
+- [ ] Run opt-in SQL Server smoke against a disposable database after applying migration 007.
+- [ ] Add the Expert fixed-test builder UI and browser smoke evidence.
+
+## Checkpoint 6E: Student-Selected Topic Practice Difficulty
+
+- [x] Add nullable manual `difficultyId` request and command contract while preserving auto mode.
+- [x] Generate exactly ten Questions at the selected active difficulty without calling Recommender or falling back.
+- [x] Persist and verify manual audit fields and additive response metadata.
+- [x] Return batch-calculated per-topic `difficultyAvailability`.
+- [x] Add handler/options/controller regression coverage for manual selection and stable error mapping.
+- [ ] Frontend: display manual difficulty choices after the backend contract is consumed.

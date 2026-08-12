@@ -27,9 +27,13 @@ public sealed class GetRecommendedLecturesQueryHandler
         var contexts = await (
             from mastery in _db.TagsMasteries.AsNoTracking()
             join topic in _db.TagTopics.AsNoTracking() on mastery.TagId equals topic.TagId
+            join parent in _db.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
             where mastery.StudentId == request.StudentId
                 && mastery.NumberDone >= MinimumEvidenceCount
                 && topic.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == topic.Grade
             select new
             {
                 mastery.TagId,
@@ -43,9 +47,13 @@ public sealed class GetRecommendedLecturesQueryHandler
         var lectureRows = await (
             from lecture in _db.Lectures.AsNoTracking()
             join topic in _db.TagTopics.AsNoTracking() on lecture.TagId equals topic.TagId
+            join parent in _db.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
             join difficulty in _db.TagDifficulties.AsNoTracking() on lecture.DifficultyId equals difficulty.DifficultyId
             where lecture.Status == "Published"
                 && topic.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == topic.Grade
                 && difficulty.IsActive
             select new
             {

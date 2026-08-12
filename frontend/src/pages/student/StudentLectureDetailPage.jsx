@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment, logLectureView } from "../../services/learningApi";
+import { toast } from "../../components/common/Toast";
 import { API_BASE_URL } from "../../services/api";
 import LatexPreview from "../../components/expert/LatexPreview";
 import MathTextArea from "../../components/common/MathTextArea";
@@ -129,7 +130,12 @@ export default function StudentLectureDetailPage() {
         // Hit 300 seconds -> log immediately so the streak is secure
         if (seconds === 300 && !hasSent300sLog) {
           hasSent300sLog = true;
-          logLectureView(id, seconds).catch(err => console.error("Error logging 300s view:", err));
+          logLectureView(id, seconds)
+            .then(() => {
+              window.dispatchEvent(new Event("gamification_updated"));
+              toast.success("Tuyệt vời! Bạn đã đạt chuỗi học tập hôm nay 🔥");
+            })
+            .catch(err => console.error("Error logging 300s view:", err));
         }
       }
     };

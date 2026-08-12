@@ -19,10 +19,17 @@ public sealed class ExcelImportPreviewValidationTests
         if (!string.IsNullOrEmpty(envRoot) && Directory.Exists(envRoot))
             return envRoot;
 
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "TestMaterial", "question_import");
+            if (Directory.Exists(candidate))
+                return candidate;
+        }
+
         return null;
     }
 
-    [Theory(Skip = "Opt-in dataset integration test. Set QUESTION_IMPORT_DATASET_ROOT environment variable to enable.")]
+    [QuestionImportDatasetTheory]
     [InlineData("2023", 50)]
     [InlineData("2024", 50)]
     [InlineData("2025", 22)]
@@ -30,10 +37,7 @@ public sealed class ExcelImportPreviewValidationTests
     public async Task Preview_FullWorkbooks_PassAllBackendValidationWithoutErrors(string year, int expectedCount)
     {
         var datasetRoot = GetDatasetRoot();
-        if (string.IsNullOrEmpty(datasetRoot) || !Directory.Exists(datasetRoot))
-        {
-            return;
-        }
+        Assert.False(string.IsNullOrEmpty(datasetRoot));
 
         var excelPath = Path.Combine(datasetRoot, year, $"MathInsight_THPT_{year}_v3.xlsx");
         if (!File.Exists(excelPath))
@@ -44,16 +48,13 @@ public sealed class ExcelImportPreviewValidationTests
         await RunValidationOnExcel(excelPath, expectedCount);
     }
 
-    [Theory(Skip = "Opt-in dataset integration test. Set QUESTION_IMPORT_DATASET_ROOT environment variable to enable.")]
+    [QuestionImportDatasetTheory]
     [InlineData("MM2026-D001", 22)]
     [InlineData("MM2026-D002", 22)]
     public async Task Preview_MathMaterial_Batch1Workbooks_PassAllBackendValidation(string examKey, int expectedCount)
     {
         var datasetRoot = GetDatasetRoot();
-        if (string.IsNullOrEmpty(datasetRoot) || !Directory.Exists(datasetRoot))
-        {
-            return;
-        }
+        Assert.False(string.IsNullOrEmpty(datasetRoot));
 
         var mathMatRoot = Path.Combine(datasetRoot, "math-material");
         var excelPath = Path.Combine(mathMatRoot, examKey, $"MathInsight_{examKey}_v3.xlsx");
@@ -77,6 +78,16 @@ public sealed class ExcelImportPreviewValidationTests
         );
 
         database.Context.TagTopics.AddRange(
+            new Entities.TagTopic { TagId = "ROOT-G10", TagName = "Grade 10 root", Grade = 10, DisplayOrder = 1, IsActive = true },
+            new Entities.TagTopic { TagId = "ROOT-G11", TagName = "Grade 11 root", Grade = 11, DisplayOrder = 1, IsActive = true },
+            new Entities.TagTopic { TagId = "ROOT-G12", TagName = "Grade 12 root", Grade = 12, DisplayOrder = 1, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G10-QUAD", TagName = "Grade 10 quadratic functions", Grade = 10, DisplayOrder = 3, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G10-PROB", TagName = "Grade 10 probability", Grade = 10, DisplayOrder = 4, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G10-EQSYS", TagName = "Grade 10 systems of equations", Grade = 10, DisplayOrder = 5, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G11-SEQ", TagName = "Grade 11 sequences", Grade = 11, DisplayOrder = 5, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G11-DERIV", TagName = "Grade 11 derivatives", Grade = 11, DisplayOrder = 6, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G11-COUNT", TagName = "Grade 11 counting", Grade = 11, DisplayOrder = 7, IsActive = true },
+            new Entities.TagTopic { TagId = "TOPIC-G11-TRIG", TagName = "Grade 11 trigonometry", Grade = 11, DisplayOrder = 8, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G10-SET", TagName = "Lớp 10 - Mệnh đề, tập hợp", Grade = 10, DisplayOrder = 1, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G10-INEQ", TagName = "Lớp 10 - Bất phương trình", Grade = 10, DisplayOrder = 2, IsActive = true },
             new Entities.TagTopic { TagId = "TOPIC-G11-PROG", TagName = "Lớp 11 - Cấp số", Grade = 11, DisplayOrder = 3, IsActive = true },
@@ -94,6 +105,13 @@ public sealed class ExcelImportPreviewValidationTests
             new Entities.TagTopic { TagId = "TOPIC-G12-DATA", TagName = "Lớp 12 - Thống kê", Grade = 12, DisplayOrder = 11, IsActive = true }
         );
 
+        foreach (var topic in database.Context.ChangeTracker.Entries<Entities.TagTopic>()
+                     .Select(entry => entry.Entity)
+                     .Where(topic => !topic.TagId.StartsWith("ROOT-", StringComparison.Ordinal)))
+        {
+            topic.ParentTagId = $"ROOT-G{topic.Grade}";
+        }
+
         await database.Context.SaveChangesAsync();
 
         var handler = new PreviewQuestionImportCommandHandler(
@@ -107,8 +125,14 @@ public sealed class ExcelImportPreviewValidationTests
 
         Assert.True(result.IsSuccess, $"Preview failed for {excelPath}");
         Assert.NotNull(result.Value);
-        Assert.Equal(expectedCount, result.Value!.TotalCount);
-        Assert.Equal(expectedCount, result.Value.ValidCount);
+        Assert.True(
+            result.Value!.TotalCount == expectedCount,
+            $"Expected {expectedCount} parsed questions but found {result.Value.TotalCount} in {excelPath}. " +
+            $"Parsed keys: {string.Join(", ", result.Value.Items.Select(item => item.QuestionKey))}");
+        Assert.True(
+            result.Value.ValidCount == expectedCount,
+            $"Expected {expectedCount} valid questions but found {result.Value.ValidCount} in {excelPath}. " +
+            $"Invalid items: {string.Join(" | ", result.Value.Items.Where(item => !item.IsValid).Select(item => $"{item.QuestionKey}: {string.Join("; ", item.Errors.Select(error => error.Code))}"))}");
         Assert.Equal(0, result.Value.InvalidCount);
         Assert.Empty(result.Value.FileErrors);
 
@@ -118,5 +142,23 @@ public sealed class ExcelImportPreviewValidationTests
             Assert.Empty(item.Errors);
             Assert.NotNull(item.Draft);
         }
+    }
+}
+
+public sealed class QuestionImportDatasetTheoryAttribute : TheoryAttribute
+{
+    public QuestionImportDatasetTheoryAttribute()
+    {
+        var configuredRoot = Environment.GetEnvironmentVariable("QUESTION_IMPORT_DATASET_ROOT");
+        if (!string.IsNullOrEmpty(configuredRoot) && Directory.Exists(configuredRoot))
+            return;
+
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "TestMaterial", "question_import")))
+                return;
+        }
+
+        Skip = "Question import dataset is unavailable. Set QUESTION_IMPORT_DATASET_ROOT to run these workbook integration tests.";
     }
 }

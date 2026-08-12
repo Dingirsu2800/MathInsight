@@ -6,6 +6,39 @@ public sealed class GenerateSharedBlueprintExamRequest
     public int DurationMinutes { get; set; }
 }
 
+public sealed class GenerateFixedBlueprintExamRequest
+{
+    public string TestName { get; set; } = string.Empty;
+    public int DurationMinutes { get; set; }
+    public IReadOnlyList<FixedBlueprintExamQuestionRequest> Questions { get; set; } = [];
+}
+
+public sealed class FixedBlueprintExamQuestionRequest
+{
+    public string QuestionId { get; set; } = string.Empty;
+    public string BlueprintDetailId { get; set; } = string.Empty;
+    public int QuestionOrder { get; set; }
+}
+
+public sealed record FixedTestCandidateResponse(
+    string QuestionId,
+    string QuestionVersionId,
+    string BlueprintDetailId,
+    string TagId,
+    string QuestionType,
+    string DifficultyId,
+    int PartCount,
+    decimal DefaultWeight,
+    IReadOnlyList<string> SupportedScoringRules,
+    string QuestionContent,
+    string? PictureUrl);
+
+public sealed record PagedFixedTestCandidateResponse(
+    int PageIndex,
+    int PageSize,
+    int TotalCount,
+    IReadOnlyList<FixedTestCandidateResponse> Items);
+
 public sealed record GeneratedTestQuestionResponse(
     string QuestionId,
     string QuestionVersionId,
@@ -68,6 +101,7 @@ public sealed record ExpertGeneratedTestListItemResponse(
     string TestName,
     string TestCode,
     string TestStatus,
+    string GenerationType,
     int DurationMinutes,
     int TotalQuestions,
     decimal MaxScore,
@@ -85,6 +119,7 @@ public sealed record ExpertTestPreviewResponse(
     string TestName,
     string TestCode,
     string TestStatus,
+    string GenerationType,
     int DurationMinutes,
     int TotalQuestions,
     decimal MaxScore,

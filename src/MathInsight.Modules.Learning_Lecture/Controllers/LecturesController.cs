@@ -29,10 +29,10 @@ public class LecturesController : ControllerBase
     private bool IsAdmin => User.FindFirst(ClaimTypes.Role)?.Value == "Admin";
 
     [HttpGet]
-    public async Task<IActionResult> GetLectures([FromQuery] string? teacherId, [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? topic, [FromQuery] int? grade, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetLectures([FromQuery] string? teacherId, [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? topic, [FromQuery] int? grade, [FromQuery] string? difficulty, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
         var targetTeacherId = string.IsNullOrEmpty(teacherId) && !IsStudent && !IsAdmin ? CurrentUserId : teacherId;
-        var query = new GetLectureListQuery(targetTeacherId, IsStudent, page, pageSize, search, status, topic, grade);
+        var query = new GetLectureListQuery(targetTeacherId, IsStudent, page, pageSize, search, status, topic, grade, difficulty);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(result);
     }

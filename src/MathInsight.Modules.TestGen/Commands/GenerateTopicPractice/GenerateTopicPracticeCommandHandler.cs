@@ -65,35 +65,36 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
         if (string.IsNullOrWhiteSpace(command.TagId))
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.RequestInvalid);
 
-        var grade = await _context.Students.AsNoTracking()
-            .Where(student => student.StudentId == command.StudentId)
-            .Select(student => student.CurrentGrade)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (grade is not (10 or 11 or 12))
+        var student = await _context.Students.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.StudentId == command.StudentId, cancellationToken);
+        if (student is null)
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeStudentNotFound);
+        if (student.CurrentGrade is not (10 or 11 or 12))
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.StudentGradeRequired);
 
-        var studentGrade = grade.Value;
+        var studentGrade = student.CurrentGrade.Value;
         var selected = await _context.TagTopics.AsNoTracking()
             .FirstOrDefaultAsync(topic => topic.TagId == command.TagId, cancellationToken);
         if (selected is null)
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeTopicNotFound);
-        if (!selected.IsActive || selected.Grade != studentGrade)
+        if (!selected.IsActive)
             return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeTopicUnavailable);
+        if (selected.Grade > studentGrade)
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeGradeNotAllowed);
 
-        var topics = await _context.TagTopics.AsNoTracking()
-            .Where(topic => topic.Grade == studentGrade && topic.IsActive)
-            .ToListAsync(cancellationToken);
-        var subtree = TopicTreeResolver.ResolveActiveSubtree(selected.TagId, topics);
+        if (string.IsNullOrWhiteSpace(selected.ParentTagId))
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicParentNotAssignable);
 
-        var resolvedRecommendations = await _recommendationResolver.ResolveForTopicsAsync(
-            command.StudentId,
-            topics,
-            cancellationToken);
-        if (resolvedRecommendations.IsFailure)
-            return Result<PreparedTopicPracticeGeneration>.Failure(resolvedRecommendations.Error!);
-        if (!resolvedRecommendations.Value!.TryGetValue(selected.TagId, out var recommendation))
-            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
+        var parent = await _context.TagTopics.AsNoTracking()
+            .SingleOrDefaultAsync(topic => topic.TagId == selected.ParentTagId, cancellationToken);
+        if (parent is null || !parent.IsActive || !string.IsNullOrWhiteSpace(parent.ParentTagId))
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicParentNotAssignable);
+        if (parent.Grade != selected.Grade)
+            return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicParentGradeMismatch);
 
+        var requestedDifficultyId = string.IsNullOrWhiteSpace(command.DifficultyId)
+            ? null
+            : command.DifficultyId.Trim();
         var activeDifficulties = await _context.TagDifficulties.AsNoTracking()
             .Where(item => item.IsActive && item.LevelValue >= 1 && item.LevelValue <= 4)
             .ToListAsync(cancellationToken);
@@ -102,44 +103,76 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             item => item.LevelValue,
             StringComparer.OrdinalIgnoreCase);
 
+        var recommendation = TopicPracticeRecommendationContext.Baseline;
         string? recommendedDifficultyId = null;
+        string? selectedDifficultyId = null;
+        string? selectedDifficultyName = null;
+        byte? selectedDifficultyLevel = null;
+        var difficultySelectionMode = TopicPracticeDifficultySelectionModes.Recommended;
         TopicPracticeSelectionPlan selectionPlan;
-        if (recommendation.IsAdaptive)
+        if (requestedDifficultyId is not null)
         {
-            var advice = recommendation.RepresentativeAdvice;
-            if (advice is null)
-                return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
+            var requestedDifficulty = await _context.TagDifficulties.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.DifficultyId == requestedDifficultyId, cancellationToken);
+            if (requestedDifficulty is null)
+                return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeDifficultyNotFound);
+            if (!requestedDifficulty.IsActive || requestedDifficulty.LevelValue is < 1 or > 4)
+                return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeDifficultyUnavailable);
 
-            var difficultyMatches = activeDifficulties
-                .Where(item => item.LevelValue == advice.RecommendedDifficultyLevel)
-                .Select(item => item.DifficultyId)
-                .ToList();
-            if (difficultyMatches.Count != 1)
-                return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
-
-            recommendedDifficultyId = difficultyMatches[0];
-            try
-            {
-                selectionPlan = TopicPracticeSelectionPlanFactory.CreateAdaptive(
-                    advice.RecommendedDifficultyLevel,
-                    recommendation.FocusTagIds,
-                    string.Equals(selected.TagId, advice.TagId, StringComparison.OrdinalIgnoreCase));
-            }
-            catch (ArgumentException)
-            {
-                return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
-            }
+            selectedDifficultyId = requestedDifficulty.DifficultyId;
+            selectedDifficultyName = requestedDifficulty.DifficultyName;
+            selectedDifficultyLevel = checked((byte)requestedDifficulty.LevelValue);
+            difficultySelectionMode = TopicPracticeDifficultySelectionModes.Manual;
+            selectionPlan = TopicPracticeSelectionPlanFactory.CreateManual(checked((byte)requestedDifficulty.LevelValue));
         }
         else
         {
-            selectionPlan = TopicPracticeSelectionPlanFactory.CreateBaseline();
+            var resolvedRecommendations = await _recommendationResolver.ResolveForTopicsAsync(
+                command.StudentId,
+                [selected],
+                cancellationToken);
+            if (resolvedRecommendations.IsFailure)
+                return Result<PreparedTopicPracticeGeneration>.Failure(resolvedRecommendations.Error!);
+            if (!resolvedRecommendations.Value!.TryGetValue(selected.TagId, out recommendation))
+                return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
+
+            if (recommendation.IsAdaptive)
+            {
+                var advice = recommendation.RepresentativeAdvice;
+                if (advice is null)
+                    return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
+
+                var difficultyMatches = activeDifficulties
+                    .Where(item => item.LevelValue == advice.RecommendedDifficultyLevel)
+                    .Select(item => item.DifficultyId)
+                    .ToList();
+                if (difficultyMatches.Count != 1)
+                    return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
+
+                recommendedDifficultyId = difficultyMatches[0];
+                try
+                {
+                    selectionPlan = TopicPracticeSelectionPlanFactory.CreateAdaptive(
+                        advice.RecommendedDifficultyLevel,
+                        recommendation.FocusTagIds,
+                        string.Equals(selected.TagId, advice.TagId, StringComparison.OrdinalIgnoreCase));
+                }
+                catch (ArgumentException)
+                {
+                    return Result<PreparedTopicPracticeGeneration>.Failure(TestGenerationErrors.TopicPracticeRecommendationInvalid);
+                }
+            }
+            else
+            {
+                selectionPlan = TopicPracticeSelectionPlanFactory.CreateBaseline();
+            }
         }
 
         var pool = await _catalog.GetCandidatesAsync(
             new QuestionCandidateCatalogFilter(
-                studentGrade,
-                subtree.ToList(),
-                difficultyLevels.Keys.ToList(),
+                selected.Grade,
+                [selected.TagId],
+                requestedDifficultyId is null ? difficultyLevels.Keys.ToList() : [requestedDifficultyId],
                 ["SingleChoice", "Composite", "ShortAnswer"]),
             cancellationToken);
         var lastSeen = await _context.TestQuestions.AsNoTracking()
@@ -148,7 +181,10 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             .Select(group => new { QuestionId = group.Key, LastSeen = group.Max(question => question.Test!.CreatedTime) })
             .ToDictionaryAsync(item => item.QuestionId, item => (DateTime?)item.LastSeen, StringComparer.OrdinalIgnoreCase, cancellationToken);
         var candidates = pool.Candidates
-            .Where(candidate => candidate.TagIds.Overlaps(subtree) && difficultyLevels.ContainsKey(candidate.DifficultyId))
+            .Where(candidate =>
+                candidate.TagIds.Contains(selected.TagId) &&
+                difficultyLevels.ContainsKey(candidate.DifficultyId) &&
+                (requestedDifficultyId is null || string.Equals(candidate.DifficultyId, requestedDifficultyId, StringComparison.OrdinalIgnoreCase)))
             .Select(candidate => new TopicPracticeCandidate(
                 candidate,
                 difficultyLevels[candidate.DifficultyId],
@@ -182,6 +218,10 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             createdTime,
             recommendation,
             recommendedDifficultyId,
+            difficultySelectionMode,
+            selectedDifficultyId,
+            selectedDifficultyName,
+            selectedDifficultyLevel,
             questions));
     }
 
@@ -249,6 +289,10 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
         PreparedTopicPracticeQuestion question)
     {
         var advice = prepared.Recommendation.RepresentativeAdvice;
+        var isManual = string.Equals(
+            prepared.DifficultySelectionMode,
+            TopicPracticeDifficultySelectionModes.Manual,
+            StringComparison.Ordinal);
         var isAdaptiveFocus = prepared.Recommendation.IsAdaptive && question.IsWeakTagFocus && advice is not null;
 
         return new TestQuestion
@@ -259,11 +303,15 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             SelectionReason = isAdaptiveFocus ? "WeakTagPractice" : "TopicPractice",
             IsAdaptiveSelected = isAdaptiveFocus,
             RecommendedForTagId = isAdaptiveFocus ? advice!.TagId : prepared.SelectedTagId,
-            RecommendedDifficultyId = isAdaptiveFocus ? prepared.RecommendedDifficultyId : null,
+            RecommendedDifficultyId = isManual
+                ? prepared.SelectedDifficultyId
+                : isAdaptiveFocus ? prepared.RecommendedDifficultyId : null,
             PtagAtSelection = isAdaptiveFocus ? advice!.OfficialPoint : null,
-            RuleVersion = prepared.Recommendation.IsAdaptive
-                ? TopicPracticePolicy.WeakTagRuleVersion
-                : TopicPracticePolicy.RuleVersion,
+            RuleVersion = isManual
+                ? TopicPracticePolicy.ManualRuleVersion
+                : prepared.Recommendation.IsAdaptive
+                    ? TopicPracticePolicy.WeakTagRuleVersion
+                    : TopicPracticePolicy.RuleVersion,
             QuestionVersionId = question.Question.QuestionVersionId,
             WeightSnapshot = question.Question.DefaultWeight,
             MaxPointsSnapshot = question.MaxPoints,
@@ -298,7 +346,13 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             test.Questions.Count - adaptiveQuestionCount,
             prepared.Recommendation.IsAdaptive
                 ? TopicPracticePolicy.WeakTagRuleVersion
-                : TopicPracticePolicy.RuleVersion));
+                : string.Equals(prepared.DifficultySelectionMode, TopicPracticeDifficultySelectionModes.Manual, StringComparison.Ordinal)
+                    ? TopicPracticePolicy.ManualRuleVersion
+                    : TopicPracticePolicy.RuleVersion,
+            prepared.DifficultySelectionMode,
+            prepared.SelectedDifficultyId,
+            prepared.SelectedDifficultyName,
+            prepared.SelectedDifficultyLevel));
     }
 
     private void LogGeneration(

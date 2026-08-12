@@ -6,8 +6,8 @@ namespace MathInsight.Modules.Recommender.Services;
 /// <summary>
 /// Recalculates CompetencyPoint for a student's grade level after TagsMastery changes.
 ///
-/// RCM-12: CompetencyPoint.point = AVERAGE(official_point) of all TagsMastery rows
-/// for that student where the Tag belongs to the student's grade (10, 11, or 12).
+/// RCM-12: CompetencyPoint.point = AVERAGE(official_point) of mastery rows on active,
+/// directly assignable child topics in the student's current grade.
 /// Upsert by unique key (student_id, grade). Clamp to [0.00, 10.00].
 ///
 /// NOTE: Grade-to-tag mapping is derived from the Tag.Grade field read from the shared
@@ -25,27 +25,25 @@ public sealed class CompetencyEngine : ICompetencyEngine
     /// <inheritdoc />
     public async Task RecalculateAsync(string studentId, int grade, CancellationToken cancellationToken = default)
     {
-        // RCM-12: Query average official_point across TagsMastery rows for this student
-        // where the TagTopic belongs to the specified grade level (10, 11, or 12).
+        // Ignore legacy root, inactive, cross-grade, and nested topics. A competency point
+        // must never be inferred from mastery that does not belong to this school grade.
         var averagePoint = await (
             from tm in _db.TagsMasteries.AsNoTracking()
-            join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
-            where tm.StudentId == studentId && tt.Grade == grade
-            select (double?)tm.OfficialPoint
+            join topic in _db.TagTopics.AsNoTracking() on tm.TagId equals topic.TagId
+            join parent in _db.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
+            where tm.StudentId == studentId &&
+                  topic.IsActive &&
+                  parent.IsActive &&
+                  string.IsNullOrWhiteSpace(parent.ParentTagId) &&
+                  topic.Grade == grade &&
+                  parent.Grade == grade
+            select (decimal?)tm.OfficialPoint
         ).AverageAsync(cancellationToken);
 
-        // Fallback if no grade-matching tag topics exist: average all TagsMastery rows for student
         if (averagePoint is null)
-        {
-            averagePoint = await _db.TagsMasteries
-                .Where(tm => tm.StudentId == studentId)
-                .AverageAsync(tm => (double?)tm.OfficialPoint, cancellationToken);
-        }
+            return; // Keep any historical point; do not create a point from another grade.
 
-        if (averagePoint is null)
-            return; // No TagsMastery rows yet; nothing to recalculate.
-
-        var point = Math.Clamp((decimal)averagePoint.Value, 0.00m, 10.00m);
+        var point = Math.Clamp(averagePoint.Value, 0.00m, 10.00m);
 
         // Upsert CompetencyPoint by (student_id, grade)
         var existing = await _db.CompetencyPoints

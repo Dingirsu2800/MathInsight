@@ -75,7 +75,8 @@ public sealed class StudentTestsController : ControllerBase
         if (request is null || string.IsNullOrWhiteSpace(request.TagId)) return BadRequest(new ApiErrorResponse(TestGenerationErrors.RequestInvalid));
         var studentId = GetCurrentStudentId();
         if (studentId is null) return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
-        var result = await _mediator.Send(new GenerateTopicPracticeCommand(studentId, request.TagId), cancellationToken);
+        var difficultyId = string.IsNullOrWhiteSpace(request.DifficultyId) ? null : request.DifficultyId.Trim();
+        var result = await _mediator.Send(new GenerateTopicPracticeCommand(studentId, request.TagId.Trim(), difficultyId), cancellationToken);
         return result.IsFailure ? ToErrorResult(result.Error!) : StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
@@ -91,14 +92,20 @@ public sealed class StudentTestsController : ControllerBase
         if (error == TestGenerationErrors.StudentNotFound ||
             error == TestGenerationErrors.BlueprintNotFound ||
             error == TestGenerationErrors.TopicPracticeStudentNotFound ||
-            error == TestGenerationErrors.TopicPracticeTopicNotFound)
+            error == TestGenerationErrors.TopicPracticeTopicNotFound ||
+            error == TestGenerationErrors.TopicPracticeDifficultyNotFound)
         {
             return NotFound(new ApiErrorResponse(error));
         }
 
         if (error == TestGenerationErrors.BlueprintUnavailable ||
             error == TestGenerationErrors.GradeMismatch ||
-            error == TestGenerationErrors.TopicPracticeTopicUnavailable)
+            error == TestGenerationErrors.TopicPracticeTopicUnavailable ||
+            error == TestGenerationErrors.StudentGradeRequired ||
+            error == TestGenerationErrors.TopicPracticeGradeNotAllowed ||
+            error == TestGenerationErrors.TopicParentGradeMismatch ||
+            error == TestGenerationErrors.TopicParentNotAssignable ||
+            error == TestGenerationErrors.TopicPracticeDifficultyUnavailable)
         {
             return UnprocessableEntity(new ApiErrorResponse(error));
         }

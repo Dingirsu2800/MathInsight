@@ -131,7 +131,16 @@ public sealed class LectureCommandTests
     {
         context.TagTopics.Add(new TagTopicReadOnly
         {
+            TagId = "root-tag-1",
+            TagName = "Root topic",
+            Grade = 12,
+            IsActive = true,
+            DisplayOrder = 1
+        });
+        context.TagTopics.Add(new TagTopicReadOnly
+        {
             TagId = "tag-1",
+            ParentTagId = "root-tag-1",
             TagName = "Topic 1",
             Grade = 12,
             IsActive = true,

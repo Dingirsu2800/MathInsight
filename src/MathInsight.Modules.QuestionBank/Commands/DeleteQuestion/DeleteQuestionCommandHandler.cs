@@ -27,6 +27,8 @@ public sealed class DeleteQuestionCommandHandler
         if (string.IsNullOrWhiteSpace(command.QuestionId))
             return Result<DeleteQuestionResponse>.Failure(QuestionBankErrors.QuestionIdRequired);
 
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -80,5 +82,6 @@ public sealed class DeleteQuestionCommandHandler
 
         return Result<DeleteQuestionResponse>.Success(
             new DeleteQuestionResponse(command.QuestionId, "HardDeleted", false, "Deleted"));
+        });
     }
 }

@@ -594,9 +594,19 @@ public sealed class QuestionExcelImportTests
             DisplayOrder = 1,
             IsActive = difficultyIsActive
         });
-        database.Context.TagTopics.Add(new TagTopic
+        database.Context.TagTopics.AddRange(
+            new TagTopic
+            {
+                TagId = "root-topic-1",
+                TagName = "Grade root",
+                Grade = topicGrade,
+                DisplayOrder = 1,
+                IsActive = true
+            },
+            new TagTopic
         {
             TagId = "topic-1",
+            ParentTagId = "root-topic-1",
             TagName = "Functions",
             Grade = topicGrade,
             DisplayOrder = 1,

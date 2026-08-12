@@ -5,11 +5,13 @@ import TopicPracticeConfirmDialog from "./TopicPracticeConfirmDialog";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { startSession } from "../../services/testingApi";
 import { getTopicPracticeErrorMessage } from "../../utils/topicPracticeErrorLocalizer";
+import { getDifficultyLevelName } from "../../utils/questionLabels";
 import { cn } from "../../utils/cn";
 
 function normalizeTopicPracticeOption(topic) {
   return {
     ...topic,
+    parentTagName: topic?.parentTagName || topic?.parentName || topic?.parentTag?.tagName || "Nhóm chung",
     isWeakRecommended: topic?.isWeakRecommended === true,
     officialPoint: Number.isFinite(Number(topic?.officialPoint))
       ? Number(topic.officialPoint)
@@ -31,125 +33,39 @@ function compareTopicPracticeSiblings(a, b) {
   return (a.tagName || "").localeCompare(b.tagName || "", "vi");
 }
 
-// Helper 1: Build cycle-safe tree hierarchy from flat topic list
-function buildCycleSafeTopicTree(rawTopics) {
-  if (!Array.isArray(rawTopics)) return [];
-
-  const topicMap = new Map();
-  rawTopics.forEach((t) => {
-    if (t && t.tagId) {
-      topicMap.set(t.tagId, { ...t, children: [] });
-    }
-  });
-
-  const roots = [];
-  const parentChildEdges = [];
-
-  topicMap.forEach((node) => {
-    const parentId = node.parentTagId;
-    if (parentId && parentId !== node.tagId && topicMap.has(parentId)) {
-      parentChildEdges.push({ parentId, childNode: node });
-    } else {
-      roots.push(node);
-    }
-  });
-
-  // Attach children with cycle detection
-  parentChildEdges.forEach(({ parentId, childNode }) => {
-    let curr = topicMap.get(parentId);
-    let isCycle = false;
-    const pathVisited = new Set([childNode.tagId]);
-
-    while (curr) {
-      if (pathVisited.has(curr.tagId)) {
-        isCycle = true;
-        break;
-      }
-      pathVisited.add(curr.tagId);
-      curr = curr.parentTagId ? topicMap.get(curr.parentTagId) : null;
-    }
-
-    if (!isCycle) {
-      topicMap.get(parentId).children.push(childNode);
-    } else if (!roots.includes(childNode)) {
-      roots.push(childNode);
-    }
-  });
-
-  // Cycle-safe recursive sorting
-  const sortVisited = new Set();
-  const sortNodes = (nodeList) => {
-    nodeList.sort(compareTopicPracticeSiblings);
-
-    nodeList.forEach((n) => {
-      if (!sortVisited.has(n.tagId)) {
-        sortVisited.add(n.tagId);
-        sortNodes(n.children);
-      } else {
-        n.children = [];
-      }
-    });
-  };
-
-  sortNodes(roots);
-  return roots;
-}
-
-// Helper 2: Cycle-safe ancestor path tracing for search matching
-function traceCycleSafeAncestors(topics, matchingTagIds) {
-  const topicMap = new Map();
-  topics.forEach((t) => {
-    if (t && t.tagId) topicMap.set(t.tagId, t);
-  });
-
-  const ancestors = new Set();
-
-  matchingTagIds.forEach((startTagId) => {
-    const pathVisited = new Set([startTagId]);
-    let curr = topicMap.get(startTagId);
-
-    while (curr && curr.parentTagId) {
-      const parentId = curr.parentTagId;
-      if (pathVisited.has(parentId)) break;
-      pathVisited.add(parentId);
-
-      if (topicMap.has(parentId)) {
-        ancestors.add(parentId);
-        curr = topicMap.get(parentId);
-      } else {
-        break;
-      }
-    }
-  });
-
-  return ancestors;
-}
-
 export default function PracticeSetupPanel() {
   const navigate = useNavigate();
   const location = useLocation();
-  // tagId được truyền từ WeakTopicsCard qua Link state
   const preselectedTagId = location.state?.preselectedTagId ?? null;
 
   // Data states
   const [grade, setGrade] = useState(null);
+  const [selectedGrade, setSelectedGrade] = useState(null);
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
   // Interaction states
   const [search, setSearch] = useState("");
-  const [expandedTagIds, setExpandedTagIds] = useState(new Set());
   const [selectedTag, setSelectedTag] = useState(null);
 
   // Dialog & Generation states
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [pageNotice, setPageNotice] = useState("");
 
   // Submit lock & Retain generated TestId ref
   const generatingRef = useRef(false);
-  const generatedTestRef = useRef({ tagId: null, testId: null });
+  const generatedTestRef = useRef({ tagId: null, difficultyId: null, testId: null });
+
+  // Distinct available grades sorted descending
+  const availableGrades = useMemo(() => {
+    if (!Array.isArray(topics)) return [];
+    const gradeSet = new Set(topics.map((t) => t.grade || grade || 12));
+    if (grade) gradeSet.add(Number(grade));
+    return Array.from(gradeSet).sort((a, b) => b - a);
+  }, [topics, grade]);
 
   // Fetch topic practice options
   const fetchOptions = useCallback(async () => {
@@ -158,17 +74,30 @@ export default function PracticeSetupPanel() {
     try {
       const res = await testGeneratorApi.getTopicPracticeOptions();
       const data = res.data || {};
-      setGrade(data.grade || null);
+      const studentGrade = data.grade || null;
+      setGrade(studentGrade);
+      setSelectedGrade((prev) => prev ?? studentGrade ?? "all");
+
       const rawTopics = Array.isArray(data.topics)
         ? data.topics.map(normalizeTopicPracticeOption)
         : [];
       setTopics(rawTopics);
 
-      // Auto-expand top-level root nodes
-      const parentIds = new Set(rawTopics.filter((t) => !t.parentTagId).map((t) => t.tagId));
-      setExpandedTagIds(parentIds);
+      // Sync active modal selection with fresh topics data or notify user if closed
+      setSelectedTag((prevTag) => {
+        if (!prevTag) return null;
+        const fresh = rawTopics.find((t) => String(t.tagId) === String(prevTag.tagId));
+        if (fresh && fresh.canGenerate) {
+          setGenerationError("Mức độ khó đã chọn không còn khả dụng. Danh sách các mức độ khó đã được cập nhật.");
+          return fresh;
+        } else {
+          setIsConfirmOpen(false);
+          setPageNotice("Chủ đề đã chọn hiện không còn đủ câu hỏi để luyện tập. Vui lòng chọn chủ đề khác.");
+          return null;
+        }
+      });
 
-      // Nếu điều hướng từ WeakTopicsCard với preselectedTagId → auto-open confirm dialog
+      // Auto preselect if coming from recommendation card
       if (preselectedTagId) {
         const preselected = rawTopics.find((t) => String(t.tagId) === String(preselectedTagId));
         if (preselected && preselected.canGenerate) {
@@ -188,92 +117,109 @@ export default function PracticeSetupPanel() {
     fetchOptions();
   }, [fetchOptions]);
 
-  // Build tree & search ancestor path
-  const { tree, matchingTagIds, ancestorTagIds } = useMemo(() => {
-    const rootNodes = buildCycleSafeTopicTree(topics);
+  // Group topics by Grade -> Parent Group Name
+  const groupedTopics = useMemo(() => {
+    if (!Array.isArray(topics)) return [];
 
     const query = search.trim().toLowerCase();
-    const matching = new Set();
 
-    if (query) {
-      topics.forEach((t) => {
-        if (t && t.tagName && t.tagName.toLowerCase().includes(query)) {
-          matching.add(t.tagId);
-        }
-      });
-    }
-
-    const ancestors = traceCycleSafeAncestors(topics, matching);
-    return { tree: rootNodes, matchingTagIds: matching, ancestorTagIds: ancestors };
-  }, [topics, search]);
-
-  // Auto expand matching ancestor nodes when searching
-  useEffect(() => {
-    if (search.trim() && ancestorTagIds.size > 0) {
-      setExpandedTagIds((prev) => new Set([...prev, ...ancestorTagIds]));
-    }
-  }, [search, ancestorTagIds]);
-
-  const toggleExpand = (tagId, e) => {
-    if (e) e.stopPropagation();
-    setExpandedTagIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(tagId)) {
-        next.delete(tagId);
-      } else {
-        next.add(tagId);
+    const filtered = topics.filter((t) => {
+      // Grade filtering step
+      const topicGrade = t.grade || grade || 12;
+      if (selectedGrade && selectedGrade !== "all" && Number(topicGrade) !== Number(selectedGrade)) {
+        return false;
       }
-      return next;
+      if (!query) return true;
+      const matchChild = (t.tagName || "").toLowerCase().includes(query);
+      const matchParent = (t.parentTagName || "").toLowerCase().includes(query);
+      return matchChild || matchParent;
     });
-  };
+
+    const gradeMap = new Map();
+
+    filtered.forEach((t) => {
+      const topicGrade = t.grade || grade || 12;
+      if (!gradeMap.has(topicGrade)) {
+        gradeMap.set(topicGrade, new Map());
+      }
+      const parentMap = gradeMap.get(topicGrade);
+      const parentName = t.parentTagName || "Nhóm chung";
+      if (!parentMap.has(parentName)) {
+        parentMap.set(parentName, []);
+      }
+      parentMap.get(parentName).push(t);
+    });
+
+    const sortedGrades = Array.from(gradeMap.keys()).sort((a, b) => b - a);
+
+    return sortedGrades.map((g) => {
+      const parentMap = gradeMap.get(g);
+      const parentGroups = Array.from(parentMap.entries()).map(([parentName, childTopics]) => {
+        childTopics.sort(compareTopicPracticeSiblings);
+        return { parentName, childTopics };
+      });
+      parentGroups.sort((a, b) => a.parentName.localeCompare(b.parentName, "vi"));
+
+      return {
+        grade: g,
+        isCurrentGrade: grade ? g === Number(grade) : true,
+        parentGroups,
+      };
+    });
+  }, [topics, search, grade, selectedGrade]);
 
   const handleSelectTopic = (node) => {
     if (!node || !node.canGenerate) return;
-    // Reset generated test cache if user selects a different topic
     if (generatedTestRef.current.tagId !== node.tagId) {
-      generatedTestRef.current = { tagId: null, testId: null };
+      generatedTestRef.current = { tagId: null, difficultyId: null, testId: null };
     }
     setSelectedTag(node);
     setGenerationError("");
     setIsConfirmOpen(true);
   };
 
-  // Execute Topic Practice Generation & Start Session with Submit Lock & TestId reuse
-  const handleConfirmGenerate = async () => {
+  // Execute Topic Practice Generation
+  const handleConfirmGenerate = async (confirmPayload) => {
     if (!selectedTag || generatingRef.current) return;
     generatingRef.current = true;
     setGenerating(true);
     setGenerationError("");
 
+    const payload = typeof confirmPayload === "object" && confirmPayload !== null
+      ? confirmPayload
+      : { tagId: selectedTag.tagId };
+
+    const payloadDifficultyId = payload.difficultyId || null;
+
     try {
       let testId = null;
-
-      // Check if we already have a generated TestId for this topic (from a previous failed startSession)
-      if (
+      const isSameRequest =
         generatedTestRef.current.tagId === selectedTag.tagId &&
-        generatedTestRef.current.testId
-      ) {
+        generatedTestRef.current.difficultyId === payloadDifficultyId &&
+        Boolean(generatedTestRef.current.testId);
+
+      if (isSameRequest) {
         testId = generatedTestRef.current.testId;
       } else {
-        // 1. Generate personal TopicPractice Test
-        const genRes = await testGeneratorApi.generateTopicPractice(selectedTag.tagId);
+        const genRes = await testGeneratorApi.generateTopicPractice(payload);
         testId = genRes.data?.testId;
 
         if (!testId) {
           throw new Error("Không nhận được mã đề thi từ hệ thống.");
         }
 
-        // Cache generated testId for retry
-        generatedTestRef.current = { tagId: selectedTag.tagId, testId };
+        generatedTestRef.current = {
+          tagId: selectedTag.tagId,
+          difficultyId: payloadDifficultyId,
+          testId
+        };
       }
 
-      // 2. Start Testing Session via testingApi (boundary requirement)
       const startData = await startSession(testId);
       const sessionId = startData?.sessionId || startData?.id;
 
       if (sessionId) {
-        // Reset cache on successful start & navigate
-        generatedTestRef.current = { tagId: null, testId: null };
+        generatedTestRef.current = { tagId: null, difficultyId: null, testId: null };
         setIsConfirmOpen(false);
         navigate(`/student/test/${sessionId}`);
       } else {
@@ -285,11 +231,15 @@ export default function PracticeSetupPanel() {
       if (errCode === "TESTING_SESSION_ALREADY_IN_PROGRESS") {
         const existingSessionId = err.response?.data?.existingSessionId;
         if (existingSessionId && typeof existingSessionId === "string") {
-          generatedTestRef.current = { tagId: null, testId: null };
+          generatedTestRef.current = { tagId: null, difficultyId: null, testId: null };
           setIsConfirmOpen(false);
           navigate(`/student/test/${existingSessionId}`);
           return;
         }
+      }
+
+      if (errCode === "TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND" || errCode === "TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE") {
+        fetchOptions();
       }
 
       setGenerationError(getTopicPracticeErrorMessage(err, "Không thể tạo bài luyện tập. Vui lòng thử lại sau."));
@@ -297,135 +247,6 @@ export default function PracticeSetupPanel() {
       generatingRef.current = false;
       setGenerating(false);
     }
-  };
-
-  // Render tree node with 44px+ touch targets and non-nested interactive elements (Finding 3 & 6)
-  const renderTreeNode = (node, depth = 0, visitedSet = new Set()) => {
-    if (!node || !node.tagId || visitedSet.has(node.tagId)) return null;
-    visitedSet.add(node.tagId);
-
-    const isExpanded = expandedTagIds.has(node.tagId);
-    const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-    const isSearchMode = !!search.trim();
-    const hasWeakRecommendation = node.isWeakRecommended &&
-      node.weakTagName &&
-      node.recommendedDifficultyLevel !== null &&
-      node.officialPoint !== null;
-
-    if (isSearchMode && !matchingTagIds.has(node.tagId) && !ancestorTagIds.has(node.tagId)) {
-      return null;
-    }
-
-    const isMatchHighlight = isSearchMode && matchingTagIds.has(node.tagId);
-
-    return (
-      <div key={node.tagId} className="flex flex-col">
-        {/* NON-INTERACTIVE Row Container */}
-        <div
-          style={{ paddingLeft: `${Math.max(12, depth * 24 + 12)}px` }}
-          className={cn(
-            "min-h-[52px] py-1.5 pr-3.5 rounded-xl border flex items-center justify-between gap-3 transition-all select-none my-0.5",
-            !node.canGenerate
-              ? "bg-surface-container-low/40 border-whisper-border/60 opacity-70"
-              : isMatchHighlight
-              ? "bg-primary/10 border-primary ring-1 ring-primary/30"
-              : "bg-pure-surface border-whisper-border hover:border-primary/30"
-          )}
-        >
-          {/* Left Side: Separate Expand Button (44px min touch target) + Separate Topic Title Button/Label */}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            {hasChildren ? (
-              <button
-                type="button"
-                aria-expanded={isExpanded}
-                aria-label={isExpanded ? `Thu gọn ${node.tagName}` : `Mở rộng ${node.tagName}`}
-                onClick={(e) => toggleExpand(node.tagId, e)}
-                className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <span className="material-symbols-outlined text-[20px]">
-                  {isExpanded ? "expand_more" : "chevron_right"}
-                </span>
-              </button>
-            ) : (
-              <div className="min-w-[44px] min-h-[44px] shrink-0 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[14px] text-on-surface-variant/40">circle</span>
-              </div>
-            )}
-
-            {node.canGenerate ? (
-              <button
-                type="button"
-                onClick={() => handleSelectTopic(node)}
-                aria-label={`Chọn chủ đề ${node.tagName}`}
-                className="flex flex-col justify-center text-left min-w-0 flex-1 min-h-[44px] py-1 px-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors group"
-              >
-                <span className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-bold truncate text-on-surface group-hover:text-primary transition-colors">
-                    {node.tagName}
-                  </span>
-                  {node.isWeakRecommended && (
-                    <span className="shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-                      Cần củng cố
-                    </span>
-                  )}
-                </span>
-                {hasWeakRecommendation && (
-                  <span className="mt-0.5 truncate text-[10px] text-on-surface-variant">
-                    Trọng tâm: {node.weakTagName} · Mức {node.recommendedDifficultyLevel} · {node.officialPoint.toFixed(2)}/10
-                  </span>
-                )}
-              </button>
-            ) : (
-              <div className="flex flex-col justify-center text-left min-w-0 flex-1 min-h-[44px] py-1 px-2">
-                <span className="text-xs font-bold truncate text-on-surface-variant">
-                  {node.tagName}
-                </span>
-                <span className="text-[10px] text-error font-medium">
-                  Chỉ có {node.availableQuestionCount}/10 câu hợp lệ
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Right Side: Question Count Badge + Separate Action Button (44px min touch target) */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={cn(
-              "px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono border",
-              node.canGenerate
-                ? "bg-emerald-success/10 text-emerald-success border-emerald-success/20"
-                : "bg-surface-container-high text-on-surface-variant border-whisper-border"
-            )}>
-              {node.availableQuestionCount}/10 câu
-            </span>
-
-            {node.canGenerate ? (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={() => handleSelectTopic(node)}
-                aria-label={`Luyện tập chủ đề ${node.tagName}`}
-                className="min-h-[44px] h-[44px] text-xs font-bold px-4 shrink-0 focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <span className="material-symbols-outlined text-[16px] mr-1.5">fitness_center</span>
-                Luyện tập
-              </Button>
-            ) : (
-              <span className="text-[11px] text-on-surface-variant italic font-medium hidden sm:inline px-2">
-                Chưa đủ câu
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Render Children */}
-        {hasChildren && isExpanded && (
-          <div className="flex flex-col">
-            {node.children.map((child) => renderTreeNode(child, depth + 1, visitedSet))}
-          </div>
-        )}
-      </div>
-    );
   };
 
   return (
@@ -438,14 +259,14 @@ export default function PracticeSetupPanel() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-on-surface flex items-center gap-2">
-              Danh mục chủ đề bài học
+              Danh mục chủ đề luyện tập
               {grade && (
                 <span className="bg-primary/15 text-primary border border-primary/25 text-[10px] font-extrabold px-2 py-0.5 rounded">
                   Khối {grade}
                 </span>
               )}
             </h2>
-            <p className="text-xs text-on-surface-variant">Chọn một chủ đề bất kỳ để tạo bài luyện tập 10 câu hỏi cố định.</p>
+            <p className="text-xs text-on-surface-variant">Chọn một chủ đề bất kỳ để bắt đầu bài luyện tập gồm 10 câu.</p>
           </div>
         </div>
 
@@ -475,6 +296,60 @@ export default function PracticeSetupPanel() {
         </div>
       </div>
 
+      {/* Step 1: Grade Selection / Filtering Bar */}
+      {!loading && !loadError && availableGrades.length > 0 && (
+        <div className="bg-pure-surface border border-whisper-border rounded-xl p-3.5 shadow-sm flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">school</span>
+            <span className="text-xs font-bold text-on-surface">Bước 1: Chọn Khối lớp</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {availableGrades.map((g) => {
+              const isCurrent = Number(g) === Number(grade);
+              const isSelected = selectedGrade === g;
+
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setSelectedGrade(g)}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 select-none",
+                    isSelected
+                      ? "bg-primary text-on-primary shadow-sm"
+                      : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+                  )}
+                >
+                  <span>Khối {g}</span>
+                  {isCurrent && (
+                    <span className={cn(
+                      "px-1.5 py-0.2 text-[9px] rounded font-extrabold uppercase",
+                      isSelected ? "bg-white/25 text-white" : "bg-primary/10 text-primary"
+                    )}>
+                      Hiện tại
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setSelectedGrade("all")}
+              className={cn(
+                "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer select-none",
+                selectedGrade === "all"
+                  ? "bg-primary text-on-primary shadow-sm"
+                  : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+              )}
+            >
+              Tất cả khối
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error State */}
       {loadError && (
         <div role="alert" className="p-4 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center justify-between gap-3 select-text">
@@ -488,6 +363,23 @@ export default function PracticeSetupPanel() {
         </div>
       )}
 
+      {/* Page Notice Banner for Stale Topics */}
+      {pageNotice && (
+        <div role="alert" className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 text-xs font-semibold flex items-center justify-between gap-3 select-text">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px] text-amber-600 shrink-0">info</span>
+            <span>{pageNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPageNotice("")}
+            className="text-amber-800 hover:text-amber-950 font-bold text-xs cursor-pointer"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
+
       {/* Loading State */}
       {loading ? (
         <div className="bg-pure-surface border border-whisper-border rounded-xl p-6 shadow-sm flex flex-col gap-3">
@@ -495,22 +387,121 @@ export default function PracticeSetupPanel() {
             <div key={idx} className="h-12 bg-surface-container-low rounded-xl animate-pulse" />
           ))}
         </div>
-      ) : loadError ? null : tree.length === 0 ? (
+      ) : loadError ? null : topics.length === 0 ? (
         <div className="bg-pure-surface border border-whisper-border rounded-xl p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
           <span className="material-symbols-outlined text-[48px] text-outline-variant">topic</span>
           <p className="text-sm font-bold text-on-surface">Không tìm thấy chủ đề học tập nào trong danh mục.</p>
         </div>
-      ) : search.trim() && matchingTagIds.size === 0 ? (
-        /* Search Empty State (Finding 5) */
+      ) : groupedTopics.length === 0 ? (
         <div className="bg-pure-surface border border-whisper-border rounded-xl p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-2.5">
           <span className="material-symbols-outlined text-[48px] text-outline-variant">search_off</span>
           <p className="text-sm font-bold text-on-surface">Không tìm thấy chủ đề nào khớp với từ khóa "{search.trim()}".</p>
           <p className="text-xs text-on-surface-variant">Vui lòng kiểm tra lại từ khóa hoặc xóa ô tìm kiếm để xem toàn bộ danh mục.</p>
         </div>
       ) : (
-        /* Topic Tree List */
-        <div className="bg-pure-surface border border-whisper-border rounded-xl p-3 md:p-4 shadow-sm flex flex-col gap-1">
-          {tree.map((rootNode) => renderTreeNode(rootNode, 0, new Set()))}
+        /* Grouped Topics List */
+        <div className="flex flex-col gap-6">
+          {groupedTopics.map((gradeGroup) => (
+            <div key={gradeGroup.grade} className="bg-pure-surface border border-whisper-border rounded-xl p-4 md:p-5 shadow-sm flex flex-col gap-4">
+
+              {/* Grade Header */}
+              <div className="flex items-center justify-between border-b border-whisper-border pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-[20px]">school</span>
+                  <h3 className="text-sm font-bold text-on-surface">
+                    {gradeGroup.isCurrentGrade
+                      ? `Lớp ${gradeGroup.grade} (Khối lớp hiện tại)`
+                      : `Ôn tập lớp ${gradeGroup.grade}`}
+                  </h3>
+                </div>
+                {!gradeGroup.isCurrentGrade && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold">
+                    Ôn tập lớp dưới
+                  </span>
+                )}
+              </div>
+
+              {/* Parent Groups */}
+              <div className="flex flex-col gap-4">
+                {gradeGroup.parentGroups.map((group) => (
+                  <div key={group.parentName} className="flex flex-col gap-2">
+                    {/* Non-interactive Parent Header */}
+                    <div className="flex items-center gap-2 text-xs font-bold text-on-surface-variant bg-surface-container-low px-3 py-1.5 rounded-lg border border-whisper-border/50">
+                      <span className="material-symbols-outlined text-[16px] text-primary">folder</span>
+                      <span>{group.parentName}</span>
+                    </div>
+
+                    {/* Direct-Child Topics */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {group.childTopics.map((node) => {
+                        const hasWeakRecommendation = node.isWeakRecommended &&
+                          node.weakTagName &&
+                          node.recommendedDifficultyLevel !== null &&
+                          node.officialPoint !== null;
+
+                        return (
+                          <div
+                            key={node.tagId}
+                            className={cn(
+                              "p-3 rounded-xl border flex items-center justify-between gap-3 transition-all",
+                              !node.canGenerate
+                                ? "bg-surface-container-low/40 border-whisper-border/60 opacity-70"
+                                : "bg-pure-surface border-whisper-border hover:border-primary/40 hover:shadow-sm"
+                            )}
+                          >
+                            <div className="flex flex-col justify-center min-w-0 flex-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-bold truncate text-on-surface">
+                                  {node.tagName}
+                                </span>
+                                {node.isWeakRecommended && (
+                                  <span className="shrink-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                                    Cần củng cố
+                                  </span>
+                                )}
+                              </div>
+                              {hasWeakRecommendation ? (
+                                <span className="mt-0.5 truncate text-[10px] text-on-surface-variant">
+                                  Trọng tâm: {node.weakTagName} · {getDifficultyLevelName(node.recommendedDifficultyLevel)} · {node.officialPoint.toFixed(2)}/10
+                                </span>
+                              ) : (
+                                <span className="mt-0.5 text-[10px] text-on-surface-variant">
+                                  {node.canGenerate
+                                    ? `${node.availableQuestionCount}/10 câu hỏi hợp lệ`
+                                    : `Chỉ có ${node.availableQuestionCount}/10 câu hợp lệ`}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {node.canGenerate ? (
+                                <Button
+                                  type="button"
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleSelectTopic(node)}
+                                  aria-label={`Luyện tập chủ đề ${node.tagName}`}
+                                  className="min-h-[44px] h-[44px] text-xs font-bold px-3.5 shrink-0"
+                                >
+                                  <span className="material-symbols-outlined text-[16px] mr-1">fitness_center</span>
+                                  Luyện tập
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-on-surface-variant italic font-medium px-2">
+                                  Chưa đủ câu
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+          ))}
         </div>
       )}
 

@@ -36,6 +36,15 @@ public class WeakTagApiSlaTests : IDisposable
         var studentId = Guid.NewGuid().ToString();
         const int totalTags = 60;
         const int weakTagCount = 30; // Half weak (< 5.00), half strong (>= 5.00)
+        const string rootTagId = "root-topic";
+
+        _db.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = rootTagId,
+            TagName = "Root topic",
+            Grade = 10,
+            IsActive = true
+        });
 
         for (int i = 0; i < totalTags; i++)
         {
@@ -45,6 +54,7 @@ public class WeakTagApiSlaTests : IDisposable
             _db.TagTopics.Add(new TagTopicReadOnly
             {
                 TagId = tagId,
+                ParentTagId = rootTagId,
                 TagName = $"Topic_{i:D3}",
                 Grade = 10,
                 IsActive = true

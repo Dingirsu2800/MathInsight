@@ -36,6 +36,8 @@ public sealed class AdminApproveQuestionReportCommandHandler
         if (reportReference is null)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportNotFound);
 
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -86,5 +88,6 @@ public sealed class AdminApproveQuestionReportCommandHandler
 
         return Result<QuestionReportResponse>.Success(
             await QuestionReportResponseMapper.CreateAsync(_context, report, cancellationToken));
+        });
     }
 }

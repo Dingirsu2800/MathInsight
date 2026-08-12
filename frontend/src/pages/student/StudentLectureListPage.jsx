@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
-import { getLectures, getTopics } from "../../services/learningApi";
+import { getLectures, getTopics, getDifficulties } from "../../services/learningApi";
 
 export default function StudentLectureListPage() {
   const navigate = useNavigate();
@@ -10,7 +10,9 @@ export default function StudentLectureListPage() {
   const [search, setSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState("");
   const [topics, setTopics] = useState([]);
+  const [difficulties, setDifficulties] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -27,6 +29,12 @@ export default function StudentLectureListPage() {
         setTopicFilter("");
       })
       .catch(err => console.error(err));
+      
+    getDifficulties()
+      .then(res => {
+        setDifficulties(res.data);
+      })
+      .catch(err => console.error(err));
   }, [gradeFilter]);
 
   const fetchLectures = useCallback(async () => {
@@ -38,6 +46,7 @@ export default function StudentLectureListPage() {
         search, 
         topic: topicFilter || undefined,
         grade: gradeFilter || undefined,
+        difficulty: difficultyFilter || undefined,
         isStudent: true 
       });
       setLectures(res.data?.items || res.data || []);
@@ -47,7 +56,7 @@ export default function StudentLectureListPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, topicFilter, gradeFilter]);
+  }, [search, topicFilter, gradeFilter, difficultyFilter]);
 
   useEffect(() => { fetchLectures(); }, [fetchLectures]);
 
@@ -90,6 +99,19 @@ export default function StudentLectureListPage() {
             {topics.map(t => (
               <option key={t.id} value={t.id} disabled={t.isChapter} className={t.isChapter ? "font-bold text-on-surface-variant bg-surface-container" : "pl-4"}>
                 {t.isChapter ? t.name : `— ${t.name}`}
+              </option>
+            ))}
+          </select>
+          
+          <select 
+            className="w-full md:w-48 px-4 py-3 bg-pure-surface border border-outline-variant rounded-xl text-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            value={difficultyFilter}
+            onChange={(e) => setDifficultyFilter(e.target.value)}
+          >
+            <option value="">Tất cả độ khó</option>
+            {difficulties.map(d => (
+              <option key={d.difficultyId} value={d.difficultyId}>
+                {d.difficultyName}
               </option>
             ))}
           </select>
@@ -143,9 +165,16 @@ export default function StudentLectureListPage() {
                         {lec.likes || 0}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-[12px] text-on-surface-variant/80">
-                      <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                      {new Date(lec.createdTime).toLocaleDateString("vi-VN")}
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="flex items-center gap-1.5 text-[12px] text-on-surface-variant/80">
+                        <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                        {new Date(lec.createdTime).toLocaleDateString("vi-VN")}
+                      </div>
+                      {lec.difficultyName && (
+                        <div className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] font-bold tracking-wider rounded uppercase">
+                          {lec.difficultyName}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

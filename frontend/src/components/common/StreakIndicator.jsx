@@ -5,22 +5,23 @@ export default function StreakIndicator() {
   const [streakData, setStreakData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => {
-    let isMounted = true;
+  const fetchStreak = () => {
     getStreak()
       .then((data) => {
-        if (isMounted) {
-          setStreakData(data);
-        }
+        setStreakData(data);
       })
       .catch((err) => {
         console.error("Lỗi khi tải Streak:", err);
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        setLoading(false);
       });
-      
-    return () => { isMounted = false; };
+  };
+
+  React.useEffect(() => {
+    fetchStreak();
+    window.addEventListener("gamification_updated", fetchStreak);
+    return () => window.removeEventListener("gamification_updated", fetchStreak);
   }, []);
 
   if (loading) return null;

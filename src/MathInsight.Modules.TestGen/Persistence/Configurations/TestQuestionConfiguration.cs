@@ -17,7 +17,7 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
                 "[PtagAtSelection] IS NULL OR ([PtagAtSelection] >= 0 AND [PtagAtSelection] <= 10)");
             table.HasCheckConstraint(
                 "CK_TestQuestion_SelectionReason",
-                "[SelectionReason] IN ('BlueprintNormal', 'WeakTagPractice', 'RemedialPractice', " +
+                "[SelectionReason] IN ('BlueprintNormal', 'FixedExam', 'WeakTagPractice', 'RemedialPractice', " +
                 "'ChallengeMode', 'Exploration', 'TopicPractice', 'Diagnostic')");
             table.HasCheckConstraint("CK_TestQuestion_WeightSnapshot", "[WeightSnapshot] > 0 AND [WeightSnapshot] <= 100");
             table.HasCheckConstraint("CK_TestQuestion_MaxPointsSnapshot", "[MaxPointsSnapshot] >= 0 AND [MaxPointsSnapshot] <= 100");

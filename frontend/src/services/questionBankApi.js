@@ -38,6 +38,10 @@ export const questionBankApi = {
     return client.put(`/api/question-bank/tags/topics/${tagId}`, payload);
   },
 
+  deleteTopic(tagId) {
+    return client.delete(`/api/question-bank/tags/topics/${tagId}`);
+  },
+
   getDifficulties(params) {
     return client.get("/api/question-bank/tags/difficulties", { params });
   },
@@ -48,6 +52,10 @@ export const questionBankApi = {
 
   updateDifficulty(difficultyId, payload) {
     return client.put(`/api/question-bank/tags/difficulties/${difficultyId}`, payload);
+  },
+
+  deleteDifficulty(difficultyId) {
+    return client.delete(`/api/question-bank/tags/difficulties/${difficultyId}`);
   },
 
   reportQuestion(questionId, payload) {

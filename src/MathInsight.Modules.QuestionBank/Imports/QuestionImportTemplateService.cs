@@ -21,12 +21,12 @@ public sealed class QuestionImportTemplateService : IQuestionImportTemplateServi
 
     public async Task<QuestionImportTemplateResponse> CreateAsync(CancellationToken cancellationToken)
     {
-        var topics = await _context.TagTopics
-            .AsNoTracking()
-            .Where(topic => topic.IsActive)
-            .OrderBy(topic => topic.Grade)
-            .ThenBy(topic => topic.DisplayOrder)
-            .Select(topic => new { topic.TagId, topic.TagName, topic.Grade })
+        var topics = await (
+            from topic in _context.TagTopics.AsNoTracking()
+            join parent in _context.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
+            where topic.IsActive && parent.IsActive && parent.ParentTagId == null && parent.Grade == topic.Grade
+            orderby topic.Grade, topic.DisplayOrder
+            select new { topic.TagId, topic.TagName, topic.Grade })
             .ToListAsync(cancellationToken);
         var difficulties = await _context.TagDifficulties
             .AsNoTracking()

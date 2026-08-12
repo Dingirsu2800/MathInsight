@@ -29,6 +29,13 @@ public sealed class CreateQuestionCommandHandler
         if (validationError is not null)
             return Result<CreateQuestionResponse>.Failure(validationError);
 
+        var referenceValidationError = await QuestionReferenceValidator.ValidateAsync(
+            _context,
+            command.Request,
+            cancellationToken);
+        if (referenceValidationError is not null)
+            return Result<CreateQuestionResponse>.Failure(referenceValidationError);
+
         var question = QuestionImportQuestionFactory.Create(
             command.Request,
             command.ExpertId,
@@ -38,19 +45,24 @@ public sealed class CreateQuestionCommandHandler
         question.CreatedTime = now;
         question.UpdatedTime = now;
 
-        await using IDbContextTransaction? transaction = _context.Database.IsRelational()
-            ? await _context.Database.BeginTransactionAsync(cancellationToken)
-            : null;
+        // The configured strategy executes once. Keeping the transaction scope inside it lets the
+        // handler remain compatible with the provider while avoiding automatic mutation replay.
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using IDbContextTransaction? transaction = _context.Database.IsRelational()
+                ? await _context.Database.BeginTransactionAsync(cancellationToken)
+                : null;
 
-        _context.Questions.Add(question);
-        _context.QuestionVersions.Add(
-            QuestionVersionSnapshotFactory.Create(question, command.ExpertId, 1, now));
-        await _context.SaveChangesAsync(cancellationToken);
+            _context.Questions.Add(question);
+            _context.QuestionVersions.Add(
+                QuestionVersionSnapshotFactory.Create(question, command.ExpertId, 1, now));
+            await _context.SaveChangesAsync(cancellationToken);
 
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
 
-        return Result<CreateQuestionResponse>.Success(
-            new CreateQuestionResponse(question.QuestionId, question.Status));
+            return Result<CreateQuestionResponse>.Success(
+                new CreateQuestionResponse(question.QuestionId, question.Status));
+        });
     }
 }

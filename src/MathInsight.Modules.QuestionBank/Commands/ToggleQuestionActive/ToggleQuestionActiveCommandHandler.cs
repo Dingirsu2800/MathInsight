@@ -27,6 +27,9 @@ public sealed class ToggleQuestionActiveCommandHandler
         if (string.IsNullOrWhiteSpace(command.QuestionId))
             return Result<ToggleQuestionActiveResponse>.Failure(QuestionBankErrors.QuestionIdRequired);
 
+        // The configured strategy executes once; no automatic retry may replay this state transition.
+        return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
         await using IDbContextTransaction? transaction = QuestionReportSqlServerLock.IsSupported(_context)
             ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -86,5 +89,6 @@ public sealed class ToggleQuestionActiveCommandHandler
 
         return Result<ToggleQuestionActiveResponse>.Success(
             new ToggleQuestionActiveResponse(question.QuestionId, question.IsActive, question.Status));
+        });
     }
 }

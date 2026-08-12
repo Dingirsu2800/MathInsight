@@ -97,7 +97,26 @@ export const testGeneratorApi = {
     return client.get('/api/test-generator/tests/topic-practice-options');
   },
 
-  generateTopicPractice(tagId) {
-    return client.post('/api/test-generator/tests/topic-practices', { tagId });
+  generateTopicPractice(payloadOrTagId, difficultyId) {
+    const body = typeof payloadOrTagId === "object" && payloadOrTagId !== null
+      ? payloadOrTagId
+      : { tagId: payloadOrTagId, ...(difficultyId ? { difficultyId } : {}) };
+    return client.post('/api/test-generator/tests/topic-practices', body);
+  },
+
+  getFixedTestCandidates(blueprintId, params, config = {}) {
+    const queryParams = {};
+    if (params) {
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== "") {
+          queryParams[key] = params[key];
+        }
+      });
+    }
+    return client.get(`/api/test-generator/blueprints/${blueprintId}/fixed-test-candidates`, { params: queryParams, ...config });
+  },
+
+  generateFixedBlueprintExam(blueprintId, payload) {
+    return client.post(`/api/test-generator/blueprints/${blueprintId}/fixed-tests`, payload);
   }
 };

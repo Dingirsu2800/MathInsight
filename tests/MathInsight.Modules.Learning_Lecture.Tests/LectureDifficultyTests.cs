@@ -73,6 +73,29 @@ public sealed class LectureDifficultyTests
     }
 
     [Fact]
+    public async Task CreateLecture_RootTopic_ReturnsTopicMustBeLeafError()
+    {
+        await using var database = await LearningInMemoryContext.CreateAsync();
+        database.Context.TagTopics.Add(new TagTopicReadOnly
+        {
+            TagId = "root-topic",
+            TagName = "Root topic",
+            Grade = 12,
+            IsActive = true,
+            DisplayOrder = 1
+        });
+        AddDifficulty(database.Context, "difficulty-1");
+        await database.Context.SaveChangesAsync();
+
+        var result = await new CreateLectureCommandHandler(database.Context).Handle(
+            new CreateLectureCommand("Lecture", "Content", null, null, "root-topic", "difficulty-1", "teacher-1", null),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(LearningErrors.LectureTopicMustBeLeaf, result.Error);
+    }
+
+    [Fact]
     public async Task UpdateLecture_ActiveDifficulty_UpdatesDifficultyId()
     {
         await using var database = await LearningInMemoryContext.CreateAsync();
@@ -157,7 +180,16 @@ public sealed class LectureDifficultyTests
     {
         context.TagTopics.Add(new TagTopicReadOnly
         {
+            TagId = "root-topic-1",
+            TagName = "Root topic",
+            Grade = 12,
+            IsActive = true,
+            DisplayOrder = 1
+        });
+        context.TagTopics.Add(new TagTopicReadOnly
+        {
             TagId = "topic-1",
+            ParentTagId = "root-topic-1",
             TagName = "Topic 1",
             Grade = 12,
             IsActive = isActive,

@@ -23,7 +23,22 @@ export const TEST_GENERATION_ERROR_MAP = {
   TOPIC_PRACTICE_TOPIC_UNAVAILABLE: "Chủ đề này hiện chưa khả dụng cho khối lớp của bạn.",
   TOPIC_PRACTICE_INSUFFICIENT_QUESTIONS: "Chủ đề chưa đủ 10 câu hỏi hợp lệ để tạo bài luyện tập.",
   TOPIC_PRACTICE_GENERATION_CONFLICT: "Hệ thống chưa thể tạo bài luyện tập. Vui lòng thử lại.",
-  TESTING_TEST_HAS_NO_TIME_LIMIT: "Bài luyện tập này không có giới hạn thời gian."
+  TESTING_TEST_HAS_NO_TIME_LIMIT: "Bài luyện tập này không có giới hạn thời gian.",
+  TOPIC_PARENT_NOT_ASSIGNABLE: "Nhóm chủ đề không thể gán trực tiếp cho câu hỏi hay đề thi.",
+  TOPIC_MUST_BE_DIRECT_CHILD: "Chỉ được chọn chủ đề con trực tiếp.",
+  TOPIC_PARENT_GRADE_MISMATCH: "Khối lớp của chủ đề không khớp với nhóm chủ đề cha.",
+  TOPIC_DEPTH_LIMIT_EXCEEDED: "Cấu trúc chủ đề chỉ hỗ trợ tối đa 2 cấp.",
+  TOPIC_PRACTICE_GRADE_NOT_ALLOWED: "Bạn chỉ có thể luyện tập các chủ đề thuộc khối lớp hiện tại hoặc thấp hơn.",
+  STUDENT_GRADE_REQUIRED: "Cần cập nhật thông tin khối lớp để xem danh sách luyện tập.",
+  FIXED_TEST_BLUEPRINT_NOT_APPROVED: "Cấu trúc đề phải ở trạng thái Đã thông qua hoặc Đang sử dụng mới được tạo đề cố định.",
+  FIXED_TEST_QUESTION_DUPLICATED: "Danh sách câu hỏi được chọn có câu bị trùng lặp.",
+  FIXED_TEST_ORDER_INVALID: "Thứ tự câu hỏi chưa hợp lệ hoặc không liên tục.",
+  FIXED_TEST_DETAIL_QUANTITY_MISMATCH: "Số lượng câu hỏi đã chọn không khớp với chỉ tiêu ma trận đề thi.",
+  FIXED_TEST_QUESTION_NOT_ELIGIBLE: "Một số câu hỏi được chọn không đáp ứng điều kiện của ma trận đề thi.",
+  FIXED_TEST_QUESTION_VERSION_UNAVAILABLE: "Phiên bản câu hỏi được chọn hiện không khả dụng.",
+  TEST_ALREADY_ARCHIVED: "Đề thi này đã ở trạng thái đã lưu trữ.",
+  TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND: "Mức độ khó được chọn không tồn tại hoặc đã bị xóa.",
+  TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE: "Mức độ khó này hiện không còn khả dụng. Vui lòng chọn mức khác."
 };
 
 export function getTestGenErrorMessage(err, defaultMessage = "Thao tác thất bại. Vui lòng thử lại sau.") {
