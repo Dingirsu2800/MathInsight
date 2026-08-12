@@ -288,3 +288,18 @@ html.dark .mjx-container,
 html.dark .katex {
   filter: invert(1) hue-rotate(180deg);
 }
+
+/* ── Thin scrollbar for overflow containers ── */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 5px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: var(--color-outline-variant, #c4c6d0);
+  border-radius: 99px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-outline, #74767f);
+}

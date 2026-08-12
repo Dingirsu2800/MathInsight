@@ -125,7 +125,12 @@ export default function WeakTopicsCard() {
 
       {/* Data */}
       {!loading && !error && topics.length > 0 && (
-        <div className="space-y-4">
+        <div className="relative">
+          {/* Scrollable list – hiển thị ~4 item, scroll để xem thêm */}
+          <div
+            className="space-y-4 overflow-y-auto pr-1"
+            style={{ maxHeight: '420px' }}
+          >
           {topics.map((topic) => {
             const score = Number(topic.officialPoint);
             const style = getTopicStyle(score);
@@ -189,6 +194,17 @@ export default function WeakTopicsCard() {
 
             return <div key={topic.tagId}>{card}</div>;
           })}
+          </div>
+
+          {/* Gradient fade – chỉ hiển thị khi có nhiều hơn 4 tag */}
+          {topics.length > 4 && (
+            <div
+              className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 rounded-b-xl"
+              style={{
+                background: 'linear-gradient(to bottom, transparent, var(--color-pure-surface, #fff))',
+              }}
+            />
+          )}
         </div>
       )}
     </div>
