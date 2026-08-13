@@ -153,7 +153,9 @@ public class GradingOrchestrator : IGradingOrchestrator
     {
         var gradedAnswers = new List<GradedAnswerDto>();
 
-        var tagContributions = new Dictionary<string, List<decimal>>();
+        // tagContributions: keyed by TagId → (sum of PointsEarned×weight, sum of MaxPoints×weight)
+        // TopicScore(i) = EarnedWeighted / MaxWeighted × 10  (weighted ratio formula)
+        var tagContributions = new Dictionary<string, (decimal EarnedWeighted, decimal MaxWeighted)>();
         var tagStats = new Dictionary<string, (int Correct, int Total)>();
 
         foreach (var answer in session.TestAnswers)
@@ -205,14 +207,11 @@ public class GradingOrchestrator : IGradingOrchestrator
                 {
                     if (string.IsNullOrWhiteSpace(tw.TagId)) continue;
 
-                    decimal contribution = normalizedScore * tw.Weight;
-
-                    if (!tagContributions.TryGetValue(tw.TagId, out var contributions))
-                    {
-                        contributions = [];
-                        tagContributions[tw.TagId] = contributions;
-                    }
-                    contributions.Add(contribution);
+                    // Accumulate weighted earned and weighted max for ratio formula
+                    tagContributions.TryGetValue(tw.TagId, out var acc);
+                    tagContributions[tw.TagId] = (
+                        acc.EarnedWeighted + answer.PointsEarned * tw.Weight,
+                        acc.MaxWeighted + maxPoints * tw.Weight);
 
                     if (!tagStats.TryGetValue(tw.TagId, out var stats))
                         stats = (0, 0);
@@ -227,8 +226,9 @@ public class GradingOrchestrator : IGradingOrchestrator
         var perTagResults = tagContributions
             .Select(kv =>
             {
-                decimal topicScore = kv.Value.Count > 0
-                    ? Math.Round(kv.Value.Average(), 2)
+                // Weighted ratio: sum(Earned × w) / sum(Max × w) × 10
+                decimal topicScore = kv.Value.MaxWeighted > 0
+                    ? Math.Round(kv.Value.EarnedWeighted / kv.Value.MaxWeighted * 10.0m, 2)
                     : 0m;
 
                 var (correct, total) = tagStats.TryGetValue(kv.Key, out var s) ? s : (0, 0);

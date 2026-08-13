@@ -110,10 +110,14 @@ public sealed record TagWeightEntry
 /// Per-topic grading result snapshot for a single (SessionId, TagId) pair.
 /// Used by Recommender to update TagsMastery and insert StudentTopicSessionResult.
 ///
-/// Unified Multi-Tag v4.1: TopicScore is now calculated using the weighted Tầng 1–2 formula:
-///   Tầng 1: c_{q,i} = s_q × w_{iq} (contribution of question q to tag i)
-///   Tầng 2: T_j^{(i)} = avg(c_{q,i}) across all questions in session j containing tag i
-/// For single-tag questions (w=1.0), T_j^{(i)} = avg(s_q) = traditional formula.
+/// TopicScore uses the weighted ratio formula (v4.2):
+///   TopicScore(i) = sum(PointsEarned_q × w_{iq}) / sum(MaxPoints_q × w_{iq}) × 10
+///   where w_{iq} is the tag weight for tag i on question q (1.0 for single-tag,
+///   0.65 for primary tag, (1-0.65)/N for each secondary tag in multi-tag questions).
+/// For single-tag questions (w=1.0), this equals the traditional formula:
+///   T_j^{(i)} = SUM(PointsEarned) / SUM(MaxPoints) × 10.
+/// This formula allows TopicScore to reach 10.0 for both single-tag and multi-tag questions
+/// when the student answers all questions in the session correctly.
 /// PerTagResults now includes entries for ALL tags (primary + secondary), not just primary.
 /// </summary>
 public sealed record TopicGradeResult
@@ -121,8 +125,9 @@ public sealed record TopicGradeResult
     public string TagId { get; init; } = string.Empty;
 
     /// <summary>
-    /// Weighted topic score 0.00–10.00: T_j^{(i)} = avg(c_{q,i}) where c_{q,i} = s_q × w_{iq}.
-    /// For single-tag questions, this equals the traditional correct_count / total_count × 10.0.
+    /// Weighted topic score 0.00–10.00:
+    /// T_j^{(i)} = sum(PointsEarned_q × w_{iq}) / sum(MaxPoints_q × w_{iq}) × 10.
+    /// For single-tag questions, this equals SUM(PointsEarned) / SUM(MaxPoints) × 10.
     /// </summary>
     public decimal TopicScore { get; init; }
 

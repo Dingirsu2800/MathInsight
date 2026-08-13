@@ -200,7 +200,7 @@ Returns aggregate statistics computed from the student's graded sessions.
   | `NumCorrect` | `int` | Count of correct answers |
   | `NumIncorrect` | `int` | Count of incorrect answers |
   | `NumAbandoned` | `int` | Count of unanswered/abandoned questions (per BR-16b) |
-  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per distinct TagId (primary and secondary) covered in the session. `TopicScore` is calculated using the weighted contribution formula (Tầng 1–2, report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. Invalidated questions are excluded from tag statistics. |
+  | `PerTagResults` | `IReadOnlyList<TopicGradeResult>` | One entry per distinct TagId (primary and secondary) covered in the session. `TopicScore` is calculated using the **weighted ratio formula (v4.2)**: `T_j^{(i)} = sum(PointsEarned_q × w_{iq}) / sum(MaxPoints_q × w_{iq}) × 10`, where `w_{iq}` is the tag weight for tag i on question q. This formula allows TopicScore to reach 10.0 for all question types. Invalidated questions are excluded from tag statistics. |
   | `Answers` | `IReadOnlyList<GradedAnswerDto>` | Detailed list of graded answers for Elo calculation (F1 resolution) |
   | `GradeRevision` | `int` | Current grading revision; increases on re-grade (e.g., after report invalidation) |
   | `GradedAt` | `DateTime` | UTC timestamp |
@@ -214,7 +214,7 @@ Returns aggregate statistics computed from the student's graded sessions.
   - `QuestionId` (`Guid`)
   - `TagId` (`Guid`) — **primary topic tag** of the question (backward-compatible; always the `IsPrimary = true` tag)
   - `TagWeights` (`IReadOnlyList<TagWeightEntry>`) — **all tags** (primary + secondary) with their role-based weights. Sum of all weights = 1.0. For single-tag questions, this list has one entry with `Weight = 1.0`. Used by Recommender for multi-tag Elo delta distribution (Công thức 2, Bước 2).
-  - `NormalizedScore` (`decimal`) — `s_q = PointsEarned / MaxPoints × 10.0` — normalized question score on 0–10 scale, used for Tầng 1 contribution calculation `c_{q,i} = s_q × w_{iq}`
+  - `NormalizedScore` (`decimal`) — `s_q = PointsEarned / MaxPoints × 10.0` — normalized question score on 0–10 scale. Used by Recommender for **Elo delta distribution** in Practice mode (`ΔP_tag_i = Δ_total × w_{iq}`). **Not used** for TopicScore calculation (which uses raw PointsEarned/MaxPoints directly).
   - `IsCorrect` (`bool`)
   - `PointsEarned` (`decimal`)
   - `MaxPoints` (`decimal`) — from `TestQuestion.MaxPointsSnapshot`
