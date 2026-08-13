@@ -165,4 +165,33 @@ public class WeakTagQueryTests : IDisposable
         var mastery = Assert.Single(result);
         Assert.Equal(validTagId.ToString(), mastery.TagId);
     }
+
+    [Fact]
+    public async Task GetStudentAllTagsMasteryAsync_IncludesUnpracticedActiveTags_WithDefaultNotLearnedStatus()
+    {
+        var studentId = Guid.NewGuid();
+        var practicedTagId = Guid.NewGuid();
+        var unpracticedTagId = Guid.NewGuid();
+
+        _db.TagTopics.AddRange(
+            MakeTagTopic(practicedTagId, "Practiced topic"),
+            MakeTagTopic(unpracticedTagId, "Unpracticed topic"));
+
+        _db.TagsMasteries.Add(MakeMastery(studentId, practicedTagId, 7.50m));
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.GetStudentAllTagsMasteryAsync(studentId.ToString());
+
+        Assert.Equal(2, result.Count);
+
+        var practiced = Assert.Single(result, t => t.TagId == practicedTagId.ToString());
+        Assert.Equal(7.50m, practiced.OfficialPoint);
+        Assert.Equal("Mastered", practiced.MasteryStatus);
+
+        var unpracticed = Assert.Single(result, t => t.TagId == unpracticedTagId.ToString());
+        Assert.Equal(5.00m, unpracticed.OfficialPoint);
+        Assert.Equal(0, unpracticed.NumberDone);
+        Assert.Equal("NotLearned", unpracticed.MasteryStatus);
+        Assert.Equal(1, unpracticed.RecommendedDifficultyLevel);
+    }
 }

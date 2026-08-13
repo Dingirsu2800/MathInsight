@@ -11,6 +11,7 @@ import MaterialIcon from '../../../components/ui/MaterialIcon';
 export default function QuestionAnswerCard({
   index,
   question,
+  questionType,
   difficulty,
   difficultyClass = 'bg-primary-fixed text-primary',
   options = [],
@@ -21,10 +22,14 @@ export default function QuestionAnswerCard({
   isScoreInvalidated = false,
   reportReason,
   scoreAdjustedTime,
+  shortAnswerText,
+  isCorrect,
   onReport,
   onAskChatbot,
 }) {
   const [showSolution, setShowSolution] = useState(false);
+
+  const correctOptions = options.filter((o) => o.isCorrect);
 
   return (
     <div className="bg-pure-surface rounded-xl border border-whisper-border overflow-hidden shadow-sm">
@@ -34,7 +39,9 @@ export default function QuestionAnswerCard({
           <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
             {index}
           </span>
-          <span className="text-sm font-bold text-on-surface-variant">Câu hỏi trắc nghiệm</span>
+          <span className="text-sm font-bold text-on-surface-variant">
+            {questionType === 'SHORT_ANSWER' ? 'Câu hỏi trả lời ngắn' : 'Câu hỏi trắc nghiệm'}
+          </span>
         </div>
         <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${difficultyClass}`}>
           {difficulty}
@@ -64,45 +71,81 @@ export default function QuestionAnswerCard({
           </ReactMarkdown>
         </div>
 
-        {/* Options grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {options.map((opt) => {
-            let borderClass = 'border-whisper-border';
-            let bgClass = '';
-            let iconEl = null;
+        {/* SHORT ANSWER section */}
+        {questionType === 'SHORT_ANSWER' ? (
+          <div className="space-y-3 my-4">
+            <div className={`p-4 border rounded-lg text-sm ${isCorrect ? 'border-emerald-success/30 bg-emerald-success/10' : 'border-deep-rose/30 bg-deep-rose/10'}`}>
+              <span className="font-bold block mb-1 text-xs uppercase text-on-surface-variant">Câu trả lời của bạn:</span>
+              <p className="font-medium text-on-surface">{shortAnswerText || '(Không trả lời)'}</p>
+            </div>
+            <div className="p-4 border border-emerald-200 bg-emerald-50 rounded-lg text-sm text-emerald-900">
+              <span className="font-bold block mb-1 text-xs uppercase text-emerald-800">Đáp án đúng:</span>
+              <p className="font-medium">
+                {correctOptions.map((o) => o.text).join(' hoặc ') || 'Xem lời giải chi tiết'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Options grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {options.map((opt) => {
+                let borderClass = 'border-whisper-border';
+                let bgClass = '';
+                let iconEl = null;
+                let badgeEl = null;
 
-            if (opt.isCorrect && opt.isSelected) {
-              borderClass = 'border-emerald-success/30';
-              bgClass = 'bg-emerald-success/10';
-              iconEl = <MaterialIcon name="check_circle" className="text-emerald-success" />;
-            } else if (opt.isCorrect && !opt.isSelected) {
-              borderClass = 'border-emerald-success/30';
-              bgClass = 'bg-emerald-success/5';
-              iconEl = <MaterialIcon name="check_circle" className="text-emerald-success/60" />;
-            } else if (!opt.isCorrect && opt.isSelected) {
-              borderClass = 'border-deep-rose/30';
-              bgClass = 'bg-deep-rose/10';
-              iconEl = <MaterialIcon name="cancel" className="text-deep-rose" />;
-            }
+                if (opt.isCorrect && opt.isSelected) {
+                  borderClass = 'border-emerald-success/50';
+                  bgClass = 'bg-emerald-success/10';
+                  iconEl = <MaterialIcon name="check_circle" className="text-emerald-success" />;
+                  badgeEl = <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-success text-white shrink-0">Bạn chọn (Đúng)</span>;
+                } else if (opt.isCorrect && !opt.isSelected) {
+                  borderClass = 'border-emerald-success/50';
+                  bgClass = 'bg-emerald-50';
+                  iconEl = <MaterialIcon name="check_circle" className="text-emerald-600" />;
+                  badgeEl = <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">Đáp án đúng</span>;
+                } else if (!opt.isCorrect && opt.isSelected) {
+                  borderClass = 'border-deep-rose/50';
+                  bgClass = 'bg-deep-rose/10';
+                  iconEl = <MaterialIcon name="cancel" className="text-deep-rose" />;
+                  badgeEl = <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-deep-rose/20 text-deep-rose shrink-0">Bạn chọn (Sai)</span>;
+                }
 
-            return (
-              <div
-                key={opt.label}
-                className={`p-4 border rounded-lg flex items-center justify-between text-sm ${borderClass} ${bgClass}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{opt.label}.</span>
-                  <div className="prose prose-sm max-w-none inline-block">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {opt.text || ''}
-                    </ReactMarkdown>
+                return (
+                  <div
+                    key={opt.label}
+                    className={`p-4 border rounded-lg flex items-center justify-between gap-3 text-sm ${borderClass} ${bgClass}`}
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="font-bold shrink-0">{opt.label}.</span>
+                      <div className="prose prose-sm max-w-none inline-block">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {opt.text || ''}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {badgeEl}
+                      {iconEl}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* Summary correct answer banner */}
+            {correctOptions.length > 0 && (
+              <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2 text-sm text-emerald-900">
+                <MaterialIcon name="check_circle" className="text-emerald-600 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <span className="font-bold">Đáp án đúng: </span>
+                  {correctOptions.map((o) => `${o.label}. ${o.text}`).join(' | ')}
                 </div>
-                {iconEl}
               </div>
-            );
-          })}
-        </div>
+            )}
+          </>
+        )}
 
         {/* Solution toggle */}
         <div className="mt-6 pt-6 border-t border-whisper-border">
