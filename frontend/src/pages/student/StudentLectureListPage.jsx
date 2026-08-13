@@ -14,7 +14,9 @@ export default function StudentLectureListPage() {
   const [topics, setTopics] = useState([]);
   const [difficulties, setDifficulties] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 12;
   useEffect(() => {
     getTopics(gradeFilter)
       .then(res => {
@@ -37,12 +39,16 @@ export default function StudentLectureListPage() {
       .catch(err => console.error(err));
   }, [gradeFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, gradeFilter, topicFilter, difficultyFilter]);
+
   const fetchLectures = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getLectures({ 
-        page: 1, 
-        pageSize: 50, 
+        page, 
+        pageSize: PAGE_SIZE, 
         search, 
         topic: topicFilter || undefined,
         grade: gradeFilter || undefined,
@@ -50,13 +56,14 @@ export default function StudentLectureListPage() {
         isStudent: true 
       });
       setLectures(res.data?.items || res.data || []);
+      setTotalCount(res.data?.totalCount || 0);
     } catch (err) {
       console.error("Lỗi khi tải danh sách bài giảng:", err);
       setLectures([]);
     } finally {
       setLoading(false);
     }
-  }, [search, topicFilter, gradeFilter, difficultyFilter]);
+  }, [search, topicFilter, gradeFilter, difficultyFilter, page]);
 
   useEffect(() => { fetchLectures(); }, [fetchLectures]);
 
@@ -180,6 +187,30 @@ export default function StudentLectureListPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {!loading && totalCount > PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-4 mt-8 mb-4">
+            <button
+              disabled={page === 1}
+              onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className="px-4 py-2 border border-outline-variant rounded-lg text-[14px] font-medium disabled:opacity-50 hover:bg-surface-variant transition-colors flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+              Trang trước
+            </button>
+            <span className="text-on-surface-variant text-[14px] font-medium">
+              Trang {page} / {Math.ceil(totalCount / PAGE_SIZE)}
+            </span>
+            <button
+              disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
+              onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className="px-4 py-2 border border-outline-variant rounded-lg text-[14px] font-medium disabled:opacity-50 hover:bg-surface-variant transition-colors flex items-center gap-1"
+            >
+              Trang sau
+              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+            </button>
           </div>
         )}
       </div>
