@@ -19,7 +19,7 @@ function getRecommendationExplanation(lecture) {
   }
 }
 
-export default function RecommendedLecturesCard() {
+export default function RecommendedLecturesCard({ layoutVariant = 'dashboard' }) {
   const [lectures, setLectures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -55,16 +55,29 @@ export default function RecommendedLecturesCard() {
     return cleanup;
   }, [fetchRecommendations]);
 
+  const isLibrary = layoutVariant === 'library';
+  const containerClass = isLibrary 
+    ? "relative bg-gradient-to-br from-primary/10 via-surface to-surface border border-primary/20 rounded-3xl p-6 lg:p-8 shadow-sm overflow-hidden"
+    : "bg-pure-surface border border-whisper-border rounded-2xl p-6 shadow-sm";
+    
+  const gridClass = isLibrary
+    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 relative z-10"
+    : "grid grid-cols-1 md:grid-cols-2 gap-4";
+
   return (
-    <div className="bg-pure-surface border border-whisper-border rounded-2xl p-6 shadow-sm">
-      <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2 mb-6">
-        <MaterialIcon name="auto_awesome" className="text-primary" />
-        Bài giảng đề xuất riêng cho bạn
+    <div className={containerClass}>
+      {isLibrary && (
+        <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+      )}
+      <h3 className="text-[20px] font-bold text-on-surface flex items-center gap-2 mb-6 relative z-10">
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 text-primary">
+          <MaterialIcon name="auto_awesome" size={20} />
+        </span>
+        Bài giảng đề xuất dành riêng cho bạn
       </h3>
 
-      {/* Loading skeleton */}
       {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={gridClass}>
           {[1, 2].map((i) => (
             <div key={i} className="rounded-xl border border-whisper-border overflow-hidden animate-pulse">
               <div className="w-full h-[180px] bg-surface-container" />
@@ -103,7 +116,7 @@ export default function RecommendedLecturesCard() {
 
       {/* Data Grid */}
       {!loading && !error && lectures.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={gridClass}>
           {lectures.map((lecture) => {
             const explanation = getRecommendationExplanation(lecture);
             const isColdStart = lecture.reason === 'ColdStartGradeFoundation';
