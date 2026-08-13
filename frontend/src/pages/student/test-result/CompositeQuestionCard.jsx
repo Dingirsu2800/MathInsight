@@ -79,34 +79,47 @@ export default function CompositeQuestionCard({
             <thead>
               <tr className="bg-surface-container-low text-xs font-bold uppercase text-on-surface-variant">
                 <th className="px-6 py-4 border-b border-whisper-border">Khẳng định</th>
-                <th className="px-6 py-4 border-b border-whisper-border w-24 text-center">Đúng</th>
-                <th className="px-6 py-4 border-b border-whisper-border w-24 text-center">Sai</th>
-                <th className="px-6 py-4 border-b border-whisper-border w-32 text-center">Kết quả</th>
+                <th className="px-6 py-4 border-b border-whisper-border w-36 text-center">Lựa chọn của bạn</th>
+                <th className="px-6 py-4 border-b border-whisper-border w-32 text-center">Đáp án đúng</th>
+                <th className="px-6 py-4 border-b border-whisper-border w-24 text-center">Kết quả</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-whisper-border text-sm">
               {statements.map((stmt, i) => {
-                const isCorrectAnswer = stmt.isCorrect === true;
+                const isItemCorrect = stmt.isCorrect === true;
+                const studentText = stmt.studentAnswer === true ? 'Đúng' : stmt.studentAnswer === false ? 'Sai' : 'Chưa chọn';
+                const correctText = stmt.correctAnswer === true ? 'Đúng' : stmt.correctAnswer === false ? 'Sai' : (stmt.correctAnswer || '—');
+
                 return (
-                  <tr key={i}>
-                    <td className="px-6 py-4 italic">
+                  <tr key={i} className={isItemCorrect ? 'bg-emerald-success/5' : 'bg-deep-rose/5'}>
+                    <td className="px-6 py-4 italic font-medium text-on-surface">
                       <div className="prose prose-sm max-w-none">
                         <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                           {stmt.text || ''}
                         </ReactMarkdown>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <RadioDot filled={stmt.studentAnswer === true} />
+                    <td className="px-6 py-4 text-center font-bold">
+                      <span className={`px-2.5 py-1 rounded text-xs inline-block ${
+                        stmt.studentAnswer === null
+                          ? 'bg-surface-container text-outline'
+                          : isItemCorrect
+                            ? 'bg-emerald-success/20 text-emerald-800'
+                            : 'bg-deep-rose/20 text-deep-rose'
+                      }`}>
+                        {studentText}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center font-bold">
+                      <span className="px-2.5 py-1 rounded text-xs inline-block bg-emerald-100 text-emerald-900 border border-emerald-300">
+                        {correctText}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <RadioDot filled={stmt.studentAnswer === false} />
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {isCorrectAnswer ? (
-                        <MaterialIcon name="check" className="text-emerald-success font-bold" />
+                      {isItemCorrect ? (
+                        <MaterialIcon name="check_circle" className="text-emerald-success font-bold" size={20} />
                       ) : (
-                        <MaterialIcon name="close" className="text-deep-rose font-bold" />
+                        <MaterialIcon name="cancel" className="text-deep-rose font-bold" size={20} />
                       )}
                     </td>
                   </tr>
@@ -117,21 +130,31 @@ export default function CompositeQuestionCard({
         </div>
 
         {/* Summary */}
-        <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg border border-whisper-border">
-          <div className="flex items-center gap-2">
-            <MaterialIcon name="analytics" className="text-primary" />
-            <span className="text-sm font-medium">
-              Tóm tắt kết quả:{' '}
-              <span className="font-bold text-on-surface">
-                Đúng {correctCount}/{statements.length} ý
+        <div className="p-4 bg-surface-container-low rounded-lg border border-whisper-border space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MaterialIcon name="analytics" className="text-primary" />
+              <span className="text-sm font-medium">
+                Tóm tắt kết quả:{' '}
+                <span className="font-bold text-on-surface">
+                  Đúng {correctCount}/{statements.length} ý
+                </span>
               </span>
-            </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-on-surface-variant">Điểm nhận:</span>
+              <span className="font-mono text-lg font-bold text-primary">
+                {earnedScore.toFixed(2)} / {maxScore.toFixed(2)}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-on-surface-variant">Điểm nhận:</span>
-            <span className="font-mono text-lg font-bold text-primary">
-              {earnedScore.toFixed(2)} / {maxScore.toFixed(2)}
-            </span>
+          <div className="text-xs text-emerald-900 bg-emerald-50 p-2.5 rounded border border-emerald-200">
+            <span className="font-bold">Đáp án chuẩn: </span>
+            {statements.map((s, idx) => {
+              const label = `Ý ${idx + 1}`;
+              const ansText = s.correctAnswer === true ? 'Đúng' : s.correctAnswer === false ? 'Sai' : (s.correctAnswer || '—');
+              return `${label}: ${ansText}`;
+            }).join(' | ')}
           </div>
         </div>
 

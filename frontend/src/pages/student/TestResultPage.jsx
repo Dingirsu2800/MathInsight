@@ -207,10 +207,11 @@ export default function TestResultPage() {
                 const diff = difficultyLabel(answer.difficultyLevel);
 
                 if (answer.questionType === 'COMPOSITE') {
-                  // Xây dựng correctAnswer từ các ý đúng của composite
-                  const correctStatements = answer.answerParts
-                    .filter((p) => p.isCorrect)
-                    .map((p, i) => `Ý ${i + 1}: ${p.partContent} → ${p.correctAnswer}`);
+                  const correctStatements = (answer.answerParts || []).map((p, i) => {
+                    const label = p.partLabel || `Ý ${i + 1}`;
+                    const ansText = p.correctAnswer === 'True' ? 'Đúng' : p.correctAnswer === 'False' ? 'Sai' : (p.correctAnswer || '—');
+                    return `${label}: ${ansText}`;
+                  });
                   const compositeCorrectAnswer = correctStatements.length > 0
                     ? correctStatements.join('; ')
                     : 'Xem lời giải chi tiết';
@@ -222,10 +223,10 @@ export default function TestResultPage() {
                       stem={answer.questionContent}
                       difficulty={diff.text}
                       difficultyClass={diff.cls}
-                      statements={answer.answerParts.map((p) => ({
+                      statements={(answer.answerParts || []).map((p) => ({
                         text: p.partContent,
-                        correctAnswer: p.correctAnswer === 'True',
-                        studentAnswer: p.studentAnswer === 'True',
+                        correctAnswer: p.correctAnswer === 'True' ? true : p.correctAnswer === 'False' ? false : p.correctAnswer,
+                        studentAnswer: p.studentAnswer === 'True' ? true : p.studentAnswer === 'False' ? false : (p.studentAnswer ? p.studentAnswer : null),
                         isCorrect: p.isCorrect,
                       }))}
                       maxScore={answer.maxPoints}
@@ -248,21 +249,25 @@ export default function TestResultPage() {
                 }
 
                 // SINGLE_CHOICE, MULTIPLE_SELECT, TRUE_FALSE, SHORT_ANSWER
-                // Xây dựng correctAnswer từ các option đúng
                 const correctOptions = (answer.answerOptions || [])
                   .filter((o) => o.isCorrect)
-                  .map((o, i) => `${String.fromCharCode(65 + (answer.answerOptions || []).indexOf(o))}. ${o.answerContent}`)
+                  .map((o) => {
+                    const idx = (answer.answerOptions || []).indexOf(o);
+                    return `${String.fromCharCode(65 + idx)}. ${o.answerContent}`;
+                  })
                   .join(', ');
-                const mcqCorrectAnswer = correctOptions || 'Xem lời giải chi tiết';
+                const mcqCorrectAnswer = correctOptions || (answer.questionType === 'SHORT_ANSWER' ? (answer.answerOptions || []).map((o) => o.answerContent).join(' hoặc ') : 'Xem lời giải chi tiết');
 
                 return (
                   <QuestionAnswerCard
                     key={answer.questionId}
                     index={answer.questionNo}
                     question={answer.questionContent}
+                    questionType={answer.questionType}
                     difficulty={diff.text}
                     difficultyClass={diff.cls}
                     isCorrect={answer.isCorrect}
+                    shortAnswerText={answer.shortAnswerText}
                     options={(answer.answerOptions || []).map((option, optionIndex) => ({
                       label: String.fromCharCode(65 + optionIndex),
                       text: option.answerContent,

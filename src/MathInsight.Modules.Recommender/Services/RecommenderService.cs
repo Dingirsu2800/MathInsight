@@ -53,22 +53,23 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
         string studentId, CancellationToken cancellationToken = default)
     {
         var allMastery = await (
-            from tm in _db.TagsMasteries.AsNoTracking()
-            join tt in _db.TagTopics.AsNoTracking() on tm.TagId equals tt.TagId
+            from tt in _db.TagTopics.AsNoTracking()
             join parent in _db.TagTopics.AsNoTracking() on tt.ParentTagId equals parent.TagId
-            where tm.StudentId == studentId
-                && tt.IsActive
+            join tm in _db.TagsMasteries.AsNoTracking().Where(m => m.StudentId == studentId)
+                on tt.TagId equals tm.TagId into tmGroup
+            from tm in tmGroup.DefaultIfEmpty()
+            where tt.IsActive
                 && parent.IsActive
                 && parent.ParentTagId == null
                 && parent.Grade == tt.Grade
-            orderby tm.OfficialPoint ascending, tm.TagId ascending
+            orderby (tm != null ? tm.OfficialPoint : 5.00m) ascending, tt.TagId ascending
             select new TagMasteryDto(
-                tm.TagId,
+                tt.TagId,
                 tt.TagName,
-                tm.OfficialPoint,
-                tm.NumberDone,
-                tm.MasteryStatus,
-                tm.RecommendedDifficultyLevel)
+                tm != null ? tm.OfficialPoint : 5.00m,
+                tm != null ? tm.NumberDone : 0,
+                tm != null ? tm.MasteryStatus : "NotLearned",
+                tm != null ? tm.RecommendedDifficultyLevel : (byte)1)
         ).ToListAsync(cancellationToken);
 
         return allMastery;

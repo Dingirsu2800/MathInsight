@@ -29,11 +29,15 @@ public sealed class GetSessionResultQueryHandler
             .AsNoTracking()
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.Question)
+                    .ThenInclude(q => q.Answers)
+            .Include(s => s.TestAnswers)
+                .ThenInclude(a => a.Question)
                     .ThenInclude(q => q.QuestionTopics)
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.SelectedOptions)
             .Include(s => s.TestAnswers)
                 .ThenInclude(a => a.AnswerParts)
+                    .ThenInclude(ap => ap.QuestionPart)
             .FirstOrDefaultAsync(s => s.SessionId == request.SessionId, cancellationToken);
 
         if (session is null)
@@ -78,6 +82,17 @@ public sealed class GetSessionResultQueryHandler
                     ? tName
                     : string.Empty;
 
+                var answerOptions = a.Question.Answers
+                    .Where(ans => !ans.IsArchived)
+                    .Select(ans => new AnswerOptionDetailDto
+                    {
+                        AnswerId = ans.AnswerId,
+                        AnswerContent = ans.AnswerContent,
+                        IsCorrect = ans.IsCorrect,
+                        WasSelected = (a.AnswerId == ans.AnswerId) || a.SelectedOptions.Any(so => so.AnswerId == ans.AnswerId)
+                    })
+                    .ToList();
+
                 return new GradedAnswerDetailDto
                 {
                     QuestionId = a.QuestionId,
@@ -99,17 +114,26 @@ public sealed class GetSessionResultQueryHandler
                     SelectedOptionIds = a.SelectedOptions
                         .Select(o => o.AnswerId)
                         .ToList(),
+                    AnswerOptions = answerOptions,
                     AnswerParts = a.AnswerParts
                         .Select(ap => new AnswerPartDetailDto
                         {
                             QuestionPartId = ap.PartId,
-                            PartType = ap.QuestionPart.PartType,
+                            PartOrder = ap.QuestionPart?.PartOrder ?? 0,
+                            PartLabel = ap.QuestionPart?.PartLabel,
+                            PartContent = ap.QuestionPart?.Content ?? string.Empty,
+                            PartType = ap.QuestionPart?.PartType ?? string.Empty,
                             StudentAnswer = ap.BooleanAnswer?.ToString() 
                                             ?? ap.TextAnswer 
                                             ?? ap.NumericAnswer?.ToString(),
+                            CorrectAnswer = ap.QuestionPart?.CorrectBoolean?.ToString()
+                                            ?? ap.QuestionPart?.CorrectText
+                                            ?? ap.QuestionPart?.CorrectNumeric?.ToString(),
                             IsCorrect = ap.IsCorrect,
                             PointsEarned = ap.PointsEarned,
+                            DefaultWeight = ap.QuestionPart?.DefaultWeight ?? 1m
                         })
+                        .OrderBy(ap => ap.PartOrder)
                         .ToList(),
                 };
             })
