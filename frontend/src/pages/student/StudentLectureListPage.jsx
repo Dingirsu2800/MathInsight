@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import { getLectures, getTopics, getDifficulties } from "../../services/learningApi";
-
+import RecommendedLecturesCard from "./dashboard/RecommendedLecturesCard";
 export default function StudentLectureListPage() {
   const navigate = useNavigate();
   const [lectures, setLectures] = useState([]);
@@ -75,7 +75,11 @@ export default function StudentLectureListPage() {
           <p className="text-[14px] text-on-surface-variant">Khám phá các bài giảng từ giáo viên của bạn.</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 mb-2">
+        {page === 1 && !search && !gradeFilter && !topicFilter && !difficultyFilter && (
+          <RecommendedLecturesCard />
+        )}
+
+        <div className="flex flex-col md:flex-row gap-4 mb-2 mt-2">
           <div className="relative w-full md:w-96">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
             <input

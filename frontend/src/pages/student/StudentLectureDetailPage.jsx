@@ -8,6 +8,14 @@ import { API_BASE_URL } from "../../services/api";
 import LatexPreview from "../../components/expert/LatexPreview";
 import MathTextArea from "../../components/common/MathTextArea";
 import RelatedLecturesList from "../../components/student/RelatedLecturesList";
+import YouTube from "react-youtube";
+
+const getYouTubeVideoId = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
 
 const getYouTubeEmbedUrl = (url) => {
   if (!url) return null;
@@ -49,7 +57,11 @@ export default function StudentLectureDetailPage() {
   const [replyContent, setReplyContent] = useState({});
   const [submittingReply, setSubmittingReply] = useState(null);
 
-
+  // Anti-skip & Progress tracking state
+  const [maxTimeWatched, setMaxTimeWatched] = useState(0);
+  const ytPlayerRef = React.useRef(null);
+  const [ytIsPlaying, setYtIsPlaying] = useState(false);
+  const hasSentVideoLogRef = React.useRef(false);
   const fetchDiscussionsData = async () => {
     try {
       const res = await getDiscussions(id, { page: 1, pageSize: 50 });
@@ -111,11 +123,12 @@ export default function StudentLectureDetailPage() {
 
   const lastLoggedIdRef = React.useRef(null);
 
-  // Timer logic for tracking lecture view duration
+  // Timer logic for tracking lecture view duration (for non-video)
   useEffect(() => {
     let seconds = 0;
     let timerId = null;
-    let hasSent300sLog = false;
+    let hasSentTextLog = false;
+    hasSentVideoLogRef.current = false; // Reset on new lecture
 
     // Log immediately on enter (0s) to update Heatmap instantly (only once per lecture id)
     if (lastLoggedIdRef.current !== id) {
@@ -127,15 +140,18 @@ export default function StudentLectureDetailPage() {
     const tick = () => {
       if (!document.hidden) {
         seconds++;
-        // Hit 300 seconds -> log immediately so the streak is secure
-        if (seconds === 300 && !hasSent300sLog) {
-          hasSent300sLog = true;
+        // Hit 600 seconds (10 mins) -> log for non-video lectures
+        // If it's a video lecture, they must watch the video to get credit.
+        const hasVideo = !!lecture?.videoUrl;
+        
+        if (seconds === 600 && !hasSentTextLog && !hasVideo) {
+          hasSentTextLog = true;
           logLectureView(id, seconds)
             .then(() => {
               window.dispatchEvent(new Event("gamification_updated"));
               toast.success("Tuyệt vời! Bạn đã đạt chuỗi học tập hôm nay 🔥");
             })
-            .catch(err => console.error("Error logging 300s view:", err));
+            .catch(err => console.error("Error logging 600s view:", err));
         }
       }
     };
@@ -145,7 +161,62 @@ export default function StudentLectureDetailPage() {
     return () => {
       if (timerId) clearInterval(timerId);
     };
-  }, [id]); // Only depend on 'id', not 'lecture' to prevent re-logging on state changes
+  }, [id, lecture]); 
+
+  // --- HTML5 Video Anti-skip logic ---
+  const handleHtml5TimeUpdate = (e) => {
+    const video = e.target;
+    if (!video.seeking) {
+      if (video.currentTime > maxTimeWatched) {
+        setMaxTimeWatched(video.currentTime);
+      }
+      checkVideoProgress(video.currentTime, video.duration);
+    }
+  };
+
+  const handleHtml5Seeking = (e) => {
+    const video = e.target;
+    if (video.currentTime > maxTimeWatched + 2) {
+      video.currentTime = maxTimeWatched;
+      toast.error("Vui lòng không tua video");
+    }
+  };
+
+  // --- YouTube Anti-skip logic ---
+  useEffect(() => {
+    let interval;
+    if (ytIsPlaying && ytPlayerRef.current) {
+      interval = setInterval(async () => {
+        try {
+          const currentTime = await ytPlayerRef.current.getCurrentTime();
+          const duration = await ytPlayerRef.current.getDuration();
+          
+          if (currentTime > maxTimeWatched + 2) {
+            ytPlayerRef.current.seekTo(maxTimeWatched, true);
+            toast.error("Vui lòng không tua video");
+          } else {
+            if (currentTime > maxTimeWatched) {
+              setMaxTimeWatched(currentTime);
+            }
+            checkVideoProgress(currentTime, duration);
+          }
+        } catch (err) {
+          // Player might not be ready
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [ytIsPlaying, maxTimeWatched]);
+
+  const checkVideoProgress = (current, duration) => {
+    if (duration > 0 && current >= duration * 0.9 && !hasSentVideoLogRef.current) {
+      hasSentVideoLogRef.current = true;
+      logLectureView(id, Math.floor(current)).then(() => {
+        window.dispatchEvent(new Event("gamification_updated"));
+        toast.success("Tuyệt vời! Bạn đã xem xong bài giảng và nhận chuỗi học tập hôm nay 🔥");
+      }).catch(console.error);
+    }
+  };
 
   const handleLikeToggle = async () => {
     try {
@@ -284,10 +355,31 @@ export default function StudentLectureDetailPage() {
           {(lecture.videoUrl || lecture.thumbnailUrl) && (
             <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group">
               {lecture.videoUrl ? (
-                getYouTubeEmbedUrl(lecture.videoUrl) ? (
-                  <iframe src={getYouTubeEmbedUrl(lecture.videoUrl)} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+                getYouTubeVideoId(lecture.videoUrl) ? (
+                  <YouTube 
+                    videoId={getYouTubeVideoId(lecture.videoUrl)}
+                    className="w-full h-full"
+                    iframeClassName="w-full h-full"
+                    opts={{
+                      width: '100%',
+                      height: '100%',
+                      playerVars: { autoplay: 0, rel: 0, modestbranding: 1 }
+                    }}
+                    onReady={(e) => { ytPlayerRef.current = e.target; }}
+                    onStateChange={(e) => {
+                      if (e.data === YouTube.PlayerState.PLAYING) setYtIsPlaying(true);
+                      else setYtIsPlaying(false);
+                    }}
+                  />
                 ) : (
-                  <video src={lecture.videoUrl} controls className="w-full h-full object-cover" poster={lecture.thumbnailUrl} />
+                  <video 
+                    src={lecture.videoUrl} 
+                    controls 
+                    className="w-full h-full object-cover" 
+                    poster={lecture.thumbnailUrl}
+                    onTimeUpdate={handleHtml5TimeUpdate}
+                    onSeeking={handleHtml5Seeking}
+                  />
                 )
               ) : (
                 <img src={lecture.thumbnailUrl} alt={lecture.title} className="w-full h-full object-cover opacity-60" />
