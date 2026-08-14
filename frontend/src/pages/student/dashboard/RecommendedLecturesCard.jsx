@@ -134,14 +134,6 @@ export default function RecommendedLecturesCard({ layoutVariant = 'dashboard' })
                 const chipColor = isRemedial ? 'bg-deep-rose' : 'bg-primary';
                 const chipLabel = isRemedial ? `Phụ đạo: ${lecture.tagName}` : lecture.tagName;
 
-                const difficultyMeta = {
-                  1: { label: 'Cơ bản',   color: 'bg-emerald-500' },
-                  2: { label: 'Trung bình', color: 'bg-amber-500'  },
-                  3: { label: 'Khá',       color: 'bg-orange-500'  },
-                  4: { label: 'Nâng cao',  color: 'bg-red-500'     },
-                };
-                const diff = difficultyMeta[lecture.difficultyLevel] ?? { label: `Mức ${lecture.difficultyLevel}`, color: 'bg-outline' };
-
                 return (
                   <Link
                     key={lecture.lectureId}
@@ -187,9 +179,6 @@ export default function RecommendedLecturesCard({ layoutVariant = 'dashboard' })
                           <MaterialIcon name="info" size={14} className="text-primary/70 shrink-0 mt-0.5" />
                           <span>{explanation}</span>
                         </p>
-                      </div>
-                      <div className={`absolute top-3 right-3 ${diff.color} text-white text-[10px] font-bold px-2.5 py-1 rounded`}>
-                        {diff.label}
                       </div>
                     </div>
 
