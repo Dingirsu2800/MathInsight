@@ -34,7 +34,7 @@ services:
       MistralOcr__ApiKey: ${MistralOcr__ApiKey:-your-api-key}
       MistralOcr__BaseUrl: ${MistralOcr__BaseUrl:-https://api.mistral.ai}
       MistralOcr__Model: ${MistralOcr__Model:-mistral-ocr-latest}
-      Chatbot__ApiKey: ${Chatbot__ApiKey:-AQ.Ab8RN6JkRCZ9rZEAMuFE1M3habu4rmaVNI64vspYGuTUnUkcsg}
+      Chatbot__ApiKey: ${Chatbot__ApiKey:-}
       Chatbot__Model: ${Chatbot__Model:-gemini-2.0-flash}
       Smtp__Enabled: "true"
       Smtp__Host: smtp.gmail.com
