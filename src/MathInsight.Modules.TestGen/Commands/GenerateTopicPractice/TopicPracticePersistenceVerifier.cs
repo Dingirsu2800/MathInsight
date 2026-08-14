@@ -6,7 +6,7 @@ namespace MathInsight.Modules.TestGen.Commands.GenerateTopicPractice;
 
 internal static class TopicPracticePersistenceVerifier
 {
-    // Keeps the prior baseline verifier available for smoke coverage created before WeakTag audit existed.
+    // Keeps the prior baseline verifier available for smoke coverage created before mastery audit existed.
     public static bool IsValid(
         Test test,
         string studentId,
@@ -139,7 +139,7 @@ internal static class TopicPracticePersistenceVerifier
         if (advice is null || string.IsNullOrWhiteSpace(prepared.RecommendedDifficultyId))
             return false;
 
-        if (questions.Any(question => !string.Equals(question.RuleVersion, TopicPracticePolicy.WeakTagRuleVersion, StringComparison.Ordinal)))
+        if (questions.Any(question => !string.Equals(question.RuleVersion, TopicPracticePolicy.MasteryRuleVersion, StringComparison.Ordinal)))
             return false;
 
         var focusQuestionIds = prepared.Questions
@@ -151,7 +151,7 @@ internal static class TopicPracticePersistenceVerifier
         {
             var isFocus = focusQuestionIds.Contains(question.QuestionId);
             return isFocus
-                ? string.Equals(question.SelectionReason, "WeakTagPractice", StringComparison.OrdinalIgnoreCase) &&
+                ? string.Equals(question.SelectionReason, "TopicPractice", StringComparison.OrdinalIgnoreCase) &&
                     question.IsAdaptiveSelected &&
                     string.Equals(question.RecommendedForTagId, advice.TagId, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(question.RecommendedDifficultyId, prepared.RecommendedDifficultyId, StringComparison.OrdinalIgnoreCase) &&

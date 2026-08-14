@@ -111,11 +111,11 @@ public sealed class GetTopicPracticeOptionsQueryHandler : IRequestHandler<GetTop
                 count >= TopicPracticePolicy.QuestionCount,
                 recommendation?.IsAdaptive == true,
                 advice?.TagId,
-                advice?.TagName,
+                advice is null ? null : topic.TagName,
                 advice?.OfficialPoint,
                 advice?.EvidenceCount,
                 advice?.RecommendedDifficultyLevel,
-                advice?.Reason,
+                advice is null ? null : "TopicMastery",
                 availability));
         }
         return Result<TopicPracticeOptionsResponse>.Success(new TopicPracticeOptionsResponse(studentGrade, TopicPracticePolicy.QuestionCount, response));

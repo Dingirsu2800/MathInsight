@@ -35,6 +35,8 @@ public static class RecommenderModuleExtensions
             provider.GetRequiredService<RecommenderService>());
         services.AddScoped<IStudentRecommendationProvider>(provider =>
             provider.GetRequiredService<RecommenderService>());
+        services.AddScoped<IStudentTopicMasteryProvider>(provider =>
+            provider.GetRequiredService<RecommenderService>());
 
         // RecommenderController is auto-discovered by AddControllers() in WebAPI.
 
