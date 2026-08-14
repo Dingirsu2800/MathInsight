@@ -223,15 +223,16 @@ export default function TestResultPage() {
                       stem={answer.questionContent}
                       difficulty={diff.text}
                       difficultyClass={diff.cls}
+                      topicName={answer.topicName}
                       statements={(answer.answerParts || []).map((p) => ({
                         text: p.partContent,
                         correctAnswer: p.correctAnswer === 'True' ? true : p.correctAnswer === 'False' ? false : p.correctAnswer,
                         studentAnswer: p.studentAnswer === 'True' ? true : p.studentAnswer === 'False' ? false : (p.studentAnswer ? p.studentAnswer : null),
                         isCorrect: p.isCorrect,
                       }))}
-                      maxScore={answer.maxPoints}
-                      earnedScore={answer.effectivePoints}
-                      machinePoints={answer.machinePointsEarned}
+                      maxScore={answer.maxPoints ?? 1}
+                      earnedScore={answer.isScoreInvalidated ? 0 : (answer.effectivePoints ?? answer.pointsEarned ?? 0)}
+                      machinePoints={answer.machinePointsEarned ?? answer.pointsEarned ?? 0}
                       isScoreInvalidated={answer.isScoreInvalidated}
                       reportReason={answer.reportReason}
                       scoreAdjustedTime={answer.scoreAdjustedTime}
@@ -266,6 +267,7 @@ export default function TestResultPage() {
                     questionType={answer.questionType}
                     difficulty={diff.text}
                     difficultyClass={diff.cls}
+                    topicName={answer.topicName}
                     isCorrect={answer.isCorrect}
                     shortAnswerText={answer.shortAnswerText}
                     options={(answer.answerOptions || []).map((option, optionIndex) => ({
@@ -275,9 +277,9 @@ export default function TestResultPage() {
                       isSelected: option.wasSelected,
                     }))}
                     solution={answer.solutionContent ? [answer.solutionContent] : []}
-                    machinePoints={answer.machinePointsEarned}
-                    effectivePoints={answer.effectivePoints}
-                    maxPoints={answer.maxPoints}
+                    machinePoints={answer.machinePointsEarned ?? answer.pointsEarned ?? 0}
+                    effectivePoints={answer.isScoreInvalidated ? 0 : (answer.effectivePoints ?? answer.pointsEarned ?? 0)}
+                    maxPoints={answer.maxPoints ?? 1}
                     isScoreInvalidated={answer.isScoreInvalidated}
                     reportReason={answer.reportReason}
                     scoreAdjustedTime={answer.scoreAdjustedTime}

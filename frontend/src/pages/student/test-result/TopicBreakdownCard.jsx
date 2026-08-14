@@ -23,12 +23,20 @@ export default function TopicBreakdownCard({ answers = [] }) {
     if (!topicMap[topicName]) {
       topicMap[topicName] = { name: topicName, total: 0, correct: 0, pointsEarned: 0, maxPoints: 0 };
     }
+
+    // Đếm total/correct trên tất cả câu (kể cả invalidated) để hiển thị x/y đúng
     topicMap[topicName].total += 1;
-    if (ans.isCorrect === true) {
+    if (ans.isCorrect === true && !ans.isScoreInvalidated) {
       topicMap[topicName].correct += 1;
     }
-    topicMap[topicName].pointsEarned += (ans.effectivePoints ?? ans.pointsEarned ?? 0);
-    topicMap[topicName].maxPoints += (ans.maxPoints ?? 1);
+
+    // Công thức TopicScore (backend v4.2): chỉ đưa câu KHÔNG bị invalidated vào tính điểm
+    // TopicScore = sum(PointsEarned) / sum(MaxPoints) × 10
+    // Ở đây nhân 100 để ra phần trăm thay vì 10
+    if (!ans.isScoreInvalidated) {
+      topicMap[topicName].pointsEarned += (ans.effectivePoints ?? ans.pointsEarned ?? 0);
+      topicMap[topicName].maxPoints += (ans.maxPoints ?? 1);
+    }
   });
 
   const topics = Object.values(topicMap).map((t) => {

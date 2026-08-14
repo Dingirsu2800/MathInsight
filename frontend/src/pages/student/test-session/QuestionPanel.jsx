@@ -1,6 +1,4 @@
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import MathMarkdown from '../../../components/ui/MathMarkdown';
 
 /**
  * Renders a single question with its answer options.
@@ -63,11 +61,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
 
       {/* Question content — supports LaTeX via remark-math + rehype-katex */}
       <div className="px-6 py-5">
-        <div className="prose prose-sm max-w-none text-on-surface mb-6">
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-            {q.questionContent || '*(Nội dung câu hỏi)*'}
-          </ReactMarkdown>
-        </div>
+        <MathMarkdown content={q.questionContent || '*(Nội dung câu hỏi)*'} className="prose prose-sm max-w-none text-on-surface mb-6" />
 
         {q.pictureUrl && (
           <img
@@ -101,11 +95,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       <span className="w-2 h-2 rounded-full bg-white" />
                     )}
                   </span>
-                  <div className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {opt.content || ''}
-                    </ReactMarkdown>
-                  </div>
+                  <MathMarkdown content={opt.content || ''} className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline" />
                 </button>
               );
             })}
@@ -136,11 +126,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       <span className="material-symbols-outlined text-white text-sm">check</span>
                     )}
                   </span>
-                  <div className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {opt.content || ''}
-                    </ReactMarkdown>
-                  </div>
+                  <MathMarkdown content={opt.content || ''} className="text-sm text-on-surface prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline" />
                 </button>
               );
             })}
@@ -169,11 +155,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                 <div key={part.partId} className="p-4 bg-surface-container-low rounded-xl border border-whisper-border">
                   <div className="text-sm text-on-surface mb-3 font-medium flex items-baseline gap-1">
                     <span>Phần {idx + 1}:</span>
-                    <div className="prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline">
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {part.content || ''}
-                      </ReactMarkdown>
-                    </div>
+                    <MathMarkdown content={part.content || ''} className="prose prose-sm max-w-none [&>p]:m-0 [&>p]:inline" />
                   </div>
                   {part.answerType === 'BOOLEAN' ? (
                     <div className="flex gap-3">
