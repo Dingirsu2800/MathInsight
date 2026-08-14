@@ -3,11 +3,12 @@ import StudentLayout from '../../components/layout/StudentLayout';
 import MaterialIcon from '../../components/ui/MaterialIcon';
 import ProgressBar from '../../components/ui/ProgressBar';
 import { getTargets, createTarget, updateTarget } from '../../services/gamificationApi';
-import { getWeakTags } from '../../services/recommenderApi';
+import { getAllTagsMastery } from '../../services/recommenderApi';
+import useCurrentUser from '../../hooks/useCurrentUser';
 
 export default function TargetScorePage() {
   const [targets, setTargets] = useState([]);
-  const [weakTags, setWeakTags] = useState([]);
+  const [allTags, setAllTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTagId, setSelectedTagId] = useState('');
   const [newTargetPoint, setNewTargetPoint] = useState(7);
@@ -15,10 +16,13 @@ export default function TargetScorePage() {
   const [editingPoint, setEditingPoint] = useState(0);
   const [error, setError] = useState('');
 
+  const { profile } = useCurrentUser('Học sinh');
+  const currentGrade = profile?.student?.currentGrade;
+
   async function reload() {
-    const [targetList, tagList] = await Promise.all([getTargets(), getWeakTags()]);
+    const [targetList, tagList] = await Promise.all([getTargets(), getAllTagsMastery()]);
     setTargets(targetList || []);
-    setWeakTags(tagList || []);
+    setAllTags(tagList || []);
   }
 
   useEffect(() => {
@@ -26,7 +30,13 @@ export default function TargetScorePage() {
   }, []);
 
   const targetedTagIds = useMemo(() => new Set(targets.map((t) => t.tagId)), [targets]);
-  const availableTags = weakTags.filter((tag) => !targetedTagIds.has(tag.tagId));
+  const availableTags = allTags.filter((tag) => {
+    if (targetedTagIds.has(tag.tagId)) return false;
+    if (currentGrade && tag.tagName) {
+      return tag.tagName.includes(`Lớp ${currentGrade}`);
+    }
+    return true;
+  });
 
   async function handleCreate(event) {
     event.preventDefault();
@@ -89,7 +99,7 @@ export default function TargetScorePage() {
                 <option value="">-- Chọn chủ đề --</option>
                 {availableTags.map((tag) => (
                   <option key={tag.tagId} value={tag.tagId}>
-                    {tag.tagName} (hiện tại {tag.officialPoint}/10)
+                    {tag.tagName}
                   </option>
                 ))}
               </select>
