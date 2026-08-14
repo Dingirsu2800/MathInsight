@@ -369,6 +369,12 @@ Discovery is not an authorization boundary. Testing must revalidate personal own
 
 `POST /api/test-generator/tests/topic-practices` accepts an additive optional `difficultyId` beside `tagId`. Omitting it preserves the existing recommendation-aware behavior. Supplying it switches to manual mode: the selected active difficulty must have level 1 through 4, Recommender is not called, and all ten generated Questions match that exact difficulty. The service never mixes or falls back to another difficulty in manual mode.
 
+## Mock Readiness: Student Catalog And Topic Mastery Practice
+
+Student shared-exam discovery accepts an additive optional `generationType` query parameter with canonical values `Fixed` and `Random`. A shared Test is `Fixed` only when every persisted `TestQuestion.SelectionReason` is `FixedExam`; it is `Random` only when every reason is `BlueprintNormal`. A mixed or unknown aggregate is rejected with a stable contract error instead of being silently classified. Filtering happens before counting and pagination.
+
+Topic Practice automatic mode uses the selected topic's mastery when it has at least three completed items. It is not limited to WeakTags. The score profiles are: `0 <= p < 2`: `9/1/0/0`; `2 <= p < 3`: `8/2/0/0`; `3 <= p < 4`: `3/6/1/0`; `4 <= p < 5`: `2/6/2/0`; `5 <= p < 6`: `0/3/6/1`; `6 <= p < 7.5`: `0/2/6/2`; `7.5 <= p < 9`: `0/0/2/8`; and `9 <= p <= 10`: `0/0/1/9`, with each tuple ordered by difficulty level 1 through 4. Missing or insufficient evidence keeps baseline `3/4/2/1`. Automatic fallback fills the requested level first, then lower levels, then higher levels; all existing uniqueness, Composite-cap, and candidate validity rules remain. Manual Topic Practice remains exactly ten Questions at the selected difficulty.
+
 `GET /api/test-generator/tests/topic-practice-options` returns `difficultyAvailability` for each assignable direct-child topic. Each item includes `difficultyId`, `difficultyName`, `levelValue`, `availableQuestionCount`, and `canGenerate`; counts use the same supported candidate shape and Composite cap as generation. Inactive or unsupported difficulties are excluded.
 
 Manual generation records `SelectionReason = TopicPractice`, `IsAdaptiveSelected = false`, `RecommendedForTagId = selected topic`, `RecommendedDifficultyId = selected difficulty`, `PtagAtSelection = NULL`, and `RuleVersion = TopicPractice-Manual-v1`. The response adds `difficultySelectionMode`, `selectedDifficultyId`, `selectedDifficultyName`, and `selectedDifficultyLevel`.

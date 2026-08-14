@@ -82,6 +82,7 @@
 - [ ] Admin frontend report dashboard and approve/reject UI
 - [x] Image upload helper endpoint -> authenticated Cloudinary REST client using server-side HTTP Basic authentication, return `picture_url`; validate JPEG/PNG/WebP magic bytes and 5 MB limit; OCR/Pix2Text remains a separate backlog checkpoint
 - [x] OCR draft endpoint -> Expert-only Mistral OCR client, one JPEG/PNG/WebP question image, 5 MB magic-byte validation, 10 requests/minute per Expert, no database write or automatic answer confirmation (BR-72)
+- [ ] Harden OCR draft semantics: observed answer marks only, forced null correctness, explicit-solution-only output, and warning for visual content without an extracted image candidate.
 - [x] Register QuestionBank import services inside `QuestionBankModuleExtensions.cs`:
   - ClosedXML parser, template service, validation service, MediatR handlers
 
