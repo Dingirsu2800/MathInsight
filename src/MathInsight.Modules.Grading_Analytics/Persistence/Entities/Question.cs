@@ -24,6 +24,9 @@ public class Question
     /// </summary>
     public string QuestionContent { get; set; } = string.Empty;
 
+    public string? SolutionContent { get; set; }
+    public string? PictureUrl { get; set; }
+
     // Navigation
     public ICollection<Answer> Answers { get; set; } = new List<Answer>();
     public ICollection<QuestionPart> Parts { get; set; } = new List<QuestionPart>();

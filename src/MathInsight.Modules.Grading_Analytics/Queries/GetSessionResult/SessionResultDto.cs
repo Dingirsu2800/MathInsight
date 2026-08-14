@@ -105,4 +105,5 @@ public sealed record AnswerPartDetailDto
     public bool? IsCorrect { get; init; }
     public decimal PointsEarned { get; init; }
     public decimal DefaultWeight { get; init; }
+    public string? Explanation { get; init; }
 }
