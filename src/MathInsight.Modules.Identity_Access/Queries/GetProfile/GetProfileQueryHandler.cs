@@ -64,6 +64,7 @@ public class GetProfileQueryHandler : IRequestHandler<GetProfileQuery, Result<Pr
             account.DateOfBirth,
             account.AvatarUrl,
             account.Role.RoleName,
+            account.CreatedTime,
             account.Student is null
                 ? null
                 : new StudentProfile(account.Student.Gender, account.Student.School, account.Student.CurrentGrade),
