@@ -240,14 +240,21 @@ export function mapEditorStateToCreateUpdateRequest(state) {
   return payload;
 }
 
-export function mapOcrDraftToEditorStatePatch(draft) {
+export function mapOcrDraftToEditorStatePatch(draft, currentEditorState = {}) {
   if (!draft) return null;
 
   const questionType = mapBackendTypeToUiType(draft.suggestedQuestionType);
 
+  let solution = "";
+  if (draft.solutionContent && draft.solutionContent.trim()) {
+    solution = draft.solutionContent;
+  } else if (currentEditorState && currentEditorState.solutionContent) {
+    solution = currentEditorState.solutionContent;
+  }
+
   const patch = {
     questionContent: draft.questionContent || "",
-    solutionContent: draft.solutionContent || "",
+    solutionContent: solution,
   };
 
   if (questionType !== "UNKNOWN") {

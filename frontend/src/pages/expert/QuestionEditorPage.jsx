@@ -812,7 +812,7 @@ export default function QuestionEditorPage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       // Map full draft state
-      const mapped = mapOcrDraftToEditorStatePatch(reviewDraft);
+      const mapped = mapOcrDraftToEditorStatePatch(reviewDraft, form);
       if (!mapped) return;
 
       setForm(prev => {
