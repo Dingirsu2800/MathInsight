@@ -162,4 +162,71 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', (
 
     expect(await screen.findByTestId('start-test-dialog')).toHaveTextContent('Đề thi nhập mã');
   });
+
+  it('isolates error state to active tab and recovers on tab switch', async () => {
+    testGeneratorApi.getSharedBlueprintExams.mockRejectedValueOnce(new Error('Server error'));
+
+    render(
+      <BrowserRouter>
+        <SharedBlueprintExamDiscoveryPage />
+      </BrowserRouter>
+    );
+
+    expect(
+      await screen.findByText('Không thể tải danh sách bài thi. Vui lòng thử lại sau.')
+    ).toBeInTheDocument();
+
+    testGeneratorApi.getSharedBlueprintExams.mockResolvedValueOnce({
+      data: { items: randomExams, totalCount: 1, totalPages: 1 },
+    });
+
+    const randomTab = screen.getByRole('tab', { name: /Đề tạo ngẫu nhiên/i });
+    fireEvent.click(randomTab);
+
+    expect(await screen.findByText('Đề ngẫu nhiên số 1')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Không thể tải danh sách bài thi. Vui lòng thử lại sau.')
+    ).not.toBeInTheDocument();
+  });
+
+  it('guards against responses containing mismatched generationType', async () => {
+    const mixedPayload = {
+      items: [
+        {
+          testId: 'TEST-FIXED-1',
+          testName: 'Đề cố định hợp lệ',
+          generationType: 'Fixed',
+          grade: 12,
+          durationMinutes: 90,
+          totalQuestions: 50,
+          maxScore: 10,
+        },
+        {
+          testId: 'TEST-RANDOM-ACCIDENTAL',
+          testName: 'Đề ngẫu nhiên lọt lưới',
+          generationType: 'Random',
+          grade: 12,
+          durationMinutes: 90,
+          totalQuestions: 50,
+          maxScore: 10,
+        },
+      ],
+      totalCount: 2,
+      totalPages: 1,
+    };
+
+    testGeneratorApi.getSharedBlueprintExams.mockResolvedValueOnce({
+      data: mixedPayload,
+    });
+
+    render(
+      <BrowserRouter>
+        <SharedBlueprintExamDiscoveryPage />
+      </BrowserRouter>
+    );
+
+    // Only "Đề cố định hợp lệ" should be rendered
+    expect(await screen.findByText('Đề cố định hợp lệ')).toBeInTheDocument();
+    expect(screen.queryByText('Đề ngẫu nhiên lọt lưới')).not.toBeInTheDocument();
+  });
 });
