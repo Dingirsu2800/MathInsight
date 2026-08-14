@@ -188,7 +188,7 @@
 
 ## Phase 8F: Mock Readiness Backend
 
-- [ ] Add server-side Student shared-exam `generationType=Fixed|Random` filtering before pagination, with stable rejection of mixed/unknown selection reasons.
+- [x] Add server-side Student shared-exam `generationType=Fixed|Random` filtering before pagination, with stable rejection of mixed/unknown selection reasons.
 - [ ] Add the batch `IStudentTopicMasteryProvider` contract without changing the WeakTag/lecture/material provider.
 - [ ] Replace automatic Topic Practice's WeakTag-only profile with the approved full-range mastery profiles; preserve baseline and strict manual mode.
 - [ ] Add focused TestGen/Recommender regression tests for catalog classification and mastery profile boundaries.

@@ -52,6 +52,9 @@ public sealed class ResolveSharedTestCodeQueryHandler
                 test.BlueprintId!,
                 test.TestName,
                 test.TestCode,
+                test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason)
+                    ? GeneratedTestValues.FixedGenerationType
+                    : GeneratedTestValues.RandomGenerationType,
                 test.Blueprint!.Grade,
                 test.DurationMinutes,
                 test.TotalQuestions,

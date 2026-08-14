@@ -37,6 +37,10 @@ public sealed class GetSharedBlueprintExamsQueryHandler
         var pageIndex = query.PageIndex <= 0 ? 1 : query.PageIndex;
         var pageSize = query.PageSize <= 0 ? 20 : Math.Min(query.PageSize, 100);
         pageIndex = Math.Min(pageIndex, int.MaxValue / pageSize);
+        var requestedGenerationType = NormalizeGenerationType(query.GenerationType);
+        if (requestedGenerationType is null && !string.IsNullOrWhiteSpace(query.GenerationType))
+            return Result<PagedSharedBlueprintExamResponse>.Failure(TestGenerationErrors.RequestInvalid);
+
         var source = _context.Tests
             .AsNoTracking()
             .Where(test =>
@@ -46,25 +50,61 @@ public sealed class GetSharedBlueprintExamsQueryHandler
                 test.Blueprint != null &&
                 test.Blueprint.Status == BlueprintStatuses.Active &&
                 test.Blueprint.Grade == grade);
-        var totalCount = await source.CountAsync(cancellationToken);
-        var items = await source
-            .OrderByDescending(test => test.CreatedTime)
-            .ThenBy(test => test.TestId)
+
+        var hasInvalidGenerationMetadata = await source.AnyAsync(test =>
+            !test.Questions.Any() ||
+            test.Questions.Any(question =>
+                question.SelectionReason != GeneratedTestValues.FixedExamReason &&
+                question.SelectionReason != GeneratedTestValues.BlueprintNormalReason) ||
+            (test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason) &&
+             test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.BlueprintNormalReason)),
+            cancellationToken);
+        if (hasInvalidGenerationMetadata)
+            return Result<PagedSharedBlueprintExamResponse>.Failure(TestGenerationErrors.SharedExamGenerationTypeInvalid);
+
+        var classifiedSource = source.Select(test => new
+        {
+            Test = test,
+            IsFixed = test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason)
+        });
+        if (requestedGenerationType == GeneratedTestValues.FixedGenerationType)
+            classifiedSource = classifiedSource.Where(item => item.IsFixed);
+        else if (requestedGenerationType == GeneratedTestValues.RandomGenerationType)
+            classifiedSource = classifiedSource.Where(item => !item.IsFixed);
+
+        var totalCount = await classifiedSource.CountAsync(cancellationToken);
+        var items = await classifiedSource
+            .OrderByDescending(item => item.Test.CreatedTime)
+            .ThenBy(item => item.Test.TestId)
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
-            .Select(test => new SharedBlueprintExamResponse(
-                test.TestId,
-                test.BlueprintId!,
-                test.TestName,
-                test.TestCode,
-                test.Blueprint!.Grade,
-                test.DurationMinutes,
-                test.TotalQuestions,
-                test.MaxScore,
-                test.CreatedTime))
+            .Select(item => new SharedBlueprintExamResponse(
+                item.Test.TestId,
+                item.Test.BlueprintId!,
+                item.Test.TestName,
+                item.Test.TestCode,
+                item.IsFixed ? GeneratedTestValues.FixedGenerationType : GeneratedTestValues.RandomGenerationType,
+                item.Test.Blueprint!.Grade,
+                item.Test.DurationMinutes,
+                item.Test.TotalQuestions,
+                item.Test.MaxScore,
+                item.Test.CreatedTime))
             .ToListAsync(cancellationToken);
 
         return Result<PagedSharedBlueprintExamResponse>.Success(
             new(pageIndex, pageSize, totalCount, items));
+    }
+
+    private static string? NormalizeGenerationType(string? generationType)
+    {
+        if (string.IsNullOrWhiteSpace(generationType))
+            return null;
+
+        return generationType.Trim().ToUpperInvariant() switch
+        {
+            "FIXED" => GeneratedTestValues.FixedGenerationType,
+            "RANDOM" => GeneratedTestValues.RandomGenerationType,
+            _ => null
+        };
     }
 }
