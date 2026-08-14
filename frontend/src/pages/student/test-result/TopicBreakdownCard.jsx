@@ -15,34 +15,52 @@ function getLabelColor(level) {
 }
 
 export default function TopicBreakdownCard({ answers = [] }) {
-  // Aggregate accuracy per topic
+  // Aggregate weighted accuracy per topic using TagWeights from API (v4.2 formula)
+  // TopicScore(i) = sum(PointsEarned_q × w_{iq}) / sum(MaxPoints_q × w_{iq}) × 100
+  // single-tag: w = 1.0 | multi-tag: primary w = 0.65, secondary w = 0.35 / N
   const topicMap = {};
 
   answers.forEach((ans) => {
-    const topicName = ans.topicName || (ans.questionType ? `Dạng ${ans.questionType}` : 'Chủ đề khác');
-    if (!topicMap[topicName]) {
-      topicMap[topicName] = { name: topicName, total: 0, correct: 0, pointsEarned: 0, maxPoints: 0 };
-    }
+    const pointsEarned = ans.effectivePoints ?? ans.pointsEarned ?? 0;
+    const maxPoints = ans.maxPoints ?? 1;
 
-    // Đếm total/correct trên tất cả câu (kể cả invalidated) để hiển thị x/y đúng
-    topicMap[topicName].total += 1;
-    if (ans.isCorrect === true && !ans.isScoreInvalidated) {
-      topicMap[topicName].correct += 1;
-    }
+    // Resolve tag entries: prefer tagWeights from API, fallback to primary topicName
+    const tagEntries = ans.tagWeights && ans.tagWeights.length > 0
+      ? ans.tagWeights
+      : [{
+          tagId: ans.tagId || '',
+          topicName: ans.topicName || (ans.questionType ? `Dạng ${ans.questionType}` : 'Chủ đề khác'),
+          weight: 1.0,
+          isPrimary: true,
+        }];
 
-    // Công thức TopicScore (backend v4.2): chỉ đưa câu KHÔNG bị invalidated vào tính điểm
-    // TopicScore = sum(PointsEarned) / sum(MaxPoints) × 10
-    // Ở đây nhân 100 để ra phần trăm thay vì 10
-    if (!ans.isScoreInvalidated) {
-      topicMap[topicName].pointsEarned += (ans.effectivePoints ?? ans.pointsEarned ?? 0);
-      topicMap[topicName].maxPoints += (ans.maxPoints ?? 1);
-    }
+    tagEntries.forEach((entry) => {
+      const topicName = entry.topicName || `Tag ${entry.tagId}` || 'Chủ đề khác';
+      if (!topicMap[topicName]) {
+        topicMap[topicName] = { name: topicName, total: 0, correct: 0, earnedWeighted: 0, maxWeighted: 0 };
+      }
+
+      // Đếm total/correct trên tất cả câu (kể cả invalidated) — chỉ tính ở primary tag
+      // để tránh đếm trùng khi một câu có nhiều tags
+      if (entry.isPrimary) {
+        topicMap[topicName].total += 1;
+        if (ans.isCorrect === true && !ans.isScoreInvalidated) {
+          topicMap[topicName].correct += 1;
+        }
+      }
+
+      // Tính weighted contribution — bỏ qua câu bị invalidated (giống backend)
+      if (!ans.isScoreInvalidated) {
+        topicMap[topicName].earnedWeighted += pointsEarned * entry.weight;
+        topicMap[topicName].maxWeighted += maxPoints * entry.weight;
+      }
+    });
   });
 
   const topics = Object.values(topicMap).map((t) => {
     let percent = 0;
-    if (t.maxPoints > 0) {
-      percent = Math.round((t.pointsEarned / t.maxPoints) * 100);
+    if (t.maxWeighted > 0) {
+      percent = Math.round((t.earnedWeighted / t.maxWeighted) * 100);
     } else if (t.total > 0) {
       percent = Math.round((t.correct / t.total) * 100);
     }
