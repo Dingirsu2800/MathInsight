@@ -41,7 +41,7 @@ public sealed class GetSharedBlueprintExamsQueryHandler
         if (requestedGenerationType is null && !string.IsNullOrWhiteSpace(query.GenerationType))
             return Result<PagedSharedBlueprintExamResponse>.Failure(TestGenerationErrors.RequestInvalid);
 
-        var source = _context.Tests
+        var source = await _context.Tests
             .AsNoTracking()
             .Where(test =>
                 test.TestStatus == GeneratedTestValues.ActiveStatus &&
@@ -49,47 +49,60 @@ public sealed class GetSharedBlueprintExamsQueryHandler
                 test.GeneratedForStudentId == null &&
                 test.Blueprint != null &&
                 test.Blueprint.Status == BlueprintStatuses.Active &&
-                test.Blueprint.Grade == grade);
+                test.Blueprint.Grade == grade)
+            .Select(test => new
+            {
+                test.TestId,
+                test.BlueprintId,
+                test.TestName,
+                test.TestCode,
+                Grade = test.Blueprint!.Grade,
+                test.DurationMinutes,
+                test.TotalQuestions,
+                test.MaxScore,
+                test.CreatedTime,
+                SelectionReasons = test.Questions.Select(question => question.SelectionReason).ToList()
+            })
+            .ToListAsync(cancellationToken);
 
-        var hasInvalidGenerationMetadata = await source.AnyAsync(test =>
-            !test.Questions.Any() ||
-            test.Questions.Any(question =>
-                question.SelectionReason != GeneratedTestValues.FixedExamReason &&
-                question.SelectionReason != GeneratedTestValues.BlueprintNormalReason) ||
-            (test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason) &&
-             test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.BlueprintNormalReason)),
-            cancellationToken);
-        if (hasInvalidGenerationMetadata)
-            return Result<PagedSharedBlueprintExamResponse>.Failure(TestGenerationErrors.SharedExamGenerationTypeInvalid);
-
-        var classifiedSource = source.Select(test => new
+        var classifiedSource = new List<ClassifiedSharedBlueprintExam>();
+        foreach (var test in source)
         {
-            Test = test,
-            IsFixed = test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason)
-        });
-        if (requestedGenerationType == GeneratedTestValues.FixedGenerationType)
-            classifiedSource = classifiedSource.Where(item => item.IsFixed);
-        else if (requestedGenerationType == GeneratedTestValues.RandomGenerationType)
-            classifiedSource = classifiedSource.Where(item => !item.IsFixed);
+            if (!SharedBlueprintExamGenerationTypeClassifier.TryClassify(test.SelectionReasons, out var generationType))
+                return Result<PagedSharedBlueprintExamResponse>.Failure(TestGenerationErrors.SharedExamGenerationTypeInvalid);
+            classifiedSource.Add(new ClassifiedSharedBlueprintExam(
+                test.TestId,
+                test.BlueprintId!,
+                test.TestName,
+                test.TestCode,
+                generationType,
+                test.Grade,
+                test.DurationMinutes,
+                test.TotalQuestions,
+                test.MaxScore,
+                test.CreatedTime));
+        }
 
-        var totalCount = await classifiedSource.CountAsync(cancellationToken);
-        var items = await classifiedSource
-            .OrderByDescending(item => item.Test.CreatedTime)
-            .ThenBy(item => item.Test.TestId)
+        var filteredSource = classifiedSource
+            .Where(item => requestedGenerationType is null || item.GenerationType == requestedGenerationType)
+            .OrderByDescending(item => item.CreatedTime)
+            .ThenBy(item => item.TestId);
+        var totalCount = filteredSource.Count();
+        var items = filteredSource
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
             .Select(item => new SharedBlueprintExamResponse(
-                item.Test.TestId,
-                item.Test.BlueprintId!,
-                item.Test.TestName,
-                item.Test.TestCode,
-                item.IsFixed ? GeneratedTestValues.FixedGenerationType : GeneratedTestValues.RandomGenerationType,
-                item.Test.Blueprint!.Grade,
-                item.Test.DurationMinutes,
-                item.Test.TotalQuestions,
-                item.Test.MaxScore,
-                item.Test.CreatedTime))
-            .ToListAsync(cancellationToken);
+                item.TestId,
+                item.BlueprintId,
+                item.TestName,
+                item.TestCode,
+                item.GenerationType,
+                item.Grade,
+                item.DurationMinutes,
+                item.TotalQuestions,
+                item.MaxScore,
+                item.CreatedTime))
+            .ToList();
 
         return Result<PagedSharedBlueprintExamResponse>.Success(
             new(pageIndex, pageSize, totalCount, items));
@@ -107,4 +120,16 @@ public sealed class GetSharedBlueprintExamsQueryHandler
             _ => null
         };
     }
+
+    private sealed record ClassifiedSharedBlueprintExam(
+        string TestId,
+        string BlueprintId,
+        string TestName,
+        string? TestCode,
+        string GenerationType,
+        int Grade,
+        int DurationMinutes,
+        int TotalQuestions,
+        decimal MaxScore,
+        DateTime CreatedTime);
 }

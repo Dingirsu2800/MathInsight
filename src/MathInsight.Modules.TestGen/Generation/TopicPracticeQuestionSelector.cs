@@ -41,8 +41,7 @@ public sealed class TopicPracticeQuestionSelector : ITopicPracticeQuestionSelect
 
             var ordered = eligible
                 .OrderBy(candidate => GetScopePriority(candidate, slot.Scope, plan))
-                .ThenBy(candidate => Math.Abs(candidate.DifficultyLevel - slot.TargetDifficultyLevel))
-                .ThenBy(candidate => candidate.DifficultyLevel)
+                .ThenBy(candidate => GetDifficultyFallbackPriority(candidate.DifficultyLevel, slot.TargetDifficultyLevel))
                 .ThenBy(candidate => candidate.LastSeenAt is not null)
                 .ThenBy(candidate => candidate.LastSeenAt)
                 .ToList();
@@ -50,8 +49,7 @@ public sealed class TopicPracticeQuestionSelector : ITopicPracticeQuestionSelect
             var finalGroup = ordered
                 .TakeWhile(candidate =>
                     GetScopePriority(candidate, slot.Scope, plan) == GetScopePriority(priority, slot.Scope, plan) &&
-                    Math.Abs(candidate.DifficultyLevel - slot.TargetDifficultyLevel) == Math.Abs(priority.DifficultyLevel - slot.TargetDifficultyLevel) &&
-                    candidate.DifficultyLevel == priority.DifficultyLevel &&
+                    GetDifficultyFallbackPriority(candidate.DifficultyLevel, slot.TargetDifficultyLevel) == GetDifficultyFallbackPriority(priority.DifficultyLevel, slot.TargetDifficultyLevel) &&
                     (candidate.LastSeenAt is null) == (priority.LastSeenAt is null) &&
                     candidate.LastSeenAt == priority.LastSeenAt)
                 .ToList();
@@ -88,5 +86,15 @@ public sealed class TopicPracticeQuestionSelector : ITopicPracticeQuestionSelect
         return scope == TopicPracticeSlotScope.FocusPreferred
             ? isFocus ? 0 : 1
             : isFocus ? 1 : 0;
+    }
+
+    private static int GetDifficultyFallbackPriority(int candidateLevel, int targetLevel)
+    {
+        if (candidateLevel == targetLevel)
+            return 0;
+
+        return candidateLevel < targetLevel
+            ? targetLevel - candidateLevel
+            : candidateLevel;
     }
 }

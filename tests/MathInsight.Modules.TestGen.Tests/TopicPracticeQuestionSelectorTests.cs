@@ -112,6 +112,22 @@ public sealed class TopicPracticeQuestionSelectorTests
     }
 
     [Fact]
+    public void Select_FallbackPrefersEveryLowerLevelBeforeAnyHigherLevel()
+    {
+        var plan = new TopicPracticeSelectionPlan(
+            Enumerable.Repeat(new TopicPracticeSlot(3, TopicPracticeSlotScope.BreadthPreferred), 10).ToList(),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            IsDirectFocusSelection: false,
+            TopicPracticePolicy.RuleVersion);
+        var candidates = CandidatesByLevel(10, 0, 0, 10);
+
+        var selection = CreateSelector().Select(candidates, plan, CancellationToken.None);
+
+        Assert.True(selection.IsComplete);
+        Assert.All(selection.Selected, item => Assert.Equal(1, item.Candidate.DifficultyLevel));
+    }
+
+    [Fact]
     public void Select_NeverReturnsMoreThanTwoCompositeQuestions()
     {
         var candidates = CandidatesByLevel(3, 4, 1, 0);

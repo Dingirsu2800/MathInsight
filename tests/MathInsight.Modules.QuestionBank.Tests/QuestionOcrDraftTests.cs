@@ -151,7 +151,7 @@ public sealed class QuestionOcrDraftTests
     {
         var annotation = new
         {
-            questionContent = "Chọn đáp án.", solutionContent = "Lời giải được in sẵn.", suggestedQuestionType = "SINGLE_CHOICE",
+            questionContent = "Chọn đáp án.", solutionContent = "Lời giải được in sẵn.", solutionExplicitlyVisible = true, suggestedQuestionType = "SINGLE_CHOICE",
             answers = new[] { new { content = "A", suggestedIsCorrect = true, detectedMark = providerMark } },
             parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
         };
@@ -162,6 +162,42 @@ public sealed class QuestionOcrDraftTests
 
         Assert.Equal(expectedMark, Assert.Single(result.Draft.Answers).DetectedMark);
         Assert.Equal("Lời giải được in sẵn.", result.Draft.SolutionContent);
+    }
+
+    [Fact]
+    public async Task MistralService_HidesSolutionAndPartExplanationUnlessExplicitlyVisible()
+    {
+        var annotation = new
+        {
+            questionContent = "Câu hỏi.",
+            solutionContent = "Lời giải do model tự tạo.",
+            solutionExplicitlyVisible = false,
+            suggestedQuestionType = "COMPOSITE",
+            answers = Array.Empty<object>(),
+            parts = new[]
+            {
+                new
+                {
+                    label = "a",
+                    content = "Mệnh đề.",
+                    partType = "TRUE_FALSE",
+                    explanation = "Giải thích do model tự tạo.",
+                    suggestedCorrectBoolean = true,
+                    suggestedCorrectText = (string?)null,
+                    suggestedCorrectNumeric = (decimal?)null,
+                    numericTolerance = (decimal?)null
+                }
+            },
+            warnings = Array.Empty<string>(),
+            visualContentDetected = false
+        };
+        using var client = CreateJsonClient(CreateProviderResponse(annotation));
+        var service = CreateMistralService(client);
+
+        var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
+
+        Assert.Equal(string.Empty, result.Draft.SolutionContent);
+        Assert.Null(Assert.Single(result.Draft.Parts).Explanation);
     }
 
     [Fact]

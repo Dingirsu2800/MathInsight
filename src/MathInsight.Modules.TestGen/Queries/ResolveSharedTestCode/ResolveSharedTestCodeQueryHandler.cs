@@ -47,23 +47,36 @@ public sealed class ResolveSharedTestCodeQueryHandler
                 test.Blueprint != null &&
                 test.Blueprint.Status == BlueprintStatuses.Active &&
                 test.Blueprint.Grade == grade)
-            .Select(test => new SharedBlueprintExamResponse(
+            .Select(test => new
+            {
                 test.TestId,
-                test.BlueprintId!,
+                test.BlueprintId,
                 test.TestName,
                 test.TestCode,
-                test.Questions.Any(question => question.SelectionReason == GeneratedTestValues.FixedExamReason)
-                    ? GeneratedTestValues.FixedGenerationType
-                    : GeneratedTestValues.RandomGenerationType,
-                test.Blueprint!.Grade,
+                Grade = test.Blueprint!.Grade,
                 test.DurationMinutes,
                 test.TotalQuestions,
                 test.MaxScore,
-                test.CreatedTime))
+                test.CreatedTime,
+                SelectionReasons = test.Questions.Select(question => question.SelectionReason).ToList()
+            })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return result is null
-            ? Result<SharedBlueprintExamResponse>.Failure(TestGenerationErrors.TestCodeNotAvailable)
-            : Result<SharedBlueprintExamResponse>.Success(result);
+        if (result is null)
+            return Result<SharedBlueprintExamResponse>.Failure(TestGenerationErrors.TestCodeNotAvailable);
+        if (!SharedBlueprintExamGenerationTypeClassifier.TryClassify(result.SelectionReasons, out var generationType))
+            return Result<SharedBlueprintExamResponse>.Failure(TestGenerationErrors.SharedExamGenerationTypeInvalid);
+
+        return Result<SharedBlueprintExamResponse>.Success(new SharedBlueprintExamResponse(
+            result.TestId,
+            result.BlueprintId!,
+            result.TestName,
+            result.TestCode,
+            generationType,
+            result.Grade,
+            result.DurationMinutes,
+            result.TotalQuestions,
+            result.MaxScore,
+            result.CreatedTime));
     }
 }

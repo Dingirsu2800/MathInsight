@@ -561,6 +561,48 @@ public sealed class SharedBlueprintExamTests
     }
 
     [Theory]
+    [InlineData("mixed")]
+    [InlineData("unknown")]
+    [InlineData("empty")]
+    public async Task ResolveCode_InvalidGenerationMetadata_ReturnsStableContractError(string scenario)
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentGrade12Id, 12);
+        var blueprint = AddBlueprint(testContext, $"resolve-{scenario}", BlueprintStatuses.Active, OwnerExpertId, grade: 12);
+        var test = AddGeneratedTest(
+            testContext,
+            $"resolve-{scenario}",
+            blueprint,
+            scenario.ToUpperInvariant(),
+            selectionReason: scenario == "unknown" ? "UnexpectedReason" : GeneratedTestValues.BlueprintNormalReason);
+        if (scenario == "mixed")
+        {
+            test.Questions.Add(new TestQuestion
+            {
+                TestId = test.TestId,
+                QuestionId = "resolve-mixed-fixed",
+                QuestionOrder = 2,
+                SelectionReason = GeneratedTestValues.FixedExamReason,
+                QuestionVersionId = "resolve-mixed-fixed-version",
+                WeightSnapshot = 1m,
+                MaxPointsSnapshot = 1m
+            });
+        }
+        else if (scenario == "empty")
+        {
+            test.Questions.Clear();
+        }
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new ResolveSharedTestCodeQueryHandler(testContext.Context).Handle(
+            new ResolveSharedTestCodeQuery(StudentGrade12Id, scenario.ToUpperInvariant()),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TestGenerationErrors.SharedExamGenerationTypeInvalid, result.Error);
+    }
+
+    [Theory]
     [InlineData("PERSONAL")]
     [InlineData("ARCHIVED")]
     [InlineData("DEACTIVATED")]

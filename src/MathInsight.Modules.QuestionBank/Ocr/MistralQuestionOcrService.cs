@@ -24,10 +24,11 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
         {
           "type":"object",
           "additionalProperties":false,
-          "required":["questionContent","solutionContent","suggestedQuestionType","answers","parts","warnings","visualContentDetected"],
+          "required":["questionContent","solutionContent","solutionExplicitlyVisible","suggestedQuestionType","answers","parts","warnings","visualContentDetected"],
           "properties":{
             "questionContent":{"type":"string"},
             "solutionContent":{"type":"string"},
+            "solutionExplicitlyVisible":{"type":"boolean"},
             "suggestedQuestionType":{"type":"string","enum":["SINGLE_CHOICE","MULTIPLE_CHOICE","TRUE_FALSE","SHORT_ANSWER","COMPOSITE","UNKNOWN"]},
             "answers":{"type":"array","maxItems":20,"items":{"type":"object","additionalProperties":false,"required":["content","suggestedIsCorrect","detectedMark"],"properties":{"content":{"type":"string"},"suggestedIsCorrect":{"type":["boolean","null"]},"detectedMark":{"type":"string"}}}},
             "parts":{"type":"array","maxItems":20,"items":{"type":"object","additionalProperties":false,"required":["label","content","partType","explanation","suggestedCorrectBoolean","suggestedCorrectText","suggestedCorrectNumeric","numericTolerance"],"properties":{"label":{"type":["string","null"]},"content":{"type":"string"},"partType":{"type":"string","enum":["TRUE_FALSE","SHORT_ANSWER","NUMERIC_ANSWER","UNKNOWN"]},"explanation":{"type":["string","null"]},"suggestedCorrectBoolean":{"type":["boolean","null"]},"suggestedCorrectText":{"type":["string","null"]},"suggestedCorrectNumeric":{"type":["number","null"]},"numericTolerance":{"type":["number","null"]}}}},
@@ -156,7 +157,7 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
                 For COMPOSITE, questionContent must contain only the shared introduction. Put each a/b/c/d statement exactly once in parts[].content, without its label, and do not duplicate statements in questionContent.
                 Observe circles, ticks, crosses, and highlights only as detectedMark on the corresponding option. They are never answer keys, including when they appear to mark a choice.
                 Set every suggested correctness value to null.
-                Leave solutionContent empty unless an explicit printed solution is visible in the source image.
+                Set solutionExplicitlyVisible true only when an explicit printed solution is visible in the source image. Otherwise set it false and leave solutionContent and every parts[].explanation empty.
                 Set visualContentDetected to true when a table, chart, graph, geometry figure, or diagram is visible. Preserve tables as GitHub-Flavored Markdown.
                 Put uncertain, omitted, or ambiguous information in warnings.
                 """,
@@ -221,7 +222,7 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
                 NormalizeOptionalText(part.Label) ?? GetDefaultPartLabel(index),
                 NormalizeText(part.Content),
                 NormalizePartType(part.PartType),
-                NormalizeOptionalText(part.Explanation),
+                annotation.SolutionExplicitlyVisible ? NormalizeOptionalText(part.Explanation) : null,
                 null,
                 null,
                 null,
@@ -251,7 +252,7 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
             extractedImages,
             new QuestionOcrDraft(
                 NormalizeText(annotation.QuestionContent),
-                NormalizeText(annotation.SolutionContent),
+                annotation.SolutionExplicitlyVisible ? NormalizeText(annotation.SolutionContent) : string.Empty,
                 questionType,
                 answers,
                 parts));
@@ -435,6 +436,7 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
     {
         public string? QuestionContent { get; init; }
         public string? SolutionContent { get; init; }
+        public bool SolutionExplicitlyVisible { get; init; }
         public string? SuggestedQuestionType { get; init; }
         public List<OcrAnswer>? Answers { get; init; }
         public List<OcrPart>? Parts { get; init; }
