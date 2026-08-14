@@ -31,7 +31,7 @@ public class ChatbotService : IChatbotService
     private static readonly ConcurrentDictionary<(string StudentId, string SessionId), DateTime> _rateLimitStore = new();
 
     // Cleanup threshold: evict entries older than this duration.
-    private static readonly TimeSpan RateLimitTtl = TimeSpan.FromHours(1);
+    private static readonly TimeSpan RateLimitTtl = TimeSpan.FromSeconds(5);
     private static DateTime _lastCleanup = DateTime.UtcNow;
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(10);
 
