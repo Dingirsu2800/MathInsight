@@ -107,7 +107,11 @@ export default function TopicPracticeConfirmDialog({
                   </h4>
                   <div className="flex items-center gap-2 text-xs font-bold text-on-surface">
                     <span className="material-symbols-outlined text-primary text-[18px]">psychology</span>
-                    <span>Dựa trên kết quả làm bài gần đây của em.</span>
+                    <span>
+                      {topic.isWeakRecommended || (topic.recommendedDifficultyLevel !== null && topic.recommendedDifficultyLevel !== undefined)
+                        ? "Hệ thống phân bổ câu hỏi dựa trên kết quả gần đây của em ở chủ đề này."
+                        : "Em chưa có đủ kết quả ở chủ đề này nên hệ thống sử dụng mức độ tổng hợp."}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs font-bold text-on-surface">
                     <span className="material-symbols-outlined text-primary text-[18px]">format_list_numbered</span>
