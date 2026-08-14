@@ -26,6 +26,11 @@
 		<PackageReference Include="Microsoft.OpenApi" Version="1.6.24" />
 	</ItemGroup>
 	<ItemGroup>
+		<!-- Top-level statements compile to an internal Program class; the integration test
+		     harness needs it visible to use WebApplicationFactory<Program>. -->
+		<InternalsVisibleTo Include="MathInsight.WebAPI.IntegrationTests" />
+	</ItemGroup>
+	<ItemGroup>
 		<ProjectReference Include="..\MathInsight.Shared\MathInsight.Shared.csproj" />
 		<ProjectReference Include="..\MathInsight.Modules.Identity_Access\MathInsight.Modules.Identity_Access.csproj" />
 		<ProjectReference Include="..\MathInsight.Modules.QuestionBank\MathInsight.Modules.QuestionBank.csproj" />
