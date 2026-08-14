@@ -59,6 +59,29 @@ public sealed record GradedAnswerDetailDto
     public IReadOnlyList<AnswerPartDetailDto> AnswerParts { get; init; } = [];
     public string? ReportReason { get; init; }
     public DateTime? ScoreAdjustedTime { get; init; }
+
+    /// <summary>
+    /// All tag weight entries for this question (primary + secondary).
+    /// Mirrors GradingOrchestrator.BuildTagWeights formula v4.2:
+    ///   single-tag  → Weight = 1.0
+    ///   multi-tag   → primary Weight = 0.65, each secondary Weight = 0.35 / N
+    /// Used by the frontend to compute weighted TopicScore per topic.
+    /// </summary>
+    public IReadOnlyList<TagWeightEntryDto> TagWeights { get; init; } = [];
+}
+
+/// <summary>
+/// API-layer projection of a question's tag weight assignment.
+/// Does NOT reference TagWeightEntry from MathInsight.Shared.Events
+/// to avoid coupling the query layer to the event/messaging types.
+/// </summary>
+public sealed record TagWeightEntryDto
+{
+    public string TagId { get; init; } = string.Empty;
+    public string TopicName { get; init; } = string.Empty;
+    /// <summary>Role-based weight w_{iq}. Sum of all entries for one question = 1.0.</summary>
+    public decimal Weight { get; init; }
+    public bool IsPrimary { get; init; }
 }
 
 public sealed record AnswerOptionDetailDto

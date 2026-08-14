@@ -1,18 +1,17 @@
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
+import MathMarkdown from '../../../components/ui/MathMarkdown';
 
 /**
  * Composite True/False question card.
- * @param {{ index: number, stem: string, difficulty: string, difficultyClass: string, statements: Array<{text: string, correctAnswer: boolean, studentAnswer: boolean}>, maxScore: number, earnedScore: number, solution: string[] }} props
+ * @param {{ index: number, stem: string, difficulty: string, difficultyClass: string, topicName?: string, statements: Array<{text: string, correctAnswer: boolean, studentAnswer: boolean}>, maxScore: number, earnedScore: number, solution: string[] }} props
  */
 export default function CompositeQuestionCard({
   index,
   stem,
   difficulty = 'KHÓ',
   difficultyClass = 'bg-tertiary-fixed text-tertiary',
+  topicName,
   statements = [],
   maxScore = 1,
   earnedScore = 0,
@@ -33,18 +32,26 @@ export default function CompositeQuestionCard({
   return (
     <div className="bg-pure-surface rounded-xl border border-whisper-border overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="p-4 bg-surface-container-low border-b border-whisper-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
+      <div className="p-4 bg-surface-container-low border-b border-whisper-border flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-8 h-8 shrink-0 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
             {index}
           </span>
-          <span className="text-sm font-bold text-on-surface-variant">
+          <span className="text-sm font-bold text-on-surface-variant truncate">
             Câu hỏi Đúng/Sai (Composite)
           </span>
         </div>
-        <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${difficultyClass}`}>
-          {difficulty}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {topicName && (
+            <span className="px-2 py-0.5 text-[11px] font-medium rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>tag</span>
+              {topicName}
+            </span>
+          )}
+          <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${difficultyClass}`}>
+            {difficulty}
+          </span>
+        </div>
       </div>
 
       {/* Body */}
@@ -66,11 +73,7 @@ export default function CompositeQuestionCard({
         )}
         {/* Stem */}
         <div className="mb-6 p-4 bg-surface-container-low rounded-lg border-l-4 border-primary">
-          <div className="text-base text-on-surface prose prose-sm max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {stem || ''}
-            </ReactMarkdown>
-          </div>
+          <MathMarkdown content={stem || ''} className="text-base text-on-surface prose prose-sm max-w-none" />
         </div>
 
         {/* Table */}
@@ -93,11 +96,7 @@ export default function CompositeQuestionCard({
                 return (
                   <tr key={i} className={isItemCorrect ? 'bg-emerald-success/5' : 'bg-deep-rose/5'}>
                     <td className="px-6 py-4 italic font-medium text-on-surface">
-                      <div className="prose prose-sm max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {stmt.text || ''}
-                        </ReactMarkdown>
-                      </div>
+                      <MathMarkdown content={stmt.text || ''} className="prose prose-sm max-w-none" />
                     </td>
                     <td className="px-6 py-4 text-center font-bold">
                       <span className={`px-2.5 py-1 rounded text-xs inline-block ${
@@ -149,12 +148,20 @@ export default function CompositeQuestionCard({
             </div>
           </div>
           <div className="text-xs text-emerald-900 bg-emerald-50 p-2.5 rounded border border-emerald-200">
-            <span className="font-bold">Đáp án chuẩn: </span>
-            {statements.map((s, idx) => {
-              const label = `Ý ${idx + 1}`;
-              const ansText = s.correctAnswer === true ? 'Đúng' : s.correctAnswer === false ? 'Sai' : (s.correctAnswer || '—');
-              return `${label}: ${ansText}`;
-            }).join(' | ')}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-bold shrink-0">Đáp án chuẩn:</span>
+              {statements.map((s, idx) => {
+                const label = `Ý ${idx + 1}`;
+                const ansText = s.correctAnswer === true ? 'Đúng' : s.correctAnswer === false ? 'Sai' : (s.correctAnswer || '—');
+                return (
+                  <div key={idx} className="inline-flex items-center gap-1">
+                    {idx > 0 && <span className="text-emerald-400 font-bold mx-1">|</span>}
+                    <span className="font-bold">{label}:</span>
+                    <MathMarkdown content={ansText} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -176,11 +183,7 @@ export default function CompositeQuestionCard({
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết từng ý:</h4>
               <div className="space-y-4 text-sm text-on-surface-variant">
                 {solution.map((step, i) => (
-                  <div key={i} className="prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {step}
-                    </ReactMarkdown>
-                  </div>
+                  <MathMarkdown key={i} content={step} className="prose prose-sm max-w-none" />
                 ))}
               </div>
               <button

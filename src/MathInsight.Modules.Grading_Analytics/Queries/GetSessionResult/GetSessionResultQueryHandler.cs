@@ -2,6 +2,7 @@ using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using MathInsight.Modules.Grading_Analytics.Persistence;
+using MathInsight.Modules.Grading_Analytics.Persistence.Entities;
 using MathInsight.Shared.Questions;
 
 namespace MathInsight.Modules.Grading_Analytics.Queries.GetSessionResult;
@@ -105,6 +106,8 @@ public sealed class GetSessionResultQueryHandler
                     TopicName = topicName,
                     IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
                     PointsEarned = a.PointsEarned,
+                    MachinePointsEarned = a.PointsEarned,
+                    EffectivePoints = (tq?.IsScoreInvalidated == true) ? 0m : a.PointsEarned,
                     MaxPoints = maxPoints,
                     TimeSpent = a.TimeSpent,
                     IsScoreInvalidated = tq?.IsScoreInvalidated ?? false,
@@ -135,6 +138,7 @@ public sealed class GetSessionResultQueryHandler
                         })
                         .OrderBy(ap => ap.PartOrder)
                         .ToList(),
+                    TagWeights = BuildTagWeightDtos(a.Question.QuestionTopics, tagTopics),
                 };
             })
             .ToList();
@@ -155,5 +159,63 @@ public sealed class GetSessionResultQueryHandler
             GradeRevision = session.GradeRevision,
             Answers = answers,
         };
+    }
+
+    /// <summary>
+    /// Mirrors GradingOrchestrator.BuildTagWeights (v4.2) but resolves TopicName
+    /// and returns API-layer DTOs instead of event records.
+    /// single-tag  → Weight = 1.0
+    /// multi-tag   → primary Weight = 0.65, each secondary Weight = 0.35 / N
+    /// </summary>
+    private static List<TagWeightEntryDto> BuildTagWeightDtos(
+        ICollection<QuestionTopic> questionTopics,
+        Dictionary<string, string> tagTopics)
+    {
+        if (questionTopics.Count == 0)
+            return [];
+
+        if (questionTopics.Count == 1)
+        {
+            var qt = questionTopics.First();
+            var name = tagTopics.GetValueOrDefault(qt.TagId, string.Empty);
+            return [new TagWeightEntryDto
+            {
+                TagId = qt.TagId,
+                TopicName = name,
+                Weight = 1.0m,
+                IsPrimary = qt.IsPrimary
+            }];
+        }
+
+        const decimal primaryWeight = 0.65m;
+        var primary = questionTopics.FirstOrDefault(qt => qt.IsPrimary);
+        var secondaries = questionTopics.Where(qt => !qt.IsPrimary).ToList();
+        decimal secondaryWeight = secondaries.Count > 0 ? (1.0m - primaryWeight) / secondaries.Count : 0m;
+
+        var weights = new List<TagWeightEntryDto>();
+
+        if (primary is not null)
+        {
+            weights.Add(new TagWeightEntryDto
+            {
+                TagId = primary.TagId,
+                TopicName = tagTopics.GetValueOrDefault(primary.TagId, string.Empty),
+                Weight = primaryWeight,
+                IsPrimary = true
+            });
+        }
+
+        foreach (var sec in secondaries)
+        {
+            weights.Add(new TagWeightEntryDto
+            {
+                TagId = sec.TagId,
+                TopicName = tagTopics.GetValueOrDefault(sec.TagId, string.Empty),
+                Weight = secondaryWeight,
+                IsPrimary = false
+            });
+        }
+
+        return weights;
     }
 }

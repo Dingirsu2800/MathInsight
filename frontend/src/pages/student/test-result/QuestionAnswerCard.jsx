@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
+import MathMarkdown from '../../../components/ui/MathMarkdown';
 
 /**
  * Individual MCQ question result card with expandable solution.
- * @param {{ index: number, question: string, difficulty: string, difficultyClass: string, options: Array<{label: string, text: string, isCorrect?: boolean, isSelected?: boolean}>, solution: string[] }} props
+ * @param {{ index: number, question: string, difficulty: string, difficultyClass: string, topicName?: string, options: Array<{label: string, text: string, isCorrect?: boolean, isSelected?: boolean}>, solution: string[] }} props
  */
 export default function QuestionAnswerCard({
   index,
@@ -14,6 +12,7 @@ export default function QuestionAnswerCard({
   questionType,
   difficulty,
   difficultyClass = 'bg-primary-fixed text-primary',
+  topicName,
   options = [],
   solution = [],
   machinePoints = 0,
@@ -34,18 +33,26 @@ export default function QuestionAnswerCard({
   return (
     <div className="bg-pure-surface rounded-xl border border-whisper-border overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="p-4 bg-surface-container-low border-b border-whisper-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
+      <div className="p-4 bg-surface-container-low border-b border-whisper-border flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-8 h-8 shrink-0 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
             {index}
           </span>
-          <span className="text-sm font-bold text-on-surface-variant">
+          <span className="text-sm font-bold text-on-surface-variant truncate">
             {questionType === 'SHORT_ANSWER' ? 'Câu hỏi trả lời ngắn' : 'Câu hỏi trắc nghiệm'}
           </span>
         </div>
-        <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${difficultyClass}`}>
-          {difficulty}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {topicName && (
+            <span className="px-2 py-0.5 text-[11px] font-medium rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>tag</span>
+              {topicName}
+            </span>
+          )}
+          <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${difficultyClass}`}>
+            {difficulty}
+          </span>
+        </div>
       </div>
 
       {/* Body */}
@@ -65,11 +72,7 @@ export default function QuestionAnswerCard({
             )}
           </div>
         )}
-        <div className="text-base mb-4 text-on-surface prose prose-sm max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-            {question || ''}
-          </ReactMarkdown>
-        </div>
+        <MathMarkdown content={question || ''} className="text-base mb-4 text-on-surface prose prose-sm max-w-none" />
 
         {/* SHORT ANSWER section */}
         {questionType === 'SHORT_ANSWER' ? (
@@ -80,9 +83,20 @@ export default function QuestionAnswerCard({
             </div>
             <div className="p-4 border border-emerald-200 bg-emerald-50 rounded-lg text-sm text-emerald-900">
               <span className="font-bold block mb-1 text-xs uppercase text-emerald-800">Đáp án đúng:</span>
-              <p className="font-medium">
-                {correctOptions.map((o) => o.text).join(' hoặc ') || 'Xem lời giải chi tiết'}
-              </p>
+              <div className="font-medium">
+                {correctOptions.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {correctOptions.map((o, idx) => (
+                      <div key={idx} className="inline-flex items-center gap-1">
+                        {idx > 0 && <span className="text-emerald-600 font-normal mx-1">hoặc</span>}
+                        <MathMarkdown content={o.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  'Xem lời giải chi tiết'
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -119,11 +133,7 @@ export default function QuestionAnswerCard({
                   >
                     <div className="flex items-center gap-2 flex-1">
                       <span className="font-bold shrink-0">{opt.label}.</span>
-                      <div className="prose prose-sm max-w-none inline-block">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {opt.text || ''}
-                        </ReactMarkdown>
-                      </div>
+                      <MathMarkdown content={opt.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {badgeEl}
@@ -138,9 +148,15 @@ export default function QuestionAnswerCard({
             {correctOptions.length > 0 && (
               <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2 text-sm text-emerald-900">
                 <MaterialIcon name="check_circle" className="text-emerald-600 shrink-0 mt-0.5" size={18} />
-                <div>
-                  <span className="font-bold">Đáp án đúng: </span>
-                  {correctOptions.map((o) => `${o.label}. ${o.text}`).join(' | ')}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-bold shrink-0">Đáp án đúng:</span>
+                  {correctOptions.map((o, idx) => (
+                    <div key={o.label} className="inline-flex items-center gap-1">
+                      {idx > 0 && <span className="text-emerald-400 font-bold mx-1">|</span>}
+                      <span className="font-bold">{o.label}.</span>
+                      <MathMarkdown content={o.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -171,11 +187,7 @@ export default function QuestionAnswerCard({
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết:</h4>
               <div className="space-y-3 text-sm text-on-surface-variant">
                 {solution.map((step, i) => (
-                  <div key={i} className="prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {step}
-                    </ReactMarkdown>
-                  </div>
+                  <MathMarkdown key={i} content={step} className="prose prose-sm max-w-none" />
                 ))}
               </div>
               <button

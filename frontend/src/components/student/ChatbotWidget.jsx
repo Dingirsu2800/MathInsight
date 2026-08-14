@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import MaterialIcon from '../ui/MaterialIcon';
+import MathMarkdown from '../ui/MathMarkdown';
 import { askChatbot } from '../../services/chatbotApi';
 
 /**
@@ -136,10 +134,10 @@ export default function ChatbotWidget({ isOpen, onClose, context }) {
       {/* Context info */}
       {context && (
         <div className="px-4 py-2 bg-primary/5 border-b border-whisper-border flex-shrink-0">
-          <p className="text-[11px] text-on-surface-variant line-clamp-2">
-            <span className="font-bold text-primary">Đáp án đúng: </span>
-            {context.correctAnswer}
-          </p>
+          <div className="text-[11px] text-on-surface-variant flex items-baseline gap-1">
+            <span className="font-bold text-primary shrink-0">Đáp án đúng: </span>
+            <MathMarkdown content={context.correctAnswer} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+          </div>
         </div>
       )}
 
@@ -172,10 +170,10 @@ export default function ChatbotWidget({ isOpen, onClose, context }) {
             return (
               <div key={msg.id} className="text-center">
                 <span className="text-[11px] text-outline bg-surface-container px-3 py-1 rounded-full inline-block">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}
-                    components={{ p: ({ children }) => <span>{children}</span> }}>
-                    {msg.text}
-                  </ReactMarkdown>
+                  <MathMarkdown
+                    content={msg.text}
+                    components={{ p: ({ children }) => <span>{children}</span> }}
+                  />
                 </span>
               </div>
             );
@@ -194,11 +192,7 @@ export default function ChatbotWidget({ isOpen, onClose, context }) {
           return (
             <div key={msg.id} className="flex justify-start">
               <div className="max-w-[85%] bg-surface-container-low border border-whisper-border px-3 py-2 rounded-2xl rounded-tl-sm text-sm text-on-surface">
-                <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                    {msg.text}
-                  </ReactMarkdown>
-                </div>
+                <MathMarkdown content={msg.text} className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1" />
               </div>
             </div>
           );

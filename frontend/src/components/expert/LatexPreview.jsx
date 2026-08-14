@@ -1,7 +1,5 @@
 import React from "react";
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
+import MathMarkdown from "../ui/MathMarkdown";
 
 export default function LatexPreview({ content }) {
   if (!content?.trim()) {
@@ -9,13 +7,10 @@ export default function LatexPreview({ content }) {
   }
 
   return (
-    <div className="text-[13px] text-on-surface break-words leading-relaxed font-body">
-      <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+    <MathMarkdown
+      content={content}
+      className="text-[13px] text-on-surface break-words leading-relaxed font-body"
+    />
   );
 }
+
