@@ -35,7 +35,7 @@ services:
       MistralOcr__BaseUrl: ${MistralOcr__BaseUrl:-https://api.mistral.ai}
       MistralOcr__Model: ${MistralOcr__Model:-mistral-ocr-latest}
       Chatbot__ApiKey: ${Chatbot__ApiKey:-}
-      Chatbot__Model: ${Chatbot__Model:-gemini-2.0-flash}
+      Chatbot__Model: ${Chatbot__Model:-gemini-3.5-flash}
       Smtp__Enabled: "true"
       Smtp__Host: smtp.gmail.com
       Smtp__Port: "587"

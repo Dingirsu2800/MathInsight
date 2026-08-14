@@ -171,9 +171,9 @@ public class ChatbotOptions
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gemini model name. Defaults to gemini-2.0-flash.
+    /// Gemini model name. Defaults to gemini-3.5-flash.
     /// </summary>
-    public string Model { get; set; } = "gemini-2.0-flash";
+    public string Model { get; set; } = "gemini-3.5-flash";
 
     /// <summary>
     /// Base URL for the Gemini API.

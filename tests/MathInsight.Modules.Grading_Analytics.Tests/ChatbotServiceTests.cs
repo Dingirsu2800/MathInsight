@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -23,7 +23,7 @@ public class ChatbotServiceTests
         var options = Options.Create(new ChatbotOptions
         {
             ApiKey = "test-api-key",
-            Model = "gemini-2.0-flash",
+            Model = "gemini-3.5-flash",
             BaseUrl = "https://generativelanguage.googleapis.com/"
         });
 
