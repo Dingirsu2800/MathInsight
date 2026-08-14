@@ -13,6 +13,7 @@ public sealed record ProfileResponse(
     DateOnly? DateOfBirth,
     string? AvatarUrl,
     string RoleName,
+    DateTime CreatedTime,
     StudentProfile? Student,
     TeacherProfile? Teacher,
     ExpertProfile? Expert);
