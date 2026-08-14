@@ -9,6 +9,7 @@ import ChatbotWidget from '../../components/student/ChatbotWidget';
 import { getSessionResult, reportSessionQuestion } from '../../services/gradingApi';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { normalizeQuestionType } from '../../utils/questionLabels';
 
 /** Map DifficultyLevel (1-4) to label and CSS class */
 function difficultyLabel(level) {
@@ -27,6 +28,23 @@ const FILTER_OPTIONS = [
   { label: 'Câu đúng', key: 'correct' },
   { label: 'Bỏ qua', key: 'skipped' },
 ];
+
+function isQuestionAbandoned(a) {
+  if (a.isAbandoned !== undefined && a.isAbandoned !== null) return Boolean(a.isAbandoned);
+  const normType = normalizeQuestionType(a.questionType);
+  if (normType === 'COMPOSITE') {
+    return !a.answerParts || a.answerParts.length === 0 || a.answerParts.every(
+      (p) => p.studentAnswer === null || p.studentAnswer === undefined || String(p.studentAnswer).trim() === ''
+    );
+  }
+  if (normType === 'SHORT_ANSWER') {
+    return !a.shortAnswerText || a.shortAnswerText.trim() === '';
+  }
+  if (normType === 'MULTIPLE_CHOICE') {
+    return (!a.selectedOptionIds || a.selectedOptionIds.length === 0) && !a.selectedOptionId;
+  }
+  return !a.selectedOptionId && (!a.selectedOptionIds || a.selectedOptionIds.length === 0);
+}
 
 export default function TestResultPage() {
   const { sessionId } = useParams();
@@ -93,9 +111,10 @@ export default function TestResultPage() {
     return result.answers.filter((a) => {
       if (filter === 'all') return true;
       if (a.isScoreInvalidated) return false;
+      const abandoned = isQuestionAbandoned(a);
       if (filter === 'correct') return a.isCorrect === true;
-      if (filter === 'wrong') return a.isCorrect === false && !a.isAbandoned;
-      if (filter === 'skipped') return a.isCorrect === null || a.isAbandoned;
+      if (filter === 'wrong') return a.isCorrect === false && !abandoned;
+      if (filter === 'skipped') return a.isCorrect === null || abandoned;
       return true;
     });
   }, [result, filter]);
@@ -205,30 +224,41 @@ export default function TestResultPage() {
 
               {filteredAnswers.map((answer) => {
                 const diff = difficultyLabel(answer.difficultyLevel);
+                const normType = normalizeQuestionType(answer.questionType);
 
-                if (answer.questionType === 'COMPOSITE') {
+                if (normType === 'COMPOSITE') {
                   const correctStatements = (answer.answerParts || []).map((p, i) => {
                     const label = p.partLabel || `Ý ${i + 1}`;
-                    const ansText = p.correctAnswer === 'True' ? 'Đúng' : p.correctAnswer === 'False' ? 'Sai' : (p.correctAnswer || '—');
-                    return `${label}: ${ansText}`;
+                    let ansText = p.correctAnswer;
+                    if (p.correctAnswer === 'True' || p.correctAnswer === true) ansText = 'Đúng';
+                    else if (p.correctAnswer === 'False' || p.correctAnswer === false) ansText = 'Sai';
+                    return `${label}: ${ansText ?? '—'}`;
                   });
                   const compositeCorrectAnswer = correctStatements.length > 0
                     ? correctStatements.join('; ')
-                    : 'Xem lời giải chi tiết';
+                    : (answer.solutionContent || 'Xem lời giải chi tiết');
 
                   return (
                     <CompositeQuestionCard
                       key={answer.questionId}
                       index={answer.questionNo}
                       stem={answer.questionContent}
+                      pictureUrl={answer.pictureUrl}
                       difficulty={diff.text}
                       difficultyClass={diff.cls}
                       topicName={answer.topicName}
-                      statements={(answer.answerParts || []).map((p) => ({
+                      statements={(answer.answerParts || []).map((p, i) => ({
+                        partId: p.questionPartId,
+                        partOrder: p.partOrder ?? i + 1,
+                        partLabel: p.partLabel || `Ý ${i + 1}`,
+                        partType: p.partType,
                         text: p.partContent,
-                        correctAnswer: p.correctAnswer === 'True' ? true : p.correctAnswer === 'False' ? false : p.correctAnswer,
-                        studentAnswer: p.studentAnswer === 'True' ? true : p.studentAnswer === 'False' ? false : (p.studentAnswer ? p.studentAnswer : null),
+                        correctAnswer: p.correctAnswer,
+                        studentAnswer: p.studentAnswer,
                         isCorrect: p.isCorrect,
+                        pointsEarned: p.pointsEarned,
+                        defaultWeight: p.defaultWeight,
+                        explanation: p.explanation,
                       }))}
                       maxScore={answer.maxPoints ?? 1}
                       earnedScore={answer.isScoreInvalidated ? 0 : (answer.effectivePoints ?? answer.pointsEarned ?? 0)}
@@ -249,28 +279,36 @@ export default function TestResultPage() {
                   );
                 }
 
-                // SINGLE_CHOICE, MULTIPLE_SELECT, TRUE_FALSE, SHORT_ANSWER
-                const correctOptions = (answer.answerOptions || [])
-                  .filter((o) => o.isCorrect)
-                  .map((o) => {
-                    const idx = (answer.answerOptions || []).indexOf(o);
-                    return `${String.fromCharCode(65 + idx)}. ${o.answerContent}`;
-                  })
-                  .join(', ');
-                const mcqCorrectAnswer = correctOptions || (answer.questionType === 'SHORT_ANSWER' ? (answer.answerOptions || []).map((o) => o.answerContent).join(' hoặc ') : 'Xem lời giải chi tiết');
+                // SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE, SHORT_ANSWER
+                let calculatedCorrectAnswer = 'Xem lời giải chi tiết';
+                if (normType === 'SHORT_ANSWER') {
+                  const correctOpt = (answer.answerOptions || []).find((o) => o.isCorrect);
+                  calculatedCorrectAnswer = correctOpt?.answerContent || answer.solutionContent || (answer.answerOptions || []).map((o) => o.answerContent).join(' hoặc ') || 'Xem lời giải chi tiết';
+                } else {
+                  const correctOptions = (answer.answerOptions || [])
+                    .filter((o) => o.isCorrect)
+                    .map((o) => {
+                      const idx = (answer.answerOptions || []).indexOf(o);
+                      return `${String.fromCharCode(65 + idx)}. ${o.answerContent}`;
+                    })
+                    .join(', ');
+                  calculatedCorrectAnswer = correctOptions || answer.solutionContent || 'Xem lời giải chi tiết';
+                }
 
                 return (
                   <QuestionAnswerCard
                     key={answer.questionId}
                     index={answer.questionNo}
                     question={answer.questionContent}
-                    questionType={answer.questionType}
+                    questionType={normType}
+                    pictureUrl={answer.pictureUrl}
                     difficulty={diff.text}
                     difficultyClass={diff.cls}
                     topicName={answer.topicName}
                     isCorrect={answer.isCorrect}
                     shortAnswerText={answer.shortAnswerText}
                     options={(answer.answerOptions || []).map((option, optionIndex) => ({
+                      id: option.answerId,
                       label: String.fromCharCode(65 + optionIndex),
                       text: option.answerContent,
                       isCorrect: option.isCorrect,
@@ -289,7 +327,7 @@ export default function TestResultPage() {
                       questionId: answer.questionId,
                       questionNo: answer.questionNo,
                       questionContent: answer.questionContent,
-                      correctAnswer: mcqCorrectAnswer,
+                      correctAnswer: calculatedCorrectAnswer,
                     })}
                   />
                 );
@@ -342,5 +380,3 @@ export default function TestResultPage() {
     </StudentLayout>
   );
 }
-
-

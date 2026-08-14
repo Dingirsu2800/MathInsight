@@ -3,13 +3,13 @@ import MaterialIcon from '../../../components/ui/MaterialIcon';
 import MathMarkdown from '../../../components/ui/MathMarkdown';
 
 /**
- * Individual MCQ question result card with expandable solution.
- * @param {{ index: number, question: string, difficulty: string, difficultyClass: string, topicName?: string, options: Array<{label: string, text: string, isCorrect?: boolean, isSelected?: boolean}>, solution: string[] }} props
+ * Individual MCQ / Short Answer question result card with expandable solution.
  */
 export default function QuestionAnswerCard({
   index,
   question,
   questionType,
+  pictureUrl,
   difficulty,
   difficultyClass = 'bg-primary-fixed text-primary',
   topicName,
@@ -29,6 +29,8 @@ export default function QuestionAnswerCard({
   const [showSolution, setShowSolution] = useState(false);
 
   const correctOptions = options.filter((o) => o.isCorrect);
+  const isShortAnswer = questionType === 'SHORT_ANSWER';
+  const isShortAnswerEmpty = !shortAnswerText || shortAnswerText.trim() === '';
 
   return (
     <div className="bg-pure-surface rounded-xl border border-whisper-border overflow-hidden shadow-sm">
@@ -39,7 +41,7 @@ export default function QuestionAnswerCard({
             {index}
           </span>
           <span className="text-sm font-bold text-on-surface-variant truncate">
-            {questionType === 'SHORT_ANSWER' ? 'Câu hỏi trả lời ngắn' : 'Câu hỏi trắc nghiệm'}
+            {isShortAnswer ? 'Câu hỏi trả lời ngắn' : 'Câu hỏi trắc nghiệm'}
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -58,7 +60,7 @@ export default function QuestionAnswerCard({
       {/* Body */}
       <div className="p-6">
         {isScoreInvalidated && (
-          <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 rounded-lg">
             <div className="flex items-center gap-2 font-bold">
               <MaterialIcon name="warning" size={18} />
               Câu hỏi đã bị vô hiệu hóa sau khi chấm
@@ -72,15 +74,49 @@ export default function QuestionAnswerCard({
             )}
           </div>
         )}
+
         <MathMarkdown content={question || ''} className="text-base mb-4 text-on-surface prose prose-sm max-w-none" />
 
+        {/* Illustration Picture */}
+        {pictureUrl && (
+          <div className="mb-6 flex justify-center">
+            <img
+              src={pictureUrl}
+              alt={`Minh họa câu ${index}`}
+              className="max-h-80 w-auto max-w-full object-contain rounded-lg border border-whisper-border shadow-xs"
+            />
+          </div>
+        )}
+
         {/* SHORT ANSWER section */}
-        {questionType === 'SHORT_ANSWER' ? (
+        {isShortAnswer ? (
           <div className="space-y-3 my-4">
-            <div className={`p-4 border rounded-lg text-sm ${isCorrect ? 'border-emerald-success/30 bg-emerald-success/10' : 'border-deep-rose/30 bg-deep-rose/10'}`}>
-              <span className="font-bold block mb-1 text-xs uppercase text-on-surface-variant">Câu trả lời của bạn:</span>
-              <p className="font-medium text-on-surface">{shortAnswerText || '(Không trả lời)'}</p>
+            <div className={`p-4 border rounded-lg text-sm ${
+              isShortAnswerEmpty
+                ? 'border-whisper-border bg-surface-container-lowest'
+                : isCorrect
+                  ? 'border-emerald-success/30 bg-emerald-success/10'
+                  : 'border-deep-rose/30 bg-deep-rose/10'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-xs uppercase text-on-surface-variant">Câu trả lời của bạn:</span>
+                {isShortAnswerEmpty ? (
+                  <span className="text-xs px-2 py-0.5 rounded bg-surface-container text-outline">Chưa trả lời</span>
+                ) : isCorrect ? (
+                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-success text-white font-bold">Chính xác</span>
+                ) : (
+                  <span className="text-xs px-2 py-0.5 rounded bg-deep-rose text-white font-bold">Chưa chính xác</span>
+                )}
+              </div>
+              <div className="font-medium text-on-surface">
+                {isShortAnswerEmpty ? (
+                  <span className="italic text-outline font-normal">(Chưa trả lời)</span>
+                ) : (
+                  <MathMarkdown content={shortAnswerText} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+                )}
+              </div>
             </div>
+
             <div className="p-4 border border-emerald-200 bg-emerald-50 rounded-lg text-sm text-emerald-900">
               <span className="font-bold block mb-1 text-xs uppercase text-emerald-800">Đáp án đúng:</span>
               <div className="font-medium">
@@ -89,7 +125,7 @@ export default function QuestionAnswerCard({
                     {correctOptions.map((o, idx) => (
                       <div key={idx} className="inline-flex items-center gap-1">
                         {idx > 0 && <span className="text-emerald-600 font-normal mx-1">hoặc</span>}
-                        <MathMarkdown content={o.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+                        <MathMarkdown content={o.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline font-bold" />
                       </div>
                     ))}
                   </div>
@@ -101,7 +137,7 @@ export default function QuestionAnswerCard({
           </div>
         ) : (
           <>
-            {/* Options grid */}
+            {/* Options grid (kept as current implementation for single choice / options) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {options.map((opt) => {
                 let borderClass = 'border-whisper-border';
@@ -154,7 +190,7 @@ export default function QuestionAnswerCard({
                     <div key={o.label} className="inline-flex items-center gap-1">
                       {idx > 0 && <span className="text-emerald-400 font-bold mx-1">|</span>}
                       <span className="font-bold">{o.label}.</span>
-                      <MathMarkdown content={o.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline" />
+                      <MathMarkdown content={o.text || ''} className="prose prose-sm max-w-none inline-block [&>p]:m-0 [&>p]:inline font-bold" />
                     </div>
                   ))}
                 </div>
@@ -186,9 +222,13 @@ export default function QuestionAnswerCard({
             <div className="mt-4 p-5 bg-surface-container-low rounded-xl border border-whisper-border">
               <h4 className="font-bold text-on-surface mb-3">Lời giải chi tiết:</h4>
               <div className="space-y-3 text-sm text-on-surface-variant">
-                {solution.map((step, i) => (
-                  <MathMarkdown key={i} content={step} className="prose prose-sm max-w-none" />
-                ))}
+                {solution.length > 0 ? (
+                  solution.map((step, i) => (
+                    <MathMarkdown key={i} content={step} className="prose prose-sm max-w-none" />
+                  ))
+                ) : (
+                  <p className="italic text-outline">Chưa có lời giải chi tiết cho câu hỏi này.</p>
+                )}
               </div>
               <button
                 className="mt-6 flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm"

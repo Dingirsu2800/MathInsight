@@ -16,6 +16,8 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(x => x.DefaultWeight).HasColumnName("DefaultWeight").HasPrecision(4, 2);
         builder.Property(x => x.DifficultyId).HasColumnName("DifficultyID").HasMaxLength(36).IsUnicode(false);
         builder.Property(x => x.QuestionContent).HasColumnName("QuestionContent").IsRequired();
+        builder.Property(x => x.SolutionContent).HasColumnName("SolutionContent");
+        builder.Property(x => x.PictureUrl).HasColumnName("PictureUrl");
 
         builder.HasMany(x => x.Answers)
                .WithOne(a => a.Question)
