@@ -69,12 +69,17 @@ export default function RecommendedLecturesCard({ layoutVariant = 'dashboard' })
       {isLibrary && (
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
       )}
-      <h3 className="text-[20px] font-bold text-on-surface flex items-center gap-2 mb-6 relative z-10">
-        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 text-primary">
-          <MaterialIcon name="auto_awesome" size={20} />
-        </span>
-        Bài giảng đề xuất dành riêng cho bạn
-      </h3>
+      <div className="flex items-center justify-between mb-6 relative z-10">
+        <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
+          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/20 text-primary">
+            <MaterialIcon name="auto_awesome" size={18} />
+          </span>
+          Bài giảng đề xuất dành riêng cho bạn
+        </h3>
+        <Link className="text-primary text-xs font-bold hover:underline" to="/student/lectures">
+          Xem tất cả
+        </Link>
+      </div>
 
       {loading && (
         <div className={gridClass}>
@@ -114,96 +119,102 @@ export default function RecommendedLecturesCard({ layoutVariant = 'dashboard' })
         </p>
       )}
 
-      {/* Data Grid */}
+      {/* Data Grid with scrollable container */}
       {!loading && !error && lectures.length > 0 && (
-        <div className={gridClass}>
-          {lectures.map((lecture) => {
-            const explanation = getRecommendationExplanation(lecture);
-            const isColdStart = lecture.reason === 'ColdStartGradeFoundation';
-            const isRemedial = lecture.reason?.startsWith('WeakTopic') === true;
-            const chipColor = isRemedial ? 'bg-deep-rose' : 'bg-primary';
-            const chipLabel = isRemedial ? `Phụ đạo: ${lecture.tagName}` : lecture.tagName;
+        <div className="relative">
+          <div
+            className="overflow-y-auto pr-1"
+            style={{ maxHeight: '420px' }}
+          >
+            <div className={gridClass}>
+              {lectures.map((lecture) => {
+                const explanation = getRecommendationExplanation(lecture);
+                const isColdStart = lecture.reason === 'ColdStartGradeFoundation';
+                const isRemedial = lecture.reason?.startsWith('WeakTopic') === true;
+                const chipColor = isRemedial ? 'bg-deep-rose' : 'bg-primary';
+                const chipLabel = isRemedial ? `Phụ đạo: ${lecture.tagName}` : lecture.tagName;
 
-            const difficultyMeta = {
-              1: { label: 'Cơ bản',   color: 'bg-emerald-500' },
-              2: { label: 'Trung bình', color: 'bg-amber-500'  },
-              3: { label: 'Khá',       color: 'bg-orange-500'  },
-              4: { label: 'Nâng cao',  color: 'bg-red-500'     },
-            };
-            const diff = difficultyMeta[lecture.difficultyLevel] ?? { label: `Mức ${lecture.difficultyLevel}`, color: 'bg-outline' };
+                return (
+                  <Link
+                    key={lecture.lectureId}
+                    to={`/student/lectures/${lecture.lectureId}`}
+                    className="group block rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none transition-all bg-pure-surface flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Thumbnail / Header Area */}
+                      <div className="relative w-full h-[180px] bg-surface-container overflow-hidden">
+                        {lecture.thumbnailUrl ? (
+                          <img
+                            src={lecture.thumbnailUrl}
+                            alt={lecture.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary-container/30">
+                            <MaterialIcon name="play_circle" size={48} className="text-primary/40" />
+                          </div>
+                        )}
 
-            return (
-              <Link
-                key={lecture.lectureId}
-                to={`/student/lectures/${lecture.lectureId}`}
-                className="group block rounded-xl overflow-hidden border border-whisper-border hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none transition-all bg-pure-surface flex flex-col justify-between"
-              >
-                <div>
-                  {/* Thumbnail / Header Area */}
-                  <div className="relative w-full h-[180px] bg-surface-container overflow-hidden">
-                    {lecture.thumbnailUrl ? (
-                      <img
-                        src={lecture.thumbnailUrl}
-                        alt={lecture.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary-container/30">
-                        <MaterialIcon name="play_circle" size={48} className="text-primary/40" />
+                        {/* Topic & Difficulty Chips */}
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[85%]">
+                          <span className={`${chipColor} text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm`}>
+                            {chipLabel}
+                          </span>
+                          {lecture.difficultyName && (
+                            <span className="bg-surface-container-highest/90 text-on-surface text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm shadow-sm border border-whisper-border">
+                              {lecture.difficultyName}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    )}
 
-                    {/* Topic & Difficulty Chips */}
-                    <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[85%]">
-                      <span className={`${chipColor} text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm`}>
-                        {chipLabel}
-                      </span>
-                      {lecture.difficultyName && (
-                        <span className="bg-surface-container-highest/90 text-on-surface text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm shadow-sm border border-whisper-border">
-                          {lecture.difficultyName}
+                      {/* Body Content */}
+                      <div className="p-3.5 space-y-2">
+                        <h4 className="text-sm font-bold text-on-surface line-clamp-2 group-hover:text-primary transition-colors">
+                          {lecture.title}
+                        </h4>
+
+                        {/* Explanation */}
+                        <p className="text-xs text-outline leading-relaxed flex items-start gap-1">
+                          <MaterialIcon name="info" size={14} className="text-primary/70 shrink-0 mt-0.5" />
+                          <span>{explanation}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Footer Score (Mastery-based only) */}
+                    <div className="px-3.5 pb-3.5 pt-1 border-t border-whisper-border/50 flex items-center justify-between text-[11px] text-on-surface-variant">
+                      {lecture.officialPoint != null && !isColdStart ? (
+                        <span className="font-semibold text-primary">
+                          Điểm chủ đề: {Number(lecture.officialPoint).toFixed(1)}/10
+                        </span>
+                      ) : (
+                        <span className="italic text-outline">
+                          Bài giảng nền tảng
+                        </span>
+                      )}
+                      {lecture.likes > 0 && (
+                        <span className="flex items-center gap-1 font-medium">
+                          <MaterialIcon name="favorite" size={12} className="text-deep-rose" />
+                          {lecture.likes}
                         </span>
                       )}
                     </div>
-                  </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
 
-                  {/* Body Content */}
-                  <div className="p-3.5 space-y-2">
-                    <h4 className="text-sm font-bold text-on-surface line-clamp-2 group-hover:text-primary transition-colors">
-                      {lecture.title}
-                    </h4>
-
-                    {/* Explanation */}
-                    <p className="text-xs text-outline leading-relaxed flex items-start gap-1">
-                      <MaterialIcon name="info" size={14} className="text-primary/70 shrink-0 mt-0.5" />
-                      <span>{explanation}</span>
-                    </p>
-                  </div>
-                  <div className={`absolute top-3 right-3 ${diff.color} text-white text-[10px] font-bold px-2.5 py-1 rounded`}>
-                    {diff.label}
-                  </div>
-                </div>
-
-                {/* Footer Score (Mastery-based only) */}
-                <div className="px-3.5 pb-3.5 pt-1 border-t border-whisper-border/50 flex items-center justify-between text-[11px] text-on-surface-variant">
-                  {lecture.officialPoint != null && !isColdStart ? (
-                    <span className="font-semibold text-primary">
-                      Điểm chủ đề: {Number(lecture.officialPoint).toFixed(1)}/10
-                    </span>
-                  ) : (
-                    <span className="italic text-outline">
-                      Bài giảng nền tảng
-                    </span>
-                  )}
-                  {lecture.likes > 0 && (
-                    <span className="flex items-center gap-1 font-medium">
-                      <MaterialIcon name="favorite" size={12} className="text-deep-rose" />
-                      {lecture.likes}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+          {/* Gradient fade – chỉ hiển thị khi có nhiều bài giảng để gợi ý scroll */}
+          {lectures.length > (isLibrary ? 4 : 2) && (
+            <div
+              className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 rounded-b-xl"
+              style={{
+                background: 'linear-gradient(to bottom, transparent, var(--color-pure-surface, #fff))',
+              }}
+            />
+          )}
         </div>
       )}
     </div>
