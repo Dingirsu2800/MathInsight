@@ -3,7 +3,6 @@ import CompetencySummaryCard from './competency/CompetencySummaryCard';
 import RadarChartCard from './competency/RadarChartCard';
 import TopicMasteryGrid from './competency/TopicMasteryGrid';
 import HistoricalProgressChart from './competency/HistoricalProgressChart';
-import ImprovementCTACard from './competency/ImprovementCTACard';
 
 export default function CompetencyPage() {
   return (
@@ -24,10 +23,8 @@ export default function CompetencyPage() {
 
         {/* Historical progress chart */}
         <HistoricalProgressChart />
-
-        {/* Improvement CTA + Suggestions */}
-        <ImprovementCTACard />
       </div>
     </StudentLayout>
   );
 }
+

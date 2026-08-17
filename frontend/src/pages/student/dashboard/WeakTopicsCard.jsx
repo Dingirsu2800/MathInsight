@@ -154,6 +154,12 @@ export default function WeakTopicsCard() {
                     {style.statusLabel}
                   </span>
                 </div>
+                <div className="flex justify-between items-center text-xs text-on-surface-variant mb-1.5">
+                  <span className="text-[11px] text-outline">Điểm chủ đề</span>
+                  <span className="font-semibold text-xs font-mono text-on-surface">
+                    {Number.isFinite(score) ? score.toFixed(1) : '0.0'}/10
+                  </span>
+                </div>
                 <ProgressBar
                   value={score}
                   max={10}
