@@ -10,7 +10,7 @@ namespace MathInsight.Modules.Recommender.Services;
 /// Reads TagsMastery and joins to TagTopic (read-only) to resolve tag names.
 /// Resolves TagDifficulty.DifficultyID based on RecommendedDifficultyLevel (1..4).
 /// </summary>
-public sealed class RecommenderService : IRecommenderService, IStudentRecommendationProvider
+public sealed class RecommenderService : IRecommenderService, IStudentRecommendationProvider, IStudentTopicMasteryProvider
 {
     private const decimal WeakThreshold = 5.00m;
 
@@ -157,5 +157,49 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
                 mastery.RecommendedDifficultyLevel,
                 mastery.OfficialPoint < 4.00m ? "BottleneckSubTag" : "OfficialPointBelow5"))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<string, TopicMasteryAdvice>> GetTopicMasteryAdviceAsync(
+        string studentId,
+        IReadOnlyCollection<string> tagIds,
+        CancellationToken cancellationToken = default)
+    {
+        var requestedTagIds = tagIds
+            .Where(tagId => !string.IsNullOrWhiteSpace(tagId))
+            .Select(tagId => tagId.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (string.IsNullOrWhiteSpace(studentId) || requestedTagIds.Count == 0)
+            return new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase);
+
+        var rows = await (
+            from mastery in _db.TagsMasteries.AsNoTracking()
+            join topic in _db.TagTopics.AsNoTracking() on mastery.TagId equals topic.TagId
+            join parent in _db.TagTopics.AsNoTracking() on topic.ParentTagId equals parent.TagId
+            where mastery.StudentId == studentId
+                && requestedTagIds.Contains(mastery.TagId)
+                && topic.IsActive
+                && parent.IsActive
+                && parent.ParentTagId == null
+                && parent.Grade == topic.Grade
+                && mastery.RecommendedDifficultyLevel >= 1
+                && mastery.RecommendedDifficultyLevel <= 4
+            select new
+            {
+                mastery.TagId,
+                mastery.OfficialPoint,
+                mastery.NumberDone,
+                mastery.RecommendedDifficultyLevel
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(
+            row => row.TagId,
+            row => new TopicMasteryAdvice(
+                row.TagId,
+                Math.Clamp(row.OfficialPoint, 0m, 10m),
+                Math.Max(0, row.NumberDone),
+                row.RecommendedDifficultyLevel),
+            StringComparer.OrdinalIgnoreCase);
     }
 }

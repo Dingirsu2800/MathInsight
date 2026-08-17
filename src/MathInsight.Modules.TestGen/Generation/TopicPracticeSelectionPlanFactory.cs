@@ -82,4 +82,35 @@ public static class TopicPracticeSelectionPlanFactory
             isDirectFocusSelection,
             TopicPracticePolicy.WeakTagRuleVersion);
     }
+
+    public static TopicPracticeSelectionPlan CreateMastery(
+        decimal officialPoint,
+        IReadOnlySet<string> focusTagIds)
+    {
+        if (focusTagIds.Count == 0)
+            throw new ArgumentException("Mastery TopicPractice requires one selected topic.", nameof(focusTagIds));
+
+        int[] profile = Math.Clamp(officialPoint, 0m, 10m) switch
+        {
+            < 2m => [9, 1, 0, 0],
+            < 3m => [8, 2, 0, 0],
+            < 4m => [3, 6, 1, 0],
+            < 5m => [2, 6, 2, 0],
+            < 6m => [0, 3, 6, 1],
+            < 7.5m => [0, 2, 6, 2],
+            < 9m => [0, 0, 2, 8],
+            _ => [0, 0, 1, 9]
+        };
+
+        var slots = profile
+            .SelectMany((count, index) => Enumerable.Repeat(
+                new TopicPracticeSlot(index + 1, TopicPracticeSlotScope.FocusPreferred), count))
+            .ToList();
+
+        return new TopicPracticeSelectionPlan(
+            slots,
+            new HashSet<string>(focusTagIds, StringComparer.OrdinalIgnoreCase),
+            IsDirectFocusSelection: true,
+            TopicPracticePolicy.MasteryRuleVersion);
+    }
 }

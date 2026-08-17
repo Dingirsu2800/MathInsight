@@ -24,14 +24,16 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
         {
           "type":"object",
           "additionalProperties":false,
-          "required":["questionContent","solutionContent","suggestedQuestionType","answers","parts","warnings"],
+          "required":["questionContent","solutionContent","solutionExplicitlyVisible","suggestedQuestionType","answers","parts","warnings","visualContentDetected"],
           "properties":{
             "questionContent":{"type":"string"},
             "solutionContent":{"type":"string"},
+            "solutionExplicitlyVisible":{"type":"boolean"},
             "suggestedQuestionType":{"type":"string","enum":["SINGLE_CHOICE","MULTIPLE_CHOICE","TRUE_FALSE","SHORT_ANSWER","COMPOSITE","UNKNOWN"]},
-            "answers":{"type":"array","maxItems":20,"items":{"type":"object","additionalProperties":false,"required":["content","suggestedIsCorrect"],"properties":{"content":{"type":"string"},"suggestedIsCorrect":{"type":["boolean","null"]}}}},
+            "answers":{"type":"array","maxItems":20,"items":{"type":"object","additionalProperties":false,"required":["content","suggestedIsCorrect","detectedMark"],"properties":{"content":{"type":"string"},"suggestedIsCorrect":{"type":["boolean","null"]},"detectedMark":{"type":"string"}}}},
             "parts":{"type":"array","maxItems":20,"items":{"type":"object","additionalProperties":false,"required":["label","content","partType","explanation","suggestedCorrectBoolean","suggestedCorrectText","suggestedCorrectNumeric","numericTolerance"],"properties":{"label":{"type":["string","null"]},"content":{"type":"string"},"partType":{"type":"string","enum":["TRUE_FALSE","SHORT_ANSWER","NUMERIC_ANSWER","UNKNOWN"]},"explanation":{"type":["string","null"]},"suggestedCorrectBoolean":{"type":["boolean","null"]},"suggestedCorrectText":{"type":["string","null"]},"suggestedCorrectNumeric":{"type":["number","null"]},"numericTolerance":{"type":["number","null"]}}}},
-            "warnings":{"type":"array","maxItems":20,"items":{"type":"string"}}
+            "warnings":{"type":"array","maxItems":20,"items":{"type":"string"}},
+            "visualContentDetected":{"type":"boolean"}
           }
         }
         """).RootElement.Clone();
@@ -153,7 +155,10 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
                 Classify only from visible structure. Use COMPOSITE for THPT true/false statement questions and preserve a/b/c/d labels.
                 For SINGLE_CHOICE and MULTIPLE_CHOICE, questionContent must contain only the stem. Exclude every answer option and labels such as A/B/C/D from questionContent. Put each option exactly once in answers[].content, without its label.
                 For COMPOSITE, questionContent must contain only the shared introduction. Put each a/b/c/d statement exactly once in parts[].content, without its label, and do not duplicate statements in questionContent.
-                Set every suggested correct value to null unless the image explicitly marks an official answer or answer key.
+                Observe circles, ticks, crosses, and highlights only as detectedMark on the corresponding option. They are never answer keys, including when they appear to mark a choice.
+                Set every suggested correctness value to null.
+                Set solutionExplicitlyVisible true only when an explicit printed solution is visible in the source image. Otherwise set it false and leave solutionContent and every parts[].explanation empty.
+                Set visualContentDetected to true when a table, chart, graph, geometry figure, or diagram is visible. Preserve tables as GitHub-Flavored Markdown.
                 Put uncertain, omitted, or ambiguous information in warnings.
                 """,
             document_annotation_format = new
@@ -206,7 +211,8 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
             .Take(20)
             .Select(answer => new QuestionOcrAnswerDraft(
                 NormalizeText(answer.Content),
-                answer.SuggestedIsCorrect))
+                null,
+                NormalizeDetectedMark(answer.DetectedMark)))
             .Where(answer => !string.IsNullOrWhiteSpace(answer.Content))
             .ToList() ?? [];
 
@@ -216,11 +222,11 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
                 NormalizeOptionalText(part.Label) ?? GetDefaultPartLabel(index),
                 NormalizeText(part.Content),
                 NormalizePartType(part.PartType),
-                NormalizeOptionalText(part.Explanation),
-                part.SuggestedCorrectBoolean,
-                NormalizeOptionalText(part.SuggestedCorrectText),
-                part.SuggestedCorrectNumeric,
-                part.NumericTolerance))
+                annotation.SolutionExplicitlyVisible ? NormalizeOptionalText(part.Explanation) : null,
+                null,
+                null,
+                null,
+                null))
             .Where(part => !string.IsNullOrWhiteSpace(part.Content))
             .ToList() ?? [];
 
@@ -233,13 +239,11 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
         if (extractedImages.Count > 0)
             warnings.Add("OCR detected one or more visual candidates. Select an image manually before attaching it to the question.");
 
-        if (answers.Any(answer => answer.SuggestedIsCorrect is not null) ||
-            parts.Any(part => part.SuggestedCorrectBoolean is not null ||
-                              part.SuggestedCorrectText is not null ||
-                              part.SuggestedCorrectNumeric is not null))
-        {
-            warnings.Add("OCR answer suggestions are not confirmed answer keys; verify them before saving.");
-        }
+        if (annotation.VisualContentDetected && extractedImages.Count == 0)
+            warnings.Add("OCR detected visual content but did not extract an image candidate; verify the table, graph, or diagram manually.");
+
+        if (answers.Any(answer => answer.DetectedMark != QuestionOcrDetectedMarks.None))
+            warnings.Add("OCR observed answer marks only; verify the answer key manually before saving.");
 
         return new QuestionOcrDraftResponse(
             rawMarkdown,
@@ -248,7 +252,7 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
             extractedImages,
             new QuestionOcrDraft(
                 NormalizeText(annotation.QuestionContent),
-                NormalizeText(annotation.SolutionContent),
+                annotation.SolutionExplicitlyVisible ? NormalizeText(annotation.SolutionContent) : string.Empty,
                 questionType,
                 answers,
                 parts));
@@ -400,6 +404,19 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
 
     private static string NormalizeText(string? value) => value?.Trim() ?? string.Empty;
 
+    private static string NormalizeDetectedMark(string? value)
+    {
+        return NormalizeToken(value) switch
+        {
+            "" or "NONE" => QuestionOcrDetectedMarks.None,
+            "CIRCLE" or "CIRCLED" => QuestionOcrDetectedMarks.Circled,
+            "TICK" or "TICKED" or "CHECK" or "CHECKED" => QuestionOcrDetectedMarks.Ticked,
+            "CROSS" or "CROSSED" => QuestionOcrDetectedMarks.Crossed,
+            "HIGHLIGHT" or "HIGHLIGHTED" => QuestionOcrDetectedMarks.Highlighted,
+            _ => QuestionOcrDetectedMarks.Unknown
+        };
+    }
+
     private static string? NormalizeOptionalText(string? value)
     {
         var normalized = NormalizeText(value);
@@ -419,16 +436,19 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
     {
         public string? QuestionContent { get; init; }
         public string? SolutionContent { get; init; }
+        public bool SolutionExplicitlyVisible { get; init; }
         public string? SuggestedQuestionType { get; init; }
         public List<OcrAnswer>? Answers { get; init; }
         public List<OcrPart>? Parts { get; init; }
         public List<string>? Warnings { get; init; }
+        public bool VisualContentDetected { get; init; }
     }
 
     private sealed class OcrAnswer
     {
         public string? Content { get; init; }
         public bool? SuggestedIsCorrect { get; init; }
+        public string? DetectedMark { get; init; }
     }
 
     private sealed class OcrPart

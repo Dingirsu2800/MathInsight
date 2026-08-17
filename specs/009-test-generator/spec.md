@@ -15,7 +15,7 @@ The module is delivered in explicit slices:
 2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
 3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
 4. **Checkpoint 6C (complete)**: generate a 10-question baseline `TopicPractice` test for one Student-selected active direct-child topic at or below the Student's current grade.
-5. **Checkpoint 6D (current)**: apply one qualified WeakTag from the selected active direct-child topic to TopicPractice without changing the request shape, database schema, or Adaptive BlueprintExam behavior.
+5. **Checkpoint 6D (complete)**: automatic TopicPractice uses qualified mastery for the selected active direct-child topic without changing the request shape, database schema, or Adaptive BlueprintExam behavior.
 6. **Expert Shared BlueprintExam (current additive checkpoint)**: let the owning Expert generate, preview, publish immediately, and archive shared BlueprintExam variants while preserving the completed Student personal generation flow.
 7. **Expert Fixed BlueprintExam**: let the owning Expert select exact eligible questions and their global order for an Approved or Active Blueprint. Fixed and random variants coexist and are archived independently.
 
@@ -204,23 +204,13 @@ The POST body contains only `tagId`. The backend derives Student ID, selected to
 - Test persistence uses `BlueprintID = NULL`, `TestMode = TopicPractice`, `GeneratedForStudentID = current Student`, `DurationMinutes = 0`, `MaxScore = 10.00`, and `ScoringPolicy = NormalizedWeight`.
 - Every TestQuestion stores the latest QuestionVersion, weight, allocated score, `SelectionReason = TopicPractice`, `RecommendedForTagID = selected TagID`, and `RuleVersion = TopicPractice-v1`.
 
-## Checkpoint 6D: WeakTag-Aware TopicPractice
+## Checkpoint 6D: Mastery-Aware TopicPractice
 
-When `TopicPractice:WeakTagAdaptiveEnabled` is `false`, TestGen does not call Recommender and keeps the baseline `3/4/2/1` level profile. When enabled, it resolves qualified advice (`OfficialPoint < 5.00`, `EvidenceCount >= 3`) from `IStudentRecommendationProvider`. Empty advice keeps the baseline; provider failure or invalid advice returns a stable `503` before Test/TestQuestion writes.
+When `TopicPractice:WeakTagAdaptiveEnabled` is `false`, TestGen does not call a provider and keeps the baseline `3/4/2/1` profile. When enabled, it calls the batch `IStudentTopicMasteryProvider` for the exact requested direct-child topics. `IStudentRecommendationProvider` remains dedicated to WeakTag, lecture, and material recommendations. Missing mastery or `EvidenceCount < 3` keeps baseline; provider failure or malformed advice returns stable `503` before Test/TestQuestion writes.
 
-For the selected active direct-child topic, TestGen uses qualified advice for that exact topic only. The profiles are:
+For the selected topic, the profile is determined by `OfficialPoint`: `0-<2: 9/1/0/0`, `2-<3: 8/2/0/0`, `3-<4: 3/6/1/0`, `4-<5: 2/6/2/0`, `5-<6: 0/3/6/1`, `6-<7.5: 0/2/6/2`, `7.5-<9: 0/0/2/8`, and `9-10: 0/0/1/9` (levels 1 through 4). Automatic candidates remain within the exact selected direct-child topic. Existing fallback, unique Question, Composite cap, and unseen-then-oldest rules remain in force.
 
-| Recommended level | Level 1 | Level 2 | Level 3 | Level 4 | Focus slots |
-|---|---:|---:|---:|---:|---|
-| Baseline/no advice | 3 | 4 | 2 | 1 | None |
-| 1 | 8 | 2 | 0 | 0 | 5xL1 + 1xL2 |
-| 2 | 2 | 7 | 1 | 0 | 1xL1 + 4xL2 + 1xL3 |
-
-All adaptive candidates remain within the exact selected direct-child topic. Existing nearest-level fallback, lower-level tie preference, unique Question, Composite cap, and unseen-then-oldest rules remain in force.
-
-Option responses add `isWeakRecommended`, representative tag data, point, evidence count, recommended level, and reason. Generation responses add `wasAdaptive`, representative tag data, level, adaptive/fallback counts, and rule version. The client still submits only `{ tagId }`.
-
-Adaptive focus rows persist `SelectionReason = WeakTagPractice`, `IsAdaptiveSelected = true`, the representative Tag ID, resolved Difficulty ID, `PtagAtSelection`, and `RuleVersion = TopicPractice-WeakTag-v1`. Non-focus rows from the same adaptive test retain `SelectionReason = TopicPractice`, `IsAdaptiveSelected = false`, the selected Tag ID, null recommendation values, and the adaptive rule version.
+Automatic rows persist `SelectionReason = TopicPractice`, `IsAdaptiveSelected = true`, `RecommendedForTagID = selected TagID`, the resolved representative difficulty, `PtagAtSelection`, and `RuleVersion = TopicPractice-Mastery-v1`. Manual rows retain `TopicPractice-Manual-v1` and never call the provider.
 
 ### Checkpoint 6D Stable Errors
 
@@ -368,6 +358,12 @@ Discovery is not an authorization boundary. Testing must revalidate personal own
 ## Checkpoint 6E: Student-Selected Topic Practice Difficulty
 
 `POST /api/test-generator/tests/topic-practices` accepts an additive optional `difficultyId` beside `tagId`. Omitting it preserves the existing recommendation-aware behavior. Supplying it switches to manual mode: the selected active difficulty must have level 1 through 4, Recommender is not called, and all ten generated Questions match that exact difficulty. The service never mixes or falls back to another difficulty in manual mode.
+
+## Mock Readiness: Student Catalog And Topic Mastery Practice
+
+Student shared-exam discovery accepts an additive optional `generationType` query parameter with canonical values `Fixed` and `Random`. A shared Test is `Fixed` only when every persisted `TestQuestion.SelectionReason` is `FixedExam`; it is `Random` only when every reason is `BlueprintNormal`. A mixed or unknown aggregate is rejected with a stable contract error instead of being silently classified. Filtering happens before counting and pagination.
+
+Topic Practice automatic mode uses the selected topic's mastery when it has at least three completed items. It is not limited to WeakTags. The score profiles are: `0 <= p < 2`: `9/1/0/0`; `2 <= p < 3`: `8/2/0/0`; `3 <= p < 4`: `3/6/1/0`; `4 <= p < 5`: `2/6/2/0`; `5 <= p < 6`: `0/3/6/1`; `6 <= p < 7.5`: `0/2/6/2`; `7.5 <= p < 9`: `0/0/2/8`; and `9 <= p <= 10`: `0/0/1/9`, with each tuple ordered by difficulty level 1 through 4. Missing or insufficient evidence keeps baseline `3/4/2/1`. Automatic fallback fills the requested level first, then lower levels, then higher levels; all existing uniqueness, Composite-cap, and candidate validity rules remain. Manual Topic Practice remains exactly ten Questions at the selected difficulty.
 
 `GET /api/test-generator/tests/topic-practice-options` returns `difficultyAvailability` for each assignable direct-child topic. Each item includes `difficultyId`, `difficultyName`, `levelValue`, `availableQuestionCount`, and `canGenerate`; counts use the same supported candidate shape and Composite cap as generation. Inactive or unsupported difficulties are excluded.
 

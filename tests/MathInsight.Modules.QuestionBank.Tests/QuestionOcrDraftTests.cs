@@ -111,7 +111,9 @@ public sealed class QuestionOcrDraftTests
         Assert.Equal("Tính $x$.", result.Draft.QuestionContent);
         Assert.Equal("SINGLE_CHOICE", result.Draft.SuggestedQuestionType);
         Assert.Single(result.Draft.Answers);
-        Assert.False(result.Draft.Answers[0].SuggestedIsCorrect ?? true);
+        Assert.Null(result.Draft.Answers[0].SuggestedIsCorrect);
+        Assert.Equal(QuestionOcrDetectedMarks.None, result.Draft.Answers[0].DetectedMark);
+        Assert.Equal(string.Empty, result.Draft.SolutionContent);
         Assert.Equal(0.91m, result.PageConfidence);
         Assert.Single(result.ExtractedImages);
         Assert.Equal("data:image/png;base64,diagram", result.ExtractedImages[0].DataUrl);
@@ -119,6 +121,117 @@ public sealed class QuestionOcrDraftTests
         Assert.Contains("document_annotation_format", requestJson);
         Assert.Contains("data:image/png;base64", requestJson);
         Assert.Contains("\"include_image_base64\":true", requestJson);
+    }
+
+    [Fact]
+    public async Task MistralService_ObservedCircleNeverConfirmsAnswerCorrectness()
+    {
+        var annotation = new
+        {
+            questionContent = "Chọn đáp án đúng.", solutionContent = "", suggestedQuestionType = "SINGLE_CHOICE",
+            answers = new[] { new { content = "A", suggestedIsCorrect = true, detectedMark = "circled" } },
+            parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
+        };
+        using var client = CreateJsonClient(CreateProviderResponse(annotation));
+        var service = CreateMistralService(client);
+
+        var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
+
+        var answer = Assert.Single(result.Draft.Answers);
+        Assert.Equal(QuestionOcrDetectedMarks.Circled, answer.DetectedMark);
+        Assert.Null(answer.SuggestedIsCorrect);
+    }
+
+    [Theory]
+    [InlineData("tick", QuestionOcrDetectedMarks.Ticked)]
+    [InlineData("cross", QuestionOcrDetectedMarks.Crossed)]
+    [InlineData("highlighted", QuestionOcrDetectedMarks.Highlighted)]
+    [InlineData("unrecognized-symbol", QuestionOcrDetectedMarks.Unknown)]
+    public async Task MistralService_NormalizesObservedMarks(string providerMark, string expectedMark)
+    {
+        var annotation = new
+        {
+            questionContent = "Chọn đáp án.", solutionContent = "Lời giải được in sẵn.", solutionExplicitlyVisible = true, suggestedQuestionType = "SINGLE_CHOICE",
+            answers = new[] { new { content = "A", suggestedIsCorrect = true, detectedMark = providerMark } },
+            parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
+        };
+        using var client = CreateJsonClient(CreateProviderResponse(annotation));
+        var service = CreateMistralService(client);
+
+        var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
+
+        Assert.Equal(expectedMark, Assert.Single(result.Draft.Answers).DetectedMark);
+        Assert.Equal("Lời giải được in sẵn.", result.Draft.SolutionContent);
+    }
+
+    [Fact]
+    public async Task MistralService_HidesSolutionAndPartExplanationUnlessExplicitlyVisible()
+    {
+        var annotation = new
+        {
+            questionContent = "Câu hỏi.",
+            solutionContent = "Lời giải do model tự tạo.",
+            solutionExplicitlyVisible = false,
+            suggestedQuestionType = "COMPOSITE",
+            answers = Array.Empty<object>(),
+            parts = new[]
+            {
+                new
+                {
+                    label = "a",
+                    content = "Mệnh đề.",
+                    partType = "TRUE_FALSE",
+                    explanation = "Giải thích do model tự tạo.",
+                    suggestedCorrectBoolean = true,
+                    suggestedCorrectText = (string?)null,
+                    suggestedCorrectNumeric = (decimal?)null,
+                    numericTolerance = (decimal?)null
+                }
+            },
+            warnings = Array.Empty<string>(),
+            visualContentDetected = false
+        };
+        using var client = CreateJsonClient(CreateProviderResponse(annotation));
+        var service = CreateMistralService(client);
+
+        var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
+
+        Assert.Equal(string.Empty, result.Draft.SolutionContent);
+        Assert.Null(Assert.Single(result.Draft.Parts).Explanation);
+    }
+
+    [Fact]
+    public async Task MistralService_VisualContentWithoutExtractedImage_ReturnsWarning()
+    {
+        var annotation = new
+        {
+            questionContent = "Bảng số liệu sau đây.", solutionContent = "", suggestedQuestionType = "SHORT_ANSWER",
+            answers = Array.Empty<object>(), parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = true
+        };
+        using var client = CreateJsonClient(CreateProviderResponse(annotation, images: Array.Empty<object>()));
+        var service = CreateMistralService(client);
+
+        var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
+
+        Assert.Empty(result.ExtractedImages);
+        Assert.Contains(result.Warnings, warning => warning.Contains("visual content", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task MistralService_PreservesMarkdownTableInRawDraft()
+    {
+        const string markdown = "| Nhóm | Tần số |\n| --- | --- |\n| [8;10) | 3 |";
+        var annotation = new
+        {
+            questionContent = "Dựa vào bảng sau.", solutionContent = "", suggestedQuestionType = "SHORT_ANSWER",
+            answers = Array.Empty<object>(), parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = true
+        };
+        using var client = CreateJsonClient(CreateProviderResponse(annotation, markdown: markdown));
+        var service = CreateMistralService(client);
+
+        var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
+
+        Assert.Equal(markdown, result.RawMarkdown);
     }
 
     [Fact]
@@ -172,24 +285,35 @@ public sealed class QuestionOcrDraftTests
         };
     }
 
+    private static HttpClient CreateJsonClient(string payload)
+        => new(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        }));
+
     private static string CreateProviderResponse()
     {
         var annotation = new
         {
             questionContent = "Tính $x$.", solutionContent = "", suggestedQuestionType = "SINGLE_CHOICE",
-            answers = new[] { new { content = "$x=1$", suggestedIsCorrect = false } },
-            parts = Array.Empty<object>(), warnings = Array.Empty<string>()
+            answers = new[] { new { content = "$x=1$", suggestedIsCorrect = false, detectedMark = "" } },
+            parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
         };
+        return CreateProviderResponse(annotation);
+    }
+
+    private static string CreateProviderResponse(object annotation, object? images = null, string markdown = "Tính $x$.")
+    {
         return JsonSerializer.Serialize(new
         {
             pages = new[]
             {
                 new
                 {
-                    markdown = "Tính $x$.",
+                    markdown,
                     confidence_scores = new { average_page_confidence_score = 0.91m },
                     blocks = Array.Empty<object>(),
-                    images = new[] { new { id = "diagram-1", image_base64 = "data:image/png;base64,diagram", image_annotation = "A geometry diagram." } }
+                    images = images ?? new[] { new { id = "diagram-1", image_base64 = "data:image/png;base64,diagram", image_annotation = "A geometry diagram." } }
                 }
             },
             document_annotation = JsonSerializer.Serialize(annotation)

@@ -485,6 +485,64 @@ public sealed class SharedBlueprintExamTests
     }
 
     [Fact]
+    public async Task Discovery_FiltersGenerationTypeBeforeCountingAndPagination()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentGrade12Id, 12);
+        var blueprint = AddBlueprint(testContext, "catalog-blueprint", BlueprintStatuses.Active, OwnerExpertId, grade: 12);
+        AddGeneratedTest(testContext, "random-one", blueprint, "RANDOM01");
+        AddGeneratedTest(testContext, "fixed-one", blueprint, "FIXED001", selectionReason: GeneratedTestValues.FixedExamReason);
+        AddGeneratedTest(testContext, "random-two", blueprint, "RANDOM02");
+        await testContext.Context.SaveChangesAsync();
+
+        var handler = new GetSharedBlueprintExamsQueryHandler(testContext.Context);
+        var fixedResult = await handler.Handle(
+            new GetSharedBlueprintExamsQuery(StudentGrade12Id, 1, 1, " fixed "),
+            CancellationToken.None);
+        var randomResult = await handler.Handle(
+            new GetSharedBlueprintExamsQuery(StudentGrade12Id, 1, 1, "RANDOM"),
+            CancellationToken.None);
+
+        Assert.True(fixedResult.IsSuccess);
+        Assert.Equal(1, fixedResult.Value!.TotalCount);
+        var fixedExam = Assert.Single(fixedResult.Value.Items);
+        Assert.Equal("fixed-one", fixedExam.TestId);
+        Assert.Equal(GeneratedTestValues.FixedGenerationType, fixedExam.GenerationType);
+
+        Assert.True(randomResult.IsSuccess);
+        Assert.Equal(2, randomResult.Value!.TotalCount);
+        Assert.Single(randomResult.Value.Items);
+        Assert.Equal(GeneratedTestValues.RandomGenerationType, randomResult.Value.Items[0].GenerationType);
+    }
+
+    [Fact]
+    public async Task Discovery_MixedSelectionReasons_ReturnsStableContractError()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentGrade12Id, 12);
+        var blueprint = AddBlueprint(testContext, "mixed-blueprint", BlueprintStatuses.Active, OwnerExpertId, grade: 12);
+        var test = AddGeneratedTest(testContext, "mixed-test", blueprint, "MIXED001");
+        test.Questions.Add(new TestQuestion
+        {
+            TestId = test.TestId,
+            QuestionId = "mixed-fixed-question",
+            QuestionOrder = 2,
+            SelectionReason = GeneratedTestValues.FixedExamReason,
+            QuestionVersionId = "mixed-fixed-version",
+            WeightSnapshot = 1m,
+            MaxPointsSnapshot = 1m
+        });
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new GetSharedBlueprintExamsQueryHandler(testContext.Context).Handle(
+            new GetSharedBlueprintExamsQuery(StudentGrade12Id, 1, 20, null),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TestGenerationErrors.SharedExamGenerationTypeInvalid, result.Error);
+    }
+
+    [Fact]
     public async Task ResolveCode_TrimsAndNormalizesCase()
     {
         await using var testContext = TestGenInMemoryContext.Create();
@@ -500,6 +558,48 @@ public sealed class SharedBlueprintExamTests
         Assert.True(result.IsSuccess);
         Assert.Equal("resolvable-test", result.Value!.TestId);
         Assert.Equal("CODE2345", result.Value.TestCode);
+    }
+
+    [Theory]
+    [InlineData("mixed")]
+    [InlineData("unknown")]
+    [InlineData("empty")]
+    public async Task ResolveCode_InvalidGenerationMetadata_ReturnsStableContractError(string scenario)
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentGrade12Id, 12);
+        var blueprint = AddBlueprint(testContext, $"resolve-{scenario}", BlueprintStatuses.Active, OwnerExpertId, grade: 12);
+        var test = AddGeneratedTest(
+            testContext,
+            $"resolve-{scenario}",
+            blueprint,
+            scenario.ToUpperInvariant(),
+            selectionReason: scenario == "unknown" ? "UnexpectedReason" : GeneratedTestValues.BlueprintNormalReason);
+        if (scenario == "mixed")
+        {
+            test.Questions.Add(new TestQuestion
+            {
+                TestId = test.TestId,
+                QuestionId = "resolve-mixed-fixed",
+                QuestionOrder = 2,
+                SelectionReason = GeneratedTestValues.FixedExamReason,
+                QuestionVersionId = "resolve-mixed-fixed-version",
+                WeightSnapshot = 1m,
+                MaxPointsSnapshot = 1m
+            });
+        }
+        else if (scenario == "empty")
+        {
+            test.Questions.Clear();
+        }
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new ResolveSharedTestCodeQueryHandler(testContext.Context).Handle(
+            new ResolveSharedTestCodeQuery(StudentGrade12Id, scenario.ToUpperInvariant()),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TestGenerationErrors.SharedExamGenerationTypeInvalid, result.Error);
     }
 
     [Theory]
@@ -669,7 +769,8 @@ public sealed class SharedBlueprintExamTests
         string? testCode,
         string testStatus = GeneratedTestValues.ActiveStatus,
         string? generatedForStudentId = null,
-        string testMode = GeneratedTestValues.BlueprintExamMode)
+        string testMode = GeneratedTestValues.BlueprintExamMode,
+        string selectionReason = GeneratedTestValues.BlueprintNormalReason)
     {
         var test = new TestEntity
         {
@@ -687,6 +788,16 @@ public sealed class SharedBlueprintExamTests
             ScoringPolicy = ScoringPolicies.BlueprintBudget,
             CreatedTime = DateTime.UtcNow
         };
+        test.Questions.Add(new TestQuestion
+        {
+            TestId = testId,
+            QuestionId = $"{testId}-question",
+            QuestionOrder = 1,
+            SelectionReason = selectionReason,
+            QuestionVersionId = $"{testId}-version",
+            WeightSnapshot = 1m,
+            MaxPointsSnapshot = 1m
+        });
         testContext.Context.Tests.Add(test);
         return test;
     }

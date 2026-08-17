@@ -9,148 +9,97 @@ namespace MathInsight.Modules.TestGen.Tests;
 
 public sealed class TopicPracticeRecommendationResolverTests
 {
-    private readonly Mock<IStudentRecommendationProvider> _provider = new();
+    private readonly Mock<IStudentTopicMasteryProvider> _provider = new();
 
     [Fact]
     public async Task ResolveForTopicsAsync_Disabled_DoesNotCallProviderAndReturnsBaselineContexts()
     {
-        var result = await CreateResolver(enabled: false).ResolveForTopicsAsync(
-            "student_01", Topics(), CancellationToken.None);
+        var result = await CreateResolver(false).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.All(result.Value!.Values, context => Assert.False(context.IsAdaptive));
-        _provider.Verify(
-            provider => provider.GetWeakTagAdviceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        _provider.Verify(provider => provider.GetTopicMasteryAdviceAsync(
+            It.IsAny<string>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task ResolveForTopicsAsync_EmptyAdvice_ReturnsBaselineContexts()
+    public async Task ResolveForTopicsAsync_MapsSufficientEvidenceOnlyToTheExactRequestedTopic()
     {
-        _provider
-            .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+        SetupAdvice(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["child"] = new("child", 5.50m, 3, 3)
+        });
 
-        var result = await CreateResolver(enabled: true).ResolveForTopicsAsync(
-            "student_01", Topics(), CancellationToken.None);
+        var result = await CreateResolver(true).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.All(result.Value!.Values, context => Assert.False(context.IsAdaptive));
-    }
-
-    [Fact]
-    public async Task ResolveForTopicsAsync_MapsAdviceOnlyToTheExactSelectedTopic()
-    {
-        _provider
-            .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
-                new WeakTagAdvice("child", "Child", 2.40m, 5, 1, "OfficialPointBelow5")
-            ]);
-
-        var result = await CreateResolver(enabled: true).ResolveForTopicsAsync(
-            "student_01", Topics(), CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(3, result.Value!.Count);
         Assert.False(result.Value!["parent"].IsAdaptive);
         Assert.True(result.Value!["child"].IsAdaptive);
-        Assert.Equal("child", result.Value!["child"].RepresentativeAdvice!.TagId);
+        Assert.Equal(5.50m, result.Value!["child"].RepresentativeAdvice!.OfficialPoint);
         Assert.False(result.Value!["sibling"].IsAdaptive);
+        _provider.Verify(provider => provider.GetTopicMasteryAdviceAsync(
+            "student_01",
+            It.Is<IReadOnlyCollection<string>>(ids => ids.Count == 3 && ids.Contains("child")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task ResolveForTopicsAsync_MapsAdviceOnlyByExactTagId()
+    public async Task ResolveForTopicsAsync_InsufficientEvidence_UsesBaseline()
     {
-        var topics = new[]
+        SetupAdvice(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
         {
-            Topic("parent", null, 1),
-            Topic("shallow", "parent", 30),
-            Topic("middle", "parent", 20),
-            Topic("deep", "middle", 10)
-        };
-        _provider
-            .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
-                new WeakTagAdvice("shallow", "Shallow", 2.40m, 5, 1, "OfficialPointBelow5"),
-                new WeakTagAdvice("deep", "Deep", 2.40m, 5, 1, "OfficialPointBelow5")
-            ]);
+            ["child"] = new("child", 1.00m, 2, 1)
+        });
 
-        var result = await CreateResolver(enabled: true).ResolveForTopicsAsync(
-            "student_01", topics, CancellationToken.None);
+        var result = await CreateResolver(true).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(4, result.Value!.Count);
-        Assert.False(result.Value!["parent"].IsAdaptive);
-        Assert.True(result.Value!["shallow"].IsAdaptive);
-        Assert.False(result.Value!["middle"].IsAdaptive);
-        Assert.True(result.Value!["deep"].IsAdaptive);
+        Assert.False(result.Value!["child"].IsAdaptive);
     }
 
     [Fact]
     public async Task ResolveForTopicsAsync_ProviderFailure_ReturnsStableUnavailableError()
     {
-        _provider
-            .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
+        _provider.Setup(provider => provider.GetTopicMasteryAdviceAsync(
+                It.IsAny<string>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TimeoutException("provider unavailable"));
 
-        var result = await CreateResolver(enabled: true).ResolveForTopicsAsync(
-            "student_01", Topics(), CancellationToken.None);
+        var result = await CreateResolver(true).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
 
         Assert.True(result.IsFailure);
         Assert.Equal("TOPIC_PRACTICE_RECOMMENDER_UNAVAILABLE", result.Error!.Code);
     }
 
     [Theory]
-    [InlineData("", "Name", 2.40, 5, 1, "Reason")]
-    [InlineData("child", "", 2.40, 5, 1, "Reason")]
-    [InlineData("child", "Name", 5.00, 5, 1, "Reason")]
-    [InlineData("child", "Name", -0.01, 5, 1, "Reason")]
-    [InlineData("child", "Name", 2.40, 2, 1, "Reason")]
-    [InlineData("child", "Name", 2.40, 5, 3, "Reason")]
-    [InlineData("child", "Name", 2.40, 5, 1, "")]
+    [InlineData("unknown", "unknown", 5.00, 3, 2)]
+    [InlineData("child", "other", 5.00, 3, 2)]
+    [InlineData("child", "child", -0.01, 3, 2)]
+    [InlineData("child", "child", 10.01, 3, 2)]
+    [InlineData("child", "child", 5.00, -1, 2)]
+    [InlineData("child", "child", 5.00, 3, 5)]
     public async Task ResolveForTopicsAsync_InvalidAdvice_ReturnsStableInvalidError(
-        string tagId,
-        string tagName,
-        decimal officialPoint,
-        int evidenceCount,
-        byte recommendedDifficultyLevel,
-        string reason)
+        string dictionaryKey, string tagId, decimal point, int evidence, byte level)
     {
-        _provider
-            .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
-                new WeakTagAdvice(tagId, tagName, officialPoint, evidenceCount, recommendedDifficultyLevel, reason)
-            ]);
+        SetupAdvice(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
+        {
+            [dictionaryKey] = new(tagId, point, evidence, level)
+        });
 
-        var result = await CreateResolver(enabled: true).ResolveForTopicsAsync(
-            "student_01", Topics(), CancellationToken.None);
+        var result = await CreateResolver(true).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
 
         Assert.True(result.IsFailure);
         Assert.Equal("TOPIC_PRACTICE_RECOMMENDATION_INVALID", result.Error!.Code);
     }
 
-    [Fact]
-    public async Task ResolveForTopicsAsync_DuplicateAdviceTag_ReturnsStableInvalidError()
-    {
-        _provider
-            .Setup(provider => provider.GetWeakTagAdviceAsync("student_01", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
-                new WeakTagAdvice("child", "Child", 2.40m, 5, 1, "Reason"),
-                new WeakTagAdvice("CHILD", "Child", 3.00m, 5, 2, "Reason")
-            ]);
+    private void SetupAdvice(IReadOnlyDictionary<string, TopicMasteryAdvice> advice) =>
+        _provider.Setup(provider => provider.GetTopicMasteryAdviceAsync(
+                "student_01", It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(advice);
 
-        var result = await CreateResolver(enabled: true).ResolveForTopicsAsync(
-            "student_01", Topics(), CancellationToken.None);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("TOPIC_PRACTICE_RECOMMENDATION_INVALID", result.Error!.Code);
-    }
-
-    private TopicPracticeRecommendationResolver CreateResolver(bool enabled)
-        => new(
-            _provider.Object,
-            Options.Create(new TopicPracticeFeatureOptions { WeakTagAdaptiveEnabled = enabled }),
-            Mock.Of<ILogger<TopicPracticeRecommendationResolver>>());
+    private TopicPracticeRecommendationResolver CreateResolver(bool enabled) => new(
+        _provider.Object,
+        Options.Create(new TopicPracticeFeatureOptions { WeakTagAdaptiveEnabled = enabled }),
+        Mock.Of<ILogger<TopicPracticeRecommendationResolver>>());
 
     private static IReadOnlyCollection<TagTopicReadModel> Topics() =>
     [
@@ -161,11 +110,6 @@ public sealed class TopicPracticeRecommendationResolverTests
 
     private static TagTopicReadModel Topic(string tagId, string? parentTagId, int displayOrder) => new()
     {
-        TagId = tagId,
-        ParentTagId = parentTagId,
-        TagName = tagId,
-        Grade = 12,
-        IsActive = true,
-        DisplayOrder = displayOrder
+        TagId = tagId, ParentTagId = parentTagId, TagName = tagId, Grade = 12, IsActive = true, DisplayOrder = displayOrder
     };
 }

@@ -29,6 +29,40 @@ public sealed class TopicPracticeQuestionSelectorTests
         Assert.Equal([level1, level2, level3, level4], Enumerable.Range(1, 4).Select(level => countsByLevel.GetValueOrDefault(level)));
     }
 
+    [Theory]
+    [InlineData(0, 9, 1, 0, 0)]
+    [InlineData(1.99, 9, 1, 0, 0)]
+    [InlineData(2, 8, 2, 0, 0)]
+    [InlineData(2.99, 8, 2, 0, 0)]
+    [InlineData(3, 3, 6, 1, 0)]
+    [InlineData(3.99, 3, 6, 1, 0)]
+    [InlineData(4, 2, 6, 2, 0)]
+    [InlineData(4.99, 2, 6, 2, 0)]
+    [InlineData(5, 0, 3, 6, 1)]
+    [InlineData(5.99, 0, 3, 6, 1)]
+    [InlineData(6, 0, 2, 6, 2)]
+    [InlineData(7.49, 0, 2, 6, 2)]
+    [InlineData(7.5, 0, 0, 2, 8)]
+    [InlineData(8.99, 0, 0, 2, 8)]
+    [InlineData(9, 0, 0, 1, 9)]
+    [InlineData(10, 0, 0, 1, 9)]
+    public void CreateMastery_BuildsProfileForEveryOfficialPointBoundary(
+        decimal officialPoint,
+        int level1,
+        int level2,
+        int level3,
+        int level4)
+    {
+        var plan = TopicPracticeSelectionPlanFactory.CreateMastery(officialPoint, FocusTags());
+
+        Assert.Equal(10, plan.Slots.Count);
+        var countsByLevel = plan.Slots
+            .GroupBy(slot => slot.TargetDifficultyLevel)
+            .ToDictionary(group => group.Key, group => group.Count());
+        Assert.Equal([level1, level2, level3, level4], Enumerable.Range(1, 4).Select(level => countsByLevel.GetValueOrDefault(level)));
+        Assert.Equal(TopicPracticePolicy.MasteryRuleVersion, plan.RuleVersion);
+    }
+
     [Fact]
     public void Select_AdaptiveParent_UsesSixFocusAndAtLeastTwoOutside_WhenPoolPermits()
     {
@@ -75,6 +109,22 @@ public sealed class TopicPracticeQuestionSelectorTests
 
         Assert.True(selection.IsComplete);
         Assert.Contains(selection.Selected, item => item.Candidate.Question.QuestionId == "q-1-3-3");
+    }
+
+    [Fact]
+    public void Select_FallbackPrefersEveryLowerLevelBeforeAnyHigherLevel()
+    {
+        var plan = new TopicPracticeSelectionPlan(
+            Enumerable.Repeat(new TopicPracticeSlot(3, TopicPracticeSlotScope.BreadthPreferred), 10).ToList(),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            IsDirectFocusSelection: false,
+            TopicPracticePolicy.RuleVersion);
+        var candidates = CandidatesByLevel(10, 0, 0, 10);
+
+        var selection = CreateSelector().Select(candidates, plan, CancellationToken.None);
+
+        Assert.True(selection.IsComplete);
+        Assert.All(selection.Selected, item => Assert.Equal(1, item.Candidate.DifficultyLevel));
     }
 
     [Fact]

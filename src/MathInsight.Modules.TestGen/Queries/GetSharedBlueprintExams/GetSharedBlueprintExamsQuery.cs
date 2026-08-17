@@ -7,4 +7,5 @@ namespace MathInsight.Modules.TestGen.Queries.GetSharedBlueprintExams;
 public sealed record GetSharedBlueprintExamsQuery(
     string StudentId,
     int PageIndex,
-    int PageSize) : IRequest<Result<PagedSharedBlueprintExamResponse>>;
+    int PageSize,
+    string? GenerationType = null) : IRequest<Result<PagedSharedBlueprintExamResponse>>;

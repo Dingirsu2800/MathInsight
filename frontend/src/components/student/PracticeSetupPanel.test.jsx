@@ -116,4 +116,42 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
       expect(screen.getByText('Chủ đề đã chọn hiện không còn đủ câu hỏi để luyện tập. Vui lòng chọn chủ đề khác.')).toBeInTheDocument();
     });
   });
+
+  it('renders student panel without internal technical jargon', async () => {
+    const recommendedData = {
+      grade: 12,
+      topics: [
+        {
+          tagId: 'TOPIC-G12-1',
+          tagName: 'Hàm số 12',
+          grade: 12,
+          parentTagName: 'Giải tích 12',
+          canGenerate: true,
+          availableQuestionCount: 15,
+          isWeakRecommended: true,
+          weakTagName: 'Khảo sát hàm số',
+          recommendedDifficultyLevel: 2,
+          officialPoint: 4.8,
+          difficultyAvailability: [],
+        },
+      ],
+    };
+
+    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: recommendedData });
+
+    const { container } = render(
+      <BrowserRouter>
+        <PracticeSetupPanel />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Hàm số 12')).toBeInTheDocument();
+    expect(screen.getByText('Cần củng cố')).toBeInTheDocument();
+
+    const renderedText = container.textContent;
+    const forbiddenTerms = ['WeakTag', 'OfficialPoint', 'EvidenceCount', 'adaptive', 'baseline', 'recommender'];
+    forbiddenTerms.forEach((term) => {
+      expect(renderedText).not.toContain(term);
+    });
+  });
 });

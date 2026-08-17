@@ -83,6 +83,7 @@ public sealed record SharedBlueprintExamResponse(
     string BlueprintId,
     string TestName,
     string? TestCode,
+    string GenerationType,
     int Grade,
     int DurationMinutes,
     int TotalQuestions,

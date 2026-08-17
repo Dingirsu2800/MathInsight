@@ -85,6 +85,27 @@ public sealed class StudentRecommendationProviderTests : IDisposable
         Assert.Empty(result);
     }
 
+    [Fact]
+    public async Task GetTopicMasteryAdviceAsync_ReturnsOnlyRequestedActiveDirectChildren()
+    {
+        Seed("TOPIC-REQUESTED", 7.60m, numberDone: 8, isActive: true, level: 4);
+        Seed("TOPIC-NOT-REQUESTED", 2.00m, numberDone: 8, isActive: true, level: 1);
+        Seed("TOPIC-INACTIVE", 3.00m, numberDone: 8, isActive: false, level: 2);
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.GetTopicMasteryAdviceAsync(
+            "student_01",
+            ["TOPIC-REQUESTED", "missing-topic"],
+            CancellationToken.None);
+
+        var advice = Assert.Single(result);
+        Assert.Equal("TOPIC-REQUESTED", advice.Key);
+        Assert.Equal(7.60m, advice.Value.OfficialPoint);
+        Assert.Equal(8, advice.Value.EvidenceCount);
+        Assert.Equal((byte)4, advice.Value.RecommendedDifficultyLevel);
+        Assert.IsAssignableFrom<IStudentTopicMasteryProvider>(_sut);
+    }
+
     public void Dispose() => _db.Dispose();
 
     private void Seed(string tagId, decimal point, int numberDone, bool isActive, byte level)

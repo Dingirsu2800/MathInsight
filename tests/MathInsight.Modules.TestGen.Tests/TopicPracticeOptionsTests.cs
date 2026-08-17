@@ -108,7 +108,7 @@ public sealed class TopicPracticeOptionsTests
             {
                 ["child"] = new(
                     true,
-                    new WeakTagAdvice("child", "Child", 2.40m, 5, 1, "OfficialPointBelow5"),
+                    new TopicMasteryAdvice("child", 2.40m, 5, 1),
                     new HashSet<string>(["child"], StringComparer.OrdinalIgnoreCase))
             }));
 
@@ -117,11 +117,11 @@ public sealed class TopicPracticeOptionsTests
         var child = Assert.Single(result.Value!.Topics, item => item.TagId == "child");
         Assert.True(child.IsWeakRecommended);
         Assert.Equal("child", child.WeakTagId);
-        Assert.Equal("Child", child.WeakTagName);
+        Assert.Equal("child", child.WeakTagName);
         Assert.Equal(2.40m, child.OfficialPoint);
         Assert.Equal(5, child.EvidenceCount);
         Assert.Equal((byte)1, child.RecommendedDifficultyLevel);
-        Assert.Equal("OfficialPointBelow5", child.RecommendationReason);
+        Assert.Equal("TopicMastery", child.RecommendationReason);
         Assert.Equal(1, resolver.CallCount);
     }
 

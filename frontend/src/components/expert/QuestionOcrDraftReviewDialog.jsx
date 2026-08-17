@@ -6,6 +6,26 @@ import LatexPreview from "./LatexPreview";
 import { cn } from "../../utils/cn";
 import { getQuestionTypeLabel } from "../../utils/questionLabels";
 
+export function getDetectedMarkLabel(mark) {
+  if (!mark) return null;
+  const upper = String(mark).trim().toUpperCase();
+  switch (upper) {
+    case "CIRCLED":
+      return "Phát hiện có khoanh";
+    case "TICKED":
+      return "Phát hiện dấu tích";
+    case "CROSSED":
+      return "Phát hiện gạch chéo";
+    case "HIGHLIGHTED":
+      return "Phát hiện được tô nổi bật";
+    case "UNKNOWN":
+      return "Có ký hiệu cần kiểm tra";
+    case "NONE":
+    default:
+      return null;
+  }
+}
+
 function clamp(value) {
   return Math.min(1, Math.max(0, value));
 }
@@ -362,35 +382,43 @@ export default function QuestionOcrDraftReviewDialog({
         {/* Editable Answers options */}
         {(suggestedType === "SINGLE_CHOICE" || suggestedType === "MULTIPLE_CHOICE") && (
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between border-b border-whisper-border pb-1">
-              <label className="text-xs font-bold text-on-surface">Các phương án trả lời:</label>
-              <span className="text-[10px] text-on-surface-variant italic">Đáp án đúng sẽ được để trống khi áp dụng</span>
+            <div className="flex flex-col gap-1 border-b border-whisper-border pb-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-on-surface">Các phương án trả lời:</label>
+                <span className="text-[10px] text-on-surface-variant italic">Đáp án đúng sẽ được để trống khi áp dụng</span>
+              </div>
+              <p className="text-[10px] text-amber-700 font-medium">
+                Ký hiệu chỉ là dữ liệu quan sát từ ảnh, không phải đáp án đã xác nhận.
+              </p>
             </div>
             <div className="space-y-2">
-              {(reviewDraft.answers || []).map((ans, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold text-on-surface-variant w-5 shrink-0">
-                    {String.fromCharCode(65 + idx)}.
-                  </span>
-                  <input
-                    type="text"
-                    value={ans.content || ""}
-                    onChange={(e) => {
-                      const nextAnswers = [...(reviewDraft.answers || [])];
-                      nextAnswers[idx] = { ...nextAnswers[idx], content: e.target.value };
-                      setReviewDraft(prev => ({ ...prev, answers: nextAnswers }));
-                    }}
-                    className="flex-1 text-xs border border-whisper-border rounded-lg px-3 py-1.5 bg-pure-surface focus:outline-none focus:border-primary"
-                    placeholder="Nội dung phương án..."
-                    disabled={isOcrBusy}
-                  />
-                  {ans.suggestedIsCorrect && (
-                    <span className="text-[10px] text-emerald-success bg-emerald-success/10 px-2 py-0.5 rounded font-bold shrink-0">
-                      Gợi ý đúng
+              {(reviewDraft.answers || []).map((ans, idx) => {
+                const markLabel = getDetectedMarkLabel(ans.detectedMark);
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-on-surface-variant w-5 shrink-0">
+                      {String.fromCharCode(65 + idx)}.
                     </span>
-                  )}
-                </div>
-              ))}
+                    <input
+                      type="text"
+                      value={ans.content || ""}
+                      onChange={(e) => {
+                        const nextAnswers = [...(reviewDraft.answers || [])];
+                        nextAnswers[idx] = { ...nextAnswers[idx], content: e.target.value };
+                        setReviewDraft(prev => ({ ...prev, answers: nextAnswers }));
+                      }}
+                      className="flex-1 text-xs border border-whisper-border rounded-lg px-3 py-1.5 bg-pure-surface focus:outline-none focus:border-primary"
+                      placeholder="Nội dung phương án..."
+                      disabled={isOcrBusy}
+                    />
+                    {markLabel && (
+                      <span className="text-[10px] text-amber-700 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-bold shrink-0">
+                        {markLabel}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
