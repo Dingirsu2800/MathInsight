@@ -4,6 +4,15 @@ import { Button } from "../ui/button";
 import { cn } from "../../utils/cn";
 import ImageCropSelector from "./ImageCropSelector";
 
+export function stabilizeSelectedFile(file) {
+  if (!file) return file;
+
+  return new File([file], file.name, {
+    type: file.type,
+    lastModified: file.lastModified
+  });
+}
+
 export default function QuestionOcrUploadDrawer({
   isOpen,
   onClose,
@@ -51,7 +60,7 @@ export default function QuestionOcrUploadDrawer({
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      onFileSelect(file);
+      onFileSelect(stabilizeSelectedFile(file));
       // Reset input value to allow selecting same file again
       e.target.value = "";
     }

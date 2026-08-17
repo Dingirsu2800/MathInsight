@@ -35,17 +35,18 @@ function createFileFromDataUrl(dataUrl, fileName) {
   return new File([bytes], fileName, { type: match[1] });
 }
 
-async function createCroppedImageFile(file, selection) {
+export async function createCroppedImageFile(file, selection, previewUrl = "") {
   if (!file || !selection) {
-    throw new Error("A source image and crop selection are required.");
+    throw new Error("Cần có ảnh nguồn và vùng chọn để cắt ảnh.");
   }
 
-  const sourceUrl = URL.createObjectURL(file);
+  const sourceUrl = previewUrl || URL.createObjectURL(file);
+  const ownsSourceUrl = !previewUrl;
   try {
     const image = await new Promise((resolve, reject) => {
       const sourceImage = new Image();
       sourceImage.onload = () => resolve(sourceImage);
-      sourceImage.onerror = () => reject(new Error("Could not load the source image for cropping."));
+      sourceImage.onerror = () => reject(new Error("Không thể tải ảnh nguồn để cắt ảnh."));
       sourceImage.src = sourceUrl;
     });
     const sourceX = Math.round(selection.x * image.naturalWidth);
@@ -57,7 +58,7 @@ async function createCroppedImageFile(file, selection) {
     canvas.height = sourceHeight;
     const context = canvas.getContext("2d");
     if (!context) {
-      throw new Error("Could not initialize the crop canvas.");
+      throw new Error("Không thể khởi tạo vùng cắt ảnh.");
     }
     context.drawImage(
       image,
@@ -74,12 +75,14 @@ async function createCroppedImageFile(file, selection) {
       ? file.type
       : "image/png";
     const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Could not create the cropped image.")), outputType, 0.95);
+      canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Không thể tạo ảnh đã cắt.")), outputType, 0.95);
     });
     const extension = outputType === "image/jpeg" ? "jpg" : outputType.split("/")[1];
     return new File([blob], `ocr-crop.${extension}`, { type: outputType });
   } finally {
-    URL.revokeObjectURL(sourceUrl);
+    if (ownsSourceUrl) {
+      URL.revokeObjectURL(sourceUrl);
+    }
   }
 }
 
@@ -715,7 +718,7 @@ export default function QuestionEditorPage() {
     setOcrScanError("");
     try {
       const scanFile = ocrCropSelection
-        ? await createCroppedImageFile(ocrFile, ocrCropSelection)
+        ? await createCroppedImageFile(ocrFile, ocrCropSelection, ocrPreviewUrl)
         : ocrFile;
       const res = await questionBankApi.extractQuestionOcrDraft(scanFile);
       const data = res.data;
@@ -774,7 +777,7 @@ export default function QuestionEditorPage() {
         const imageToUpload = selectedExtractedImage
           ? createFileFromDataUrl(selectedExtractedImage.dataUrl, `${selectedExtractedImage.id}.png`)
           : manualCropSelection
-            ? await createCroppedImageFile(ocrFile, manualCropSelection)
+            ? await createCroppedImageFile(ocrFile, manualCropSelection, ocrPreviewUrl)
             : ocrFile;
         const uploadRes = await questionBankApi.uploadQuestionImage(imageToUpload);
         pictureUrl = uploadRes.data?.pictureUrl;
@@ -812,7 +815,7 @@ export default function QuestionEditorPage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       // Map full draft state
-      const mapped = mapOcrDraftToEditorStatePatch(reviewDraft);
+      const mapped = mapOcrDraftToEditorStatePatch(reviewDraft, form);
       if (!mapped) return;
 
       setForm(prev => {

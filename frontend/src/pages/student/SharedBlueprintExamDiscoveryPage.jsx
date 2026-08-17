@@ -14,10 +14,16 @@ export default function SharedBlueprintExamDiscoveryPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Mode derived from route path: '/student/test/topics' -> practice, else -> exam
+  const mode = location.pathname.endsWith('/topics') ? 'practice' : 'exam';
+
   // TestCode Resolution State
   const [testCodeInput, setTestCodeInput] = useState("");
   const [resolvingCode, setResolvingCode] = useState(false);
   const [resolveError, setResolveError] = useState("");
+
+  // Exam Generation Type Filter State ("Fixed" | "Random")
+  const [generationType, setGenerationType] = useState("Fixed");
 
   // Shared Exams List State
   const [exams, setExams] = useState([]);
@@ -34,33 +40,56 @@ export default function SharedBlueprintExamDiscoveryPage() {
   const [selectedTest, setSelectedTest] = useState(null);
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
 
-  // Mode derived from route path: '/student/test/topics' -> practice, else -> exam
-  const mode = location.pathname.endsWith('/topics') ? 'practice' : 'exam';
-
   const resolveInFlightRef = useRef(false);
+  const activeRequestIdRef = useRef(0);
 
-  const fetchExams = async () => {
+  const fetchExams = async (targetGenerationType, targetPageIndex) => {
+    const currentRequestId = ++activeRequestIdRef.current;
     setLoading(true);
     setListError("");
     try {
-      const response = await testGeneratorApi.getSharedBlueprintExams({ pageIndex, pageSize });
+      const response = await testGeneratorApi.getSharedBlueprintExams({
+        pageIndex: targetPageIndex,
+        pageSize,
+        generationType: targetGenerationType,
+      });
+
+      // Ignore stale responses from earlier tab/page requests
+      if (currentRequestId !== activeRequestIdRef.current) return;
+
       const data = response.data || {};
-      setExams(data.items || []);
+      const rawItems = data.items || [];
+      // Client safety guard against mismatched items
+      const filteredItems = rawItems.filter(
+        (item) => !item.generationType || item.generationType.toLowerCase() === targetGenerationType.toLowerCase()
+      );
+
+      setExams(filteredItems);
       setTotalCount(data.totalCount || 0);
       const calculatedPages = Math.ceil((data.totalCount || 0) / pageSize) || 1;
       setTotalPages(data.totalPages || calculatedPages);
     } catch (err) {
+      if (currentRequestId !== activeRequestIdRef.current) return;
       setListError(getTestGenErrorMessage(err, "Không thể tải danh sách bài thi. Vui lòng thử lại sau."));
     } finally {
-      setLoading(false);
+      if (currentRequestId === activeRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     if (mode === 'exam') {
-      fetchExams();
+      fetchExams(generationType, pageIndex);
     }
-  }, [pageIndex, pageSize, mode]);
+  }, [mode, generationType, pageIndex, pageSize]);
+
+  const handleGenerationTypeChange = (newType) => {
+    if (newType === generationType) return;
+    setGenerationType(newType);
+    setPageIndex(1);
+    setExams([]);
+  };
 
   const handleResolveCodeSubmit = async (e) => {
     e.preventDefault();
@@ -102,7 +131,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto select-none">
         {/* Page Header */}
         <DashboardPageHeader
-          title={mode === 'practice' ? 'Luyện tập theo chủ đề' : 'Đề thi tạo theo ma trận'}
+          title={mode === 'practice' ? 'Luyện tập theo chủ đề' : 'Đề thi theo cấu trúc'}
           subtitle={
             mode === 'practice'
               ? 'Chọn chủ đề bài học để tạo bài luyện tập 10 câu hỏi không giới hạn thời gian.'
@@ -151,14 +180,14 @@ export default function SharedBlueprintExamDiscoveryPage() {
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-[24px]">vpn_key</span>
               <div>
-                <h2 className="text-sm font-bold text-on-surface">Nhập mã ma trận trực tiếp</h2>
-                <p className="text-xs text-on-surface-variant">Nhập mã ma trận (TestCode) để tìm bài thi tương ứng.</p>
+                <h2 className="text-sm font-bold text-on-surface">Nhập mã đề</h2>
+                <p className="text-xs text-on-surface-variant">Nhập mã đề (TestCode) để tìm bài thi tương ứng.</p>
               </div>
             </div>
 
             <form onSubmit={handleResolveCodeSubmit} className="flex flex-col sm:flex-row gap-3 mt-1 select-text">
               <div className="flex-1 relative">
-                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã ma trận</label>
+                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã đề</label>
                 <input
                   id="student-test-code-input"
                   type="text"
@@ -200,12 +229,37 @@ export default function SharedBlueprintExamDiscoveryPage() {
             )}
           </div>
 
-          {/* List Section Title */}
-          <div className="flex items-center justify-between border-b border-whisper-border pb-3">
-            <h2 className="text-sm font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">quiz</span>
-              Danh sách ma trận đề thi
-            </h2>
+          {/* Exam Generation Type Segmented Tabs */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-whisper-border pb-3">
+            <div role="tablist" aria-label="Loại đề thi" className="flex items-center gap-1 p-1 bg-surface-container-low border border-whisper-border rounded-xl w-fit">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={generationType === 'Fixed'}
+                onClick={() => handleGenerationTypeChange('Fixed')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
+                  generationType === 'Fixed'
+                    ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Đề cố định
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={generationType === 'Random'}
+                onClick={() => handleGenerationTypeChange('Random')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
+                  generationType === 'Random'
+                    ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Đề tạo ngẫu nhiên
+              </button>
+            </div>
+
             {totalCount > 0 && (
               <span className="text-xs text-on-surface-variant font-bold font-mono">
                 Tổng số: {totalCount} bài thi
@@ -220,7 +274,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
                 <span className="material-symbols-outlined text-[20px] shrink-0">error</span>
                 <span>{listError}</span>
               </div>
-              <Button variant="outline" size="sm" onClick={fetchExams} className="h-8 text-xs font-bold">Thử lại</Button>
+              <Button variant="outline" size="sm" onClick={() => fetchExams(generationType, pageIndex)} className="h-8 text-xs font-bold">Thử lại</Button>
             </div>
           )}
 
@@ -240,7 +294,11 @@ export default function SharedBlueprintExamDiscoveryPage() {
           ) : listError ? null : exams.length === 0 ? (
             <div className="bg-pure-surface border border-whisper-border rounded-xl p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
               <span className="material-symbols-outlined text-[48px] text-outline-variant">assignment_late</span>
-              <p className="text-sm font-bold text-on-surface">Chưa có đề thi dùng chung nào phù hợp với khối lớp của bạn.</p>
+              <p className="text-sm font-bold text-on-surface">
+                {generationType === 'Fixed'
+                  ? 'Chưa có đề cố định phù hợp với khối lớp của bạn.'
+                  : 'Chưa có đề tạo ngẫu nhiên phù hợp với khối lớp của bạn.'}
+              </p>
               <p className="text-xs">Bạn có thể dùng mã đề thi do giáo viên cung cấp ở ô tìm kiếm trên.</p>
             </div>
           ) : (

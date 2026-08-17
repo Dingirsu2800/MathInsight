@@ -48,6 +48,10 @@ public static class TestGenerationErrors
         "TEST_CODE_NOT_AVAILABLE",
         "The test code is not available.");
 
+    public static readonly Error SharedExamGenerationTypeInvalid = new(
+        "SHARED_EXAM_GENERATION_TYPE_INVALID",
+        "The shared exam has unsupported or mixed generation metadata.");
+
     public static readonly Error GeneratedTestNotFound = new(
         "GENERATED_TEST_NOT_FOUND",
         "The generated test was not found or is unavailable.");

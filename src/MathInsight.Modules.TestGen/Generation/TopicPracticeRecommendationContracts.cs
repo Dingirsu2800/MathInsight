@@ -4,7 +4,7 @@ namespace MathInsight.Modules.TestGen.Generation;
 
 public sealed record TopicPracticeRecommendationContext(
     bool IsAdaptive,
-    WeakTagAdvice? RepresentativeAdvice,
+    TopicMasteryAdvice? RepresentativeAdvice,
     IReadOnlySet<string> FocusTagIds)
 {
     public static TopicPracticeRecommendationContext Baseline { get; } = new(

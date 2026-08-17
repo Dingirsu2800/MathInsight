@@ -9,12 +9,12 @@ namespace MathInsight.Modules.TestGen.Generation;
 
 public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommendationResolver
 {
-    private readonly IStudentRecommendationProvider _provider;
+    private readonly IStudentTopicMasteryProvider _provider;
     private readonly TopicPracticeFeatureOptions _options;
     private readonly ILogger<TopicPracticeRecommendationResolver> _logger;
 
     public TopicPracticeRecommendationResolver(
-        IStudentRecommendationProvider provider,
+        IStudentTopicMasteryProvider provider,
         IOptions<TopicPracticeFeatureOptions> options,
         ILogger<TopicPracticeRecommendationResolver> logger)
     {
@@ -36,10 +36,13 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
             return Result<IReadOnlyDictionary<string, TopicPracticeRecommendationContext>>.Success(
                 CreateBaselineContexts(activeTopics));
 
-        IReadOnlyList<WeakTagAdvice> advice;
+        IReadOnlyDictionary<string, TopicMasteryAdvice> advice;
         try
         {
-            advice = await _provider.GetWeakTagAdviceAsync(studentId, cancellationToken);
+            advice = await _provider.GetTopicMasteryAdviceAsync(
+                studentId,
+                activeTopics.Select(topic => topic.TagId).ToList(),
+                cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -52,7 +55,7 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
                 TestGenerationErrors.TopicPracticeRecommenderUnavailable);
         }
 
-        if (!IsValidAdvice(advice))
+        if (!IsValidAdvice(advice, activeTopics))
         {
             _logger.LogWarning("TopicPractice recommendation provider returned invalid advice for StudentId {StudentId}", studentId);
             return Result<IReadOnlyDictionary<string, TopicPracticeRecommendationContext>>.Failure(
@@ -63,10 +66,9 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
 
         foreach (var selectedTopic in activeTopics)
         {
-            var representative = advice
-                .SingleOrDefault(item => string.Equals(item.TagId, selectedTopic.TagId, StringComparison.OrdinalIgnoreCase));
+            advice.TryGetValue(selectedTopic.TagId, out var representative);
 
-            contexts[selectedTopic.TagId] = representative is null
+            contexts[selectedTopic.TagId] = representative is null || representative.EvidenceCount < 3
                 ? TopicPracticeRecommendationContext.Baseline
                 : new TopicPracticeRecommendationContext(
                     true,
@@ -86,18 +88,20 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
             StringComparer.OrdinalIgnoreCase);
     }
 
-    private static bool IsValidAdvice(IReadOnlyList<WeakTagAdvice> advice)
+    private static bool IsValidAdvice(
+        IReadOnlyDictionary<string, TopicMasteryAdvice> advice,
+        IReadOnlyCollection<TagTopicReadModel> activeTopics)
     {
-        var tagIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return advice.All(item =>
-            !string.IsNullOrWhiteSpace(item.TagId) &&
-            tagIds.Add(item.TagId) &&
-            !string.IsNullOrWhiteSpace(item.TagName) &&
-            item.OfficialPoint >= 0m &&
-            item.OfficialPoint < 5m &&
-            item.EvidenceCount >= 3 &&
-            item.RecommendedDifficultyLevel is 1 or 2 &&
-            !string.IsNullOrWhiteSpace(item.Reason));
+        var activeTagIds = activeTopics
+            .Select(topic => topic.TagId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return advice.All(pair =>
+            !string.IsNullOrWhiteSpace(pair.Key) &&
+            activeTagIds.Contains(pair.Key) &&
+            string.Equals(pair.Key, pair.Value.TagId, StringComparison.OrdinalIgnoreCase) &&
+            pair.Value.OfficialPoint is >= 0m and <= 10m &&
+            pair.Value.EvidenceCount >= 0 &&
+            pair.Value.RecommendedDifficultyLevel is >= 1 and <= 4);
     }
 
 }

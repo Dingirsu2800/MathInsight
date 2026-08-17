@@ -186,6 +186,13 @@
 - [ ] Add disposable SQL Server smoke coverage for semantic IDs and adaptive audit.
 - [ ] Add frontend weak-topic ordering, preview, dialog copy, localization, build, and browser smoke evidence.
 
+## Phase 8F: Mock Readiness Backend
+
+- [x] Add server-side Student shared-exam `generationType=Fixed|Random` filtering before pagination, with stable rejection of mixed/unknown selection reasons.
+- [x] Add the batch `IStudentTopicMasteryProvider` contract without changing the WeakTag/lecture/material provider.
+- [x] Replace automatic Topic Practice's WeakTag-only profile with the approved full-range mastery profiles; preserve baseline and strict manual mode.
+- [x] Add focused TestGen/Recommender regression tests for catalog classification and mastery profile boundaries.
+
 ## Phase 9: Expert Shared BlueprintExam
 
 - [x] Preserve all Student personal BlueprintExam endpoints and regression tests.

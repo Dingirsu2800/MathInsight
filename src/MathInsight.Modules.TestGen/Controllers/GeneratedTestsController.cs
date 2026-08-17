@@ -31,6 +31,7 @@ public sealed class GeneratedTestsController : ControllerBase
     public async Task<IActionResult> GetSharedBlueprintExams(
         [FromQuery] int pageIndex,
         [FromQuery] int pageSize,
+        [FromQuery] string? generationType,
         CancellationToken cancellationToken)
     {
         var studentId = GetCurrentAccountId();
@@ -38,7 +39,7 @@ public sealed class GeneratedTestsController : ControllerBase
             return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
-            new GetSharedBlueprintExamsQuery(studentId, pageIndex, pageSize),
+            new GetSharedBlueprintExamsQuery(studentId, pageIndex, pageSize, generationType),
             cancellationToken);
         return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
     }

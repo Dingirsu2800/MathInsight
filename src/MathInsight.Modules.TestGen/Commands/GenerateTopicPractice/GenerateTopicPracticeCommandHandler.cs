@@ -152,10 +152,9 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
                 recommendedDifficultyId = difficultyMatches[0];
                 try
                 {
-                    selectionPlan = TopicPracticeSelectionPlanFactory.CreateAdaptive(
-                        advice.RecommendedDifficultyLevel,
-                        recommendation.FocusTagIds,
-                        string.Equals(selected.TagId, advice.TagId, StringComparison.OrdinalIgnoreCase));
+                    selectionPlan = TopicPracticeSelectionPlanFactory.CreateMastery(
+                        advice.OfficialPoint,
+                        recommendation.FocusTagIds);
                 }
                 catch (ArgumentException)
                 {
@@ -300,7 +299,7 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             TestId = prepared.TestId,
             QuestionId = question.Question.QuestionId,
             QuestionOrder = question.QuestionOrder,
-            SelectionReason = isAdaptiveFocus ? "WeakTagPractice" : "TopicPractice",
+            SelectionReason = "TopicPractice",
             IsAdaptiveSelected = isAdaptiveFocus,
             RecommendedForTagId = isAdaptiveFocus ? advice!.TagId : prepared.SelectedTagId,
             RecommendedDifficultyId = isManual
@@ -310,7 +309,7 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             RuleVersion = isManual
                 ? TopicPracticePolicy.ManualRuleVersion
                 : prepared.Recommendation.IsAdaptive
-                    ? TopicPracticePolicy.WeakTagRuleVersion
+                    ? TopicPracticePolicy.MasteryRuleVersion
                     : TopicPracticePolicy.RuleVersion,
             QuestionVersionId = question.Question.QuestionVersionId,
             WeightSnapshot = question.Question.DefaultWeight,
@@ -340,12 +339,12 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             test.CreatedTime,
             prepared.Recommendation.IsAdaptive,
             prepared.Recommendation.RepresentativeAdvice?.TagId,
-            prepared.Recommendation.RepresentativeAdvice?.TagName,
+            prepared.Recommendation.IsAdaptive ? prepared.SelectedTagName : null,
             prepared.Recommendation.RepresentativeAdvice?.RecommendedDifficultyLevel,
             adaptiveQuestionCount,
             test.Questions.Count - adaptiveQuestionCount,
             prepared.Recommendation.IsAdaptive
-                ? TopicPracticePolicy.WeakTagRuleVersion
+                ? TopicPracticePolicy.MasteryRuleVersion
                 : string.Equals(prepared.DifficultySelectionMode, TopicPracticeDifficultySelectionModes.Manual, StringComparison.Ordinal)
                     ? TopicPracticePolicy.ManualRuleVersion
                     : TopicPracticePolicy.RuleVersion,
@@ -361,7 +360,7 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
     {
         var advice = prepared.Recommendation.RepresentativeAdvice;
         _logger.LogInformation(
-            "Generated TopicPractice TestId {TestId} for StudentId {StudentId}, SelectedTagId {SelectedTagId}, WeakTagId {WeakTagId}, OfficialPoint {OfficialPoint}, EvidenceCount {EvidenceCount}, RecommendedDifficultyLevel {RecommendedDifficultyLevel}, AdaptiveQuestionCount {AdaptiveQuestionCount}, FallbackQuestionCount {FallbackQuestionCount}, RuleVersion {RuleVersion}",
+            "Generated TopicPractice TestId {TestId} for StudentId {StudentId}, SelectedTagId {SelectedTagId}, MasteryTagId {MasteryTagId}, OfficialPoint {OfficialPoint}, EvidenceCount {EvidenceCount}, RecommendedDifficultyLevel {RecommendedDifficultyLevel}, AdaptiveQuestionCount {AdaptiveQuestionCount}, FallbackQuestionCount {FallbackQuestionCount}, RuleVersion {RuleVersion}",
             response.TestId,
             prepared.StudentId,
             prepared.SelectedTagId,

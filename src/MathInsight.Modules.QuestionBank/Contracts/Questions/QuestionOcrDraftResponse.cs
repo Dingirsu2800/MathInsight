@@ -21,7 +21,18 @@ public sealed record QuestionOcrDraft(
 
 public sealed record QuestionOcrAnswerDraft(
     string Content,
-    bool? SuggestedIsCorrect);
+    bool? SuggestedIsCorrect,
+    string DetectedMark);
+
+public static class QuestionOcrDetectedMarks
+{
+    public const string None = "None";
+    public const string Circled = "Circled";
+    public const string Ticked = "Ticked";
+    public const string Crossed = "Crossed";
+    public const string Highlighted = "Highlighted";
+    public const string Unknown = "Unknown";
+}
 
 public sealed record QuestionOcrPartDraft(
     string? Label,

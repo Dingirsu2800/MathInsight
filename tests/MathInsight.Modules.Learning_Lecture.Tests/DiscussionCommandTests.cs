@@ -59,7 +59,8 @@ public sealed class DiscussionCommandTests
         });
         await database.Context.SaveChangesAsync();
 
-        var handler = new ReportDiscussionCommandHandler(database.Context);
+        var mockPublisher = new Mock<IPublisher>();
+        var handler = new ReportDiscussionCommandHandler(database.Context, mockPublisher.Object);
         var command = new ReportDiscussionCommand(questionId, null, "student-2", "Spam");
 
         // Act
@@ -81,7 +82,8 @@ public sealed class DiscussionCommandTests
     {
         // Arrange
         await using var database = await LearningInMemoryContext.CreateAsync();
-        var handler = new ReportDiscussionCommandHandler(database.Context);
+        var mockPublisher = new Mock<IPublisher>();
+        var handler = new ReportDiscussionCommandHandler(database.Context, mockPublisher.Object);
         
         // DC-06 Validation
         var command = new ReportDiscussionCommand(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), "student-2", "Spam");

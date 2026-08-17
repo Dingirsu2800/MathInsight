@@ -101,4 +101,83 @@ describe('TopicPracticeConfirmDialog - Contract 6E Manual Difficulty', () => {
       difficultyId: 'DIFF-2',
     });
   });
+
+  it('renders qualified mastery copy when mastery data exists, and baseline copy otherwise', () => {
+    const masteryTopic = {
+      ...sampleTopic,
+      isWeakRecommended: true,
+      weakTagName: 'Số phức',
+      recommendedDifficultyLevel: 2,
+      officialPoint: 4.5,
+    };
+
+    const { rerender } = render(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={masteryTopic}
+        onConfirm={vi.fn()}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    // Auto mode label
+    expect(screen.getByText('Mức phù hợp')).toBeInTheDocument();
+    expect(screen.getByText('Khuyến nghị')).toBeInTheDocument();
+
+    // Qualified mastery copy
+    expect(
+      screen.getByText('Hệ thống phân bổ câu hỏi dựa trên kết quả gần đây của em ở chủ đề này.')
+    ).toBeInTheDocument();
+
+    // Re-render with baseline topic (no prior mastery results)
+    const baselineTopic = {
+      ...sampleTopic,
+      isWeakRecommended: false,
+      recommendedDifficultyLevel: null,
+      officialPoint: null,
+    };
+
+    rerender(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={baselineTopic}
+        onConfirm={vi.fn()}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    // Baseline copy
+    expect(
+      screen.getByText('Em chưa có đủ kết quả ở chủ đề này nên hệ thống sử dụng mức độ tổng hợp.')
+    ).toBeInTheDocument();
+  });
+
+  it('contains no internal technical jargon in UI text', () => {
+    const { container } = render(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={{
+          ...sampleTopic,
+          isWeakRecommended: true,
+          weakTagName: 'Số phức',
+          recommendedDifficultyLevel: 2,
+          officialPoint: 4.5,
+        }}
+        onConfirm={vi.fn()}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    const renderedText = container.textContent;
+    const forbiddenTerms = ['WeakTag', 'OfficialPoint', 'EvidenceCount', 'adaptive', 'baseline', 'recommender'];
+    forbiddenTerms.forEach((term) => {
+      expect(renderedText).not.toContain(term);
+    });
+  });
 });

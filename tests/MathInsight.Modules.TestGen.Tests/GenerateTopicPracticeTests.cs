@@ -46,7 +46,7 @@ public sealed class GenerateTopicPracticeTests
     }
 
     [Fact]
-    public async Task Generate_QualifiedLevelOneAdvice_PersistsFocusAndGeneralAudit()
+    public async Task Generate_QualifiedMastery_PersistsMasteryAudit()
     {
         await using var fixture = TestGenInMemoryContext.Create();
         fixture.Context.Students.Add(new StudentReadModel { StudentId = "student", CurrentGrade = 12 });
@@ -54,11 +54,14 @@ public sealed class GenerateTopicPracticeTests
             new TagTopicReadModel { TagId = "root", TagName = "Root", Grade = 12, IsActive = true },
             new TagTopicReadModel { TagId = "topic", ParentTagId = "root", TagName = "Topic", Grade = 12, IsActive = true },
             new TagTopicReadModel { TagId = "weak-child", ParentTagId = "root", TagName = "Weak child", Grade = 12, IsActive = true, DisplayOrder = 1 });
-        fixture.Context.TagDifficulties.Add(new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true });
+        fixture.Context.TagDifficulties.AddRange(
+            new TagDifficultyReadModel { DifficultyId = "d-1", DifficultyName = "Easy", LevelValue = 1, IsActive = true },
+            new TagDifficultyReadModel { DifficultyId = "d-2", DifficultyName = "Understand", LevelValue = 2, IsActive = true });
         for (var index = 0; index < 10; index++) AddQuestion(fixture, $"focus-{index}", "topic");
+        AddQuestion(fixture, "focus-level-2", "topic", 12, "d-2");
         await fixture.Context.SaveChangesAsync();
 
-        var advice = new WeakTagAdvice("topic", "Topic", 2.40m, 5, 1, "BottleneckSubTag");
+        var advice = new TopicMasteryAdvice("topic", 1.40m, 5, 1);
         var result = await CreateHandler(
             fixture,
             new AdviceRecommendationResolver("topic", new TopicPracticeRecommendationContext(
@@ -77,11 +80,11 @@ public sealed class GenerateTopicPracticeTests
         Assert.Equal(10, focusRows.Count);
         Assert.All(focusRows, question =>
         {
-            Assert.Equal("WeakTagPractice", question.SelectionReason);
+            Assert.Equal("TopicPractice", question.SelectionReason);
             Assert.Equal("topic", question.RecommendedForTagId);
             Assert.Equal("d-1", question.RecommendedDifficultyId);
-            Assert.Equal(2.40m, question.PtagAtSelection);
-            Assert.Equal("TopicPractice-WeakTag-v1", question.RuleVersion);
+            Assert.Equal(1.40m, question.PtagAtSelection);
+            Assert.Equal("TopicPractice-Mastery-v1", question.RuleVersion);
         });
         Assert.All(test.Questions.Where(question => !question.IsAdaptiveSelected), question =>
         {
@@ -89,7 +92,7 @@ public sealed class GenerateTopicPracticeTests
             Assert.Equal("topic", question.RecommendedForTagId);
             Assert.Null(question.RecommendedDifficultyId);
             Assert.Null(question.PtagAtSelection);
-            Assert.Equal("TopicPractice-WeakTag-v1", question.RuleVersion);
+            Assert.Equal("TopicPractice-Mastery-v1", question.RuleVersion);
         });
     }
 

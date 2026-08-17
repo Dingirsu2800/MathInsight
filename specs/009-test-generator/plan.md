@@ -197,6 +197,10 @@ POST /api/test-generator/tests/blueprint-exams
 
 Phase 9 adds Expert and shared-discovery routes without replacing these endpoints:
 
+### Mock Readiness Additive Contracts
+
+Student discovery retains its existing route and gains only an optional `generationType=Fixed|Random` query parameter. The query projects persisted selection reasons, filters before count/pagination, and rejects mixed or unsupported reason sets. Topic Practice consumes a new batch shared `IStudentTopicMasteryProvider`; `IStudentRecommendationProvider` remains the contract for WeakTag, lecture, and material recommendation. The mastery provider returns only requested topic rows for one student and never performs one query per topic.
+
 ```text
 POST  /api/test-generator/blueprints/{blueprintId}/tests
 GET   /api/test-generator/blueprints/{blueprintId}/fixed-test-candidates
