@@ -116,8 +116,16 @@ export const testGeneratorApi = {
     return client.get(`/api/test-generator/blueprints/${blueprintId}/fixed-test-candidates`, { params: queryParams, ...config });
   },
 
-  getBlueprintExamOptions() {
-    return client.get('/api/test-generator/tests/blueprint-options');
+  getBlueprintExamOptions(params, config = {}) {
+    const queryParams = {};
+    if (params) {
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== "") {
+          queryParams[key] = params[key];
+        }
+      });
+    }
+    return client.get('/api/test-generator/tests/blueprint-options', { params: queryParams, ...config });
   },
 
   generateBlueprintExam(blueprintId) {

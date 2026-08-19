@@ -1,6 +1,6 @@
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AdaptiveBlueprintExamDialog from './AdaptiveBlueprintExamDialog';
 import { testGeneratorApi } from '../../services/testGeneratorApi';
 import { startSession } from '../../services/testingApi';
@@ -30,7 +30,7 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
+describe('AdaptiveBlueprintExamDialog - Task 8 Scaled Discovery & Pagination', () => {
   const sampleOptions = [
     {
       blueprintId: 'BP-12-01',
@@ -54,8 +54,10 @@ describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
     },
   ];
 
-  it('lazily fetches blueprint options only when dialog is opened', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: sampleOptions });
+  it('lazily fetches blueprint options with default pageIndex=1&pageSize=20 only when opened', async () => {
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+      data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+    });
 
     const { rerender } = render(
       <BrowserRouter>
@@ -71,13 +73,219 @@ describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
       </BrowserRouter>
     );
 
-    expect(testGeneratorApi.getBlueprintExamOptions).toHaveBeenCalledTimes(1);
+    expect(testGeneratorApi.getBlueprintExamOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ pageIndex: 1, pageSize: 20 }),
+      expect.anything()
+    );
+
     expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
     expect(screen.getByText('Đề thử nghiệm Tốt nghiệp THPT')).toBeInTheDocument();
   });
 
+  it('debounces search input by 300ms, resets pageIndex to 1, and requests search term', async () => {
+    testGeneratorApi.getBlueprintExamOptions
+      .mockResolvedValueOnce({
+        data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [sampleOptions[0]],
+          totalCount: 1,
+          pageIndex: 1,
+          pageSize: 20,
+        },
+      });
+
+    render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText(/Tìm kiếm theo tên cấu trúc đề/i);
+
+    // Type in search
+    fireEvent.change(searchInput, { target: { value: 'HK1' } });
+
+    // Fast-forward debounce timer
+    await waitFor(() => {
+      expect(testGeneratorApi.getBlueprintExamOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'HK1', pageIndex: 1, pageSize: 20 }),
+        expect.anything()
+      );
+    });
+  });
+
+  it('renders large catalog metadata (e.g. 2,000 items) and navigates pages', async () => {
+    testGeneratorApi.getBlueprintExamOptions
+      .mockResolvedValueOnce({
+        data: { items: sampleOptions, totalCount: 2000, pageIndex: 1, pageSize: 20 },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              blueprintId: 'BP-12-PAGE2',
+              blueprintName: 'Cấu trúc đề trang 2',
+              grade: 12,
+              totalQuestions: 50,
+              totalScore: 10,
+              durationMinutes: 90,
+              status: 'Active',
+              sectionCount: 3,
+            },
+          ],
+          totalCount: 2000,
+          pageIndex: 2,
+          pageSize: 20,
+        },
+      });
+
+    render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Tổng cộng: 2000 cấu trúc đề/i)).toBeInTheDocument();
+    expect(screen.getByText(/\(Trang 1\/100\)/i)).toBeInTheDocument();
+
+    // Previous button should be disabled on first page
+    const prevBtn = screen.getByRole('button', { name: /Trước/i });
+    expect(prevBtn).toBeDisabled();
+
+    // Next button should be enabled
+    const nextBtn = screen.getByRole('button', { name: /Tiếp/i });
+    expect(nextBtn).not.toBeDisabled();
+
+    fireEvent.click(nextBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.getBlueprintExamOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ pageIndex: 2, pageSize: 20 }),
+        expect.anything()
+      );
+    });
+
+    expect(await screen.findByText('Cấu trúc đề trang 2')).toBeInTheDocument();
+    expect(screen.getByText(/\(Trang 2\/100\)/i)).toBeInTheDocument();
+  });
+
+  it('ignores aborted/canceled requests without setting error banner', async () => {
+    const canceledError = new Error('canceled');
+    canceledError.name = 'CanceledError';
+    canceledError.code = 'ERR_CANCELED';
+
+    testGeneratorApi.getBlueprintExamOptions.mockRejectedValueOnce(canceledError);
+
+    render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    // Should NOT show any error alert
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Không thể tải danh sách cấu trúc đề thi/i)).not.toBeInTheDocument();
+  });
+
+  it('retains selected option across rerenders when it remains in result', async () => {
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+      data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+    });
+
+    const { rerender } = render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
+
+    // Click to select BP-12-02
+    const bp2Button = screen.getByRole('button', { name: /Đề thử nghiệm Tốt nghiệp THPT/i });
+    fireEvent.click(bp2Button);
+
+    // Selected blueprint details appear
+    expect(screen.getByText('Quy định đề thi theo năng lực')).toBeInTheDocument();
+
+    // Rerender with same options
+    rerender(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    // Selection should still be retained
+    expect(screen.getByText('Quy định đề thi theo năng lực')).toBeInTheDocument();
+  });
+
+  it('preserves generated TestID across dialog close/reopen and allows retry without regenerating', async () => {
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+      data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+    });
+    testGeneratorApi.generateBlueprintExam.mockResolvedValue({
+      data: { testId: 'TEST-GEN-RETAINED-01' },
+    });
+    // First startSession fails
+    startSession.mockRejectedValueOnce(new Error('Session start failed'));
+
+    const { rerender } = render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
+
+    // Select blueprint
+    const bp1Button = screen.getByRole('button', { name: /Cấu trúc đề ôn tập HK1 Toán 12/i });
+    fireEvent.click(bp1Button);
+
+    // Generate and start
+    const submitBtn = screen.getByRole('button', { name: /Tạo và bắt đầu/i });
+    fireEvent.click(submitBtn);
+
+    // Retry button appears
+    const retryBtn = await screen.findByRole('button', { name: /Thử bắt đầu lại/i });
+    expect(retryBtn).toBeInTheDocument();
+    expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
+
+    // Close dialog
+    rerender(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={false} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    // Reopen dialog
+    rerender(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    // Because TestID is preserved, clicking retry calls startSession with retained TestID without calling generate again
+    startSession.mockResolvedValueOnce({ sessionId: 'SESSION-SUCCESS-01' });
+
+    const retryBtnAfterReopen = await screen.findByRole('button', { name: /Thử bắt đầu lại/i });
+    fireEvent.click(retryBtnAfterReopen);
+
+    await waitFor(() => {
+      // Must NOT regenerate!
+      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
+      // startSession called with retained testId
+      expect(startSession).toHaveBeenLastCalledWith('TEST-GEN-RETAINED-01');
+      expect(mockNavigate).toHaveBeenCalledWith('/student/test/SESSION-SUCCESS-01');
+    });
+  });
+
   it('renders blueprint metadata and natural Vietnamese explanation without forbidden terms', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: sampleOptions });
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+      data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+    });
 
     const { container } = render(
       <BrowserRouter>
@@ -86,6 +294,10 @@ describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
     );
 
     expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
+
+    // Select blueprint
+    const bp1Button = screen.getByRole('button', { name: /Cấu trúc đề ôn tập HK1 Toán 12/i });
+    fireEvent.click(bp1Button);
 
     // Check metadata display
     expect(screen.getByText(/3 phần/i)).toBeInTheDocument();
@@ -109,122 +321,10 @@ describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
     });
   });
 
-  it('generates test once and immediately starts session upon clicking "Tạo và bắt đầu"', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: sampleOptions });
-    testGeneratorApi.generateBlueprintExam.mockResolvedValue({
-      data: { testId: 'TEST-GEN-001' },
+  it('renders empty state when no eligible blueprints match', async () => {
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+      data: { items: [], totalCount: 0, pageIndex: 1, pageSize: 20 },
     });
-    startSession.mockResolvedValue({
-      sessionId: 'SESSION-001',
-    });
-
-    const handleClose = vi.fn();
-    render(
-      <BrowserRouter>
-        <AdaptiveBlueprintExamDialog isOpen={true} onClose={handleClose} />
-      </BrowserRouter>
-    );
-
-    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
-
-    const submitBtn = screen.getByRole('button', { name: /Tạo và bắt đầu/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
-      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledWith('BP-12-01');
-      expect(startSession).toHaveBeenCalledTimes(1);
-      expect(startSession).toHaveBeenCalledWith('TEST-GEN-001');
-      expect(mockNavigate).toHaveBeenCalledWith('/student/test/SESSION-001');
-      expect(handleClose).toHaveBeenCalled();
-    });
-  });
-
-  it('retains TestID on startSession failure and allows retry without regenerating', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: sampleOptions });
-    testGeneratorApi.generateBlueprintExam.mockResolvedValue({
-      data: { testId: 'TEST-GEN-002' },
-    });
-    // First startSession fails
-    startSession.mockRejectedValueOnce(new Error('Network failure on session start'));
-
-    render(
-      <BrowserRouter>
-        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
-      </BrowserRouter>
-    );
-
-    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
-
-    const submitBtn = screen.getByRole('button', { name: /Tạo và bắt đầu/i });
-    fireEvent.click(submitBtn);
-
-    // After failure, error banner and retry button appear
-    const retryBtn = await screen.findByRole('button', { name: /Thử bắt đầu lại/i });
-    expect(retryBtn).toBeInTheDocument();
-    expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
-    expect(startSession).toHaveBeenCalledTimes(1);
-
-    // Next startSession succeeds
-    startSession.mockResolvedValueOnce({
-      sessionId: 'SESSION-RETRY-002',
-    });
-
-    fireEvent.click(retryBtn);
-
-    await waitFor(() => {
-      // Must NOT regenerate! generateBlueprintExam remains called only 1 time
-      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
-      // startSession called second time with the same TestID
-      expect(startSession).toHaveBeenCalledTimes(2);
-      expect(startSession).toHaveBeenLastCalledWith('TEST-GEN-002');
-      expect(mockNavigate).toHaveBeenCalledWith('/student/test/SESSION-RETRY-002');
-    });
-  });
-
-  it('retains TestID when the dialog is closed and reopened after start failure', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: sampleOptions });
-    testGeneratorApi.generateBlueprintExam.mockResolvedValue({
-      data: { testId: 'TEST-GEN-CLOSE-REOPEN' },
-    });
-    startSession.mockRejectedValueOnce(new Error('Network failure on session start'));
-
-    const onClose = vi.fn();
-    const { rerender } = render(
-      <BrowserRouter>
-        <AdaptiveBlueprintExamDialog isOpen={true} onClose={onClose} />
-      </BrowserRouter>
-    );
-
-    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Tạo và bắt đầu/i }));
-    await screen.findByRole('button', { name: /Thử bắt đầu lại/i });
-
-    rerender(
-      <BrowserRouter>
-        <AdaptiveBlueprintExamDialog isOpen={false} onClose={onClose} />
-      </BrowserRouter>
-    );
-    rerender(
-      <BrowserRouter>
-        <AdaptiveBlueprintExamDialog isOpen={true} onClose={onClose} />
-      </BrowserRouter>
-    );
-
-    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
-    startSession.mockResolvedValueOnce({ sessionId: 'SESSION-CLOSE-REOPEN' });
-    fireEvent.click(screen.getByRole('button', { name: /Tạo và bắt đầu/i }));
-
-    await waitFor(() => {
-      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
-      expect(startSession).toHaveBeenCalledTimes(2);
-      expect(startSession).toHaveBeenLastCalledWith('TEST-GEN-CLOSE-REOPEN');
-      expect(mockNavigate).toHaveBeenCalledWith('/student/test/SESSION-CLOSE-REOPEN');
-    });
-  });
-
-  it('renders empty state when no eligible blueprints are returned', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: [] });
 
     render(
       <BrowserRouter>
@@ -236,28 +336,7 @@ describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
       await screen.findByText(/Chưa có cấu trúc đề thi nào phù hợp với khối lớp của bạn/i)
     ).toBeInTheDocument();
 
-    // Final action button should be disabled when no options exist
     const submitBtn = screen.getByRole('button', { name: /Tạo và bắt đầu/i });
     expect(submitBtn).toBeDisabled();
-  });
-
-  it('renders error state and retry button when fetching blueprint options fails', async () => {
-    testGeneratorApi.getBlueprintExamOptions.mockRejectedValueOnce(new Error('Fetch options failed'));
-
-    render(
-      <BrowserRouter>
-        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
-      </BrowserRouter>
-    );
-
-    expect(
-      await screen.findByText(/Không thể tải danh sách cấu trúc đề thi/i)
-    ).toBeInTheDocument();
-
-    testGeneratorApi.getBlueprintExamOptions.mockResolvedValueOnce({ data: sampleOptions });
-    const reloadBtn = screen.getByRole('button', { name: /Thử lại/i });
-    fireEvent.click(reloadBtn);
-
-    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
   });
 });

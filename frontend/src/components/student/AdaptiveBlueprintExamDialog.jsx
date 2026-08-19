@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -9,6 +9,13 @@ import { cn } from "../../utils/cn";
 
 export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
   const navigate = useNavigate();
+
+  // Search and Pagination State
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [pageIndex, setPageIndex] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Blueprint Options State
   const [options, setOptions] = useState([]);
@@ -26,26 +33,81 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
   // In-flight and retained IDs refs
   const submittingRef = useRef(false);
   const generatedTestIdRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const activeRequestIdRef = useRef(0);
+  const isSearchFirstRenderRef = useRef(true);
 
-  const fetchOptions = async () => {
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Reset page and selected option when debounced search term changes
+  useEffect(() => {
+    if (isSearchFirstRenderRef.current) {
+      isSearchFirstRenderRef.current = false;
+      return;
+    }
+    setPageIndex(1);
+    setSelectedBlueprintId("");
+  }, [debouncedSearch]);
+
+  const fetchOptions = async (searchTerm, page) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const currentRequestId = ++activeRequestIdRef.current;
+
     setLoadingOptions(true);
     setOptionsError("");
+
     try {
-      const res = await testGeneratorApi.getBlueprintExamOptions();
-      const items = res.data || [];
+      const res = await testGeneratorApi.getBlueprintExamOptions(
+        {
+          search: searchTerm ? searchTerm.trim() : undefined,
+          pageIndex: page,
+          pageSize,
+        },
+        { signal: abortController.signal }
+      );
+
+      if (currentRequestId !== activeRequestIdRef.current) return;
+
+      const data = res.data || {};
+      const items = Array.isArray(data) ? data : (data.items || []);
+      const count = typeof data.totalCount === "number" ? data.totalCount : items.length;
+
       setOptions(items);
-      if (items.length > 0) {
-        setSelectedBlueprintId((prev) => {
-          const exists = items.some((item) => item.blueprintId === prev);
-          return exists ? prev : items[0].blueprintId;
-        });
-      } else {
-        setSelectedBlueprintId("");
-      }
+      setTotalCount(count);
+
+      // Selection Invariant: Keep one selected BlueprintID across rerenders when it remains in the current result; otherwise clear it explicitly.
+      setSelectedBlueprintId((prev) => {
+        if (prev && items.some((item) => item.blueprintId === prev)) {
+          return prev;
+        }
+        return "";
+      });
     } catch (err) {
+      if (
+        err?.name === "CanceledError" ||
+        err?.name === "AbortError" ||
+        err?.code === "ERR_CANCELED" ||
+        err?.message === "canceled" ||
+        abortController.signal.aborted
+      ) {
+        return;
+      }
+      if (currentRequestId !== activeRequestIdRef.current) return;
       setOptionsError(getTestGenErrorMessage(err, "Không thể tải danh sách cấu trúc đề thi. Vui lòng thử lại sau."));
     } finally {
-      setLoadingOptions(false);
+      if (currentRequestId === activeRequestIdRef.current) {
+        setLoadingOptions(false);
+      }
     }
   };
 
@@ -56,10 +118,15 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
       setActionError("");
       setResumeSessionId(null);
       submittingRef.current = false;
-      fetchOptions();
+      fetchOptions(debouncedSearch, pageIndex);
+    } else {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, debouncedSearch, pageIndex]);
 
+  const totalPages = useMemo(() => Math.ceil(totalCount / pageSize) || 1, [totalCount, pageSize]);
   const selectedBlueprint = options.find((b) => b.blueprintId === selectedBlueprintId) || null;
   const isBusy = generating || starting;
 
@@ -73,7 +140,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
       return;
     }
 
-    if (!selectedBlueprintId) return;
+    if (!selectedBlueprintId && !generatedTestIdRef.current) return;
 
     submittingRef.current = true;
     setActionError("");
@@ -142,9 +209,14 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
   };
 
   return (
-    <Dialog isOpen={isOpen} onClose={handleSafeClose} isCloseDisabled={isBusy}>
-      <div className="flex flex-col h-full select-none max-w-2xl mx-auto">
-        <DialogHeader>
+    <Dialog
+      isOpen={isOpen}
+      onClose={handleSafeClose}
+      isCloseDisabled={isBusy}
+      className="w-[92vw] max-w-[800px] max-h-[85vh] flex flex-col p-6"
+    >
+      <div className="flex flex-col h-full select-none">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[22px]">auto_awesome</span>
             Tạo đề theo năng lực
@@ -154,13 +226,43 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
           </DialogDescription>
         </DialogHeader>
 
-        <DialogContent>
-          <div className="flex flex-col gap-4 select-text">
+        {/* Search Bar - Header region */}
+        <div className="shrink-0 mb-3 select-text">
+          <div className="relative w-full">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none">
+              search
+            </span>
+            <input
+              type="text"
+              value={searchInput}
+              disabled={isBusy}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Tìm kiếm theo tên cấu trúc đề..."
+              aria-label="Tìm kiếm theo tên cấu trúc đề"
+              className="w-full h-10 pl-9 pr-8 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => setSearchInput("")}
+                aria-label="Xóa từ khóa tìm kiếm"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-0.5 rounded cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable Content Region */}
+        <DialogContent className="flex-1 overflow-y-auto pr-1">
+          <div className="flex flex-col gap-3.5 select-text">
             {/* Loading options */}
             {loadingOptions && (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2.5">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="p-4 bg-surface-container-low rounded-xl border border-whisper-border animate-pulse flex flex-col gap-2">
+                  <div key={i} className="p-3.5 bg-surface-container-low rounded-xl border border-whisper-border animate-pulse flex flex-col gap-2">
                     <div className="h-4 bg-surface-container-high rounded w-3/4"></div>
                     <div className="h-3 bg-surface-container rounded w-1/2"></div>
                   </div>
@@ -179,7 +281,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={fetchOptions}
+                  onClick={() => fetchOptions(debouncedSearch, pageIndex)}
                   className="h-8 text-xs font-bold shrink-0"
                 >
                   Thử lại
@@ -192,17 +294,18 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
               <div className="bg-surface-container-low border border-whisper-border rounded-xl p-8 text-center text-on-surface-variant flex flex-col items-center justify-center gap-2">
                 <span className="material-symbols-outlined text-[40px] text-outline-variant">assignment_late</span>
                 <p className="text-sm font-bold text-on-surface">Chưa có cấu trúc đề thi nào phù hợp với khối lớp của bạn.</p>
-                <p className="text-xs">Vui lòng quay lại sau hoặc liên hệ giáo viên để biết thêm chi tiết.</p>
+                <p className="text-xs">
+                  {debouncedSearch
+                    ? "Không tìm thấy cấu trúc đề khớp với từ khóa tìm kiếm."
+                    : "Vui lòng quay lại sau hoặc liên hệ giáo viên để biết thêm chi tiết."}
+                </p>
               </div>
             )}
 
             {/* Blueprint list selection */}
             {!loadingOptions && !optionsError && options.length > 0 && (
-              <div className="flex flex-col gap-2.5">
-                <label className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                  Chọn cấu trúc đề thi
-                </label>
-                <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
                   {options.map((bp) => {
                     const isSelected = bp.blueprintId === selectedBlueprintId;
                     return (
@@ -217,9 +320,9 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
                         }}
                         disabled={isBusy || !!generatedTestId}
                         className={cn(
-                          "w-full text-left p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 cursor-pointer select-none",
+                          "w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 cursor-pointer select-none",
                           isSelected
-                            ? "bg-primary/5 border-primary shadow-sm"
+                            ? "bg-primary/5 border-primary shadow-sm ring-1 ring-primary/30"
                             : "bg-surface-container-low border-whisper-border hover:border-primary/40",
                           (isBusy || !!generatedTestId) && "cursor-not-allowed opacity-80"
                         )}
@@ -255,17 +358,51 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
                     );
                   })}
                 </div>
+
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between pt-2 border-t border-whisper-border text-xs text-on-surface-variant">
+                  <span className="font-semibold">
+                    {totalCount > 0 ? `Tổng cộng: ${totalCount} cấu trúc đề` : "0 cấu trúc đề"}
+                    {totalPages > 1 && ` (Trang ${pageIndex}/${totalPages})`}
+                  </span>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={pageIndex <= 1 || loadingOptions || isBusy}
+                        onClick={() => setPageIndex((p) => Math.max(1, p - 1))}
+                        className="h-8 px-2.5 text-xs font-bold"
+                      >
+                        <span className="material-symbols-outlined text-[16px] mr-1">chevron_left</span>
+                        Trước
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={pageIndex >= totalPages || loadingOptions || isBusy}
+                        onClick={() => setPageIndex((p) => Math.min(totalPages, p + 1))}
+                        className="h-8 px-2.5 text-xs font-bold"
+                      >
+                        Tiếp
+                        <span className="material-symbols-outlined text-[16px] ml-1">chevron_right</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Natural explanation and details banner */}
+            {/* Natural explanation banner */}
             {selectedBlueprint && (
-              <div className="bg-surface-container-low border border-whisper-border p-4 rounded-xl flex flex-col gap-2.5">
+              <div className="bg-surface-container-low border border-whisper-border p-3.5 rounded-xl flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-on-surface">
                   <span className="material-symbols-outlined text-primary text-[18px]">psychology</span>
                   <span>Quy định đề thi theo năng lực</span>
                 </div>
-                <div className="flex flex-col gap-1.5 text-xs text-on-surface-variant leading-relaxed">
+                <div className="flex flex-col gap-1 text-xs text-on-surface-variant leading-relaxed">
                   <div className="flex items-start gap-2">
                     <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">check_circle</span>
                     <span>Cấu trúc đề thi (số phần, số câu hỏi, dạng bài và thời gian làm bài) được giữ nguyên theo chuẩn.</span>
@@ -301,7 +438,8 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
           </div>
         </DialogContent>
 
-        <DialogFooter>
+        {/* Footer */}
+        <DialogFooter className="shrink-0">
           <Button
             type="button"
             variant="outline"
@@ -315,7 +453,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
           <Button
             type="button"
             variant="primary"
-            disabled={loadingOptions || options.length === 0 || !selectedBlueprintId || isBusy}
+            disabled={loadingOptions || options.length === 0 || (!selectedBlueprintId && !generatedTestId) || isBusy}
             onClick={handleCreateAndStart}
             className="min-h-[44px] min-w-[160px] font-bold"
           >
@@ -334,7 +472,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
                 <span className="material-symbols-outlined text-[18px]">play_arrow</span>
                 <span>Tiếp tục bài đang làm</span>
               </div>
-            ) : generatedTestId && actionError ? (
+            ) : generatedTestId ? (
               <div className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[18px]">refresh</span>
                 <span>Thử bắt đầu lại</span>
