@@ -99,6 +99,15 @@
 - [x] Add semantic-ID, evidence-threshold, inactive-topic, and deterministic-order tests.
   - [x] Keep SQL-only implementation for MVP; Redis cache is optional later.
 
+## Shared Mastery Evidence V2
+
+- [x] Add `IStudentTopicMasteryProvider` and `TopicMasteryAdvice` to `MathInsight.Shared` with semantic string IDs.
+- [x] Expose `EvidenceItemCount` and `EvidenceSessionCount` without changing the existing WeakTag provider or REST DTOs.
+- [x] Batch-load mastery rows and usable session counts, ignoring `TotalItems <= 0` snapshots and merging IDs case-insensitively.
+- [x] Return zero session evidence when a mastery row has no usable session snapshot.
+- [x] Add provider tests for semantic IDs, grouped session counts, and non-positive item totals.
+- [x] Keep evidence-count persistence out of schema scope; consumers use structured logs and existing audit fields.
+
 - [x] **Recommendation Queries**:
   - [x] `GetWeakTagsQuery` - UC-52.
 - [x] `GetRecommendedLecturesQuery` - UC-53 initial weak-topic baseline. Phase 6 replaces this behavior with qualified all-mastery difficulty-aware ranking.

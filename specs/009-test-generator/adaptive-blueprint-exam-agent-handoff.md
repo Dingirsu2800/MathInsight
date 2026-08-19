@@ -23,8 +23,8 @@ Required behavior:
 - Only personal POST /api/test-generator/tests/blueprint-exams becomes mastery-aware.
 - Shared Fixed/Random generation must remain unchanged.
 - Batch-call MathInsight.Shared IStudentTopicMasteryProvider once for distinct exact blueprint topics.
-- Missing or EvidenceCount < 3 keeps original difficulty.
-- Qualified point <5 lowers one level; 5..<7.5 keeps; >=7.5 raises one; clamp 1..4.
+- Missing, fewer than 5 graded items, or fewer than 2 usable sessions keeps original difficulty.
+- Strong point <2 may lower two levels; qualified point <5 lowers one; 5..<7.5 keeps; >=7.5 raises one; clamp 1..4.
 - Evaluate every slot; no 20% cap and no 40% probability.
 - Preserve exact section/topic/type/quantity/part/scoring/duration/score.
 - Global assignment prefers target difficulty, falls back only to original, preserves uniqueness, and must not false-fail when a complete assignment exists.

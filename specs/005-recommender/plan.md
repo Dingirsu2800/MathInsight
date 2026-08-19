@@ -138,6 +138,16 @@ officialPoint < 4.00m
 
 When no qualified context exists, grade-based cold start returns active, `Published`, level-1 lectures for `Student.CurrentGrade`; null grade returns `[]`. The response includes difficulty metadata, nullable `OfficialPoint`, evidence count, fallback flag, and an audit reason. Material recommendation keeps its existing weak-topic behavior and has no difficulty-ranking scope.
 
+### Shared Mastery Evidence V2 Boundary
+
+The additive `IStudentTopicMasteryProvider` contract is separate from the
+existing WeakTag provider. It returns `TopicMasteryAdvice` keyed by semantic
+topic ID and exposes both `EvidenceItemCount` (`TagsMastery.NumberDone`) and
+`EvidenceSessionCount` (usable `StudentTopicSessionResult` rows with
+`TotalItems > 0`). Recommender performs one mastery query and one grouped
+session-count query per request, never one query per topic. TestGen owns the
+normal/strong evidence thresholds and policy interpretation.
+
 ## Verification Plan
 
 1. `dotnet build` - zero compile errors.

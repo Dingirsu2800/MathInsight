@@ -41,7 +41,7 @@ public sealed class GenerateTopicPracticeTests
         var test = Assert.Single(fixture.Context.Tests);
         Assert.Null(test.BlueprintId); Assert.Equal(0, test.DurationMinutes); Assert.Equal("NormalizedWeight", test.ScoringPolicy);
         Assert.Equal(10, test.Questions.Count); Assert.Equal(10m, test.Questions.Sum(question => question.MaxPointsSnapshot));
-            Assert.All(test.Questions, question => Assert.Equal(TopicPracticePolicy.RuleVersion, question.RuleVersion));
+        Assert.All(test.Questions, question => Assert.Equal(TopicPracticePolicy.RuleVersion, question.RuleVersion));
         Assert.Equal(0, result.Value!.CreatedTime.Ticks % TimeSpan.TicksPerSecond);
     }
 

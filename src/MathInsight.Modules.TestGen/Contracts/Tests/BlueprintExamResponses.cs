@@ -29,4 +29,4 @@ public sealed record GenerateBlueprintExamResponse(
     bool WasAdaptive = false,
     int AdaptiveQuestionCount = 0,
     int BaselineQuestionCount = 0,
-    string RuleVersion = "BlueprintExam-Mastery-v1");
+    string RuleVersion = "BlueprintExam-Mastery-v2");

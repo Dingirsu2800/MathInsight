@@ -8,7 +8,7 @@
 - [x] Mark all TestQuestions using an invalidated version for recalculation.
 
 **Branch**: `testgen-test-generation` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
-**Current delivery slice**: Checkpoint 6A - baseline BlueprintExam
+**Current delivery slice**: Checkpoint 6B backend Part A - mastery evidence v2 and paged Blueprint options
 
 ## Phase 0: Specification Alignment
 
@@ -160,15 +160,16 @@
 ## Phase 8B: Mastery-Aware Personal BlueprintExam
 
 - [x] Repair Recommender string-ID/PascalCase SQL mappings and introduce the stable batch `IStudentTopicMasteryProvider` contract.
-- [ ] Batch-load mastery for all exact blueprint topics and apply the qualified-evidence gate.
-- [ ] Resolve original and preferred difficulty IDs through active `TagDifficulty.LevelValue` rows.
-- [ ] Evaluate every slot using the approved one-level down/keep/up rules without a percentage cap or adaptive probability.
-- [ ] Add a complete minimum-cost capacity assignment that prefers adjusted difficulty and falls back only to original difficulty.
-- [ ] Populate and verify adaptive recommendation audit fields, additive response metadata, and ambiguous-commit verification.
-- [ ] Keep shared Fixed/Random generation behavior unchanged with regression coverage.
-- [ ] Add stable `503` mastery provider/validation errors and prove no partial writes.
+- [x] Batch-load mastery for all exact blueprint topics and apply the v2 item/session evidence gate.
+- [x] Resolve original and preferred difficulty IDs through active `TagDifficulty.LevelValue` rows.
+- [x] Evaluate every slot using the v2 weak/neutral/strong rules without a percentage cap or adaptive probability.
+- [x] Add a separate minimum-cost capacity assignment that prefers adjusted difficulty and falls back only to original difficulty.
+- [x] Populate and verify adaptive recommendation audit fields, additive response metadata, and ambiguous-commit verification.
+- [x] Keep shared Fixed/Random generation behavior unchanged with regression coverage.
+- [x] Add stable `503` mastery provider/validation errors and prove no partial writes.
+- [x] Add paged/searchable Student Blueprint options with grade/status filtering before count and paging.
 - [ ] Add the Student `Tạo đề theo năng lực` flow while preserving the separate Fixed/Random catalog.
-- [ ] Run focused backend/frontend verification and one browser smoke covering adjusted and baseline fallback rows.
+- [ ] Run integrated backend/frontend verification and one browser smoke covering adjusted and baseline fallback rows.
 - [ ] Reconcile stale completed Phase 8D, Phase 10, and Checkpoint 6E task boxes only where repository or smoke evidence exists.
 - [ ] Deduplicate recent questions after the product window/fallback rule is approved.
 

@@ -110,6 +110,11 @@ public sealed class TopicPracticeRecommendationResolverTests
 
     private static TagTopicReadModel Topic(string tagId, string? parentTagId, int displayOrder) => new()
     {
-        TagId = tagId, ParentTagId = parentTagId, TagName = tagId, Grade = 12, IsActive = true, DisplayOrder = displayOrder
+        TagId = tagId,
+        ParentTagId = parentTagId,
+        TagName = tagId,
+        Grade = 12,
+        IsActive = true,
+        DisplayOrder = displayOrder
     };
 }

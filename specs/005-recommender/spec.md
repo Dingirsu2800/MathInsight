@@ -212,6 +212,47 @@ The provider returns only active qualified rows where `OfficialPoint < 5.00` and
 > ```
 > This resolution is stable because `TagDifficulty.LevelValue` has a UNIQUE constraint (BR-63 in module 002).
 
+### Shared Topic Mastery Evidence Contract
+
+`MathInsight.Shared.Recommendations.IStudentTopicMasteryProvider` is a separate
+batch contract for TestGen mastery-aware policies. It does not replace
+`IStudentRecommendationProvider` and does not change the WeakTag, lecture, or
+material REST contracts.
+
+```csharp
+public interface IStudentTopicMasteryProvider
+{
+    Task<IReadOnlyDictionary<string, TopicMasteryAdvice>> GetTopicMasteryAdviceAsync(
+        string studentId,
+        IReadOnlyCollection<string> tagIds,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record TopicMasteryAdvice(
+    string TagId,
+    decimal OfficialPoint,
+    int EvidenceItemCount,
+    int EvidenceSessionCount,
+    byte RecommendedDifficultyLevel);
+```
+
+`EvidenceItemCount` is the non-negative `TagsMastery.NumberDone` value and
+counts graded items, not sessions. `EvidenceSessionCount` counts usable
+`StudentTopicSessionResult` rows for the same student and topic where
+`TotalItems > 0`. The provider loads mastery and session counts in batches,
+merges semantic IDs case-insensitively, and returns only requested topic IDs.
+Missing mastery is a successful empty/baseline result. Provider failures and
+malformed advice are handled by the consuming TestGen policy as stable errors.
+
+The v2 consumers qualify evidence independently:
+
+- normal evidence: at least 5 items and 2 sessions;
+- strong evidence: at least 8 items and 3 sessions.
+
+No database column is added for these counts in this checkpoint. TestGen logs
+the counts in structured generation logs while durable `TestQuestion` audit
+continues to use the existing recommendation fields and rule version.
+
 ## Success Criteria *(mandatory)*
 
 - WeakTag API returns within **2 seconds** from SQL Server without Redis.
