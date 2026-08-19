@@ -64,6 +64,47 @@ public sealed class TopicPracticeQuestionSelectorTests
     }
 
     [Fact]
+    public void CreateMastery_UsesColdStartWithoutNormalEvidence()
+    {
+        var plan = TopicPracticeSelectionPlanFactory.CreateMastery(
+            1.00m,
+            FocusTags(),
+            hasNormalEvidence: false,
+            hasStrongEvidence: false);
+
+        var counts = plan.Slots
+            .GroupBy(slot => slot.TargetDifficultyLevel)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Assert.Equal([3, 4, 2, 1], Enumerable.Range(1, 4).Select(level => counts.GetValueOrDefault(level)));
+    }
+
+    [Theory]
+    [InlineData(1.00, false, 8, 2, 0, 0)]
+    [InlineData(1.00, true, 9, 1, 0, 0)]
+    [InlineData(9.00, false, 0, 0, 2, 8)]
+    [InlineData(9.00, true, 0, 0, 1, 9)]
+    public void CreateMastery_ReservesExtremeProfilesForStrongEvidence(
+        decimal officialPoint,
+        bool hasStrongEvidence,
+        int level1,
+        int level2,
+        int level3,
+        int level4)
+    {
+        var plan = TopicPracticeSelectionPlanFactory.CreateMastery(
+            officialPoint,
+            FocusTags(),
+            hasNormalEvidence: true,
+            hasStrongEvidence);
+        var counts = plan.Slots
+            .GroupBy(slot => slot.TargetDifficultyLevel)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Assert.Equal([level1, level2, level3, level4], Enumerable.Range(1, 4).Select(level => counts.GetValueOrDefault(level)));
+    }
+
+    [Fact]
     public void Select_AdaptiveParent_UsesSixFocusAndAtLeastTwoOutside_WhenPoolPermits()
     {
         var candidates = CandidatesByLevel(8, 2, 0, 0, "focus");

@@ -11,6 +11,8 @@ using MathInsight.Shared.Scoring;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TestEntity = MathInsight.Modules.TestGen.Persistence.Entities.Test;
 
 namespace MathInsight.Modules.TestGen.Commands.GenerateBlueprintExam;
@@ -22,17 +24,20 @@ public sealed class GenerateBlueprintExamCommandHandler
     private readonly IBlueprintExamCandidateProvider _candidateProvider;
     private readonly IAdaptiveBlueprintExamQuestionSelector _adaptiveSelector;
     private readonly IStudentTopicMasteryProvider _masteryProvider;
+    private readonly ILogger<GenerateBlueprintExamCommandHandler> _logger;
 
     public GenerateBlueprintExamCommandHandler(
         TestGenDbContext context,
         IBlueprintExamCandidateProvider candidateProvider,
         IAdaptiveBlueprintExamQuestionSelector adaptiveSelector,
-        IStudentTopicMasteryProvider masteryProvider)
+        IStudentTopicMasteryProvider masteryProvider,
+        ILogger<GenerateBlueprintExamCommandHandler>? logger = null)
     {
         _context = context;
         _candidateProvider = candidateProvider;
         _adaptiveSelector = adaptiveSelector;
         _masteryProvider = masteryProvider;
+        _logger = logger ?? NullLogger<GenerateBlueprintExamCommandHandler>.Instance;
     }
 
     public async Task<Result<GenerateBlueprintExamResponse>> Handle(
@@ -224,7 +229,8 @@ public sealed class GenerateBlueprintExamCommandHandler
                 !string.Equals(entry.Key, entry.Value.TagId, StringComparison.OrdinalIgnoreCase) ||
                 entry.Value.OfficialPoint < 0m ||
                 entry.Value.OfficialPoint > 10m ||
-                entry.Value.EvidenceCount < 0 ||
+                entry.Value.EvidenceItemCount < 0 ||
+                entry.Value.EvidenceSessionCount < 0 ||
                 !adviceByTag.TryAdd(entry.Key, entry.Value))
             {
                 return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryInvalid);
@@ -254,34 +260,55 @@ public sealed class GenerateBlueprintExamCommandHandler
                 return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.BlueprintUnavailable);
 
             adviceByTag.TryGetValue(requirement.TagId, out var mastery);
-            var qualified = mastery is not null &&
-                mastery.EvidenceCount >= AdaptiveBlueprintExamPolicy.MinimumEvidenceCount;
+            var qualified = AdaptiveBlueprintExamPolicy.HasNormalEvidence(mastery);
             var preferredLevel = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(
                 originalDifficulty.LevelValue,
                 mastery);
-            var targetDifficulty = preferredLevel == originalDifficulty.LevelValue
-                ? originalDifficulty
-                : difficultyByLevel.GetValueOrDefault(preferredLevel);
-            var preferredDifficulty = targetDifficulty ?? originalDifficulty;
+            var acceptedDifficultyIds = AdaptiveBlueprintExamPolicy.BuildAcceptedLevels(
+                    originalDifficulty.LevelValue,
+                    mastery)
+                .Select(level => difficultyByLevel.GetValueOrDefault(level)?.DifficultyId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (!acceptedDifficultyIds.Contains(originalDifficulty.DifficultyId, StringComparer.OrdinalIgnoreCase))
+                acceptedDifficultyIds.Add(originalDifficulty.DifficultyId);
+
+            var preferredDifficultyId = acceptedDifficultyIds[0];
             var adjusted = qualified &&
                 preferredLevel != originalDifficulty.LevelValue &&
                 !string.Equals(
-                    preferredDifficulty.DifficultyId,
+                    preferredDifficultyId,
                     originalDifficulty.DifficultyId,
                     StringComparison.OrdinalIgnoreCase);
+
+            _logger.LogInformation(
+                "Adaptive blueprint detail {BlueprintDetailId} for StudentId {StudentId}, TagId {TagId}, OfficialPoint {OfficialPoint}, EvidenceItemCount {EvidenceItemCount}, EvidenceSessionCount {EvidenceSessionCount}, OriginalDifficultyId {OriginalDifficultyId}, PreferredDifficultyId {PreferredDifficultyId}, IsAdaptive {IsAdaptive}, RuleVersion {RuleVersion}",
+                requirement.BlueprintDetailId,
+                studentId,
+                requirement.TagId,
+                mastery?.OfficialPoint,
+                mastery?.EvidenceItemCount ?? 0,
+                mastery?.EvidenceSessionCount ?? 0,
+                originalDifficulty.DifficultyId,
+                preferredDifficultyId,
+                adjusted,
+                AdaptiveBlueprintExamPolicy.RuleVersion);
 
             plans[requirement.BlueprintDetailId] = new AdaptiveBlueprintDetailPlan(
                 requirement.BlueprintDetailId,
                 requirement.TagId,
                 originalDifficulty.DifficultyId,
-                preferredDifficulty.DifficultyId,
+                preferredDifficultyId,
                 qualified ? mastery!.OfficialPoint : null,
                 qualified,
-                adjusted);
+                adjusted,
+                acceptedDifficultyIds);
         }
 
         var difficultyIds = plans.Values
-            .SelectMany(plan => new[] { plan.OriginalDifficultyId, plan.PreferredDifficultyId })
+            .SelectMany(plan => plan.AcceptedDifficultyIds)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         return Result<AdaptiveBlueprintResolution>.Success(new AdaptiveBlueprintResolution(plans, difficultyIds));
@@ -408,10 +435,9 @@ public sealed class GenerateBlueprintExamCommandHandler
         IReadOnlyDictionary<string, AdaptiveBlueprintDetailPlan> plansByDetailId)
     {
         if (!plansByDetailId.TryGetValue(prepared.Assignment.BlueprintDetailId, out var plan) ||
-            !plan.HasDifficultyAdjustment ||
-            !string.Equals(
+            string.Equals(
                 prepared.Candidate.DifficultyId,
-                plan.PreferredDifficultyId,
+                plan.OriginalDifficultyId,
                 StringComparison.OrdinalIgnoreCase))
         {
             return new AuditValues(false, null, null, null, null);
@@ -420,7 +446,7 @@ public sealed class GenerateBlueprintExamCommandHandler
         return new AuditValues(
             true,
             plan.TagId,
-            plan.PreferredDifficultyId,
+            prepared.Candidate.DifficultyId,
             plan.OfficialPoint,
             AdaptiveBlueprintExamPolicy.RuleVersion);
     }

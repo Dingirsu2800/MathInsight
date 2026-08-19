@@ -10,6 +10,12 @@ public sealed record BlueprintExamOptionResponse(
     string Status,
     int SectionCount);
 
+public sealed record BlueprintExamOptionsResponse(
+    IReadOnlyList<BlueprintExamOptionResponse> Items,
+    int TotalCount,
+    int PageIndex,
+    int PageSize);
+
 public sealed record GenerateBlueprintExamResponse(
     string TestId,
     string BlueprintId,
@@ -23,4 +29,4 @@ public sealed record GenerateBlueprintExamResponse(
     bool WasAdaptive = false,
     int AdaptiveQuestionCount = 0,
     int BaselineQuestionCount = 0,
-    string RuleVersion = "BlueprintExam-Mastery-v1");
+    string RuleVersion = "BlueprintExam-Mastery-v2");

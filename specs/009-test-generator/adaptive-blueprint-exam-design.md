@@ -34,12 +34,12 @@ TestGen requests mastery once for all distinct exact topic IDs in the blueprint 
 
 | Evidence and OfficialPoint | Preferred level relative to blueprint |
 |---|---|
-| Missing or `EvidenceCount < 3` | Original level |
+| Missing, `EvidenceItemCount < 5`, or `EvidenceSessionCount < 2` | Original level |
 | `0.00 <= point < 5.00` | Original minus one |
 | `5.00 <= point < 7.50` | Original level |
 | `7.50 <= point <= 10.00` | Original plus one |
 
-Levels are clamped to `1..4`. A weak level-1 slot and a strong level-4 slot therefore remain unchanged. Missing mastery is a normal baseline path, not an error. Invalid point/evidence data is a provider-contract error.
+Normal evidence requires at least 5 graded items and 2 usable sessions. Strong evidence requires at least 8 graded items and 3 usable sessions. A strong point below 2 may lower two levels; other qualified weak points below 5 lower one level. Levels are clamped to `1..4`. A weak level-1 slot and a strong level-4 slot therefore remain unchanged. Missing mastery is a normal baseline path, not an error. Invalid point/evidence data is a provider-contract error.
 
 ## Selection Design
 
@@ -67,7 +67,7 @@ IsAdaptiveSelected = true
 RecommendedForTagID = BlueprintDetail.TagID
 RecommendedDifficultyID = preferred DifficultyID
 PtagAtSelection = OfficialPoint
-RuleVersion = BlueprintExam-Mastery-v1
+RuleVersion = BlueprintExam-Mastery-v2
 ```
 
 A neutral row, insufficient-evidence row, clamped-no-change row, or preferred-pool fallback row stores the existing baseline audit shape: `IsAdaptiveSelected = false` and recommendation fields null.
@@ -78,7 +78,7 @@ The generation response adds:
 wasAdaptive
 adaptiveQuestionCount
 baselineQuestionCount
-ruleVersion = BlueprintExam-Mastery-v1
+ruleVersion = BlueprintExam-Mastery-v2
 ```
 
 ## Failure Contract

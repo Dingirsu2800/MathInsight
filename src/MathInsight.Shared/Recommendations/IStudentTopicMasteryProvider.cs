@@ -11,5 +11,16 @@ public interface IStudentTopicMasteryProvider
 public sealed record TopicMasteryAdvice(
     string TagId,
     decimal OfficialPoint,
-    int EvidenceCount,
-    byte RecommendedDifficultyLevel);
+    int EvidenceItemCount,
+    int EvidenceSessionCount,
+    byte RecommendedDifficultyLevel)
+{
+    public TopicMasteryAdvice(
+        string tagId,
+        decimal officialPoint,
+        int evidenceItemCount,
+        byte recommendedDifficultyLevel)
+        : this(tagId, officialPoint, evidenceItemCount, 0, recommendedDifficultyLevel)
+    {
+    }
+}

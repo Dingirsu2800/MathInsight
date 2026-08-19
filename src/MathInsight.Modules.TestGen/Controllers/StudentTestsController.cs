@@ -26,14 +26,18 @@ public sealed class StudentTestsController : ControllerBase
     }
 
     [HttpGet("blueprint-options")]
-    public async Task<IActionResult> GetBlueprintOptions(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetBlueprintOptions(
+        [FromQuery] string? search = null,
+        [FromQuery] int pageIndex = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
         var studentId = GetCurrentStudentId();
         if (studentId is null)
             return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
 
         var result = await _mediator.Send(
-            new GetBlueprintExamOptionsQuery(studentId),
+            new GetBlueprintExamOptionsQuery(studentId, search, pageIndex, pageSize),
             cancellationToken);
 
         return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);

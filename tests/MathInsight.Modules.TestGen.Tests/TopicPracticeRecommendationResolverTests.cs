@@ -27,7 +27,7 @@ public sealed class TopicPracticeRecommendationResolverTests
     {
         SetupAdvice(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
         {
-            ["child"] = new("child", 5.50m, 3, 3)
+            ["child"] = new("child", 5.50m, 5, 2, 3)
         });
 
         var result = await CreateResolver(true).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
@@ -48,7 +48,7 @@ public sealed class TopicPracticeRecommendationResolverTests
     {
         SetupAdvice(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
         {
-            ["child"] = new("child", 1.00m, 2, 1)
+            ["child"] = new("child", 1.00m, 4, 2, 1)
         });
 
         var result = await CreateResolver(true).ResolveForTopicsAsync("student_01", Topics(), CancellationToken.None);
@@ -110,6 +110,11 @@ public sealed class TopicPracticeRecommendationResolverTests
 
     private static TagTopicReadModel Topic(string tagId, string? parentTagId, int displayOrder) => new()
     {
-        TagId = tagId, ParentTagId = parentTagId, TagName = tagId, Grade = 12, IsActive = true, DisplayOrder = displayOrder
+        TagId = tagId,
+        ParentTagId = parentTagId,
+        TagName = tagId,
+        Grade = 12,
+        IsActive = true,
+        DisplayOrder = displayOrder
     };
 }

@@ -108,7 +108,7 @@ public sealed class TopicPracticeOptionsTests
             {
                 ["child"] = new(
                     true,
-                    new TopicMasteryAdvice("child", 2.40m, 5, 1),
+                    new TopicMasteryAdvice("child", 2.40m, 5, 2, 1),
                     new HashSet<string>(["child"], StringComparer.OrdinalIgnoreCase))
             }));
 

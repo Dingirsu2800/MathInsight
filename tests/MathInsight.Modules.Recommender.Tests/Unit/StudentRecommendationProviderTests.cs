@@ -91,6 +91,10 @@ public sealed class StudentRecommendationProviderTests : IDisposable
         Seed("TOPIC-REQUESTED", 7.60m, numberDone: 8, isActive: true, level: 4);
         Seed("TOPIC-NOT-REQUESTED", 2.00m, numberDone: 8, isActive: true, level: 1);
         Seed("TOPIC-INACTIVE", 3.00m, numberDone: 8, isActive: false, level: 2);
+        SeedSession("session-valid-1", "TOPIC-REQUESTED", totalItems: 10m);
+        SeedSession("session-valid-2", "TOPIC-REQUESTED", totalItems: 5m);
+        SeedSession("session-not-requested", "TOPIC-NOT-REQUESTED", totalItems: 20m);
+        SeedSession("session-empty", "TOPIC-REQUESTED", totalItems: 0m);
         await _db.SaveChangesAsync();
 
         var result = await _sut.GetTopicMasteryAdviceAsync(
@@ -101,7 +105,8 @@ public sealed class StudentRecommendationProviderTests : IDisposable
         var advice = Assert.Single(result);
         Assert.Equal("TOPIC-REQUESTED", advice.Key);
         Assert.Equal(7.60m, advice.Value.OfficialPoint);
-        Assert.Equal(8, advice.Value.EvidenceCount);
+        Assert.Equal(8, advice.Value.EvidenceItemCount);
+        Assert.Equal(2, advice.Value.EvidenceSessionCount);
         Assert.Equal((byte)4, advice.Value.RecommendedDifficultyLevel);
         Assert.IsAssignableFrom<IStudentTopicMasteryProvider>(_sut);
     }
@@ -129,6 +134,23 @@ public sealed class StudentRecommendationProviderTests : IDisposable
             MasteryStatus = "Learning",
             NumberDone = numberDone,
             RecommendedDifficultyLevel = level
+        });
+    }
+
+    private void SeedSession(string sessionId, string tagId, decimal totalItems)
+    {
+        _db.StudentTopicSessionResults.Add(new StudentTopicSessionResult
+        {
+            StudentTopicSessionResultId = $"snapshot-{sessionId}",
+            StudentId = "student_01",
+            SessionId = sessionId,
+            TagId = tagId,
+            TotalItems = totalItems,
+            CorrectItems = totalItems > 0 ? 5m : 0m,
+            EarnedPoints = totalItems > 0 ? 5m : 0m,
+            MaxPoints = totalItems > 0 ? 10m : 0m,
+            TopicScore = totalItems > 0 ? 5m : 0m,
+            CreatedTime = DateTime.UtcNow
         });
     }
 }

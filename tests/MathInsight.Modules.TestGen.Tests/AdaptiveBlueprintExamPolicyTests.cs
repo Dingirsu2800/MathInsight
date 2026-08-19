@@ -6,19 +6,25 @@ namespace MathInsight.Modules.TestGen.Tests;
 public sealed class AdaptiveBlueprintExamPolicyTests
 {
     [Theory]
-    [InlineData(0, 3, 5, 2)]
-    [InlineData(4.99, 3, 5, 2)]
-    [InlineData(5, 3, 5, 3)]
-    [InlineData(7.49, 3, 5, 3)]
-    [InlineData(7.5, 3, 5, 4)]
-    [InlineData(10, 3, 5, 4)]
-    public void ResolvePreferredLevel_UsesOfficialPointBoundaries(
+    [InlineData(4, 2, 1, 3, 3)]
+    [InlineData(5, 1, 1, 3, 3)]
+    [InlineData(5, 2, 1, 3, 2)]
+    [InlineData(7, 3, 1, 3, 2)]
+    [InlineData(8, 2, 1, 3, 2)]
+    [InlineData(8, 3, 1, 3, 1)]
+    public void ResolvePreferredLevel_UsesItemAndSessionQualification(
+        int evidenceItemCount,
+        int evidenceSessionCount,
         double point,
         int originalLevel,
-        int evidenceCount,
         int expectedLevel)
     {
-        var mastery = new TopicMasteryAdvice("topic", (decimal)point, evidenceCount, 2);
+        var mastery = new TopicMasteryAdvice(
+            "topic",
+            (decimal)point,
+            evidenceItemCount,
+            evidenceSessionCount,
+            2);
 
         var result = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(originalLevel, mastery);
 
@@ -26,31 +32,42 @@ public sealed class AdaptiveBlueprintExamPolicyTests
     }
 
     [Theory]
-    [InlineData(2)]
-    public void ResolvePreferredLevel_KeepsOriginalWhenEvidenceIsInsufficient(int evidenceCount)
+    [InlineData(2, 2)]
+    [InlineData(5, 3)]
+    [InlineData(7.5, 4)]
+    public void ResolvePreferredLevel_UsesPointBoundaries(
+        double point,
+        int expectedLevel)
     {
-        var mastery = new TopicMasteryAdvice("topic", 1m, evidenceCount, 1);
+        var mastery = new TopicMasteryAdvice("topic", (decimal)point, 5, 2, 2);
 
-        var result = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(3, mastery);
-
-        Assert.Equal(3, result);
+        Assert.Equal(expectedLevel,
+            AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(3, mastery));
     }
 
     [Fact]
-    public void ResolvePreferredLevel_KeepsOriginalWhenMasteryIsMissing()
+    public void ResolvePreferredLevel_ClampsStrongWeakAndStrongHighLevels()
     {
-        var result = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(2, null);
-
-        Assert.Equal(2, result);
-    }
-
-    [Fact]
-    public void ResolvePreferredLevel_ClampsWeakLevelOneAndStrongLevelFour()
-    {
-        var weak = new TopicMasteryAdvice("topic", 4.99m, 3, 1);
-        var strong = new TopicMasteryAdvice("topic", 7.5m, 3, 4);
+        var weak = new TopicMasteryAdvice("topic", 1m, 8, 3, 1);
+        var strong = new TopicMasteryAdvice("topic", 8m, 8, 3, 4);
 
         Assert.Equal(1, AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(1, weak));
         Assert.Equal(4, AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(4, strong));
+    }
+
+    [Fact]
+    public void MissingMasteryKeepsOriginalLevel()
+    {
+        Assert.Equal(2, AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(2, null));
+    }
+
+    [Fact]
+    public void BuildAcceptedLevels_UsesIntermediateLevelsForStrongPointBelowTwo()
+    {
+        var mastery = new TopicMasteryAdvice("topic", 1m, 8, 3, 2);
+
+        Assert.Equal(
+            [2, 3, 4],
+            AdaptiveBlueprintExamPolicy.BuildAcceptedLevels(4, mastery));
     }
 }

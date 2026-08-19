@@ -113,7 +113,7 @@ public sealed class GetTopicPracticeOptionsQueryHandler : IRequestHandler<GetTop
                 advice?.TagId,
                 advice is null ? null : topic.TagName,
                 advice?.OfficialPoint,
-                advice?.EvidenceCount,
+                advice?.EvidenceItemCount,
                 advice?.RecommendedDifficultyLevel,
                 advice is null ? null : "TopicMastery",
                 availability));

@@ -163,15 +163,15 @@ Frontend localizes these codes; backend messages remain developer-facing English
 - Blueprint generation creates `TestMode = BlueprintExam`, `GeneratedBy = System`, and a nullable `TestCode`.
 - `TestQuestion` stores ordering plus `SourceBlueprintDetailID` and recommendation audit fields.
 - TestGen owns read models for QuestionBank taxonomy/questions and marks them `ExcludeFromMigrations()`.
-- TestGen calls the existing in-process Recommender service. `RecommendedDifficultyLevel` is resolved through `TagDifficulty.LevelValue`; it is never compared directly with `DifficultyID`.
+- TestGen consumes the shared in-process mastery provider. `RecommendedDifficultyLevel` is resolved through `TagDifficulty.LevelValue`; it is never compared directly with `DifficultyID`. The existing WeakTag/lecture/material provider remains a separate contract.
 - **BR-52 Expert ownership of generated tests**: experts do not directly create, update, or delete `Test` or `TestQuestion` records in MVP. Experts manage `Question` and `Blueprint` data; the backend GenerationEngine creates generated test records.
 - **BR-53 Optional test code**: `TestCode` is generated only for shareable or code-entry tests; personal adaptive and recommendation sessions keep `TestCode = NULL`.
 - **BR-51 Composite metadata**: composite sections must define their part metadata before generation; non-composite sections leave that metadata null.
 - **BR-50 Question type filtering**: generated candidates must match the `QuestionType` declared by their blueprint section.
 - Personal BlueprintExam generation evaluates every blueprint slot against the Student's mastery for that slot's exact topic. It does not cap adaptive rows or use a random adaptive-bias probability.
-- Mastery is qualified only when `EvidenceCount >= 3` and `OfficialPoint` is in `0.00..10.00`. Missing or insufficient evidence keeps the original blueprint difficulty.
-- Qualified mastery resolves the preferred difficulty relative to the blueprint slot: `0.00 <= point < 5.00` lowers one level, `5.00 <= point < 7.50` keeps the original level, and `7.50 <= point <= 10.00` raises one level. The result is clamped to active levels `1..4`.
-- Selection keeps the exact section, topic, question type, quantity, scoring rule, part shape, duration, and score budget. It prefers the resolved difficulty and falls back only to the original blueprint difficulty.
+- Mastery evidence is qualified with `EvidenceItemCount >= 5` and `EvidenceSessionCount >= 2`; strong evidence requires `EvidenceItemCount >= 8` and `EvidenceSessionCount >= 3`. `EvidenceItemCount` is graded item evidence from `TagsMastery.NumberDone`, not a session count. Missing or insufficient evidence keeps the original blueprint difficulty.
+- Qualified mastery resolves the preferred difficulty relative to the blueprint slot: strong `0.00 <= point < 2.00` lowers two levels, qualified `point < 5.00` lowers one level, `5.00 <= point < 7.50` keeps the original level, and `7.50 <= point <= 10.00` raises one level. The result is clamped to active levels `1..4`.
+- Selection keeps the exact section, topic, question type, quantity, scoring rule, part shape, duration, and score budget. It prefers the resolved difficulty and falls back through available intermediate levels between the preferred and original difficulty, then to the original blueprint difficulty.
 - A capacity-aware global assignment maximizes preferred-difficulty matches without sacrificing complete fulfillment or global Question uniqueness. If neither preferred nor original candidates can complete the blueprint, generation fails before any write.
 - Shared Fixed and Random BlueprintExam variants remain non-adaptive and identical for every Student who starts them.
 - **Student Practice and Exam Flow**: student endpoints expose two initial formats across separate checkpoints:
@@ -206,11 +206,11 @@ The POST body contains only `tagId`. The backend derives Student ID, selected to
 
 ## Checkpoint 6D: Mastery-Aware TopicPractice
 
-When `TopicPractice:WeakTagAdaptiveEnabled` is `false`, TestGen does not call a provider and keeps the baseline `3/4/2/1` profile. When enabled, it calls the batch `IStudentTopicMasteryProvider` for the exact requested direct-child topics. `IStudentRecommendationProvider` remains dedicated to WeakTag, lecture, and material recommendations. Missing mastery or `EvidenceCount < 3` keeps baseline; provider failure or malformed advice returns stable `503` before Test/TestQuestion writes.
+When `TopicPractice:WeakTagAdaptiveEnabled` is `false`, TestGen does not call a provider and keeps the baseline `3/4/2/1` profile. When enabled, it calls the batch `IStudentTopicMasteryProvider` for the exact requested direct-child topics. `IStudentRecommendationProvider` remains dedicated to WeakTag, lecture, and material recommendations. Missing mastery or evidence below `5` items and `2` usable sessions keeps baseline; provider failure or malformed advice returns stable `503` before Test/TestQuestion writes.
 
 For the selected topic, the profile is determined by `OfficialPoint`: `0-<2: 9/1/0/0`, `2-<3: 8/2/0/0`, `3-<4: 3/6/1/0`, `4-<5: 2/6/2/0`, `5-<6: 0/3/6/1`, `6-<7.5: 0/2/6/2`, `7.5-<9: 0/0/2/8`, and `9-10: 0/0/1/9` (levels 1 through 4). Automatic candidates remain within the exact selected direct-child topic. Existing fallback, unique Question, Composite cap, and unseen-then-oldest rules remain in force.
 
-Automatic rows persist `SelectionReason = TopicPractice`, `IsAdaptiveSelected = true`, `RecommendedForTagID = selected TagID`, the resolved representative difficulty, `PtagAtSelection`, and `RuleVersion = TopicPractice-Mastery-v1`. Manual rows retain `TopicPractice-Manual-v1` and never call the provider.
+Automatic rows persist `SelectionReason = TopicPractice`, `IsAdaptiveSelected = true`, `RecommendedForTagID = selected TagID`, the resolved representative difficulty, `PtagAtSelection`, and `RuleVersion = TopicPractice-Mastery-v2`. Strong evidence is required for the `9/1/0/0` and `0/0/1/9` extreme profiles; normal-but-not-strong evidence uses the capped extreme profiles. Manual rows retain `TopicPractice-Manual-v1` and never call the provider.
 
 ### Checkpoint 6D Stable Errors
 
@@ -242,7 +242,7 @@ Base route: `/api/test-generator/tests`
 
 | Method | Route | Behavior |
 |---|---|---|
-| `GET` | `/blueprint-options` | Return `Approved` or `Active` blueprints matching the authenticated Student's current grade |
+| `GET` | `/blueprint-options?search=&pageIndex=1&pageSize=20` | Return a filtered page of `Approved` or `Active` blueprints matching the authenticated Student's current grade |
 | `POST` | `/blueprint-exams` | Generate one personal BlueprintExam from the requested blueprint |
 
 The POST body contains only `blueprintId`. `GeneratedForStudentID` always comes from the authenticated claim. A personal generated Test has `TestCode = NULL`.
@@ -360,11 +360,37 @@ Discovery is not an authorization boundary. Testing must revalidate personal own
 
 The existing `GET /api/test-generator/tests/blueprint-options` and `POST /api/test-generator/tests/blueprint-exams` routes remain unchanged. The POST body still contains only `blueprintId`; Student identity comes from the authenticated claim. The generated Test remains personal with `GeneratedForStudentID = current Student`, `TestCode = NULL`, `TestMode = BlueprintExam`, and `GeneratedBy = System`.
 
-TestGen consumes `IStudentTopicMasteryProvider` from `MathInsight.Shared` once per command for all distinct blueprint topic IDs. It must not reference the Recommender module directly, make an internal HTTP call, or query once per topic. Provider failure returns `503 ADAPTIVE_EXAM_MASTERY_UNAVAILABLE`; malformed advice returns `503 ADAPTIVE_EXAM_MASTERY_INVALID`. Missing advice is a normal baseline fallback.
+The blueprint-options query accepts `search` (BlueprintName only), `pageIndex`
+(default `1`) and `pageSize` (default `20`, valid range `1..50`). It filters
+Student grade, `Approved`/`Active` status, and search before `Count`, `Skip`,
+and `Take`. Results are ordered by `ReviewTime DESC`, `BlueprintName`, then
+`BlueprintID`; generated Test records are never included. The response shape is:
 
-A row selected at the preferred difficulty stores `SelectionReason = BlueprintNormal`, `IsAdaptiveSelected = true`, `RecommendedForTagID`, `RecommendedDifficultyID`, `PtagAtSelection`, and `RuleVersion = BlueprintExam-Mastery-v1`. A neutral row or a row that falls back to the original blueprint difficulty stores baseline audit fields with `IsAdaptiveSelected = false` and null recommendation fields. No schema change is required.
+```json
+{
+  "items": [],
+  "totalCount": 0,
+  "pageIndex": 1,
+  "pageSize": 20
+}
+```
 
-The generation response adds `wasAdaptive`, `adaptiveQuestionCount`, `baselineQuestionCount`, and `ruleVersion`. These fields are additive; existing clients remain compatible. Testing still owns TestSession creation. The frontend generates the Test only after final confirmation, immediately attempts `StartSession`, retains the returned `TestID` when start fails, and retries the same Test rather than generating another one.
+Invalid pagination returns `400 TEST_GENERATION_REQUEST_INVALID`.
+
+TestGen consumes `IStudentTopicMasteryProvider` from `MathInsight.Shared` once per command for all distinct blueprint topic IDs. It must not reference the Recommender module directly, make an internal HTTP call, or query once per topic. `EvidenceItemCount` is graded item evidence from `TagsMastery.NumberDone`; `EvidenceSessionCount` is usable `StudentTopicSessionResult` evidence with `TotalItems > 0`. Normal evidence requires at least `5` items and `2` sessions; strong evidence requires at least `8` items and `3` sessions. Provider failure returns `503 ADAPTIVE_EXAM_MASTERY_UNAVAILABLE`; malformed advice returns `503 ADAPTIVE_EXAM_MASTERY_INVALID`. Missing or insufficient evidence is a normal baseline fallback.
+
+For qualified mastery, `OfficialPoint < 2` with strong evidence lowers two
+levels; `< 5` lowers one level; `5..<7.5` keeps the original level; and
+`>= 7.5` raises one level. The result is clamped to levels `1..4`. Every
+BlueprintDetail is evaluated; there is no adaptive percentage cap or random
+adaptive probability. Candidate selection is a separate minimum-cost capacity
+assignment that prefers the adjusted level, then available intermediate levels,
+and finally the original Blueprint difficulty, while preserving global Question
+uniqueness.
+
+A row selected at a genuinely adjusted difficulty, including an available intermediate fallback, stores `SelectionReason = BlueprintNormal`, `IsAdaptiveSelected = true`, `RecommendedForTagID`, `RecommendedDifficultyID`, `PtagAtSelection`, and `RuleVersion = BlueprintExam-Mastery-v2`. A neutral row, insufficient-evidence row, clamped no-change row, or fallback that returns to the original Blueprint difficulty stores baseline audit fields with `IsAdaptiveSelected = false` and null recommendation fields. Evidence counts are written to structured generation logs; no schema change is required.
+
+The generation response adds `wasAdaptive`, `adaptiveQuestionCount`, `baselineQuestionCount`, and `ruleVersion = BlueprintExam-Mastery-v2`. These fields are additive; existing clients remain compatible. Testing still owns TestSession creation. The frontend generates the Test only after final confirmation, immediately attempts `StartSession`, retains the returned `TestID` when start fails, and retries the same Test rather than generating another one.
 
 ## Checkpoint 6E: Student-Selected Topic Practice Difficulty
 
@@ -374,7 +400,7 @@ The generation response adds `wasAdaptive`, `adaptiveQuestionCount`, `baselineQu
 
 Student shared-exam discovery accepts an additive optional `generationType` query parameter with canonical values `Fixed` and `Random`. A shared Test is `Fixed` only when every persisted `TestQuestion.SelectionReason` is `FixedExam`; it is `Random` only when every reason is `BlueprintNormal`. A mixed or unknown aggregate is rejected with a stable contract error instead of being silently classified. Filtering happens before counting and pagination.
 
-Topic Practice automatic mode uses the selected topic's mastery when it has at least three completed items. It is not limited to WeakTags. The score profiles are: `0 <= p < 2`: `9/1/0/0`; `2 <= p < 3`: `8/2/0/0`; `3 <= p < 4`: `3/6/1/0`; `4 <= p < 5`: `2/6/2/0`; `5 <= p < 6`: `0/3/6/1`; `6 <= p < 7.5`: `0/2/6/2`; `7.5 <= p < 9`: `0/0/2/8`; and `9 <= p <= 10`: `0/0/1/9`, with each tuple ordered by difficulty level 1 through 4. Missing or insufficient evidence keeps baseline `3/4/2/1`. Automatic fallback fills the requested level first, then lower levels, then higher levels; all existing uniqueness, Composite-cap, and candidate validity rules remain. Manual Topic Practice remains exactly ten Questions at the selected difficulty.
+Topic Practice automatic mode uses the selected topic's mastery only with normal evidence of at least `5` items and `2` usable sessions. It is not limited to WeakTags. The score profiles are: `0 <= p < 2`: `9/1/0/0`; `2 <= p < 3`: `8/2/0/0`; `3 <= p < 4`: `3/6/1/0`; `4 <= p < 5`: `2/6/2/0`; `5 <= p < 6`: `0/3/6/1`; `6 <= p < 7.5`: `0/2/6/2`; `7.5 <= p < 9`: `0/0/2/8`; and `9 <= p <= 10`: `0/0/1/9`, with each tuple ordered by difficulty level 1 through 4. Missing or insufficient evidence keeps baseline `3/4/2/1`; strong evidence is required for the two extreme profiles. Automatic fallback fills the requested level first, then lower levels, then higher levels; all existing uniqueness, Composite-cap, and candidate validity rules remain. Manual Topic Practice remains exactly ten Questions at the selected difficulty. The automatic rule version is `TopicPractice-Mastery-v2`.
 
 `GET /api/test-generator/tests/topic-practice-options` returns `difficultyAvailability` for each assignable direct-child topic. Each item includes `difficultyId`, `difficultyName`, `levelValue`, `availableQuestionCount`, and `canGenerate`; counts use the same supported candidate shape and Composite cap as generation. Inactive or unsupported difficulties are excluded.
 

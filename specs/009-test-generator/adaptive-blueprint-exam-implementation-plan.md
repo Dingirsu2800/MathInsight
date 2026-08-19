@@ -31,8 +31,11 @@
 ```csharp
 public static class AdaptiveBlueprintExamPolicy
 {
-    public const string RuleVersion = "BlueprintExam-Mastery-v1";
-    public const int MinimumEvidenceCount = 3;
+    public const string RuleVersion = "BlueprintExam-Mastery-v2";
+    public const int MinimumItemCount = 5;
+    public const int MinimumSessionCount = 2;
+    public const int StrongItemCount = 8;
+    public const int StrongSessionCount = 3;
 
     public static int ResolvePreferredLevel(
         int originalLevel,
@@ -127,7 +130,7 @@ string RuleVersion
 
 - [ ] Write RED handler tests for one batch provider call, weak downscale, neutral baseline, strong upscale, insufficient evidence, missing mastery, level clamp, target shortage fallback, provider exception, malformed advice, no partial write, and mixed audit rows.
 - [ ] Bulk-load active TagDifficulty levels `1..4`; resolve original IDs and preferred IDs without comparing a level number directly to DifficultyID.
-- [ ] Call `IStudentTopicMasteryProvider` once with distinct exact blueprint TagIDs. Missing keys are baseline. Validate used advice has matching nonblank TagID, `OfficialPoint` in `0..10`, and nonnegative EvidenceCount.
+- [ ] Call `IStudentTopicMasteryProvider` once with distinct exact blueprint TagIDs. Missing keys are baseline. Validate used advice has matching nonblank TagID, `OfficialPoint` in `0..10`, and nonnegative item/session evidence counts.
 - [ ] Use the adaptive selector and persist audit only when the actual candidate difficulty equals a genuinely adjusted preferred difficulty.
 - [ ] Extend ambiguous-commit verification to accept and validate the exact mixed adaptive/baseline aggregate, response counts, score snapshots, order, quantities, and blueprint activation.
 - [ ] Add `ADAPTIVE_EXAM_MASTERY_UNAVAILABLE` and `ADAPTIVE_EXAM_MASTERY_INVALID`, both mapped to HTTP 503.
