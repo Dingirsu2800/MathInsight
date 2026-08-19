@@ -20,12 +20,26 @@ public sealed class BlueprintExamCandidateProvider : IBlueprintExamCandidateProv
         MathInsight.Modules.TestGen.Persistence.Entities.Blueprint blueprint,
         CancellationToken cancellationToken)
     {
+        var details = blueprint.Sections
+            .SelectMany(section => section.Details)
+            .ToList();
+        return GetCandidatesAsync(
+            blueprint,
+            details.Select(detail => detail.DifficultyId).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            cancellationToken);
+    }
+
+    public Task<BlueprintExamCandidatePool> GetCandidatesAsync(
+        MathInsight.Modules.TestGen.Persistence.Entities.Blueprint blueprint,
+        IReadOnlyCollection<string> difficultyIds,
+        CancellationToken cancellationToken)
+    {
         var sections = blueprint.Sections.ToList();
         var details = sections.SelectMany(section => section.Details).ToList();
         var filter = new QuestionCandidateCatalogFilter(
             blueprint.Grade,
             details.Select(detail => detail.TagId).Distinct().ToList(),
-            details.Select(detail => detail.DifficultyId).Distinct().ToList(),
+            difficultyIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             sections.Select(section => section.QuestionType).Distinct().ToList());
 
         return _catalog.GetCandidatesAsync(filter, cancellationToken);

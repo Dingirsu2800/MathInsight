@@ -123,10 +123,12 @@ MathInsight.Modules.TestGen/
 
 ### Checkpoint 6B: Adaptive BlueprintExam
 
-- Repair and verify the Recommender SQL contract before integration.
-- Introduce a stable cross-module advice contract.
-- Resolve recommended difficulty levels and apply the approved WeakTag cap/bias/downscale rules.
-- Populate adaptive TestQuestion audit fields and add recent-question deduplication after its product rule is finalized.
+- Reuse the existing batch `IStudentTopicMasteryProvider` contract from `MathInsight.Shared`; TestGen does not reference Recommender directly.
+- Resolve each blueprint detail's original active level and a preferred level using qualified mastery: below `5.00` lowers one, `5.00..<7.50` keeps it, and `7.50..10.00` raises one, clamped to levels `1..4`.
+- Load candidates for the union of original and preferred difficulties, then use a global minimum-cost capacity assignment: preferred edges cost less than original-difficulty fallback edges, while each Question retains capacity one.
+- Preserve exact blueprint structure and scoring. Populate recommendation audit fields only when the selected Question actually uses the preferred adjusted difficulty.
+- Keep shared Fixed/Random generation and Testing session creation unchanged. Defer recent-question deduplication until its product window is approved.
+- Add a Student UI command `Tạo đề theo năng lực` above the shared catalog. Keep `Kho đề` filters `Đề cố định` and `Đề theo cấu trúc` separate from this create action.
 
 ### Checkpoint 6C: TopicPractice
 

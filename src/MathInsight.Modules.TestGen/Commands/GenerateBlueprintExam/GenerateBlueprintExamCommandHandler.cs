@@ -5,6 +5,7 @@ using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
+using MathInsight.Shared.Recommendations;
 using MathInsight.Shared.Results;
 using MathInsight.Shared.Scoring;
 using MediatR;
@@ -19,16 +20,19 @@ public sealed class GenerateBlueprintExamCommandHandler
 {
     private readonly TestGenDbContext _context;
     private readonly IBlueprintExamCandidateProvider _candidateProvider;
-    private readonly IBlueprintExamQuestionSelector _selector;
+    private readonly IAdaptiveBlueprintExamQuestionSelector _adaptiveSelector;
+    private readonly IStudentTopicMasteryProvider _masteryProvider;
 
     public GenerateBlueprintExamCommandHandler(
         TestGenDbContext context,
         IBlueprintExamCandidateProvider candidateProvider,
-        IBlueprintExamQuestionSelector selector)
+        IAdaptiveBlueprintExamQuestionSelector adaptiveSelector,
+        IStudentTopicMasteryProvider masteryProvider)
     {
         _context = context;
         _candidateProvider = candidateProvider;
-        _selector = selector;
+        _adaptiveSelector = adaptiveSelector;
+        _masteryProvider = masteryProvider;
     }
 
     public async Task<Result<GenerateBlueprintExamResponse>> Handle(
@@ -66,6 +70,7 @@ public sealed class GenerateBlueprintExamCommandHandler
 
         var existing = await _context.Tests
             .AsNoTracking()
+            .Include(test => test.Questions)
             .FirstOrDefaultAsync(test => test.TestId == testId, cancellationToken);
         if (existing is not null)
             return Result<GenerateBlueprintExamResponse>.Success(ToResponse(existing));
@@ -98,8 +103,24 @@ public sealed class GenerateBlueprintExamCommandHandler
         if (BlueprintExamGenerationPlanner.ValidateStructure(blueprint, requirements) != BlueprintExamStructureError.None)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.BlueprintUnavailable);
 
-        var candidatePool = await _candidateProvider.GetCandidatesAsync(blueprint, cancellationToken);
-        var selection = _selector.Select(requirements, candidatePool.Candidates, cancellationToken);
+        var resolution = await ResolveAdaptivePlansAsync(
+            command.StudentId,
+            requirements,
+            cancellationToken);
+        if (resolution.IsFailure)
+            return Result<GenerateBlueprintExamResponse>.Failure(resolution.Error!);
+
+        var plansByDetailId = resolution.Value!.PlansByDetailId;
+        var candidatePool = await _candidateProvider.GetCandidatesAsync(
+            blueprint,
+            resolution.Value.DifficultyIds,
+            cancellationToken);
+        var selection = _adaptiveSelector.Select(
+            requirements,
+            plansByDetailId,
+            candidatePool.Candidates,
+            cancellationToken);
+
         if (!selection.IsComplete || selection.Assignments.Count != blueprint.TotalQuestions)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.InsufficientQuestions);
 
@@ -127,6 +148,7 @@ public sealed class GenerateBlueprintExamCommandHandler
 
         foreach (var prepared in preparedQuestions)
         {
+            var audit = ResolveAudit(prepared, plansByDetailId);
             test.Questions.Add(new TestQuestion
             {
                 TestId = test.TestId,
@@ -134,11 +156,11 @@ public sealed class GenerateBlueprintExamCommandHandler
                 QuestionOrder = prepared.QuestionOrder,
                 SourceBlueprintDetailId = prepared.Assignment.BlueprintDetailId,
                 SelectionReason = GeneratedTestValues.BlueprintNormalReason,
-                IsAdaptiveSelected = false,
-                RecommendedForTagId = null,
-                RecommendedDifficultyId = null,
-                PtagAtSelection = null,
-                RuleVersion = null,
+                IsAdaptiveSelected = audit.IsAdaptive,
+                RecommendedForTagId = audit.RecommendedForTagId,
+                RecommendedDifficultyId = audit.RecommendedDifficultyId,
+                PtagAtSelection = audit.PtagAtSelection,
+                RuleVersion = audit.RuleVersion,
                 QuestionVersionId = prepared.Candidate.QuestionVersionId,
                 WeightSnapshot = prepared.Candidate.DefaultWeight,
                 MaxPointsSnapshot = prepared.MaxPoints,
@@ -160,6 +182,111 @@ public sealed class GenerateBlueprintExamCommandHandler
         return Result<GenerateBlueprintExamResponse>.Success(ToResponse(test));
     }
 
+    private async Task<Result<AdaptiveBlueprintResolution>> ResolveAdaptivePlansAsync(
+        string studentId,
+        IReadOnlyList<BlueprintExamRequirement> requirements,
+        CancellationToken cancellationToken)
+    {
+        var tagIds = requirements
+            .Select(requirement => requirement.TagId)
+            .Where(tagId => !string.IsNullOrWhiteSpace(tagId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        IReadOnlyDictionary<string, TopicMasteryAdvice> advice;
+        try
+        {
+            advice = await _masteryProvider.GetTopicMasteryAdviceAsync(
+                studentId,
+                tagIds,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryUnavailable);
+        }
+        catch (Exception)
+        {
+            return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryUnavailable);
+        }
+
+        if (advice is null)
+            return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryInvalid);
+
+        var adviceByTag = new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in advice)
+        {
+            if (!tagIds.Contains(entry.Key, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            if (entry.Value is null ||
+                string.IsNullOrWhiteSpace(entry.Value.TagId) ||
+                !string.Equals(entry.Key, entry.Value.TagId, StringComparison.OrdinalIgnoreCase) ||
+                entry.Value.OfficialPoint < 0m ||
+                entry.Value.OfficialPoint > 10m ||
+                entry.Value.EvidenceCount < 0 ||
+                !adviceByTag.TryAdd(entry.Key, entry.Value))
+            {
+                return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryInvalid);
+            }
+        }
+
+        var activeDifficulties = await _context.TagDifficulties
+            .AsNoTracking()
+            .Where(difficulty =>
+                difficulty.IsActive &&
+                difficulty.LevelValue >= 1 &&
+                difficulty.LevelValue <= 4)
+            .OrderBy(difficulty => difficulty.DisplayOrder)
+            .ThenBy(difficulty => difficulty.DifficultyId)
+            .ToListAsync(cancellationToken);
+        var difficultyById = activeDifficulties.ToDictionary(
+            difficulty => difficulty.DifficultyId,
+            StringComparer.OrdinalIgnoreCase);
+        var difficultyByLevel = activeDifficulties
+            .GroupBy(difficulty => difficulty.LevelValue)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var plans = new Dictionary<string, AdaptiveBlueprintDetailPlan>(StringComparer.OrdinalIgnoreCase);
+        foreach (var requirement in requirements)
+        {
+            if (!difficultyById.TryGetValue(requirement.DifficultyId, out var originalDifficulty))
+                return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.BlueprintUnavailable);
+
+            adviceByTag.TryGetValue(requirement.TagId, out var mastery);
+            var qualified = mastery is not null &&
+                mastery.EvidenceCount >= AdaptiveBlueprintExamPolicy.MinimumEvidenceCount;
+            var preferredLevel = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(
+                originalDifficulty.LevelValue,
+                mastery);
+            var targetDifficulty = preferredLevel == originalDifficulty.LevelValue
+                ? originalDifficulty
+                : difficultyByLevel.GetValueOrDefault(preferredLevel);
+            var preferredDifficulty = targetDifficulty ?? originalDifficulty;
+            var adjusted = qualified &&
+                preferredLevel != originalDifficulty.LevelValue &&
+                !string.Equals(
+                    preferredDifficulty.DifficultyId,
+                    originalDifficulty.DifficultyId,
+                    StringComparison.OrdinalIgnoreCase);
+
+            plans[requirement.BlueprintDetailId] = new AdaptiveBlueprintDetailPlan(
+                requirement.BlueprintDetailId,
+                requirement.TagId,
+                originalDifficulty.DifficultyId,
+                preferredDifficulty.DifficultyId,
+                qualified ? mastery!.OfficialPoint : null,
+                qualified,
+                adjusted);
+        }
+
+        var difficultyIds = plans.Values
+            .SelectMany(plan => new[] { plan.OriginalDifficultyId, plan.PreferredDifficultyId })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return Result<AdaptiveBlueprintResolution>.Success(new AdaptiveBlueprintResolution(plans, difficultyIds));
+    }
+
     private async Task<(bool IsSuccessful, Result<GenerateBlueprintExamResponse> Result)> VerifySucceededAsync(
         GenerateBlueprintExamCommand command,
         string testId,
@@ -168,6 +295,7 @@ public sealed class GenerateBlueprintExamCommandHandler
         var persisted = await _context.Tests
             .AsNoTracking()
             .Include(test => test.Questions)
+                .ThenInclude(question => question.Question)
             .FirstOrDefaultAsync(test => test.TestId == testId, cancellationToken);
         if (persisted is null)
             return (false, default!);
@@ -203,6 +331,15 @@ public sealed class GenerateBlueprintExamCommandHandler
             expectedQuantities.All(expected =>
                 actualQuantities.TryGetValue(expected.Key, out var actual) &&
                 actual == expected.Value);
+        var detailsById = blueprint?.Sections
+            .SelectMany(section => section.Details)
+            .ToDictionary(detail => detail.BlueprintDetailId, StringComparer.OrdinalIgnoreCase);
+        var auditRowsMatch = detailsById is not null &&
+            persisted.Questions.All(question => IsValidAuditRow(question, detailsById));
+        var uniqueQuestions = persisted.Questions
+            .Select(question => question.QuestionId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count() == persisted.Questions.Count;
         var succeeded = blueprint?.Status == BlueprintStatuses.Active &&
             persisted.BlueprintId == command.BlueprintId &&
             persisted.GeneratedForStudentId == command.StudentId &&
@@ -215,30 +352,83 @@ public sealed class GenerateBlueprintExamCommandHandler
             persisted.Questions.Sum(question => question.MaxPointsSnapshot) == persisted.MaxScore &&
             orders.SequenceEqual(Enumerable.Range(1, persisted.TotalQuestions)) &&
             detailQuantitiesMatch &&
-            persisted.Questions.All(IsBaselineAuditRow);
+            uniqueQuestions &&
+            auditRowsMatch;
 
         return succeeded
             ? (true, Result<GenerateBlueprintExamResponse>.Success(ToResponse(persisted)))
             : (false, default!);
     }
 
+    private static bool IsValidAuditRow(
+        TestQuestion question,
+        IReadOnlyDictionary<string, BlueprintDetail> detailsById)
+    {
+        if (IsBaselineAuditRow(question))
+            return true;
+
+        if (!detailsById.TryGetValue(question.SourceBlueprintDetailId ?? string.Empty, out var detail) ||
+            question.SelectionReason != GeneratedTestValues.BlueprintNormalReason ||
+            !question.IsAdaptiveSelected ||
+            !string.Equals(question.RecommendedForTagId, detail.TagId, StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(question.RecommendedDifficultyId) ||
+            question.PtagAtSelection is null ||
+            question.PtagAtSelection < 0m ||
+            question.PtagAtSelection > 10m ||
+            question.RuleVersion != AdaptiveBlueprintExamPolicy.RuleVersion ||
+            (question.Question is not null &&
+             !string.Equals(question.Question.DifficultyId, question.RecommendedDifficultyId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        return HasValidSnapshot(question);
+    }
+
     private static bool IsBaselineAuditRow(TestQuestion question)
-        => !string.IsNullOrWhiteSpace(question.SourceBlueprintDetailId) &&
+        => HasValidSnapshot(question) &&
+           !string.IsNullOrWhiteSpace(question.SourceBlueprintDetailId) &&
            question.SelectionReason == GeneratedTestValues.BlueprintNormalReason &&
            !question.IsAdaptiveSelected &&
            question.RecommendedForTagId is null &&
            question.RecommendedDifficultyId is null &&
            question.PtagAtSelection is null &&
-           question.RuleVersion is null &&
-           !string.IsNullOrWhiteSpace(question.QuestionVersionId) &&
+           question.RuleVersion is null;
+
+    private static bool HasValidSnapshot(TestQuestion question)
+        => !string.IsNullOrWhiteSpace(question.QuestionVersionId) &&
            question.WeightSnapshot > 0m &&
            question.MaxPointsSnapshot >= 0m &&
            ScoringRules.IsSupported(question.ScoringRuleSnapshot) &&
            !question.IsScoreInvalidated &&
            question.InvalidatedByReportId is null;
 
+    private static AuditValues ResolveAudit(
+        PreparedBlueprintExamQuestion prepared,
+        IReadOnlyDictionary<string, AdaptiveBlueprintDetailPlan> plansByDetailId)
+    {
+        if (!plansByDetailId.TryGetValue(prepared.Assignment.BlueprintDetailId, out var plan) ||
+            !plan.HasDifficultyAdjustment ||
+            !string.Equals(
+                prepared.Candidate.DifficultyId,
+                plan.PreferredDifficultyId,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new AuditValues(false, null, null, null, null);
+        }
+
+        return new AuditValues(
+            true,
+            plan.TagId,
+            plan.PreferredDifficultyId,
+            plan.OfficialPoint,
+            AdaptiveBlueprintExamPolicy.RuleVersion);
+    }
+
     private static GenerateBlueprintExamResponse ToResponse(TestEntity test)
-        => new(
+    {
+        var adaptiveQuestionCount = test.Questions.Count(question => question.IsAdaptiveSelected);
+        return new GenerateBlueprintExamResponse(
             test.TestId,
             test.BlueprintId!,
             test.TestMode,
@@ -247,5 +437,21 @@ public sealed class GenerateBlueprintExamCommandHandler
             test.TotalQuestions,
             test.MaxScore,
             test.ScoringPolicy,
-            test.CreatedTime);
+            test.CreatedTime,
+            adaptiveQuestionCount > 0,
+            adaptiveQuestionCount,
+            test.Questions.Count - adaptiveQuestionCount,
+            AdaptiveBlueprintExamPolicy.RuleVersion);
+    }
+
+    private sealed record AdaptiveBlueprintResolution(
+        IReadOnlyDictionary<string, AdaptiveBlueprintDetailPlan> PlansByDetailId,
+        IReadOnlyCollection<string> DifficultyIds);
+
+    private sealed record AuditValues(
+        bool IsAdaptive,
+        string? RecommendedForTagId,
+        string? RecommendedDifficultyId,
+        decimal? PtagAtSelection,
+        string? RuleVersion);
 }

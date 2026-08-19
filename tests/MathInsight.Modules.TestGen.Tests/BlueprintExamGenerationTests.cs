@@ -8,8 +8,10 @@ using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
 using MathInsight.Modules.TestGen.Tests;
+using MathInsight.Shared.Recommendations;
 using MathInsight.Shared.Questions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 
 namespace MathInsight.Modules.TestGen.Tests;
 
@@ -278,10 +280,34 @@ public sealed class BlueprintExamGenerationTests
     }
 
     private static GenerateBlueprintExamCommandHandler CreateHandler(TestGenInMemoryContext testContext)
-        => new(
+    {
+        if (!testContext.Context.TagDifficulties.Any())
+        {
+            testContext.Context.TagDifficulties.Add(new TagDifficultyReadModel
+            {
+                DifficultyId = EasyDifficultyId,
+                DifficultyName = "Easy",
+                LevelValue = 1,
+                DisplayOrder = 1,
+                IsActive = true
+            });
+            testContext.Context.SaveChanges();
+        }
+
+        var masteryProvider = new Mock<IStudentTopicMasteryProvider>();
+        masteryProvider
+            .Setup(provider => provider.GetTopicMasteryAdviceAsync(
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyCollection<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, TopicMasteryAdvice>());
+
+        return new GenerateBlueprintExamCommandHandler(
             testContext.Context,
             new BlueprintExamCandidateProvider(testContext.Context),
-            new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer()));
+            new AdaptiveBlueprintExamQuestionSelector(new NoOpGenerationRandomizer()),
+            masteryProvider.Object);
+    }
 
     private static void AddStudent(TestGenInMemoryContext testContext, string studentId, int? grade)
         => testContext.Context.Students.Add(new StudentReadModel

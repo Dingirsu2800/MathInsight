@@ -19,4 +19,8 @@ public sealed record GenerateBlueprintExamResponse(
     int TotalQuestions,
     decimal MaxScore,
     string ScoringPolicy,
-    DateTime CreatedTime);
+    DateTime CreatedTime,
+    bool WasAdaptive = false,
+    int AdaptiveQuestionCount = 0,
+    int BaselineQuestionCount = 0,
+    string RuleVersion = "BlueprintExam-Mastery-v1");

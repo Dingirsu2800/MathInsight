@@ -29,6 +29,7 @@ public static class TestGenModuleExtensions
         services.AddScoped<IBlueprintExamCandidateProvider>(serviceProvider =>
             new BlueprintExamCandidateProvider(serviceProvider.GetRequiredService<IQuestionCandidateCatalog>()));
         services.AddScoped<IBlueprintExamQuestionSelector, CapacityAwareQuestionSelector>();
+        services.AddScoped<IAdaptiveBlueprintExamQuestionSelector, AdaptiveBlueprintExamQuestionSelector>();
         services.AddScoped<ITopicPracticeQuestionSelector, TopicPracticeQuestionSelector>();
         services.Configure<TopicPracticeFeatureOptions>(
             configuration.GetSection(TopicPracticeFeatureOptions.SectionName));
