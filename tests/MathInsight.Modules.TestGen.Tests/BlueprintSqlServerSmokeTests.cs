@@ -11,8 +11,10 @@ using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Validation;
+using MathInsight.Shared.Recommendations;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 
 namespace MathInsight.Modules.TestGen.Tests;
 
@@ -244,10 +246,19 @@ public sealed class BlueprintSqlServerSmokeTests
     private static async Task VerifyBlueprintExamGenerationAsync(string connectionString)
     {
         await using var context = CreateContext(connectionString);
+        var masteryProvider = new Mock<IStudentTopicMasteryProvider>();
+        masteryProvider
+            .Setup(provider => provider.GetTopicMasteryAdviceAsync(
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyCollection<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, TopicMasteryAdvice>());
+
         var handler = new GenerateBlueprintExamCommandHandler(
             context,
             new BlueprintExamCandidateProvider(context),
-            new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer()));
+            new AdaptiveBlueprintExamQuestionSelector(new NoOpGenerationRandomizer()),
+            masteryProvider.Object);
 
         var result = await handler.Handle(
             new GenerateBlueprintExamCommand("generation-blueprint", "smoke-student"),

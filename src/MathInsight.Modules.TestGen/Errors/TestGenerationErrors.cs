@@ -28,6 +28,14 @@ public static class TestGenerationErrors
         "TEST_GENERATION_INSUFFICIENT_QUESTIONS",
         "The approved active question pool cannot fulfill the blueprint.");
 
+    public static readonly Error AdaptiveExamMasteryUnavailable = new(
+        "ADAPTIVE_EXAM_MASTERY_UNAVAILABLE",
+        "Mastery advice is temporarily unavailable.");
+
+    public static readonly Error AdaptiveExamMasteryInvalid = new(
+        "ADAPTIVE_EXAM_MASTERY_INVALID",
+        "Mastery advice could not be safely applied.");
+
     public static readonly Error ScoreBudgetMismatch = new(
         "BLUEPRINT_SCORE_BUDGET_MISMATCH",
         "Blueprint section score budgets do not equal the total score.");

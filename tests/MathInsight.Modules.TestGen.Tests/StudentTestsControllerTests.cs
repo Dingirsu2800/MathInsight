@@ -178,6 +178,31 @@ public sealed class StudentTestsControllerTests
     }
 
     [Theory]
+    [InlineData("unavailable")]
+    [InlineData("invalid")]
+    public async Task BlueprintExam_MapsAdaptiveMasteryFailuresTo503(string errorKind)
+    {
+        var error = errorKind == "unavailable"
+            ? TestGenerationErrors.AdaptiveExamMasteryUnavailable
+            : TestGenerationErrors.AdaptiveExamMasteryInvalid;
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(instance => instance.Send(
+                It.IsAny<GenerateBlueprintExamCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateBlueprintExamResponse>.Failure(error));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GenerateBlueprintExam(
+            new GenerateBlueprintExamRequest { BlueprintId = "blueprint" },
+            CancellationToken.None);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, objectResult.StatusCode);
+        Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
+    }
+
+    [Theory]
     [InlineData("grade-required")]
     [InlineData("higher-grade")]
     [InlineData("root")]
