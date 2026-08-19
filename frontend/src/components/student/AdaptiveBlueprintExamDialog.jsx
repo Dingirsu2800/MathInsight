@@ -53,11 +53,9 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
     if (isOpen) {
       setGenerating(false);
       setStarting(false);
-      setGeneratedTestId(null);
       setActionError("");
       setResumeSessionId(null);
       submittingRef.current = false;
-      generatedTestIdRef.current = null;
       fetchOptions();
     }
   }, [isOpen]);
