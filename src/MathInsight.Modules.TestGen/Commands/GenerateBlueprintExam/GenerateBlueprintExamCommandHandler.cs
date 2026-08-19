@@ -20,24 +20,19 @@ public sealed class GenerateBlueprintExamCommandHandler
 {
     private readonly TestGenDbContext _context;
     private readonly IBlueprintExamCandidateProvider _candidateProvider;
-    private readonly IBlueprintExamQuestionSelector _selector;
     private readonly IAdaptiveBlueprintExamQuestionSelector _adaptiveSelector;
-    private readonly IStudentTopicMasteryProvider? _masteryProvider;
-    private readonly bool _masteryAware;
+    private readonly IStudentTopicMasteryProvider _masteryProvider;
 
     public GenerateBlueprintExamCommandHandler(
         TestGenDbContext context,
         IBlueprintExamCandidateProvider candidateProvider,
-        IBlueprintExamQuestionSelector selector,
-        IAdaptiveBlueprintExamQuestionSelector? adaptiveSelector = null,
-        IStudentTopicMasteryProvider? masteryProvider = null)
+        IAdaptiveBlueprintExamQuestionSelector adaptiveSelector,
+        IStudentTopicMasteryProvider masteryProvider)
     {
         _context = context;
         _candidateProvider = candidateProvider;
-        _selector = selector;
-        _adaptiveSelector = adaptiveSelector ?? new AdaptiveBlueprintExamQuestionSelector(new SystemGenerationRandomizer());
+        _adaptiveSelector = adaptiveSelector;
         _masteryProvider = masteryProvider;
-        _masteryAware = adaptiveSelector is not null && masteryProvider is not null;
     }
 
     public async Task<Result<GenerateBlueprintExamResponse>> Handle(
@@ -108,36 +103,23 @@ public sealed class GenerateBlueprintExamCommandHandler
         if (BlueprintExamGenerationPlanner.ValidateStructure(blueprint, requirements) != BlueprintExamStructureError.None)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.BlueprintUnavailable);
 
-        IReadOnlyDictionary<string, AdaptiveBlueprintDetailPlan> plansByDetailId =
-            new Dictionary<string, AdaptiveBlueprintDetailPlan>(StringComparer.OrdinalIgnoreCase);
-        BlueprintExamCandidatePool candidatePool;
-        BlueprintExamSelection selection;
+        var resolution = await ResolveAdaptivePlansAsync(
+            command.StudentId,
+            requirements,
+            cancellationToken);
+        if (resolution.IsFailure)
+            return Result<GenerateBlueprintExamResponse>.Failure(resolution.Error!);
 
-        if (_masteryAware)
-        {
-            var resolution = await ResolveAdaptivePlansAsync(
-                command.StudentId,
-                requirements,
-                cancellationToken);
-            if (resolution.IsFailure)
-                return Result<GenerateBlueprintExamResponse>.Failure(resolution.Error!);
-
-            plansByDetailId = resolution.Value!.PlansByDetailId;
-            candidatePool = await _candidateProvider.GetCandidatesAsync(
-                blueprint,
-                resolution.Value.DifficultyIds,
-                cancellationToken);
-            selection = _adaptiveSelector.Select(
-                requirements,
-                plansByDetailId,
-                candidatePool.Candidates,
-                cancellationToken);
-        }
-        else
-        {
-            candidatePool = await _candidateProvider.GetCandidatesAsync(blueprint, cancellationToken);
-            selection = _selector.Select(requirements, candidatePool.Candidates, cancellationToken);
-        }
+        var plansByDetailId = resolution.Value!.PlansByDetailId;
+        var candidatePool = await _candidateProvider.GetCandidatesAsync(
+            blueprint,
+            resolution.Value.DifficultyIds,
+            cancellationToken);
+        var selection = _adaptiveSelector.Select(
+            requirements,
+            plansByDetailId,
+            candidatePool.Candidates,
+            cancellationToken);
 
         if (!selection.IsComplete || selection.Assignments.Count != blueprint.TotalQuestions)
             return Result<GenerateBlueprintExamResponse>.Failure(TestGenerationErrors.InsufficientQuestions);
@@ -205,9 +187,6 @@ public sealed class GenerateBlueprintExamCommandHandler
         IReadOnlyList<BlueprintExamRequirement> requirements,
         CancellationToken cancellationToken)
     {
-        if (_masteryProvider is null)
-            return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryUnavailable);
-
         var tagIds = requirements
             .Select(requirement => requirement.TagId)
             .Where(tagId => !string.IsNullOrWhiteSpace(tagId))

@@ -6,6 +6,7 @@ using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Shared.Recommendations;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.TestGen.Tests;
@@ -21,6 +22,24 @@ public sealed class AdaptiveBlueprintExamGenerationTests
     private const string DifficultyTwo = "difficulty-2";
     private const string DifficultyThree = "difficulty-3";
     private const string DifficultyFour = "difficulty-4";
+
+    [Fact]
+    public async Task HandlerCannotResolveWithoutMasteryProvider()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        var services = new ServiceCollection();
+        services.AddSingleton(testContext.Context);
+        services.AddSingleton<IBlueprintExamCandidateProvider>(
+            new CapturingCandidateProvider([]));
+        services.AddSingleton<IAdaptiveBlueprintExamQuestionSelector>(
+            new AdaptiveBlueprintExamQuestionSelector(new NoOpGenerationRandomizer()));
+        services.AddTransient<GenerateBlueprintExamCommandHandler>();
+
+        using var serviceProvider = services.BuildServiceProvider();
+
+        Assert.Throws<InvalidOperationException>(
+            () => serviceProvider.GetRequiredService<GenerateBlueprintExamCommandHandler>());
+    }
 
     [Fact]
     public async Task Generate_CallsMasteryOnceAndPersistsOnlyActuallyAdjustedRows()
@@ -197,7 +216,6 @@ public sealed class AdaptiveBlueprintExamGenerationTests
         => new(
             testContext.Context,
             provider,
-            new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer()),
             new AdaptiveBlueprintExamQuestionSelector(new NoOpGenerationRandomizer()),
             mastery);
 
