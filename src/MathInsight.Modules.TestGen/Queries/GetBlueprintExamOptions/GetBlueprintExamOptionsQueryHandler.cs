@@ -9,8 +9,10 @@ using Microsoft.EntityFrameworkCore;
 namespace MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
 
 public sealed class GetBlueprintExamOptionsQueryHandler
-    : IRequestHandler<GetBlueprintExamOptionsQuery, Result<IReadOnlyList<BlueprintExamOptionResponse>>>
+    : IRequestHandler<GetBlueprintExamOptionsQuery, Result<BlueprintExamOptionsResponse>>
 {
+    private const int MaxPageSize = 50;
+
     private readonly TestGenDbContext _context;
 
     public GetBlueprintExamOptionsQueryHandler(TestGenDbContext context)
@@ -18,14 +20,20 @@ public sealed class GetBlueprintExamOptionsQueryHandler
         _context = context;
     }
 
-    public async Task<Result<IReadOnlyList<BlueprintExamOptionResponse>>> Handle(
+    public async Task<Result<BlueprintExamOptionsResponse>> Handle(
         GetBlueprintExamOptionsQuery query,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(query.StudentId))
         {
-            return Result<IReadOnlyList<BlueprintExamOptionResponse>>.Failure(
+            return Result<BlueprintExamOptionsResponse>.Failure(
                 ApplicationErrors.AuthInvalidToken);
+        }
+
+        if (query.PageIndex < 1 || query.PageSize is < 1 or > MaxPageSize)
+        {
+            return Result<BlueprintExamOptionsResponse>.Failure(
+                TestGenerationErrors.RequestInvalid);
         }
 
         var grade = await _context.Students
@@ -36,18 +44,34 @@ public sealed class GetBlueprintExamOptionsQueryHandler
 
         if (grade is not (10 or 11 or 12))
         {
-            return Result<IReadOnlyList<BlueprintExamOptionResponse>>.Failure(
+            return Result<BlueprintExamOptionsResponse>.Failure(
                 TestGenerationErrors.StudentNotFound);
         }
 
-        var items = await _context.Blueprints
+        var blueprints = _context.Blueprints
             .AsNoTracking()
             .Where(blueprint =>
                 blueprint.Grade == grade &&
                 (blueprint.Status == BlueprintStatuses.Approved ||
                  blueprint.Status == BlueprintStatuses.Active))
-            .OrderBy(blueprint => blueprint.BlueprintName)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+            blueprints = blueprints.Where(blueprint => blueprint.BlueprintName.ToLower().Contains(search.ToLower()));
+        }
+
+        var totalCount = await blueprints.CountAsync(cancellationToken);
+        var skip = (long)(query.PageIndex - 1) * query.PageSize;
+        var items = skip > int.MaxValue
+            ? []
+            : await blueprints
+            .OrderByDescending(blueprint => blueprint.ReviewTime)
+            .ThenBy(blueprint => blueprint.BlueprintName)
             .ThenBy(blueprint => blueprint.BlueprintId)
+            .Skip((int)skip)
+            .Take(query.PageSize)
             .Select(blueprint => new BlueprintExamOptionResponse(
                 blueprint.BlueprintId,
                 blueprint.BlueprintName,
@@ -59,6 +83,11 @@ public sealed class GetBlueprintExamOptionsQueryHandler
                 blueprint.Sections.Count))
             .ToListAsync(cancellationToken);
 
-        return Result<IReadOnlyList<BlueprintExamOptionResponse>>.Success(items);
+        return Result<BlueprintExamOptionsResponse>.Success(
+            new BlueprintExamOptionsResponse(
+                items,
+                totalCount,
+                query.PageIndex,
+                query.PageSize));
     }
 }

@@ -24,13 +24,17 @@ public sealed class StudentTestsControllerTests
         var mediator = new Mock<IMediator>();
         mediator
             .Setup(instance => instance.Send(
-                It.Is<GetBlueprintExamOptionsQuery>(query => query.StudentId == StudentId),
+                It.Is<GetBlueprintExamOptionsQuery>(query =>
+                    query.StudentId == StudentId &&
+                    query.PageIndex == 2 &&
+                    query.PageSize == 10 &&
+                    query.Search == "mock"),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<IReadOnlyList<BlueprintExamOptionResponse>>.Success(
-                Array.Empty<BlueprintExamOptionResponse>()));
+            .ReturnsAsync(Result<BlueprintExamOptionsResponse>.Success(
+                new BlueprintExamOptionsResponse([], 0, 2, 10)));
         var controller = CreateController(mediator.Object);
 
-        var result = await controller.GetBlueprintOptions(CancellationToken.None);
+        var result = await controller.GetBlueprintOptions("mock", 2, 10, CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);
         mediator.VerifyAll();

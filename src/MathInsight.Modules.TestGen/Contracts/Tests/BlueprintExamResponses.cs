@@ -10,6 +10,12 @@ public sealed record BlueprintExamOptionResponse(
     string Status,
     int SectionCount);
 
+public sealed record BlueprintExamOptionsResponse(
+    IReadOnlyList<BlueprintExamOptionResponse> Items,
+    int TotalCount,
+    int PageIndex,
+    int PageSize);
+
 public sealed record GenerateBlueprintExamResponse(
     string TestId,
     string BlueprintId,
