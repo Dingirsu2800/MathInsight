@@ -38,7 +38,14 @@ export const TEST_GENERATION_ERROR_MAP = {
   FIXED_TEST_QUESTION_VERSION_UNAVAILABLE: "Phiên bản câu hỏi được chọn hiện không khả dụng.",
   TEST_ALREADY_ARCHIVED: "Đề thi này đã ở trạng thái đã lưu trữ.",
   TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND: "Mức độ khó được chọn không tồn tại hoặc đã bị xóa.",
-  TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE: "Mức độ khó này hiện không còn khả dụng. Vui lòng chọn mức khác."
+  TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE: "Mức độ khó này hiện không còn khả dụng. Vui lòng chọn mức khác.",
+  ADAPTIVE_EXAM_MASTERY_UNAVAILABLE: "Hệ thống phân tích năng lực đang tạm thời gián đoạn. Vui lòng thử lại sau.",
+  ADAPTIVE_EXAM_MASTERY_INVALID: "Dữ liệu năng lực hiện chưa thể áp dụng để tạo đề. Vui lòng thử lại sau.",
+  TEST_GENERATION_BLUEPRINT_NOT_FOUND: "Cấu trúc đề không tồn tại hoặc đã bị xóa.",
+  TEST_GENERATION_BLUEPRINT_UNAVAILABLE: "Cấu trúc đề này hiện chưa khả dụng để tạo bài thi.",
+  TEST_GENERATION_GRADE_MISMATCH: "Khối lớp của cấu trúc đề không phù hợp với khối lớp của bạn.",
+  TEST_GENERATION_INSUFFICIENT_QUESTIONS: "Ngân hàng câu hỏi chưa đủ để tạo đề thi theo cấu trúc này.",
+  TEST_GENERATION_STUDENT_NOT_FOUND: "Không tìm thấy thông tin học sinh."
 };
 
 export function getTestGenErrorMessage(err, defaultMessage = "Thao tác thất bại. Vui lòng thử lại sau.") {

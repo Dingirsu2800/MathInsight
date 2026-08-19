@@ -4,6 +4,7 @@ import StudentLayout from "../../components/layout/StudentLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { Button } from "../../components/ui/button";
 import StartTestDialog from "../../components/student/StartTestDialog";
+import AdaptiveBlueprintExamDialog from "../../components/student/AdaptiveBlueprintExamDialog";
 import PracticeSetupPanel from "../../components/student/PracticeSetupPanel";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { getTestGenErrorMessage } from "../../utils/testGenerationErrorLocalizer";
@@ -39,6 +40,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
   // Dialog State
   const [selectedTest, setSelectedTest] = useState(null);
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
+  const [isAdaptiveDialogOpen, setIsAdaptiveDialogOpen] = useState(false);
 
   const resolveInFlightRef = useRef(false);
   const activeRequestIdRef = useRef(0);
@@ -229,42 +231,56 @@ export default function SharedBlueprintExamDiscoveryPage() {
             )}
           </div>
 
-          {/* Exam Generation Type Segmented Tabs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-whisper-border pb-3">
-            <div role="tablist" aria-label="Loại đề thi" className="flex items-center gap-1 p-1 bg-surface-container-low border border-whisper-border rounded-xl w-fit">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={generationType === 'Fixed'}
-                onClick={() => handleGenerationTypeChange('Fixed')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
-                  generationType === 'Fixed'
-                    ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                Đề cố định
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={generationType === 'Random'}
-                onClick={() => handleGenerationTypeChange('Random')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
-                  generationType === 'Random'
-                    ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                Đề tạo ngẫu nhiên
-              </button>
-            </div>
+          {/* Action Header: Create Personal Adaptive Exam Command & Catalog Selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-whisper-border pb-4">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => setIsAdaptiveDialogOpen(true)}
+              className="h-11 min-h-[44px] px-5 font-bold shadow-sm flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto"
+            >
+              <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+              <span>Tạo đề theo năng lực</span>
+            </Button>
 
-            {totalCount > 0 && (
-              <span className="text-xs text-on-surface-variant font-bold font-mono">
-                Tổng số: {totalCount} bài thi
-              </span>
-            )}
+            {/* Shared Catalog Heading & Segmented Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <span className="text-xs font-bold text-on-surface-variant shrink-0">Kho đề:</span>
+              <div role="tablist" aria-label="Kho đề thi" className="flex items-center gap-1 p-1 bg-surface-container-low border border-whisper-border rounded-xl w-fit">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={generationType === 'Fixed'}
+                  onClick={() => handleGenerationTypeChange('Fixed')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
+                    generationType === 'Fixed'
+                      ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Đề cố định
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={generationType === 'Random'}
+                  onClick={() => handleGenerationTypeChange('Random')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
+                    generationType === 'Random'
+                      ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Đề theo cấu trúc
+                </button>
+              </div>
+
+              {totalCount > 0 && (
+                <span className="text-xs text-on-surface-variant font-bold font-mono">
+                  ({totalCount} bài thi)
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Error Banner */}
@@ -297,7 +313,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
               <p className="text-sm font-bold text-on-surface">
                 {generationType === 'Fixed'
                   ? 'Chưa có đề cố định phù hợp với khối lớp của bạn.'
-                  : 'Chưa có đề tạo ngẫu nhiên phù hợp với khối lớp của bạn.'}
+                  : 'Chưa có đề theo cấu trúc phù hợp với khối lớp của bạn.'}
               </p>
               <p className="text-xs">Bạn có thể dùng mã đề thi do giáo viên cung cấp ở ô tìm kiếm trên.</p>
             </div>
@@ -397,6 +413,12 @@ export default function SharedBlueprintExamDiscoveryPage() {
         isOpen={isStartDialogOpen}
         onClose={() => setIsStartDialogOpen(false)}
         test={selectedTest}
+      />
+
+      {/* Adaptive Blueprint Exam Dialog */}
+      <AdaptiveBlueprintExamDialog
+        isOpen={isAdaptiveDialogOpen}
+        onClose={() => setIsAdaptiveDialogOpen(false)}
       />
     </StudentLayout>
   );

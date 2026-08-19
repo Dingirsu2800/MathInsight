@@ -20,12 +20,16 @@ vi.mock('../../components/student/StartTestDialog', () => ({
   default: ({ isOpen, test }) => (isOpen ? <div data-testid="start-test-dialog">{test?.testName}</div> : null),
 }));
 
+vi.mock('../../components/student/AdaptiveBlueprintExamDialog', () => ({
+  default: ({ isOpen }) => (isOpen ? <div data-testid="adaptive-blueprint-exam-dialog">Dialog Adaptive Exam</div> : null),
+}));
+
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
 
-describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', () => {
+describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation & Adaptive Command', () => {
   const fixedExams = [
     {
       testId: 'TEST-FIXED-1',
@@ -54,6 +58,30 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', (
     },
   ];
 
+  it('renders command button "Tạo đề theo năng lực" with auto_awesome icon outside catalog tablist and opens dialog on click', async () => {
+    testGeneratorApi.getSharedBlueprintExams.mockResolvedValue({
+      data: { items: fixedExams, totalCount: 1, totalPages: 1 },
+    });
+
+    render(
+      <BrowserRouter>
+        <SharedBlueprintExamDiscoveryPage />
+      </BrowserRouter>
+    );
+
+    const commandBtn = screen.getByRole('button', { name: /Tạo đề theo năng lực/i });
+    expect(commandBtn).toBeInTheDocument();
+    expect(commandBtn).toHaveTextContent('auto_awesome');
+
+    // Verify catalog tablist does NOT contain the create command
+    const tablist = screen.getByRole('tablist', { name: 'Kho đề thi' });
+    expect(tablist).not.toContainElement(commandBtn);
+
+    // Clicking command opens adaptive dialog
+    fireEvent.click(commandBtn);
+    expect(await screen.findByTestId('adaptive-blueprint-exam-dialog')).toBeInTheDocument();
+  });
+
   it('requests generationType=Fixed by default on initial render', async () => {
     testGeneratorApi.getSharedBlueprintExams.mockResolvedValue({
       data: { items: fixedExams, totalCount: 1, totalPages: 1 },
@@ -75,7 +103,7 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', (
     expect(await screen.findByText('Đề cố định số 1')).toBeInTheDocument();
   });
 
-  it('switches to Random tab, requests generationType=Random, and resets pageIndex to 1', async () => {
+  it('switches to Random tab ("Đề theo cấu trúc"), requests generationType=Random, and resets pageIndex to 1', async () => {
     testGeneratorApi.getSharedBlueprintExams
       .mockResolvedValueOnce({
         data: { items: fixedExams, totalCount: 1, totalPages: 1 },
@@ -92,7 +120,7 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', (
 
     expect(await screen.findByText('Đề cố định số 1')).toBeInTheDocument();
 
-    const randomTab = screen.getByRole('tab', { name: /Đề tạo ngẫu nhiên/i });
+    const randomTab = screen.getByRole('tab', { name: /Đề theo cấu trúc/i });
     fireEvent.click(randomTab);
 
     await waitFor(() => {
@@ -127,11 +155,11 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', (
       data: { items: [], totalCount: 0, totalPages: 1 },
     });
 
-    const randomTab = screen.getByRole('tab', { name: /Đề tạo ngẫu nhiên/i });
+    const randomTab = screen.getByRole('tab', { name: /Đề theo cấu trúc/i });
     fireEvent.click(randomTab);
 
     expect(
-      await screen.findByText('Chưa có đề tạo ngẫu nhiên phù hợp với khối lớp của bạn.')
+      await screen.findByText('Chưa có đề theo cấu trúc phù hợp với khối lớp của bạn.')
     ).toBeInTheDocument();
   });
 
@@ -180,7 +208,7 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation', (
       data: { items: randomExams, totalCount: 1, totalPages: 1 },
     });
 
-    const randomTab = screen.getByRole('tab', { name: /Đề tạo ngẫu nhiên/i });
+    const randomTab = screen.getByRole('tab', { name: /Đề theo cấu trúc/i });
     fireEvent.click(randomTab);
 
     expect(await screen.findByText('Đề ngẫu nhiên số 1')).toBeInTheDocument();
