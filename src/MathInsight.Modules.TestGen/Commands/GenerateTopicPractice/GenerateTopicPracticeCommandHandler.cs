@@ -360,13 +360,13 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
     {
         var advice = prepared.Recommendation.RepresentativeAdvice;
         _logger.LogInformation(
-            "Generated TopicPractice TestId {TestId} for StudentId {StudentId}, SelectedTagId {SelectedTagId}, MasteryTagId {MasteryTagId}, OfficialPoint {OfficialPoint}, EvidenceCount {EvidenceCount}, RecommendedDifficultyLevel {RecommendedDifficultyLevel}, AdaptiveQuestionCount {AdaptiveQuestionCount}, FallbackQuestionCount {FallbackQuestionCount}, RuleVersion {RuleVersion}",
+            "Generated TopicPractice TestId {TestId} for StudentId {StudentId}, SelectedTagId {SelectedTagId}, MasteryTagId {MasteryTagId}, OfficialPoint {OfficialPoint}, EvidenceItemCount {EvidenceItemCount}, RecommendedDifficultyLevel {RecommendedDifficultyLevel}, AdaptiveQuestionCount {AdaptiveQuestionCount}, FallbackQuestionCount {FallbackQuestionCount}, RuleVersion {RuleVersion}",
             response.TestId,
             prepared.StudentId,
             prepared.SelectedTagId,
             advice?.TagId,
             advice?.OfficialPoint,
-            advice?.EvidenceCount,
+            advice?.EvidenceItemCount,
             advice?.RecommendedDifficultyLevel,
             response.AdaptiveQuestionCount,
             response.FallbackQuestionCount,

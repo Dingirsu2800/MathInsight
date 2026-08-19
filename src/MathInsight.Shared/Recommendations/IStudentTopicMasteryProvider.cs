@@ -11,5 +11,6 @@ public interface IStudentTopicMasteryProvider
 public sealed record TopicMasteryAdvice(
     string TagId,
     decimal OfficialPoint,
-    int EvidenceCount,
+    int EvidenceItemCount,
+    int EvidenceSessionCount,
     byte RecommendedDifficultyLevel);

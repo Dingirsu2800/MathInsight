@@ -18,7 +18,7 @@ public sealed class AdaptiveBlueprintExamPolicyTests
         int evidenceCount,
         int expectedLevel)
     {
-        var mastery = new TopicMasteryAdvice("topic", (decimal)point, evidenceCount, 2);
+        var mastery = new TopicMasteryAdvice("topic", (decimal)point, evidenceCount, 2, 2);
 
         var result = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(originalLevel, mastery);
 
@@ -29,7 +29,7 @@ public sealed class AdaptiveBlueprintExamPolicyTests
     [InlineData(2)]
     public void ResolvePreferredLevel_KeepsOriginalWhenEvidenceIsInsufficient(int evidenceCount)
     {
-        var mastery = new TopicMasteryAdvice("topic", 1m, evidenceCount, 1);
+        var mastery = new TopicMasteryAdvice("topic", 1m, evidenceCount, 0, 1);
 
         var result = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(3, mastery);
 
@@ -47,8 +47,8 @@ public sealed class AdaptiveBlueprintExamPolicyTests
     [Fact]
     public void ResolvePreferredLevel_ClampsWeakLevelOneAndStrongLevelFour()
     {
-        var weak = new TopicMasteryAdvice("topic", 4.99m, 3, 1);
-        var strong = new TopicMasteryAdvice("topic", 7.5m, 3, 4);
+        var weak = new TopicMasteryAdvice("topic", 4.99m, 3, 2, 1);
+        var strong = new TopicMasteryAdvice("topic", 7.5m, 3, 2, 4);
 
         Assert.Equal(1, AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(1, weak));
         Assert.Equal(4, AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(4, strong));

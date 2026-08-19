@@ -224,7 +224,7 @@ public sealed class GenerateBlueprintExamCommandHandler
                 !string.Equals(entry.Key, entry.Value.TagId, StringComparison.OrdinalIgnoreCase) ||
                 entry.Value.OfficialPoint < 0m ||
                 entry.Value.OfficialPoint > 10m ||
-                entry.Value.EvidenceCount < 0 ||
+                entry.Value.EvidenceItemCount < 0 ||
                 !adviceByTag.TryAdd(entry.Key, entry.Value))
             {
                 return Result<AdaptiveBlueprintResolution>.Failure(TestGenerationErrors.AdaptiveExamMasteryInvalid);
@@ -255,7 +255,7 @@ public sealed class GenerateBlueprintExamCommandHandler
 
             adviceByTag.TryGetValue(requirement.TagId, out var mastery);
             var qualified = mastery is not null &&
-                mastery.EvidenceCount >= AdaptiveBlueprintExamPolicy.MinimumEvidenceCount;
+                mastery.EvidenceItemCount >= AdaptiveBlueprintExamPolicy.MinimumEvidenceCount;
             var preferredLevel = AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(
                 originalDifficulty.LevelValue,
                 mastery);

@@ -12,7 +12,7 @@ public static class AdaptiveBlueprintExamPolicy
         TopicMasteryAdvice? mastery)
     {
         var clampedOriginalLevel = Math.Clamp(originalLevel, 1, 4);
-        if (mastery is null || mastery.EvidenceCount < MinimumEvidenceCount)
+        if (mastery is null || mastery.EvidenceItemCount < MinimumEvidenceCount)
             return clampedOriginalLevel;
 
         var offset = mastery.OfficialPoint switch

@@ -61,7 +61,7 @@ public sealed class GenerateTopicPracticeTests
         AddQuestion(fixture, "focus-level-2", "topic", 12, "d-2");
         await fixture.Context.SaveChangesAsync();
 
-        var advice = new TopicMasteryAdvice("topic", 1.40m, 5, 1);
+        var advice = new TopicMasteryAdvice("topic", 1.40m, 5, 2, 1);
         var result = await CreateHandler(
             fixture,
             new AdviceRecommendationResolver("topic", new TopicPracticeRecommendationContext(
