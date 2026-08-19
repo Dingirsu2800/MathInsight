@@ -7,7 +7,7 @@ public static class TopicPracticePolicy
     public const decimal MaxScore = 10.00m;
     public const string RuleVersion = "TopicPractice-v1";
     public const string WeakTagRuleVersion = "TopicPractice-WeakTag-v1";
-    public const string MasteryRuleVersion = "TopicPractice-Mastery-v1";
+    public const string MasteryRuleVersion = "TopicPractice-Mastery-v2";
     public const string ManualRuleVersion = "TopicPractice-Manual-v1";
 }
 

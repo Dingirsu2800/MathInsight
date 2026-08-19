@@ -154,7 +154,9 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
                 {
                     selectionPlan = TopicPracticeSelectionPlanFactory.CreateMastery(
                         advice.OfficialPoint,
-                        recommendation.FocusTagIds);
+                        recommendation.FocusTagIds,
+                        AdaptiveBlueprintExamPolicy.HasNormalEvidence(advice),
+                        AdaptiveBlueprintExamPolicy.HasStrongEvidence(advice));
                 }
                 catch (ArgumentException)
                 {
@@ -360,13 +362,14 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
     {
         var advice = prepared.Recommendation.RepresentativeAdvice;
         _logger.LogInformation(
-            "Generated TopicPractice TestId {TestId} for StudentId {StudentId}, SelectedTagId {SelectedTagId}, MasteryTagId {MasteryTagId}, OfficialPoint {OfficialPoint}, EvidenceItemCount {EvidenceItemCount}, RecommendedDifficultyLevel {RecommendedDifficultyLevel}, AdaptiveQuestionCount {AdaptiveQuestionCount}, FallbackQuestionCount {FallbackQuestionCount}, RuleVersion {RuleVersion}",
+            "Generated TopicPractice TestId {TestId} for StudentId {StudentId}, SelectedTagId {SelectedTagId}, MasteryTagId {MasteryTagId}, OfficialPoint {OfficialPoint}, EvidenceItemCount {EvidenceItemCount}, EvidenceSessionCount {EvidenceSessionCount}, RecommendedDifficultyLevel {RecommendedDifficultyLevel}, AdaptiveQuestionCount {AdaptiveQuestionCount}, FallbackQuestionCount {FallbackQuestionCount}, RuleVersion {RuleVersion}",
             response.TestId,
             prepared.StudentId,
             prepared.SelectedTagId,
             advice?.TagId,
             advice?.OfficialPoint,
             advice?.EvidenceItemCount,
+            advice?.EvidenceSessionCount,
             advice?.RecommendedDifficultyLevel,
             response.AdaptiveQuestionCount,
             response.FallbackQuestionCount,
