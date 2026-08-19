@@ -4,7 +4,7 @@
 
 **Feature Branch**: `testgen-test-generation`
 **Created**: 2026-06-23 | **Clarified**: 2026-07-16
-**Status**: Checkpoint 6A - baseline BlueprintExam generation
+**Status**: Checkpoint 6B - mastery-aware personal BlueprintExam generation
 **Database Contract**: `Implementation/Database/database/001_Create_MathInsight_Azure.sql`
 
 ## Scope and Delivery Order
@@ -12,8 +12,8 @@
 The module is delivered in explicit slices:
 
 1. **Expert Blueprint MVP (complete)**: blueprint CRUD, section/detail matrix, submit for peer review, approve/reject, clone, and delete/deactivate.
-2. **Checkpoint 6A (current scope)**: let a Student discover eligible blueprints and generate a baseline, non-adaptive `BlueprintExam` with exact blueprint slot matching.
-3. **Checkpoint 6B (later)**: integrate repaired Recommender advice and adaptive BlueprintExam selection.
+2. **Checkpoint 6A (complete)**: let a Student discover eligible blueprints and generate a baseline `BlueprintExam` with exact blueprint slot matching.
+3. **Checkpoint 6B (current scope)**: turn the existing personal Student BlueprintExam generation route into mastery-aware selection while preserving the blueprint's sections, topics, question types, quantities, scoring, duration, and Testing boundary.
 4. **Checkpoint 6C (complete)**: generate a 10-question baseline `TopicPractice` test for one Student-selected active direct-child topic at or below the Student's current grade.
 5. **Checkpoint 6D (complete)**: automatic TopicPractice uses qualified mastery for the selected active direct-child topic without changing the request shape, database schema, or Adaptive BlueprintExam behavior.
 6. **Expert Shared BlueprintExam (current additive checkpoint)**: let the owning Expert generate, preview, publish immediately, and archive shared BlueprintExam variants while preserving the completed Student personal generation flow.
@@ -168,12 +168,12 @@ Frontend localizes these codes; backend messages remain developer-facing English
 - **BR-53 Optional test code**: `TestCode` is generated only for shareable or code-entry tests; personal adaptive and recommendation sessions keep `TestCode = NULL`.
 - **BR-51 Composite metadata**: composite sections must define their part metadata before generation; non-composite sections leave that metadata null.
 - **BR-50 Question type filtering**: generated candidates must match the `QuestionType` declared by their blueprint section.
-- The generation engine applies the following adaptive constraints:
-  - **WeakTag Cap**: WeakTag-biased questions may occupy at most 20% of a generated test.
-  - **Adaptive Bias Probability**: for each matching blueprint slot, WeakTag question selection has a 40% bias probability.
-  - **Difficulty Downscaling**: a `Hard` or `Very Hard` slot for a WeakTag topic (`official_point < 5.00`) is selected at `Medium`; a `Medium` slot for a topic with `official_point < 3.00` is selected at `Easy`.
-  - **Difficulty Upscaling**: when `official_point >= 8.00` and `mastery_status = Mastered`, the engine may select one difficulty level higher.
-  - **Easy-Level Protection**: when `official_point < 5.00` at `Easy`, bias probability is reduced to 10%, no further downscaling is applied, and foundational learning content is prioritized.
+- Personal BlueprintExam generation evaluates every blueprint slot against the Student's mastery for that slot's exact topic. It does not cap adaptive rows or use a random adaptive-bias probability.
+- Mastery is qualified only when `EvidenceCount >= 3` and `OfficialPoint` is in `0.00..10.00`. Missing or insufficient evidence keeps the original blueprint difficulty.
+- Qualified mastery resolves the preferred difficulty relative to the blueprint slot: `0.00 <= point < 5.00` lowers one level, `5.00 <= point < 7.50` keeps the original level, and `7.50 <= point <= 10.00` raises one level. The result is clamped to active levels `1..4`.
+- Selection keeps the exact section, topic, question type, quantity, scoring rule, part shape, duration, and score budget. It prefers the resolved difficulty and falls back only to the original blueprint difficulty.
+- A capacity-aware global assignment maximizes preferred-difficulty matches without sacrificing complete fulfillment or global Question uniqueness. If neither preferred nor original candidates can complete the blueprint, generation fails before any write.
+- Shared Fixed and Random BlueprintExam variants remain non-adaptive and identical for every Student who starts them.
 - **Student Practice and Exam Flow**: student endpoints expose two initial formats across separate checkpoints:
   - **Exam Mode**: a full-length session generated from an approved blueprint.
   - **Practice Mode**: exactly 10 questions from one Student-selected active direct-child topic. Students may select topics from their current or a lower grade; the baseline difficulty profile is 3/4/2/1 across levels 1-4.
@@ -286,7 +286,7 @@ Frontend localizes these codes; backend messages remain developer-facing English
 - Paged list responds within 1.5 seconds under normal MVP data volume.
 - Blueprint options expose only `Approved` or `Active` blueprints for the authenticated Student's current grade.
 - Checkpoint 6A generates exactly `Blueprint.TotalQuestions` globally unique TestQuestion rows or writes nothing.
-- Every generated TestQuestion can be traced to one SourceBlueprintDetail and uses baseline non-adaptive audit values.
+- Every generated TestQuestion can be traced to one SourceBlueprintDetail. Shared variants keep baseline audit values; personal Checkpoint 6B rows use either the approved adaptive audit shape or the unchanged baseline shape.
 - Overlapping multi-topic candidates are assigned without false insufficient-pool failures when a complete assignment exists.
 - Test generation does not create TestSession or TestAnswer data.
 
@@ -346,14 +346,25 @@ Discovery is not an authorization boundary. Testing must revalidate personal own
 | `TEST_CODE_NOT_AVAILABLE` | 404 | Public code resolution intentionally reveals no availability detail |
 | `GENERATED_TEST_NOT_FOUND` | 404 | Expert preview/archive target is unavailable |
 
-## Out of Scope for Checkpoint 6A
+## Out of Scope for Checkpoint 6B
 
-- Adaptive WeakTag selection and Recommender integration.
+- Changing shared Fixed or Random BlueprintExam generation.
+- Changing blueprint topics, sections, question types, quantities, score budgets, duration, or scoring rules.
 - Recent-session question deduplication until the product window/fallback rule is approved.
 - TestSession, TestAnswer, submission, grading, and solution APIs owned by Testing/Grading.
-- Student generation frontend.
+- Expert dashboard or shared-catalog redesign beyond the approved Student create command and label change.
 - Expert CRUD over Test or TestQuestion.
 - Redis, RabbitMQ, background queues, or EF migrations.
+
+## Checkpoint 6B: Mastery-Aware Personal BlueprintExam
+
+The existing `GET /api/test-generator/tests/blueprint-options` and `POST /api/test-generator/tests/blueprint-exams` routes remain unchanged. The POST body still contains only `blueprintId`; Student identity comes from the authenticated claim. The generated Test remains personal with `GeneratedForStudentID = current Student`, `TestCode = NULL`, `TestMode = BlueprintExam`, and `GeneratedBy = System`.
+
+TestGen consumes `IStudentTopicMasteryProvider` from `MathInsight.Shared` once per command for all distinct blueprint topic IDs. It must not reference the Recommender module directly, make an internal HTTP call, or query once per topic. Provider failure returns `503 ADAPTIVE_EXAM_MASTERY_UNAVAILABLE`; malformed advice returns `503 ADAPTIVE_EXAM_MASTERY_INVALID`. Missing advice is a normal baseline fallback.
+
+A row selected at the preferred difficulty stores `SelectionReason = BlueprintNormal`, `IsAdaptiveSelected = true`, `RecommendedForTagID`, `RecommendedDifficultyID`, `PtagAtSelection`, and `RuleVersion = BlueprintExam-Mastery-v1`. A neutral row or a row that falls back to the original blueprint difficulty stores baseline audit fields with `IsAdaptiveSelected = false` and null recommendation fields. No schema change is required.
+
+The generation response adds `wasAdaptive`, `adaptiveQuestionCount`, `baselineQuestionCount`, and `ruleVersion`. These fields are additive; existing clients remain compatible. Testing still owns TestSession creation. The frontend generates the Test only after final confirmation, immediately attempts `StartSession`, retains the returned `TestID` when start fails, and retries the same Test rather than generating another one.
 
 ## Checkpoint 6E: Student-Selected Topic Practice Difficulty
 
