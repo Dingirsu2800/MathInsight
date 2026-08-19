@@ -119,7 +119,10 @@ export default function LectureEditorPage() {
 
   const handleSubmit = async (e, isPublish = false) => {
     if (e) e.preventDefault();
-    if (!validate()) return;
+    if (!validate()) {
+      toast.error("Cần nhập đầy đủ dữ liệu bài giảng");
+      return;
+    }
     
     if (isPublish) setPublishing(true);
     else setSaving(true);
