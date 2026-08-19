@@ -7,4 +7,10 @@ public interface IBlueprintExamCandidateProvider
     Task<BlueprintExamCandidatePool> GetCandidatesAsync(
         Blueprint blueprint,
         CancellationToken cancellationToken);
+
+    Task<BlueprintExamCandidatePool> GetCandidatesAsync(
+        Blueprint blueprint,
+        IReadOnlyCollection<string> difficultyIds,
+        CancellationToken cancellationToken)
+        => GetCandidatesAsync(blueprint, cancellationToken);
 }
