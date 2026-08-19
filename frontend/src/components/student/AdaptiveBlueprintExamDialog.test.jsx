@@ -182,6 +182,47 @@ describe('AdaptiveBlueprintExamDialog - Checkpoint 6B Student UI', () => {
     });
   });
 
+  it('retains TestID when the dialog is closed and reopened after start failure', async () => {
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: sampleOptions });
+    testGeneratorApi.generateBlueprintExam.mockResolvedValue({
+      data: { testId: 'TEST-GEN-CLOSE-REOPEN' },
+    });
+    startSession.mockRejectedValueOnce(new Error('Network failure on session start'));
+
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={onClose} />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Tạo và bắt đầu/i }));
+    await screen.findByRole('button', { name: /Thử bắt đầu lại/i });
+
+    rerender(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={false} onClose={onClose} />
+      </BrowserRouter>
+    );
+    rerender(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={onClose} />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Cấu trúc đề ôn tập HK1 Toán 12')).toBeInTheDocument();
+    startSession.mockResolvedValueOnce({ sessionId: 'SESSION-CLOSE-REOPEN' });
+    fireEvent.click(screen.getByRole('button', { name: /Tạo và bắt đầu/i }));
+
+    await waitFor(() => {
+      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
+      expect(startSession).toHaveBeenCalledTimes(2);
+      expect(startSession).toHaveBeenLastCalledWith('TEST-GEN-CLOSE-REOPEN');
+      expect(mockNavigate).toHaveBeenCalledWith('/student/test/SESSION-CLOSE-REOPEN');
+    });
+  });
+
   it('renders empty state when no eligible blueprints are returned', async () => {
     testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({ data: [] });
 
