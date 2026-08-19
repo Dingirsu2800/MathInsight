@@ -171,7 +171,7 @@ Frontend localizes these codes; backend messages remain developer-facing English
 - Personal BlueprintExam generation evaluates every blueprint slot against the Student's mastery for that slot's exact topic. It does not cap adaptive rows or use a random adaptive-bias probability.
 - Mastery evidence is qualified with `EvidenceItemCount >= 5` and `EvidenceSessionCount >= 2`; strong evidence requires `EvidenceItemCount >= 8` and `EvidenceSessionCount >= 3`. `EvidenceItemCount` is graded item evidence from `TagsMastery.NumberDone`, not a session count. Missing or insufficient evidence keeps the original blueprint difficulty.
 - Qualified mastery resolves the preferred difficulty relative to the blueprint slot: strong `0.00 <= point < 2.00` lowers two levels, qualified `point < 5.00` lowers one level, `5.00 <= point < 7.50` keeps the original level, and `7.50 <= point <= 10.00` raises one level. The result is clamped to active levels `1..4`.
-- Selection keeps the exact section, topic, question type, quantity, scoring rule, part shape, duration, and score budget. It prefers the resolved difficulty and falls back only to the original blueprint difficulty.
+- Selection keeps the exact section, topic, question type, quantity, scoring rule, part shape, duration, and score budget. It prefers the resolved difficulty and falls back through available intermediate levels between the preferred and original difficulty, then to the original blueprint difficulty.
 - A capacity-aware global assignment maximizes preferred-difficulty matches without sacrificing complete fulfillment or global Question uniqueness. If neither preferred nor original candidates can complete the blueprint, generation fails before any write.
 - Shared Fixed and Random BlueprintExam variants remain non-adaptive and identical for every Student who starts them.
 - **Student Practice and Exam Flow**: student endpoints expose two initial formats across separate checkpoints:
@@ -384,10 +384,11 @@ levels; `< 5` lowers one level; `5..<7.5` keeps the original level; and
 `>= 7.5` raises one level. The result is clamped to levels `1..4`. Every
 BlueprintDetail is evaluated; there is no adaptive percentage cap or random
 adaptive probability. Candidate selection is a separate minimum-cost capacity
-assignment that prefers the adjusted level and falls back only to the original
-Blueprint difficulty, while preserving global Question uniqueness.
+assignment that prefers the adjusted level, then available intermediate levels,
+and finally the original Blueprint difficulty, while preserving global Question
+uniqueness.
 
-A row selected at a genuinely adjusted preferred difficulty stores `SelectionReason = BlueprintNormal`, `IsAdaptiveSelected = true`, `RecommendedForTagID`, `RecommendedDifficultyID`, `PtagAtSelection`, and `RuleVersion = BlueprintExam-Mastery-v2`. A neutral row, insufficient-evidence row, clamped no-change row, or preferred-pool fallback stores baseline audit fields with `IsAdaptiveSelected = false` and null recommendation fields. Evidence counts are written to structured generation logs; no schema change is required.
+A row selected at a genuinely adjusted difficulty, including an available intermediate fallback, stores `SelectionReason = BlueprintNormal`, `IsAdaptiveSelected = true`, `RecommendedForTagID`, `RecommendedDifficultyID`, `PtagAtSelection`, and `RuleVersion = BlueprintExam-Mastery-v2`. A neutral row, insufficient-evidence row, clamped no-change row, or fallback that returns to the original Blueprint difficulty stores baseline audit fields with `IsAdaptiveSelected = false` and null recommendation fields. Evidence counts are written to structured generation logs; no schema change is required.
 
 The generation response adds `wasAdaptive`, `adaptiveQuestionCount`, `baselineQuestionCount`, and `ruleVersion = BlueprintExam-Mastery-v2`. These fields are additive; existing clients remain compatible. Testing still owns TestSession creation. The frontend generates the Test only after final confirmation, immediately attempts `StartSession`, retains the returned `TestID` when start fails, and retries the same Test rather than generating another one.
 

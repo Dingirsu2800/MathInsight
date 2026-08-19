@@ -435,10 +435,9 @@ public sealed class GenerateBlueprintExamCommandHandler
         IReadOnlyDictionary<string, AdaptiveBlueprintDetailPlan> plansByDetailId)
     {
         if (!plansByDetailId.TryGetValue(prepared.Assignment.BlueprintDetailId, out var plan) ||
-            !plan.HasDifficultyAdjustment ||
-            !string.Equals(
+            string.Equals(
                 prepared.Candidate.DifficultyId,
-                plan.PreferredDifficultyId,
+                plan.OriginalDifficultyId,
                 StringComparison.OrdinalIgnoreCase))
         {
             return new AuditValues(false, null, null, null, null);
@@ -447,7 +446,7 @@ public sealed class GenerateBlueprintExamCommandHandler
         return new AuditValues(
             true,
             plan.TagId,
-            plan.PreferredDifficultyId,
+            prepared.Candidate.DifficultyId,
             plan.OfficialPoint,
             AdaptiveBlueprintExamPolicy.RuleVersion);
     }

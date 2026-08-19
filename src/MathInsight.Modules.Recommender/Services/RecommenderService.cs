@@ -196,6 +196,7 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
         var sessionCountRows = await _db.StudentTopicSessionResults
             .AsNoTracking()
             .Where(result => result.StudentId == studentId
+                && requestedTagIds.Contains(result.TagId)
                 && result.TotalItems > 0)
             .GroupBy(result => result.TagId)
             .Select(group => new

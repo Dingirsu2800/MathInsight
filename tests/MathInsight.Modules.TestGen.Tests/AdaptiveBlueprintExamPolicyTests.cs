@@ -60,4 +60,14 @@ public sealed class AdaptiveBlueprintExamPolicyTests
     {
         Assert.Equal(2, AdaptiveBlueprintExamPolicy.ResolvePreferredLevel(2, null));
     }
+
+    [Fact]
+    public void BuildAcceptedLevels_UsesIntermediateLevelsForStrongPointBelowTwo()
+    {
+        var mastery = new TopicMasteryAdvice("topic", 1m, 8, 3, 2);
+
+        Assert.Equal(
+            [2, 3, 4],
+            AdaptiveBlueprintExamPolicy.BuildAcceptedLevels(4, mastery));
+    }
 }

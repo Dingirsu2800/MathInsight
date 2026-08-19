@@ -48,9 +48,6 @@ public static class AdaptiveBlueprintExamPolicy
         if (preferred == original)
             return [original];
 
-        if (HasStrongEvidence(mastery))
-            return [preferred, original];
-
         if (preferred < original)
             return Enumerable.Range(preferred, original - preferred + 1).ToArray();
 

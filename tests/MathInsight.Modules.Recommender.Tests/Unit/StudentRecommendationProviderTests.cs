@@ -91,8 +91,9 @@ public sealed class StudentRecommendationProviderTests : IDisposable
         Seed("TOPIC-REQUESTED", 7.60m, numberDone: 8, isActive: true, level: 4);
         Seed("TOPIC-NOT-REQUESTED", 2.00m, numberDone: 8, isActive: true, level: 1);
         Seed("TOPIC-INACTIVE", 3.00m, numberDone: 8, isActive: false, level: 2);
-        SeedSession("session-valid-1", "topic-requested", totalItems: 10m);
+        SeedSession("session-valid-1", "TOPIC-REQUESTED", totalItems: 10m);
         SeedSession("session-valid-2", "TOPIC-REQUESTED", totalItems: 5m);
+        SeedSession("session-not-requested", "TOPIC-NOT-REQUESTED", totalItems: 20m);
         SeedSession("session-empty", "TOPIC-REQUESTED", totalItems: 0m);
         await _db.SaveChangesAsync();
 

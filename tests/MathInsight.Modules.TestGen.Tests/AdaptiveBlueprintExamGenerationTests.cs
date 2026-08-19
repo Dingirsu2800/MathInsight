@@ -167,6 +167,39 @@ public sealed class AdaptiveBlueprintExamGenerationTests
     }
 
     [Fact]
+    public async Task Generate_UsesIntermediateFallbackAndAuditsActualDifficulty()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext.Context);
+        AddDifficultiesWithoutLevelTwo(testContext.Context);
+        AddBlueprint(testContext.Context, [(StrongTopic, DifficultyFour)]);
+        var provider = new CapturingCandidateProvider([
+            Candidate("strong-fallback-level-three", StrongTopic, DifficultyThree),
+            Candidate("strong-original-level-four", StrongTopic, DifficultyFour)]);
+        var mastery = new CapturingMasteryProvider(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
+        {
+            [StrongTopic] = new(StrongTopic, 1m, 8, 3, 2)
+        });
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(testContext, provider, mastery).Handle(
+            new GenerateBlueprintExamCommand(BlueprintId, StudentId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value!.AdaptiveQuestionCount);
+        Assert.Equal(0, result.Value.BaselineQuestionCount);
+
+        var question = Assert.Single(await testContext.Context.TestQuestions.ToListAsync());
+        Assert.Equal("strong-fallback-level-three", question.QuestionId);
+        Assert.True(question.IsAdaptiveSelected);
+        Assert.Equal(StrongTopic, question.RecommendedForTagId);
+        Assert.Equal(DifficultyThree, question.RecommendedDifficultyId);
+        Assert.Equal(1m, question.PtagAtSelection);
+        Assert.Equal(AdaptiveBlueprintExamPolicy.RuleVersion, question.RuleVersion);
+    }
+
+    [Fact]
     public async Task Generate_ReturnsUnavailableAndWritesNothingWhenProviderThrows()
     {
         await using var testContext = TestGenInMemoryContext.Create();
@@ -279,6 +312,12 @@ public sealed class AdaptiveBlueprintExamGenerationTests
             new TagDifficultyReadModel { DifficultyId = DifficultyThree, DifficultyName = "Level 3", LevelValue = 3, IsActive = true },
             new TagDifficultyReadModel { DifficultyId = DifficultyFour, DifficultyName = "Level 4", LevelValue = 4, IsActive = true });
     }
+
+    private static void AddDifficultiesWithoutLevelTwo(TestGenDbContext context)
+        => context.TagDifficulties.AddRange(
+            new TagDifficultyReadModel { DifficultyId = DifficultyOne, DifficultyName = "Level 1", LevelValue = 1, IsActive = true },
+            new TagDifficultyReadModel { DifficultyId = DifficultyThree, DifficultyName = "Level 3", LevelValue = 3, IsActive = true },
+            new TagDifficultyReadModel { DifficultyId = DifficultyFour, DifficultyName = "Level 4", LevelValue = 4, IsActive = true });
 
     private static BlueprintExamCandidate Candidate(string id, string tagId, string difficultyId)
         => new(
