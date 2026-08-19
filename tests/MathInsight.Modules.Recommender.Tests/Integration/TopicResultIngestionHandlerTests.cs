@@ -444,13 +444,25 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Assert.True(mastery.OfficialPoint < 5.00m);
     }
 
-    // ── Test: Exam event resets PracticePoint to OfficialPoint per BR-09b ─────
+    // ── Test: Exam event preserves the PracticePoint component ────────────────
 
     [Fact]
-    public async Task Handle_ExamEvent_ResetsPracticePointToOfficialPoint_PerBR09b()
+    public async Task Handle_ExamEvent_PreservesExistingPracticePoint()
     {
         var studentId = Guid.NewGuid();
         var tagId = Guid.NewGuid();
+        _db.TagsMasteries.Add(new TagsMastery
+        {
+            TagsMasteryId = "mastery-existing-practice",
+            StudentId = studentId.ToString(),
+            TagId = tagId.ToString(),
+            OfficialPoint = 4.00m,
+            PracticePoint = 4.00m,
+            ExamAnchor = 2.00m,
+            MasteryStatus = "Learning",
+            ExamHistory = "[]"
+        });
+        await _db.SaveChangesAsync();
 
         await _handler.Handle(
             MakeExamEvent(studentId, Guid.NewGuid(), tagId, topicScore: 9.00m), default);
@@ -458,8 +470,37 @@ public class TopicResultIngestionHandlerTests : IDisposable
         var mastery = await _db.TagsMasteries
             .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
 
-        // OfficialPoint = 0.7*9 + 0.3*0 = 6.30. PracticePoint must be reset to OfficialPoint (6.30)
-        Assert.Equal(6.30m, mastery.OfficialPoint);
-        Assert.Equal(mastery.OfficialPoint, mastery.PracticePoint);
+        // OfficialPoint = 0.7*9 + 0.3*4 = 7.50; PracticePoint remains 4.00.
+        Assert.Equal(7.50m, mastery.OfficialPoint);
+        Assert.Equal(4.00m, mastery.PracticePoint);
+    }
+
+    [Fact]
+    public async Task Handle_PracticeEvent_PreservesExistingExamAnchor()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+        _db.TagsMasteries.Add(new TagsMastery
+        {
+            TagsMasteryId = "mastery-existing-exam",
+            StudentId = studentId.ToString(),
+            TagId = tagId.ToString(),
+            OfficialPoint = 6.00m,
+            PracticePoint = 4.00m,
+            ExamAnchor = 7.00m,
+            MasteryStatus = "Learning",
+            ExamHistory = "[]"
+        });
+        await _db.SaveChangesAsync();
+
+        await _handler.Handle(
+            MakePracticeEvent(studentId, Guid.NewGuid(), tagId, isCorrect: true, difficultyLevel: 2), default);
+
+        var mastery = await _db.TagsMasteries
+            .FirstAsync(tm => tm.StudentId == studentId.ToString() && tm.TagId == tagId.ToString());
+
+        Assert.Equal(7.00m, mastery.ExamAnchor);
+        Assert.Equal(4.05m, mastery.PracticePoint);
+        Assert.Equal(6.115m, mastery.OfficialPoint);
     }
 }

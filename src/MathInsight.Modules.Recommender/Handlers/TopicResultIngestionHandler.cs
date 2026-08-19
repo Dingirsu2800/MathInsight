@@ -114,8 +114,6 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             mastery.OfficialPoint = Math.Clamp(
                 0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
                 0.00m, 10.00m);
-
-            mastery.PracticePoint = mastery.OfficialPoint;
         }
         else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
         {
