@@ -13,4 +13,14 @@ public sealed record TopicMasteryAdvice(
     decimal OfficialPoint,
     int EvidenceItemCount,
     int EvidenceSessionCount,
-    byte RecommendedDifficultyLevel);
+    byte RecommendedDifficultyLevel)
+{
+    public TopicMasteryAdvice(
+        string tagId,
+        decimal officialPoint,
+        int evidenceItemCount,
+        byte recommendedDifficultyLevel)
+        : this(tagId, officialPoint, evidenceItemCount, 0, recommendedDifficultyLevel)
+    {
+    }
+}

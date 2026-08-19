@@ -55,9 +55,9 @@ public sealed class AdaptiveBlueprintExamGenerationTests
         ]);
         var mastery = new CapturingMasteryProvider(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
         {
-            [WeakTopic] = new(WeakTopic, 4.99m, 3, 2),
-            [NeutralTopic] = new(NeutralTopic, 5m, 3, 2),
-            [StrongTopic] = new(StrongTopic, 7.5m, 3, 4)
+            [WeakTopic] = new(WeakTopic, 4.99m, 5, 2, 2),
+            [NeutralTopic] = new(NeutralTopic, 5m, 5, 2, 2),
+            [StrongTopic] = new(StrongTopic, 7.5m, 8, 3, 4)
         });
         await testContext.Context.SaveChangesAsync();
 
@@ -149,7 +149,7 @@ public sealed class AdaptiveBlueprintExamGenerationTests
         var provider = new CapturingCandidateProvider([Candidate("weak-original", WeakTopic, DifficultyTwo)]);
         var mastery = new CapturingMasteryProvider(new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase)
         {
-            [WeakTopic] = new(WeakTopic, 1m, 5, 1)
+            [WeakTopic] = new(WeakTopic, 1m, 5, 2, 1)
         });
         await testContext.Context.SaveChangesAsync();
 

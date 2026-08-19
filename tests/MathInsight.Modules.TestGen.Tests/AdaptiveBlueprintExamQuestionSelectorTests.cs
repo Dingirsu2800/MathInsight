@@ -43,6 +43,33 @@ public sealed class AdaptiveBlueprintExamQuestionSelectorTests
     }
 
     [Fact]
+    public void Select_UsesIntermediateDifficultyFromOrderedPreferenceList()
+    {
+        var requirement = Requirement("detail-a", "topic-a", "difficulty-4");
+        var plans = new Dictionary<string, AdaptiveBlueprintDetailPlan>(StringComparer.OrdinalIgnoreCase)
+        {
+            [requirement.BlueprintDetailId] = new(
+                requirement.BlueprintDetailId,
+                requirement.TagId,
+                requirement.DifficultyId,
+                "difficulty-2",
+                1m,
+                true,
+                true,
+                ["difficulty-2", "difficulty-3", "difficulty-4"])
+        };
+
+        var result = CreateSelector().Select(
+            [requirement],
+            plans,
+            [Candidate("intermediate", "topic-a", "difficulty-3")],
+            CancellationToken.None);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal("intermediate", Assert.Single(result.Assignments).QuestionId);
+    }
+
+    [Fact]
     public void Select_RejectsCandidatesAtUnrelatedDifficulty()
     {
         var requirement = Requirement("detail-a", "topic-a", OriginalDifficulty);

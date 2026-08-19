@@ -111,15 +111,15 @@ public sealed class AdaptiveBlueprintExamQuestionSelector : IAdaptiveBlueprintEx
             return false;
         }
 
-        if (string.Equals(candidate.DifficultyId, plan.PreferredDifficultyId, StringComparison.OrdinalIgnoreCase))
+        for (var preferenceIndex = 0; preferenceIndex < plan.AcceptedDifficultyIds.Count; preferenceIndex++)
         {
-            cost = 0;
-            return true;
-        }
+            if (!string.Equals(
+                    candidate.DifficultyId,
+                    plan.AcceptedDifficultyIds[preferenceIndex],
+                    StringComparison.OrdinalIgnoreCase))
+                continue;
 
-        if (string.Equals(candidate.DifficultyId, plan.OriginalDifficultyId, StringComparison.OrdinalIgnoreCase))
-        {
-            cost = 1;
+            cost = preferenceIndex;
             return true;
         }
 
