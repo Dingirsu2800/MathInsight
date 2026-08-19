@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { Button } from "../../components/ui/button";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import StartTestDialog from "../../components/student/StartTestDialog";
 import AdaptiveBlueprintExamDialog from "../../components/student/AdaptiveBlueprintExamDialog";
 import PracticeSetupPanel from "../../components/student/PracticeSetupPanel";
@@ -41,6 +42,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
   const [selectedTest, setSelectedTest] = useState(null);
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
   const [isAdaptiveDialogOpen, setIsAdaptiveDialogOpen] = useState(false);
+  const [isTestCodeDialogOpen, setIsTestCodeDialogOpen] = useState(false);
 
   const resolveInFlightRef = useRef(false);
   const activeRequestIdRef = useRef(0);
@@ -94,7 +96,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
   };
 
   const handleResolveCodeSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const rawInput = testCodeInput.trim();
     if (!rawInput) {
       setResolveError("Vui lòng nhập mã đề thi.");
@@ -110,6 +112,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
       const res = await testGeneratorApi.resolveTestCode(rawInput);
       const resolvedTest = res.data;
       if (resolvedTest && resolvedTest.testId) {
+        setIsTestCodeDialogOpen(false);
         setSelectedTest(resolvedTest);
         setIsStartDialogOpen(true);
       } else {
@@ -177,71 +180,33 @@ export default function SharedBlueprintExamDiscoveryPage() {
         {/* ── Exam Mode content below ── */}
         {mode === 'exam' && (<>
 
-          {/* Enter TestCode Card */}
-          <div className="bg-pure-surface border border-whisper-border rounded-xl p-5 md:p-6 shadow-sm flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[24px]">vpn_key</span>
-              <div>
-                <h2 className="text-sm font-bold text-on-surface">Nhập mã đề</h2>
-                <p className="text-xs text-on-surface-variant">Nhập mã đề (TestCode) để tìm bài thi tương ứng.</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleResolveCodeSubmit} className="flex flex-col sm:flex-row gap-3 mt-1 select-text">
-              <div className="flex-1 relative">
-                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã đề</label>
-                <input
-                  id="student-test-code-input"
-                  type="text"
-                  value={testCodeInput}
-                  disabled={resolvingCode}
-                  onChange={(e) => {
-                    setTestCodeInput(e.target.value);
-                    if (resolveError) setResolveError("");
-                  }}
-                  placeholder="Ví dụ: MATH7K2P..."
-                  className="w-full h-11 pl-3.5 pr-3 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface font-mono uppercase tracking-wider focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
-                />
-              </div>
+          {/* Action Header: Create Personal Adaptive Exam Command, TestCode Dialog Command & Catalog Selector */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-whisper-border pb-4">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <Button
-                type="submit"
+                type="button"
                 variant="primary"
-                disabled={resolvingCode}
-                className="h-11 min-h-[44px] px-6 font-bold shrink-0"
+                onClick={() => setIsAdaptiveDialogOpen(true)}
+                className="h-11 min-h-[44px] px-5 font-bold shadow-sm flex items-center justify-center gap-2 shrink-0"
               >
-                {resolvingCode ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Đang tìm...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[18px]">search</span>
-                    <span>Tìm đề</span>
-                  </div>
-                )}
+                <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                <span>Tạo đề theo năng lực</span>
               </Button>
-            </form>
 
-            {resolveError && (
-              <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2 select-text">
-                <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
-                <span>{resolveError}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Action Header: Create Personal Adaptive Exam Command & Catalog Selector */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-whisper-border pb-4">
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => setIsAdaptiveDialogOpen(true)}
-              className="h-11 min-h-[44px] px-5 font-bold shadow-sm flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto"
-            >
-              <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-              <span>Tạo đề theo năng lực</span>
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTestCodeInput("");
+                  setResolveError("");
+                  setIsTestCodeDialogOpen(true);
+                }}
+                className="h-11 min-h-[44px] px-4 font-bold flex items-center justify-center gap-2 shrink-0"
+              >
+                <span className="material-symbols-outlined text-[20px]">vpn_key</span>
+                <span>Nhập mã đề</span>
+              </Button>
+            </div>
 
             {/* Shared Catalog Heading & Segmented Tabs */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
@@ -420,6 +385,86 @@ export default function SharedBlueprintExamDiscoveryPage() {
         isOpen={isAdaptiveDialogOpen}
         onClose={() => setIsAdaptiveDialogOpen(false)}
       />
+
+      {/* Compact TestCode Entry Dialog */}
+      <Dialog
+        isOpen={isTestCodeDialogOpen}
+        onClose={() => {
+          if (!resolvingCode) setIsTestCodeDialogOpen(false);
+        }}
+        isCloseDisabled={resolvingCode}
+        className="w-[92vw] max-w-[420px]"
+      >
+        <div className="flex flex-col h-full select-none">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <span className="material-symbols-outlined text-primary text-[22px]">vpn_key</span>
+              Nhập mã đề
+            </DialogTitle>
+            <DialogDescription>
+              Nhập mã đề để tìm bài thi
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResolveCodeSubmit}>
+            <DialogContent>
+              <div className="flex flex-col gap-3 py-1 select-text">
+                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã đề</label>
+                <input
+                  id="student-test-code-input"
+                  type="text"
+                  autoFocus
+                  value={testCodeInput}
+                  disabled={resolvingCode}
+                  onChange={(e) => {
+                    setTestCodeInput(e.target.value);
+                    if (resolveError) setResolveError("");
+                  }}
+                  placeholder="Ví dụ: MATH7K2P..."
+                  className="w-full h-11 px-3.5 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface font-mono uppercase tracking-wider focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
+                />
+
+                {resolveError && (
+                  <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2 select-text">
+                    <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                    <span>{resolveError}</span>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={resolvingCode}
+                onClick={() => setIsTestCodeDialogOpen(false)}
+                className="min-h-[44px]"
+              >
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={resolvingCode || !testCodeInput.trim()}
+                className="h-11 min-h-[44px] px-5 font-bold shrink-0 min-w-[100px]"
+              >
+                {resolvingCode ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Đang tìm...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[18px]">search</span>
+                    <span>Tìm đề</span>
+                  </div>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </div>
+      </Dialog>
     </StudentLayout>
   );
 }

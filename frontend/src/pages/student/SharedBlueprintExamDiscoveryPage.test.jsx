@@ -163,7 +163,7 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation & A
     ).toBeInTheDocument();
   });
 
-  it('keeps test-code resolution input available above catalog tabs', async () => {
+  it('opens and closes compact TestCode dialog, submits via Enter, and opens start dialog on resolve', async () => {
     testGeneratorApi.getSharedBlueprintExams.mockResolvedValue({
       data: { items: fixedExams, totalCount: 1, totalPages: 1 },
     });
@@ -177,10 +177,29 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation & A
       </BrowserRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'Nhập mã đề' })).toBeInTheDocument();
-    const input = screen.getByPlaceholderText(/MATH7K2P/i);
-    fireEvent.change(input, { target: { value: 'RESOLVED-1' } });
+    // Initial state: TestCode dialog is closed
+    expect(screen.queryByPlaceholderText(/MATH7K2P/i)).not.toBeInTheDocument();
 
+    // Click "Nhập mã đề" command button
+    const openCodeBtn = screen.getByRole('button', { name: /Nhập mã đề/i });
+    fireEvent.click(openCodeBtn);
+
+    // Dialog opens with natural copy
+    expect(screen.getByText('Nhập mã đề để tìm bài thi')).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(/MATH7K2P/i);
+    expect(input).toBeInTheDocument();
+
+    // Test Cancel / Close
+    const cancelBtn = screen.getByRole('button', { name: /Hủy/i });
+    fireEvent.click(cancelBtn);
+    expect(screen.queryByPlaceholderText(/MATH7K2P/i)).not.toBeInTheDocument();
+
+    // Reopen dialog and type code
+    fireEvent.click(openCodeBtn);
+    const reopenedInput = screen.getByPlaceholderText(/MATH7K2P/i);
+    fireEvent.change(reopenedInput, { target: { value: 'RESOLVED-1' } });
+
+    // Submit via form Enter or "Tìm đề" button
     const submitBtn = screen.getByRole('button', { name: /Tìm đề/i });
     fireEvent.click(submitBtn);
 
@@ -188,6 +207,8 @@ describe('SharedBlueprintExamDiscoveryPage - Student Exam Catalog Separation & A
       expect(testGeneratorApi.resolveTestCode).toHaveBeenCalledWith('RESOLVED-1');
     });
 
+    // TestCode dialog closes and start-test-dialog opens
+    expect(screen.queryByText('Nhập mã đề để tìm bài thi')).not.toBeInTheDocument();
     expect(await screen.findByTestId('start-test-dialog')).toHaveTextContent('Đề thi nhập mã');
   });
 
