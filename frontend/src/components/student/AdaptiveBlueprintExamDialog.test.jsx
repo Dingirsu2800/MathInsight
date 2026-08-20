@@ -118,6 +118,97 @@ describe('AdaptiveBlueprintExamDialog - Task 8 Scaled Discovery & Pagination', (
     });
   });
 
+  it('prevents a second generation request when search debounce fires while generation is unresolved', async () => {
+    vi.useFakeTimers();
+    try {
+      testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+        data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+      });
+
+      let resolveGenerate;
+      testGeneratorApi.generateBlueprintExam.mockImplementation(
+        () => new Promise((resolve) => { resolveGenerate = resolve; })
+      );
+
+      render(
+        <BrowserRouter>
+          <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+        </BrowserRouter>
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // 1. Type a search term
+      const searchInput = screen.getByPlaceholderText(/Tìm kiếm theo tên cấu trúc đề/i);
+      fireEvent.change(searchInput, { target: { value: 'Toán 12' } });
+
+      // 2. Select blueprint and click create BEFORE the 300ms debounce completes (e.g. at 100ms)
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+
+      const bp1Button = screen.getByRole('button', { name: /Cấu trúc đề ôn tập HK1 Toán 12/i });
+      fireEvent.click(bp1Button);
+
+      const submitBtn = screen.getByRole('button', { name: /Tạo và bắt đầu/i });
+      fireEvent.click(submitBtn);
+
+      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
+
+      // 3. Let the debounce fire while generateBlueprintExam is unresolved
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+
+      // 4. Click the action again
+      fireEvent.click(submitBtn);
+
+      // 5. Assert generateBlueprintExam was called exactly once
+      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
+
+      // Clean up the pending promise
+      if (resolveGenerate) {
+        await act(async () => {
+          resolveGenerate({ data: { testId: 'TEST-DEBOUNCE-GUARD' } });
+        });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('guarantees rapid double-clicks trigger generateBlueprintExam at most once', async () => {
+    testGeneratorApi.getBlueprintExamOptions.mockResolvedValue({
+      data: { items: sampleOptions, totalCount: 2, pageIndex: 1, pageSize: 20 },
+    });
+    testGeneratorApi.generateBlueprintExam.mockResolvedValue({
+      data: { testId: 'TEST-RAPID-001' },
+    });
+    startSession.mockResolvedValue({
+      sessionId: 'SESSION-RAPID-001',
+    });
+
+    render(
+      <BrowserRouter>
+        <AdaptiveBlueprintExamDialog isOpen={true} onClose={vi.fn()} />
+      </BrowserRouter>
+    );
+
+    const bp1Button = await screen.findByRole('button', { name: /Cấu trúc đề ôn tập HK1 Toán 12/i });
+    fireEvent.click(bp1Button);
+
+    const submitBtn = screen.getByRole('button', { name: /Tạo và bắt đầu/i });
+    // Rapid double click
+    fireEvent.click(submitBtn);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.generateBlueprintExam).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('renders large catalog metadata (e.g. 2,000 items) and navigates pages', async () => {
     testGeneratorApi.getBlueprintExamOptions
       .mockResolvedValueOnce({

@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
-import { startSession } from "../../services/testingApi";
 import { getTestGenErrorMessage } from "../../utils/testGenerationErrorLocalizer";
+import { useAdaptiveExamFlow } from "../../hooks/useAdaptiveExamFlow";
 import { cn } from "../../utils/cn";
 
 export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
-  const navigate = useNavigate();
-
   // Search and Pagination State
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -23,16 +20,18 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
   const [optionsError, setOptionsError] = useState("");
   const [selectedBlueprintId, setSelectedBlueprintId] = useState("");
 
-  // Action State (Generation & Session Start)
-  const [generating, setGenerating] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [generatedTestId, setGeneratedTestId] = useState(null);
-  const [actionError, setActionError] = useState("");
-  const [resumeSessionId, setResumeSessionId] = useState(null);
+  // Own Adaptive Exam Flow Instance (Isolated from Featured Panel)
+  const {
+    generating,
+    starting,
+    isBusy,
+    generatedTestId,
+    actionError,
+    resumeSessionId,
+    handleCreateAndStart,
+    resetActionError,
+  } = useAdaptiveExamFlow();
 
-  // In-flight and retained IDs refs
-  const submittingRef = useRef(false);
-  const generatedTestIdRef = useRef(null);
   const abortControllerRef = useRef(null);
   const activeRequestIdRef = useRef(0);
   const isSearchFirstRenderRef = useRef(true);
@@ -113,11 +112,6 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      setGenerating(false);
-      setStarting(false);
-      setActionError("");
-      setResumeSessionId(null);
-      submittingRef.current = false;
       fetchOptions(debouncedSearch, pageIndex);
     } else {
       if (abortControllerRef.current) {
@@ -128,78 +122,9 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
 
   const totalPages = useMemo(() => Math.ceil(totalCount / pageSize) || 1, [totalCount, pageSize]);
   const selectedBlueprint = options.find((b) => b.blueprintId === selectedBlueprintId) || null;
-  const isBusy = generating || starting;
 
-  const handleCreateAndStart = async () => {
-    if (submittingRef.current) return;
-
-    // If an existing session is in progress, resume it
-    if (resumeSessionId) {
-      onClose();
-      navigate(`/student/test/${resumeSessionId}`);
-      return;
-    }
-
-    if (!selectedBlueprintId && !generatedTestIdRef.current) return;
-
-    submittingRef.current = true;
-    setActionError("");
-
-    let testIdToStart = generatedTestIdRef.current;
-
-    // Step 1: Generate Test if not already generated
-    if (!testIdToStart) {
-      setGenerating(true);
-      try {
-        const res = await testGeneratorApi.generateBlueprintExam(selectedBlueprintId);
-        testIdToStart = res.data?.testId;
-        if (!testIdToStart) {
-          throw new Error("Không nhận được mã đề thi từ máy chủ.");
-        }
-        generatedTestIdRef.current = testIdToStart;
-        setGeneratedTestId(testIdToStart);
-      } catch (err) {
-        submittingRef.current = false;
-        setGenerating(false);
-        setActionError(getTestGenErrorMessage(err, "Không thể tạo bài thi theo năng lực. Vui lòng thử lại sau."));
-        return;
-      } finally {
-        setGenerating(false);
-      }
-    }
-
-    // Step 2: Start session with the retained testId
-    setStarting(true);
-    try {
-      const sessionData = await startSession(testIdToStart);
-      const sessionId = sessionData?.sessionId || sessionData?.id;
-
-      if (sessionId) {
-        generatedTestIdRef.current = null;
-        setGeneratedTestId(null);
-        submittingRef.current = false;
-        setStarting(false);
-        onClose();
-        navigate(`/student/test/${sessionId}`);
-      } else {
-        throw new Error("Không nhận được mã phiên làm bài từ máy chủ.");
-      }
-    } catch (err) {
-      submittingRef.current = false;
-      setStarting(false);
-
-      const errCode = err.response?.data?.code;
-      if (errCode === "TESTING_SESSION_ALREADY_IN_PROGRESS") {
-        const existingSessionId = err.response?.data?.existingSessionId;
-        if (existingSessionId && typeof existingSessionId === "string") {
-          setResumeSessionId(existingSessionId);
-        }
-        setActionError("Bạn đang có một phiên làm bài chưa hoàn thành cho đề thi này.");
-        return;
-      }
-
-      setActionError(getTestGenErrorMessage(err, "Không thể bắt đầu phiên làm bài. Vui lòng thử bắt đầu lại."));
-    }
+  const onConfirm = () => {
+    handleCreateAndStart(selectedBlueprintId, onClose);
   };
 
   const handleSafeClose = () => {
@@ -219,7 +144,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[22px]">auto_awesome</span>
-            Tạo đề theo năng lực
+            Chọn cấu trúc đề thi
           </DialogTitle>
           <DialogDescription>
             Đề thi được cá nhân hóa dựa trên cấu trúc chuẩn và kết quả làm bài gần đây của em.
@@ -315,7 +240,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
                         onClick={() => {
                           if (!isBusy && !generatedTestId) {
                             setSelectedBlueprintId(bp.blueprintId);
-                            setActionError("");
+                            resetActionError();
                           }
                         }}
                         disabled={isBusy || !!generatedTestId}
@@ -454,7 +379,7 @@ export default function AdaptiveBlueprintExamDialog({ isOpen, onClose }) {
             type="button"
             variant="primary"
             disabled={loadingOptions || options.length === 0 || (!selectedBlueprintId && !generatedTestId) || isBusy}
-            onClick={handleCreateAndStart}
+            onClick={onConfirm}
             className="min-h-[44px] min-w-[160px] font-bold"
           >
             {generating ? (
