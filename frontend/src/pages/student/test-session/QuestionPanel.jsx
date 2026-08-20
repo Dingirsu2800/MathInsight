@@ -136,10 +136,11 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
         {/* SHORT_ANSWER */}
         {(type === 'SHORT_ANSWER' || type === 'SHORTANSWER') && (
           <div>
-            <textarea
-              className="w-full border border-whisper-border rounded-xl px-4 py-3 text-sm text-on-surface bg-pure-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none transition-colors"
-              rows={3}
-              placeholder="Nhập câu trả lời..."
+            <input
+              type="text"
+              maxLength={100}
+              className="w-full border border-whisper-border rounded-xl px-4 py-3 text-sm text-on-surface bg-pure-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
+              placeholder="Nhập đáp án ngắn..."
               value={answer?.shortAnswerText || ''}
               onChange={(e) => handleShortAnswer(e.target.value)}
             />
@@ -175,7 +176,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                     </div>
                   ) : part.answerType === 'NUMERIC' || part.answerType === 'NUMBER' ? (
                     <input
-                      type="number"
+                      type="text"
                       inputMode="decimal"
                       className="w-full border border-whisper-border rounded-lg px-3 py-2 text-sm text-on-surface bg-pure-surface focus:border-primary outline-none transition-colors"
                       placeholder="Nhập kết quả..."
@@ -185,8 +186,9 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                   ) : (
                     <input
                       type="text"
+                      maxLength={255}
                       className="w-full border border-whisper-border rounded-lg px-3 py-2 text-sm text-on-surface bg-pure-surface focus:border-primary outline-none transition-colors"
-                      placeholder="Nhập câu trả lời..."
+                      placeholder="Nhập đáp án ngắn..."
                       value={partAnswer?.textAnswer || ''}
                       onChange={(e) => handlePartAnswer(part.partId, 'textAnswer', e.target.value)}
                     />
@@ -210,8 +212,8 @@ function formatType(type) {
     MULTIPLE_SELECT: 'Chọn nhiều',
     MULTIPLESELECT: 'Chọn nhiều',
     MULTIPLECHOICE: 'Chọn nhiều',
-    SHORT_ANSWER: 'Tự luận',
-    SHORTANSWER: 'Tự luận',
+    SHORT_ANSWER: 'Trả lời ngắn',
+    SHORTANSWER: 'Trả lời ngắn',
     COMPOSITE: 'Tổng hợp',
   };
   return map[type] || type;
