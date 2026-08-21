@@ -198,10 +198,10 @@ public sealed class GetSessionResultQueryHandler
     }
 
     /// <summary>
-    /// Mirrors GradingOrchestrator.BuildTagWeights (v4.2) but resolves TopicName
+    /// Mirrors GradingOrchestrator.BuildTagWeights (v4.3) but resolves TopicName
     /// and returns API-layer DTOs instead of event records.
     /// single-tag  → Weight = 1.0
-    /// multi-tag   → primary Weight = 0.65, each secondary Weight = 0.35 / N
+    /// multi-tag   → primary Weight = 0.77, each secondary Weight = 0.23 / N
     /// </summary>
     private static List<TagWeightEntryDto> BuildTagWeightDtos(
         ICollection<QuestionTopic> questionTopics,
@@ -223,7 +223,7 @@ public sealed class GetSessionResultQueryHandler
             }];
         }
 
-        const decimal primaryWeight = 0.65m;
+        const decimal primaryWeight = 0.77m;
         var primary = questionTopics.FirstOrDefault(qt => qt.IsPrimary);
         var secondaries = questionTopics.Where(qt => !qt.IsPrimary).ToList();
         decimal secondaryWeight = secondaries.Count > 0 ? (1.0m - primaryWeight) / secondaries.Count : 0m;

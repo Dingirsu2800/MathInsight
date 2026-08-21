@@ -4,6 +4,7 @@
  * UC-55 / RCM-17
  */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import ProgressBar from '../../../components/ui/ProgressBar';
 import { getAllTagsMastery } from '../../../services/recommenderApi';
@@ -100,25 +101,23 @@ export default function TopicMasteryGrid() {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-on-surface">Chi tiết từng chuyên đề</h3>
+        <h3 className="text-lg font-semibold text-on-surface">Chi tiết từng chủ đề</h3>
         <div className="flex gap-2">
           <button
             onClick={() => setSortBy('progress')}
-            className={`px-4 py-2 rounded-lg font-mono text-xs border transition-colors ${
-              sortBy === 'progress'
+            className={`px-4 py-2 rounded-lg font-mono text-xs border transition-colors ${sortBy === 'progress'
                 ? 'bg-primary text-white border-primary'
                 : 'bg-pure-surface border-whisper-border hover:bg-surface-container'
-            }`}
+              }`}
           >
             Theo tiến độ
           </button>
           <button
             onClick={() => setSortBy('score')}
-            className={`px-4 py-2 rounded-lg font-mono text-xs border transition-colors ${
-              sortBy === 'score'
+            className={`px-4 py-2 rounded-lg font-mono text-xs border transition-colors ${sortBy === 'score'
                 ? 'bg-primary text-white border-primary'
                 : 'bg-pure-surface border-whisper-border hover:bg-surface-container'
-            }`}
+              }`}
           >
             Theo điểm số
           </button>
@@ -161,33 +160,13 @@ export default function TopicMasteryGrid() {
             const style = getTopicStyle(topic.masteryStatus, score);
             const icon = ICON_POOL[idx % ICON_POOL.length];
 
-            return (
+            const card = (
               <div
-                key={topic.tagId}
-                className={`bg-pure-surface border rounded-xl p-5 flex flex-col relative overflow-hidden transition-transform hover:-translate-y-1 ${
-                  style.flagged
+                className={`bg-pure-surface border rounded-xl p-5 flex flex-col relative overflow-hidden transition-transform hover:-translate-y-1 ${style.flagged
                     ? 'border-2 border-deep-rose/30'
                     : 'border-whisper-border'
-                }`}
+                  }`}
               >
-                {/* Flag badge */}
-                {style.flagged && (
-                  <div className="absolute top-0 right-0">
-                    <div className="bg-deep-rose text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1">
-                      <MaterialIcon name="priority_high" size={12} filled />
-                      CẦN PHỤ ĐẠO
-                    </div>
-                  </div>
-                )}
-                {style.isUnpracticed && (
-                  <div className="absolute top-0 right-0">
-                    <div className="bg-surface-container-highest text-on-surface-variant text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1">
-                      <MaterialIcon name="info" size={12} />
-                      CHƯA BẮT ĐẦU
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex justify-between items-start mb-4">
                   <div className={`p-2 rounded-lg ${icon.bg}`}>
                     <MaterialIcon name={icon.name} className={icon.color} />
@@ -229,8 +208,19 @@ export default function TopicMasteryGrid() {
                     </div>
                   </div>
                 )}
-
               </div>
+            );
+
+            return (
+              <Link
+                key={topic.tagId}
+                to="/student/test/topics"
+                state={{ preselectedTagId: topic.tagId }}
+                className="block group hover:scale-[1.01] transition-transform"
+                aria-label={`Luyện tập chủ đề ${topic.tagName}`}
+              >
+                {card}
+              </Link>
             );
           })}
         </div>

@@ -13,7 +13,7 @@ namespace MathInsight.Modules.Grading_Analytics.Services;
 
 public sealed class ScoreAdjustmentService : IScoreAdjustmentService
 {
-    private const decimal PrimaryTagWeight = 0.65m;
+    private const decimal PrimaryTagWeight = 0.77m;
 
     private readonly GradingDbContext _db;
     private readonly IPublisher _publisher;

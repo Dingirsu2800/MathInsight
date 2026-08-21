@@ -62,11 +62,11 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
                 && parent.IsActive
                 && parent.ParentTagId == null
                 && parent.Grade == tt.Grade
-            orderby (tm != null ? tm.OfficialPoint : 5.00m) ascending, tt.TagId ascending
+            orderby (tm != null ? tm.OfficialPoint : 3.27m) ascending, tt.TagId ascending
             select new TagMasteryDto(
                 tt.TagId,
                 tt.TagName,
-                tm != null ? tm.OfficialPoint : 5.00m,
+                tm != null ? tm.OfficialPoint : 3.27m,
                 tm != null ? tm.NumberDone : 0,
                 tm != null ? tm.MasteryStatus : "NotLearned",
                 tm != null ? tm.RecommendedDifficultyLevel : (byte)1)
