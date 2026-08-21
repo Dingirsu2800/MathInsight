@@ -86,21 +86,32 @@ public static class TopicPracticeSelectionPlanFactory
     public static TopicPracticeSelectionPlan CreateMastery(
         decimal officialPoint,
         IReadOnlySet<string> focusTagIds)
+        => CreateMastery(officialPoint, focusTagIds, hasNormalEvidence: true, hasStrongEvidence: true);
+
+    public static TopicPracticeSelectionPlan CreateMastery(
+        decimal officialPoint,
+        IReadOnlySet<string> focusTagIds,
+        bool hasNormalEvidence,
+        bool hasStrongEvidence)
     {
         if (focusTagIds.Count == 0)
             throw new ArgumentException("Mastery TopicPractice requires one selected topic.", nameof(focusTagIds));
 
-        int[] profile = Math.Clamp(officialPoint, 0m, 10m) switch
-        {
-            < 2m => [9, 1, 0, 0],
-            < 3m => [8, 2, 0, 0],
-            < 4m => [3, 6, 1, 0],
-            < 5m => [2, 6, 2, 0],
-            < 6m => [0, 3, 6, 1],
-            < 7.5m => [0, 2, 6, 2],
-            < 9m => [0, 0, 2, 8],
-            _ => [0, 0, 1, 9]
-        };
+        int[] profile = !hasNormalEvidence
+            ? [3, 4, 2, 1]
+            : Math.Clamp(officialPoint, 0m, 10m) switch
+            {
+                < 2m when hasStrongEvidence => [9, 1, 0, 0],
+                < 2m => [8, 2, 0, 0],
+                < 3m => [8, 2, 0, 0],
+                < 4m => [3, 6, 1, 0],
+                < 5m => [2, 6, 2, 0],
+                < 6m => [0, 3, 6, 1],
+                < 7.5m => [0, 2, 6, 2],
+                < 9m => [0, 0, 2, 8],
+                _ when hasStrongEvidence => [0, 0, 1, 9],
+                _ => [0, 0, 2, 8]
+            };
 
         var slots = profile
             .SelectMany((count, index) => Enumerable.Repeat(

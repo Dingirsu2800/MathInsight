@@ -51,7 +51,7 @@ export default function LeaderboardPage() {
             Bảng xếp hạng
           </h1>
           <p className="text-on-surface-variant text-sm mt-1">
-            Xếp hạng học sinh theo điểm năng lực, cập nhật hàng ngày.
+            Danh sách xếp hạng được xét duyệt dựa trên tiêu chí Điểm năng lực.
           </p>
         </div>
 
@@ -82,7 +82,6 @@ export default function LeaderboardPage() {
                 <tr>
                   <th className="text-left px-6 py-3 w-16">#</th>
                   <th className="text-left px-6 py-3">Học sinh</th>
-                  <th className="text-right px-6 py-3">Điểm năng lực</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,9 +111,6 @@ export default function LeaderboardPage() {
                       <td className="px-6 py-3 text-on-surface">
                         {entry.studentName}
                         {isMe && <span className="ml-2 text-xs text-primary font-medium">(Bạn)</span>}
-                      </td>
-                      <td className="px-6 py-3 text-right font-semibold text-primary">
-                        {entry.point}/10
                       </td>
                     </tr>
                   );

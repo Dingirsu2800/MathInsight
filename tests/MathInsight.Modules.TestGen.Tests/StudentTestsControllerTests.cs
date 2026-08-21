@@ -24,13 +24,17 @@ public sealed class StudentTestsControllerTests
         var mediator = new Mock<IMediator>();
         mediator
             .Setup(instance => instance.Send(
-                It.Is<GetBlueprintExamOptionsQuery>(query => query.StudentId == StudentId),
+                It.Is<GetBlueprintExamOptionsQuery>(query =>
+                    query.StudentId == StudentId &&
+                    query.PageIndex == 2 &&
+                    query.PageSize == 10 &&
+                    query.Search == "mock"),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<IReadOnlyList<BlueprintExamOptionResponse>>.Success(
-                Array.Empty<BlueprintExamOptionResponse>()));
+            .ReturnsAsync(Result<BlueprintExamOptionsResponse>.Success(
+                new BlueprintExamOptionsResponse([], 0, 2, 10)));
         var controller = CreateController(mediator.Object);
 
-        var result = await controller.GetBlueprintOptions(CancellationToken.None);
+        var result = await controller.GetBlueprintOptions("mock", 2, 10, CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(result);
         mediator.VerifyAll();
@@ -170,6 +174,31 @@ public sealed class StudentTestsControllerTests
 
         var result = await controller.GenerateTopicPractice(
             new GenerateTopicPracticeRequest { TagId = "topic" },
+            CancellationToken.None);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, objectResult.StatusCode);
+        Assert.Equal(error.Code, Assert.IsType<ApiErrorResponse>(objectResult.Value).Code);
+    }
+
+    [Theory]
+    [InlineData("unavailable")]
+    [InlineData("invalid")]
+    public async Task BlueprintExam_MapsAdaptiveMasteryFailuresTo503(string errorKind)
+    {
+        var error = errorKind == "unavailable"
+            ? TestGenerationErrors.AdaptiveExamMasteryUnavailable
+            : TestGenerationErrors.AdaptiveExamMasteryInvalid;
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(instance => instance.Send(
+                It.IsAny<GenerateBlueprintExamCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<GenerateBlueprintExamResponse>.Failure(error));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.GenerateBlueprintExam(
+            new GenerateBlueprintExamRequest { BlueprintId = "blueprint" },
             CancellationToken.None);
 
         var objectResult = Assert.IsType<ObjectResult>(result);

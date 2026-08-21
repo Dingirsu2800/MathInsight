@@ -193,13 +193,38 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
             })
             .ToListAsync(cancellationToken);
 
-        return rows.ToDictionary(
-            row => row.TagId,
-            row => new TopicMasteryAdvice(
+        var sessionCountRows = await _db.StudentTopicSessionResults
+            .AsNoTracking()
+            .Where(result => result.StudentId == studentId
+                && requestedTagIds.Contains(result.TagId)
+                && result.TotalItems > 0)
+            .GroupBy(result => result.TagId)
+            .Select(group => new
+            {
+                TagId = group.Key,
+                Count = group.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        var sessionCounts = sessionCountRows
+            .GroupBy(row => row.TagId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(row => row.Count),
+                StringComparer.OrdinalIgnoreCase);
+
+        var result = new Dictionary<string, TopicMasteryAdvice>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            sessionCounts.TryGetValue(row.TagId, out var sessionCount);
+            result[row.TagId] = new TopicMasteryAdvice(
                 row.TagId,
                 Math.Clamp(row.OfficialPoint, 0m, 10m),
                 Math.Max(0, row.NumberDone),
-                row.RecommendedDifficultyLevel),
-            StringComparer.OrdinalIgnoreCase);
+                sessionCount,
+                row.RecommendedDifficultyLevel);
+        }
+
+        return result;
     }
 }

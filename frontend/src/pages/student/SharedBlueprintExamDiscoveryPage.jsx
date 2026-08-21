@@ -3,12 +3,14 @@ import { useLocation, useNavigate } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { Button } from "../../components/ui/button";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import StartTestDialog from "../../components/student/StartTestDialog";
+import AdaptiveBlueprintExamDialog from "../../components/student/AdaptiveBlueprintExamDialog";
 import PracticeSetupPanel from "../../components/student/PracticeSetupPanel";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { getTestGenErrorMessage } from "../../utils/testGenerationErrorLocalizer";
+import { useAdaptiveExamFlow } from "../../hooks/useAdaptiveExamFlow";
 import { cn } from "../../utils/cn";
-
 
 export default function SharedBlueprintExamDiscoveryPage() {
   const location = useLocation();
@@ -36,12 +38,53 @@ export default function SharedBlueprintExamDiscoveryPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Featured Adaptive Blueprint State
+  const [featuredBlueprint, setFeaturedBlueprint] = useState(null);
+  const [loadingFeatured, setLoadingFeatured] = useState(true);
+  const [featuredError, setFeaturedError] = useState("");
+
+  // Shared Adaptive Exam Flow
+  const adaptiveFlow = useAdaptiveExamFlow();
+  const {
+    generating,
+    starting,
+    isBusy: isAdaptiveBusy,
+    generatedTestId,
+    actionError: adaptiveActionError,
+    resumeSessionId,
+    handleCreateAndStart,
+  } = adaptiveFlow;
+
   // Dialog State
   const [selectedTest, setSelectedTest] = useState(null);
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
+  const [isAdaptiveDialogOpen, setIsAdaptiveDialogOpen] = useState(false);
+  const [isTestCodeDialogOpen, setIsTestCodeDialogOpen] = useState(false);
 
   const resolveInFlightRef = useRef(false);
   const activeRequestIdRef = useRef(0);
+
+  const fetchFeaturedBlueprint = async () => {
+    setLoadingFeatured(true);
+    setFeaturedError("");
+    try {
+      const res = await testGeneratorApi.getBlueprintExamOptions({
+        pageIndex: 1,
+        pageSize: 1,
+      });
+      const data = res.data || {};
+      const items = Array.isArray(data) ? data : (data.items || []);
+      if (items.length > 0) {
+        setFeaturedBlueprint(items[0]);
+      } else {
+        setFeaturedBlueprint(null);
+      }
+    } catch (err) {
+      setFeaturedError(getTestGenErrorMessage(err, "Không thể tải cấu trúc đề thi đề xuất."));
+    } finally {
+      setLoadingFeatured(false);
+    }
+  };
 
   const fetchExams = async (targetGenerationType, targetPageIndex) => {
     const currentRequestId = ++activeRequestIdRef.current;
@@ -80,6 +123,12 @@ export default function SharedBlueprintExamDiscoveryPage() {
 
   useEffect(() => {
     if (mode === 'exam') {
+      fetchFeaturedBlueprint();
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === 'exam') {
       fetchExams(generationType, pageIndex);
     }
   }, [mode, generationType, pageIndex, pageSize]);
@@ -92,7 +141,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
   };
 
   const handleResolveCodeSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const rawInput = testCodeInput.trim();
     if (!rawInput) {
       setResolveError("Vui lòng nhập mã đề thi.");
@@ -108,6 +157,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
       const res = await testGeneratorApi.resolveTestCode(rawInput);
       const resolvedTest = res.data;
       if (resolvedTest && resolvedTest.testId) {
+        setIsTestCodeDialogOpen(false);
         setSelectedTest(resolvedTest);
         setIsStartDialogOpen(true);
       } else {
@@ -175,96 +225,215 @@ export default function SharedBlueprintExamDiscoveryPage() {
         {/* ── Exam Mode content below ── */}
         {mode === 'exam' && (<>
 
-          {/* Enter TestCode Card */}
-          <div className="bg-pure-surface border border-whisper-border rounded-xl p-5 md:p-6 shadow-sm flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[24px]">vpn_key</span>
-              <div>
-                <h2 className="text-sm font-bold text-on-surface">Nhập mã đề</h2>
-                <p className="text-xs text-on-surface-variant">Nhập mã đề (TestCode) để tìm bài thi tương ứng.</p>
+          {/* ── Featured Recommendation Panel: Đề dành cho em ── */}
+          {loadingFeatured ? (
+            <div data-testid="featured-blueprint-skeleton" className="bg-gradient-to-br from-primary/5 via-surface-container-low to-pure-surface border border-primary/20 rounded-2xl p-6 shadow-sm animate-pulse flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+              <div className="space-y-3 flex-1">
+                <div className="h-5 bg-surface-container-high rounded-full w-36"></div>
+                <div className="h-6 bg-surface-container-high rounded-md w-2/3"></div>
+                <div className="h-4 bg-surface-container rounded-md w-1/2"></div>
+              </div>
+              <div className="flex gap-3 shrink-0">
+                <div className="h-11 bg-surface-container-high rounded-xl w-32"></div>
+                <div className="h-11 bg-surface-container-high rounded-xl w-36"></div>
               </div>
             </div>
-
-            <form onSubmit={handleResolveCodeSubmit} className="flex flex-col sm:flex-row gap-3 mt-1 select-text">
-              <div className="flex-1 relative">
-                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã đề</label>
-                <input
-                  id="student-test-code-input"
-                  type="text"
-                  value={testCodeInput}
-                  disabled={resolvingCode}
-                  onChange={(e) => {
-                    setTestCodeInput(e.target.value);
-                    if (resolveError) setResolveError("");
-                  }}
-                  placeholder="Ví dụ: MATH7K2P..."
-                  className="w-full h-11 pl-3.5 pr-3 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface font-mono uppercase tracking-wider focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
-                />
+          ) : featuredError ? (
+            <div className="bg-surface-container-low border border-whisper-border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 text-on-surface-variant">
+                <span className="material-symbols-outlined text-outline-variant text-[20px]">info</span>
+                <span>{featuredError}</span>
               </div>
               <Button
-                type="submit"
-                variant="primary"
-                disabled={resolvingCode}
-                className="h-11 min-h-[44px] px-6 font-bold shrink-0"
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={fetchFeaturedBlueprint}
+                className="h-8 px-3 font-bold shrink-0 self-start sm:self-auto"
               >
-                {resolvingCode ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Đang tìm...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[18px]">search</span>
-                    <span>Tìm đề</span>
-                  </div>
-                )}
+                Thử lại
               </Button>
-            </form>
+            </div>
+          ) : !featuredBlueprint ? (
+            <div className="bg-surface-container-low border border-whisper-border rounded-2xl p-6 text-center text-on-surface-variant flex flex-col items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[36px] text-outline-variant">assignment_late</span>
+              <p className="text-sm font-bold text-on-surface">Chưa có cấu trúc đề thi nào phù hợp với khối lớp của bạn.</p>
+              <p className="text-xs">Bạn có thể chọn đề thi sẵn có trong kho đề bên dưới hoặc liên hệ giáo viên.</p>
+            </div>
+          ) : (
+            <div data-testid="featured-recommendation-panel" className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-surface-container-low border border-primary/25 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                <div className="space-y-2.5 min-w-0 flex-1 select-text">
+                  {/* Badge */}
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary border border-primary/25 text-xs font-extrabold tracking-wide">
+                      <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                      Đề dành cho em
+                    </span>
+                    <span className="bg-surface-container-high/80 text-on-surface-variant text-[11px] font-bold px-2 py-0.5 rounded-md border border-whisper-border">
+                      Khối {featuredBlueprint.grade}
+                    </span>
+                  </div>
 
-            {resolveError && (
-              <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2 select-text">
-                <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
-                <span>{resolveError}</span>
+                  {/* Blueprint Name */}
+                  <h2 className="text-lg md:text-xl font-black text-on-surface tracking-tight truncate">
+                    {featuredBlueprint.blueprintName}
+                  </h2>
+
+                  {/* Metadata Badges / Info */}
+                  <div className="flex items-center gap-2.5 sm:gap-3.5 text-xs text-on-surface-variant font-medium flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[16px] text-primary">view_list</span>
+                      {featuredBlueprint.sectionCount} phần
+                    </span>
+                    <span className="text-whisper-border">·</span>
+                    <span className="flex items-center gap-1 font-mono">
+                      <span className="material-symbols-outlined text-[16px] text-primary">format_list_numbered</span>
+                      {featuredBlueprint.totalQuestions} câu
+                    </span>
+                    <span className="text-whisper-border">·</span>
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[16px] text-primary">schedule</span>
+                      {featuredBlueprint.durationMinutes === 0 ? "Không giới hạn" : `${featuredBlueprint.durationMinutes} phút`}
+                    </span>
+                    <span className="text-whisper-border">·</span>
+                    <span className="flex items-center gap-1 font-mono font-bold text-primary">
+                      <span className="material-symbols-outlined text-[16px]">grade</span>
+                      {featuredBlueprint.totalScore} điểm
+                    </span>
+                  </div>
+
+                  {/* Supporting Copy */}
+                  <p className="text-xs text-on-surface-variant flex items-center gap-1.5 pt-0.5">
+                    <span className="material-symbols-outlined text-primary text-[16px] shrink-0">psychology</span>
+                    <span>Độ khó câu hỏi được điều chỉnh dựa trên kết quả làm bài gần đây của em.</span>
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isAdaptiveBusy}
+                    onClick={() => setIsAdaptiveDialogOpen(true)}
+                    className="min-h-[44px] px-4 font-bold border-primary/30 hover:bg-primary/5 text-on-surface"
+                  >
+                    Chọn cấu trúc khác
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={isAdaptiveBusy}
+                    onClick={() => handleCreateAndStart(featuredBlueprint.blueprintId)}
+                    className="min-h-[44px] px-6 font-bold shadow-md flex items-center justify-center gap-2"
+                  >
+                    {generating ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Đang tạo đề...</span>
+                      </div>
+                    ) : starting ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Đang bắt đầu...</span>
+                      </div>
+                    ) : resumeSessionId ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px]">play_arrow</span>
+                        <span>Tiếp tục bài đang làm</span>
+                      </div>
+                    ) : generatedTestId ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px]">refresh</span>
+                        <span>Thử bắt đầu lại</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                        <span>Tạo đề ngay</span>
+                      </div>
+                    )}
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Exam Generation Type Segmented Tabs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-whisper-border pb-3">
-            <div role="tablist" aria-label="Loại đề thi" className="flex items-center gap-1 p-1 bg-surface-container-low border border-whisper-border rounded-xl w-fit">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={generationType === 'Fixed'}
-                onClick={() => handleGenerationTypeChange('Fixed')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
-                  generationType === 'Fixed'
-                    ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                Đề cố định
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={generationType === 'Random'}
-                onClick={() => handleGenerationTypeChange('Random')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
-                  generationType === 'Random'
-                    ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                Đề tạo ngẫu nhiên
-              </button>
+              {/* In-Panel Resume Alert Banner */}
+              {resumeSessionId && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-on-surface flex items-start gap-2.5 text-xs">
+                  <span className="material-symbols-outlined text-amber-700 text-[18px] shrink-0 mt-0.5">pending_actions</span>
+                  <p className="text-on-surface-variant leading-relaxed">
+                    Bạn đang có một phiên làm bài chưa hoàn thành cho đề thi này. Hãy chọn "Tiếp tục bài đang làm" để tiếp tục.
+                  </p>
+                </div>
+              )}
+
+              {/* In-Panel Error Alert Banner */}
+              {adaptiveActionError && !resumeSessionId && (
+                <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                  <span className="flex-1">{adaptiveActionError}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Shared Catalog Header: Segmented Tabs & Beside TestCode Button ── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-whisper-border pb-4">
+            {/* Catalog Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <span className="text-xs font-bold text-on-surface-variant shrink-0">Kho đề:</span>
+              <div role="tablist" aria-label="Kho đề thi" className="flex items-center gap-1 p-1 bg-surface-container-low border border-whisper-border rounded-xl w-fit">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={generationType === 'Fixed'}
+                  onClick={() => handleGenerationTypeChange('Fixed')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
+                    generationType === 'Fixed'
+                      ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Đề cố định
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={generationType === 'Random'}
+                  onClick={() => handleGenerationTypeChange('Random')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[38px] ${
+                    generationType === 'Random'
+                      ? 'bg-pure-surface text-primary shadow-sm border border-whisper-border'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Đề theo cấu trúc
+                </button>
+              </div>
+
+              {totalCount > 0 && (
+                <span className="text-xs text-on-surface-variant font-bold font-mono">
+                  ({totalCount} bài thi)
+                </span>
+              )}
             </div>
 
-            {totalCount > 0 && (
-              <span className="text-xs text-on-surface-variant font-bold font-mono">
-                Tổng số: {totalCount} bài thi
-              </span>
-            )}
+            {/* Beside Catalog: TestCode Modal Trigger Button */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setTestCodeInput("");
+                setResolveError("");
+                setIsTestCodeDialogOpen(true);
+              }}
+              className="h-10 min-h-[44px] px-4 font-bold flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto"
+            >
+              <span className="material-symbols-outlined text-[18px]">vpn_key</span>
+              <span>Nhập mã đề</span>
+            </Button>
           </div>
 
           {/* Error Banner */}
@@ -297,7 +466,7 @@ export default function SharedBlueprintExamDiscoveryPage() {
               <p className="text-sm font-bold text-on-surface">
                 {generationType === 'Fixed'
                   ? 'Chưa có đề cố định phù hợp với khối lớp của bạn.'
-                  : 'Chưa có đề tạo ngẫu nhiên phù hợp với khối lớp của bạn.'}
+                  : 'Chưa có đề theo cấu trúc phù hợp với khối lớp của bạn.'}
               </p>
               <p className="text-xs">Bạn có thể dùng mã đề thi do giáo viên cung cấp ở ô tìm kiếm trên.</p>
             </div>
@@ -398,7 +567,92 @@ export default function SharedBlueprintExamDiscoveryPage() {
         onClose={() => setIsStartDialogOpen(false)}
         test={selectedTest}
       />
+
+      {/* Adaptive Blueprint Exam Dialog */}
+      <AdaptiveBlueprintExamDialog
+        isOpen={isAdaptiveDialogOpen}
+        onClose={() => setIsAdaptiveDialogOpen(false)}
+      />
+
+      {/* Compact TestCode Entry Dialog */}
+      <Dialog
+        isOpen={isTestCodeDialogOpen}
+        onClose={() => {
+          if (!resolvingCode) setIsTestCodeDialogOpen(false);
+        }}
+        isCloseDisabled={resolvingCode}
+        className="w-[92vw] max-w-[420px]"
+      >
+        <div className="flex flex-col h-full select-none">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <span className="material-symbols-outlined text-primary text-[22px]">vpn_key</span>
+              Nhập mã đề
+            </DialogTitle>
+            <DialogDescription>
+              Nhập mã đề để tìm bài thi
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResolveCodeSubmit}>
+            <DialogContent>
+              <div className="flex flex-col gap-3 py-1 select-text">
+                <label htmlFor="student-test-code-input" className="sr-only">Nhập mã đề</label>
+                <input
+                  id="student-test-code-input"
+                  type="text"
+                  autoFocus
+                  value={testCodeInput}
+                  disabled={resolvingCode}
+                  onChange={(e) => {
+                    setTestCodeInput(e.target.value);
+                    if (resolveError) setResolveError("");
+                  }}
+                  placeholder="Ví dụ: MATH7K2P..."
+                  className="w-full h-11 px-3.5 bg-surface-container-low border border-whisper-border rounded-xl text-xs text-on-surface font-mono uppercase tracking-wider focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-60"
+                />
+
+                {resolveError && (
+                  <div role="alert" className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-center gap-2 select-text">
+                    <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                    <span>{resolveError}</span>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={resolvingCode}
+                onClick={() => setIsTestCodeDialogOpen(false)}
+                className="min-h-[44px]"
+              >
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={resolvingCode || !testCodeInput.trim()}
+                className="h-11 min-h-[44px] px-5 font-bold shrink-0 min-w-[100px]"
+              >
+                {resolvingCode ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Đang tìm...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[18px]">search</span>
+                    <span>Tìm đề</span>
+                  </div>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </div>
+      </Dialog>
     </StudentLayout>
   );
 }
-

@@ -8,8 +8,10 @@ using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
 using MathInsight.Modules.TestGen.Tests;
+using MathInsight.Shared.Recommendations;
 using MathInsight.Shared.Questions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 
 namespace MathInsight.Modules.TestGen.Tests;
 
@@ -56,10 +58,57 @@ public sealed class BlueprintExamGenerationTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        var items = Assert.IsAssignableFrom<IReadOnlyList<BlueprintExamOptionResponse>>(
-            result.Value);
-        Assert.Equal(["active", "approved"], items.Select(item => item.BlueprintId));
-        Assert.All(items, item => Assert.Equal(12, item.Grade));
+        Assert.Equal(2, result.Value!.TotalCount);
+        Assert.Equal(1, result.Value.PageIndex);
+        Assert.Equal(20, result.Value.PageSize);
+        Assert.Equal(["active", "approved"], result.Value.Items.Select(item => item.BlueprintId));
+        Assert.All(result.Value.Items, item => Assert.Equal(12, item.Grade));
+    }
+
+    [Fact]
+    public async Task Options_SearchesBeforeCountingAndOrdersByReviewTimeThenNameAndId()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentId, 12);
+        var older = AddBlueprint(testContext, "match-old", BlueprintStatuses.Approved, grade: 12);
+        older.BlueprintName = "Match older";
+        older.ReviewTime = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        var laterByName = AddBlueprint(testContext, "match-b", BlueprintStatuses.Active, grade: 12);
+        laterByName.BlueprintName = "Match B";
+        laterByName.ReviewTime = new DateTime(2026, 8, 2, 0, 0, 0, DateTimeKind.Utc);
+        var laterById = AddBlueprint(testContext, "match-a", BlueprintStatuses.Active, grade: 12);
+        laterById.BlueprintName = "Match A";
+        laterById.ReviewTime = laterByName.ReviewTime;
+        var noMatch = AddBlueprint(testContext, "other", BlueprintStatuses.Approved, grade: 12);
+        noMatch.BlueprintName = "Other";
+        noMatch.ReviewTime = new DateTime(2026, 8, 3, 0, 0, 0, DateTimeKind.Utc);
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new GetBlueprintExamOptionsQueryHandler(testContext.Context).Handle(
+            new GetBlueprintExamOptionsQuery(StudentId, " match ", 1, 2),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(3, result.Value!.TotalCount);
+        Assert.Equal(["match-a", "match-b"], result.Value.Items.Select(item => item.BlueprintId));
+    }
+
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(1, 0)]
+    [InlineData(1, 51)]
+    public async Task Options_InvalidPagination_ReturnsRequestInvalid(int pageIndex, int pageSize)
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentId, 12);
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new GetBlueprintExamOptionsQueryHandler(testContext.Context).Handle(
+            new GetBlueprintExamOptionsQuery(StudentId, null, pageIndex, pageSize),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TestGenerationErrors.RequestInvalid, result.Error);
     }
 
     [Fact]
@@ -278,10 +327,34 @@ public sealed class BlueprintExamGenerationTests
     }
 
     private static GenerateBlueprintExamCommandHandler CreateHandler(TestGenInMemoryContext testContext)
-        => new(
+    {
+        if (!testContext.Context.TagDifficulties.Any())
+        {
+            testContext.Context.TagDifficulties.Add(new TagDifficultyReadModel
+            {
+                DifficultyId = EasyDifficultyId,
+                DifficultyName = "Easy",
+                LevelValue = 1,
+                DisplayOrder = 1,
+                IsActive = true
+            });
+            testContext.Context.SaveChanges();
+        }
+
+        var masteryProvider = new Mock<IStudentTopicMasteryProvider>();
+        masteryProvider
+            .Setup(provider => provider.GetTopicMasteryAdviceAsync(
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyCollection<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, TopicMasteryAdvice>());
+
+        return new GenerateBlueprintExamCommandHandler(
             testContext.Context,
             new BlueprintExamCandidateProvider(testContext.Context),
-            new CapacityAwareQuestionSelector(new NoOpGenerationRandomizer()));
+            new AdaptiveBlueprintExamQuestionSelector(new NoOpGenerationRandomizer()),
+            masteryProvider.Object);
+    }
 
     private static void AddStudent(TestGenInMemoryContext testContext, string studentId, int? grade)
         => testContext.Context.Students.Add(new StudentReadModel

@@ -123,10 +123,15 @@ MathInsight.Modules.TestGen/
 
 ### Checkpoint 6B: Adaptive BlueprintExam
 
-- Repair and verify the Recommender SQL contract before integration.
-- Introduce a stable cross-module advice contract.
-- Resolve recommended difficulty levels and apply the approved WeakTag cap/bias/downscale rules.
-- Populate adaptive TestQuestion audit fields and add recent-question deduplication after its product rule is finalized.
+- Reuse the existing batch `IStudentTopicMasteryProvider` contract from `MathInsight.Shared`; TestGen does not reference Recommender directly.
+- Qualify normal evidence at `5` items and `2` usable sessions; qualify strong evidence at `8` items and `3` sessions. `NumberDone` is item evidence, not a session count.
+- Resolve each blueprint detail's original active level and a preferred level using v2 mastery: strong point `<2` lowers two, qualified point `<5` lowers one, `5..<7.5` keeps it, and `>=7.5` raises one, clamped to levels `1..4`.
+- Load candidates for the union of original and preferred difficulties, then use a separate adaptive minimum-cost capacity assignment: preferred edges cost less than original-difficulty fallback edges, while each Question retains capacity one. Only preferred or original difficulty is eligible.
+- Preserve exact blueprint structure and scoring. Populate recommendation audit fields only when the selected Question actually uses the preferred adjusted difficulty.
+- Evaluate every detail without a percentage cap or adaptive probability. Log item/session evidence in structured logs; do not add schema columns.
+- Keep `GET /api/test-generator/tests/blueprint-options` route stable while adding `search`, `pageIndex` (default `1`), and `pageSize` (default `20`, maximum `50`). Filter before count/paging and order by `ReviewTime DESC`, `BlueprintName`, `BlueprintID`.
+- Keep shared Fixed/Random generation and Testing session creation unchanged. Defer recent-question deduplication until its product window is approved.
+- Add a Student UI command `Tạo đề theo năng lực` above the shared catalog. Keep `Kho đề` filters `Đề cố định` and `Đề theo cấu trúc` separate from this create action.
 
 ### Checkpoint 6C: TopicPractice
 

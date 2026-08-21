@@ -41,7 +41,7 @@ public sealed class GenerateTopicPracticeTests
         var test = Assert.Single(fixture.Context.Tests);
         Assert.Null(test.BlueprintId); Assert.Equal(0, test.DurationMinutes); Assert.Equal("NormalizedWeight", test.ScoringPolicy);
         Assert.Equal(10, test.Questions.Count); Assert.Equal(10m, test.Questions.Sum(question => question.MaxPointsSnapshot));
-        Assert.All(test.Questions, question => Assert.Equal("TopicPractice-v1", question.RuleVersion));
+        Assert.All(test.Questions, question => Assert.Equal(TopicPracticePolicy.RuleVersion, question.RuleVersion));
         Assert.Equal(0, result.Value!.CreatedTime.Ticks % TimeSpan.TicksPerSecond);
     }
 
@@ -61,7 +61,7 @@ public sealed class GenerateTopicPracticeTests
         AddQuestion(fixture, "focus-level-2", "topic", 12, "d-2");
         await fixture.Context.SaveChangesAsync();
 
-        var advice = new TopicMasteryAdvice("topic", 1.40m, 5, 1);
+        var advice = new TopicMasteryAdvice("topic", 1.40m, 5, 2, 1);
         var result = await CreateHandler(
             fixture,
             new AdviceRecommendationResolver("topic", new TopicPracticeRecommendationContext(
@@ -84,7 +84,7 @@ public sealed class GenerateTopicPracticeTests
             Assert.Equal("topic", question.RecommendedForTagId);
             Assert.Equal("d-1", question.RecommendedDifficultyId);
             Assert.Equal(1.40m, question.PtagAtSelection);
-            Assert.Equal("TopicPractice-Mastery-v1", question.RuleVersion);
+            Assert.Equal(TopicPracticePolicy.MasteryRuleVersion, question.RuleVersion);
         });
         Assert.All(test.Questions.Where(question => !question.IsAdaptiveSelected), question =>
         {
@@ -92,7 +92,7 @@ public sealed class GenerateTopicPracticeTests
             Assert.Equal("topic", question.RecommendedForTagId);
             Assert.Null(question.RecommendedDifficultyId);
             Assert.Null(question.PtagAtSelection);
-            Assert.Equal("TopicPractice-Mastery-v1", question.RuleVersion);
+            Assert.Equal(TopicPracticePolicy.MasteryRuleVersion, question.RuleVersion);
         });
     }
 

@@ -14,6 +14,10 @@ import {
   timeoutSubmitSession,
 } from '../../services/testingApi';
 import { getTestGenErrorMessage } from '../../utils/testGenerationErrorLocalizer';
+import {
+  toAutoSavePayload,
+  toFiniteNumericAnswer,
+} from './test-session/answerPayload';
 
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 const AUTO_SAVE_DEBOUNCE_MS = 1200;
@@ -45,24 +49,6 @@ function hydrateAnswers(savedAnswers = []) {
     selectedOptions: (answer.selectedOptions || []).map((option) => option.answerId),
     parts: (answer.parts || []).map((part) => ({ ...part })),
   }]));
-}
-
-function toAutoSavePayload(answers) {
-  return Object.entries(answers).map(([questionId, answer]) => ({
-    questionId,
-    answerId: answer.answerId || null,
-    shortAnswerText: answer.shortAnswerText?.trim() || null,
-    timeSpent: answer.timeSpent || 0,
-    selectedOptions: (answer.selectedOptions || []).map((answerId) => ({ answerId })),
-    parts: (answer.parts || []).map((part) => ({
-      partId: part.partId,
-      booleanAnswer: part.booleanAnswer ?? null,
-      textAnswer: part.textAnswer?.trim() || null,
-      numericAnswer: part.numericAnswer === '' || part.numericAnswer == null
-        ? null
-        : Number(part.numericAnswer),
-    })),
-  }));
 }
 
 function getDraftStorageKey(id) {
@@ -381,7 +367,7 @@ export default function TestSession() {
       || answer.selectedOptions?.length
       || answer.parts?.some((part) => part.booleanAnswer != null
         || part.textAnswer?.trim()
-        || part.numericAnswer != null))
+        || toFiniteNumericAnswer(part.numericAnswer) !== null))
     .map(([questionId]) => questionId)), [answers]);
   const unansweredCount = questions.length - answeredIds.size;
 

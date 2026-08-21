@@ -68,7 +68,7 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
         {
             advice.TryGetValue(selectedTopic.TagId, out var representative);
 
-            contexts[selectedTopic.TagId] = representative is null || representative.EvidenceCount < 3
+            contexts[selectedTopic.TagId] = !AdaptiveBlueprintExamPolicy.HasNormalEvidence(representative)
                 ? TopicPracticeRecommendationContext.Baseline
                 : new TopicPracticeRecommendationContext(
                     true,
@@ -100,7 +100,8 @@ public sealed class TopicPracticeRecommendationResolver : ITopicPracticeRecommen
             activeTagIds.Contains(pair.Key) &&
             string.Equals(pair.Key, pair.Value.TagId, StringComparison.OrdinalIgnoreCase) &&
             pair.Value.OfficialPoint is >= 0m and <= 10m &&
-            pair.Value.EvidenceCount >= 0 &&
+            pair.Value.EvidenceItemCount >= 0 &&
+            pair.Value.EvidenceSessionCount >= 0 &&
             pair.Value.RecommendedDifficultyLevel is >= 1 and <= 4);
     }
 

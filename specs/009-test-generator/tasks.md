@@ -8,7 +8,7 @@
 - [x] Mark all TestQuestions using an invalidated version for recalculation.
 
 **Branch**: `testgen-test-generation` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
-**Current delivery slice**: Checkpoint 6A - baseline BlueprintExam
+**Current delivery slice**: Checkpoint 6B backend Part A - mastery evidence v2 and paged Blueprint options
 
 ## Phase 0: Specification Alignment
 
@@ -157,13 +157,20 @@
 - [x] Add controller tests for authenticated claim extraction and error mappings.
 - [x] Run TestGen tests and `dotnet build MathInsight.sln --no-restore`.
 
-## Phase 8B: Adaptive BlueprintExam Backlog
+## Phase 8B: Mastery-Aware Personal BlueprintExam
 
-- [ ] Repair Recommender string-ID/PascalCase SQL mappings and verify them against SQL Server before TestGen integration.
-- [ ] Introduce a stable in-process Recommender advice contract.
-- [ ] Resolve `RecommendedDifficultyLevel` through `TagDifficulty.LevelValue`.
-- [ ] Apply final WeakTag cap, bias, downscale/upscale, and fallback rules.
-- [ ] Populate adaptive recommendation audit fields.
+- [x] Repair Recommender string-ID/PascalCase SQL mappings and introduce the stable batch `IStudentTopicMasteryProvider` contract.
+- [x] Batch-load mastery for all exact blueprint topics and apply the v2 item/session evidence gate.
+- [x] Resolve original and preferred difficulty IDs through active `TagDifficulty.LevelValue` rows.
+- [x] Evaluate every slot using the v2 weak/neutral/strong rules without a percentage cap or adaptive probability.
+- [x] Add a separate minimum-cost capacity assignment that prefers adjusted difficulty and falls back only to original difficulty.
+- [x] Populate and verify adaptive recommendation audit fields, additive response metadata, and ambiguous-commit verification.
+- [x] Keep shared Fixed/Random generation behavior unchanged with regression coverage.
+- [x] Add stable `503` mastery provider/validation errors and prove no partial writes.
+- [x] Add paged/searchable Student Blueprint options with grade/status filtering before count and paging.
+- [ ] Add the Student `Tạo đề theo năng lực` flow while preserving the separate Fixed/Random catalog.
+- [ ] Run integrated backend/frontend verification and one browser smoke covering adjusted and baseline fallback rows.
+- [ ] Reconcile stale completed Phase 8D, Phase 10, and Checkpoint 6E task boxes only where repository or smoke evidence exists.
 - [ ] Deduplicate recent questions after the product window/fallback rule is approved.
 
 ## Phase 8C: TopicPractice
