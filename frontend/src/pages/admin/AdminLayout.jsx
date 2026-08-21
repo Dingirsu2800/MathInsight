@@ -22,6 +22,8 @@ export default function AdminLayout({ children }) {
   };
 
   const topNavItems = [
+    { label: "Ngân hàng câu hỏi", to: "/admin/questions" },
+    { label: "Báo cáo câu hỏi", to: "/admin/reports/questions" },
     { label: "Tài khoản", to: "/admin/accounts" },
     { label: "Đơn đăng ký giáo viên", to: "/admin/applications" },
     { label: "Vai trò & Quyền", to: "/admin/roles" }
