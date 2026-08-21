@@ -62,9 +62,9 @@ public sealed record GradedAnswerDetailDto
 
     /// <summary>
     /// All tag weight entries for this question (primary + secondary).
-    /// Mirrors GradingOrchestrator.BuildTagWeights formula v4.2:
+    /// Mirrors GradingOrchestrator.BuildTagWeights formula v4.3:
     ///   single-tag  → Weight = 1.0
-    ///   multi-tag   → primary Weight = 0.65, each secondary Weight = 0.35 / N
+    ///   multi-tag   → primary Weight = 0.77, each secondary Weight = 0.23 / N
     /// Used by the frontend to compute weighted TopicScore per topic.
     /// </summary>
     public IReadOnlyList<TagWeightEntryDto> TagWeights { get; init; } = [];

@@ -4,11 +4,11 @@
 
 **Feature Branch**: `005-recommender`
 
-**Created**: 2026-06-23 | **Updated**: 2026-08-03
+**Created**: 2026-06-23 | **Updated**: 2026-08-21
 
 **Status**: Approved
 
-**Source Documents**: PRD §4 (FT-06), UCS UC-52-UC-54, algorithm report v4.1 (Unified Multi-Tag), schema migration 002
+**Source Documents**: PRD §4 (FT-06), UCS UC-52-UC-54, algorithm report v4.3 Validated (Unified Multi-Tag, Optuna-optimized), Simulation Report Monte Carlo v4.2, schema migration 002
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -25,7 +25,7 @@
 
 ### Edge Cases
 
-- **No history**: If the grading pipeline encounters a `(student_id, tag_id)` pair with no existing `TagsMastery` row, **lazy-create** it with `official_point = 5.00` (neutral/unknown). The row is inserted with `mastery_status = NotLearned`, `number_done = 0`, and `series_answer_count = 0`. **Trigger**: lazy-create happens only when the Recommender processes a `GradeCalculatedEvent` that references a tag the student has never been graded on before. Topics with no `TagsMastery` row stay neutral and are **not** treated as weak — `GetStudentWeakTagsAsync` only returns rows where `official_point < 5.00`, so topics without a row are correctly excluded until real graded data arrives.
+- **No history**: If the grading pipeline encounters a `(student_id, tag_id)` pair with no existing `TagsMastery` row, **lazy-create** it with `official_point = 0.00`, `practice_point = 0.00`, `exam_anchor = 0.00`. The row is inserted with `mastery_status = NotLearned`, `number_done = 0`, and `series_answer_count = 0`. **Trigger**: lazy-create happens only when the Recommender processes a `GradeCalculatedEvent` that references a tag the student has never been graded on before. Topics with no `TagsMastery` row use a default display value of `init_p = 3.27` (Optuna-optimized pessimistic start) in `GetStudentAllTagsMasteryAsync`. `GetStudentWeakTagsAsync` only returns rows where `official_point < 5.00`, so topics without a row are correctly excluded until real graded data arrives.
 - **All topics strong**: If no topic has `official_point < 5.00`, WeakTags is empty; TestGen may use normal blueprint/topic practice.
 - **Repeated grade event**: Recommender update must be idempotent per `(session_id, tag_id)` by using `StudentTopicSessionResult`.
 - **Low point at easiest mapped difficulty**: Keep recommended difficulty at level 1 and mark `is_remedial = true`.
@@ -41,27 +41,29 @@
 - **RCM-04**: `official_point` is calculated from the role-based formula:
 
 ```text
-official_point = 0.7 * exam_anchor + 0.3 * practice_point
+official_point = 0.55 * exam_anchor + 0.45 * practice_point
 ```
 
-- **RCM-05**: `exam_anchor` is updated from Exam format sessions (using `GradeCalculatedEvent.TestFormat == "Exam"`) using an **Exponential Decay weighted average** over the `k ≤ 5` most recent per-topic session scores:
+  Where `blend_exam = 0.55` (Optuna-optimized, integrity constraint `blend_exam ≥ 0.55` — Exam must outweigh Practice).
+
+- **RCM-05**: `exam_anchor` is updated from Exam format sessions (using `GradeCalculatedEvent.TestFormat == "Exam"`) using an **Exponential Decay weighted average** over the `k ≤ 10` most recent per-topic session scores:
 
   ```text
   exam_anchor = Σ(j=1→k) [β^(j-1) × T_j^{(i)}]  /  Σ(j=1→k) [β^(j-1)]
   ```
 
   Where:
-  - `T_j^{(i)}` — **weighted** topic score (0–10) of tag_i in the j-th most recent graded session, calculated by Grading module using Tầng 1–2 formula (report v4.1): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. This value arrives pre-calculated in `TopicGradeResult.TopicScore`.
-  - `k ≤ 5` — sliding window of up to 5 recent sessions stored in `exam_history` (JSON array)
-  - `β = 0.8` — exponential decay factor (Ebbinghaus Forgetting Curve)
+  - `T_j^{(i)}` — **weighted** topic score (0–10) of tag_i in the j-th most recent graded session, calculated by Grading module using Tầng 1–2 formula (report v4.3): `T_j^{(i)} = avg(c_{q,i})` where `c_{q,i} = s_q × w_{iq}`. This value arrives pre-calculated in `TopicGradeResult.TopicScore`.
+  - `k ≤ 10` — sliding window of up to 10 recent sessions stored in `exam_history` (JSON array) (Optuna-optimized, wider window for EWMA stability)
+  - `β = 0.976` — exponential decay factor (Optuna-optimized; strongly trusts recent exam results, validated on THPTQG 2026 data)
 
   **`exam_history` ordering contract (I2)**: `exam_history` is a JSON array stored on `TagsMastery`.
   - `exam_history[0]` = most recent session score (j=1, weight β⁰ = 1.0).
   - `exam_history[k-1]` = oldest session score in the window.
-  - On each update: **prepend** the new score; if `len > 5`, remove the last element.
+  - On each update: **prepend** the new score; if `len > 10`, remove the last element.
   - This ordering is mandatory — the formula's weight assignment depends on it.
 
-  Decay weights: β⁰ = 1.0 → β¹ = 0.8 → β² = 0.64 → β³ = 0.512 → β⁴ = 0.410
+  Decay weights (first 5): β⁰ = 1.0 → β¹ = 0.976 → β² = 0.953 → β³ = 0.930 → β⁴ = 0.907
 - **RCM-06**: `practice_point` is updated sequentially and retrospectively per-answer after a Practice format session is submitted and graded (using `GradeCalculatedEvent.TestFormat == "Practice"`) (F4 resolution). The calculation processes the session's answers in sequential order of their `question_no` (using the detailed answers provided in `GradeCalculatedEvent.Answers` which includes `QuestionNo` and `IsAbandoned` fields) (F1 resolution).
 
   **Bước 1 — Tính Δ_total** (unchanged from MVP):
@@ -79,18 +81,18 @@ official_point = 0.7 * exam_anchor + 0.3 * practice_point
   ```
 
   Where:
-  - `α = 0.05` — base learning rate (K-factor, inspired by Elo rating system)
+  - `α = 0.30` — base learning rate (K-factor, Optuna-optimized; 6× faster than initial 0.05 — sensitivity analysis confirms α has near-zero impact on accuracy, the algorithm is robust to this parameter; Elo, 1978)
   - `w_D ∈ {0.5, 1.0, 1.5, 2.0}` — difficulty weight for levels 1–4 (inspired by IRT)
-  - `w_i` — tag weight from `GradedAnswerDto.TagWeights`: `1.0` for single-tag, `w_main` (default `0.65`) for Tag Chính, `(1 − w_main) / N_sub` for Tag Phụ (BR-13/14/15)
+  - `w_i` — tag weight from `GradedAnswerDto.TagWeights`: `1.0` for single-tag, `w_main` (default `0.77`, Optuna-optimized) for Tag Chính, `(1 − w_main) / N_sub` for Tag Phụ (BR-13/14/15)
   - `γ_time = 1.0` — normal time multiplier
-  - `γ_time_penalty = 1.5` — guessing penalty when answer time `t < 5 seconds` and not abandoned. For unanswered/abandoned questions, `γ_time_penalty = 1.0` (no penalty).
+  - `γ_time_penalty = 1.91` — guessing penalty when answer time `t < 5 seconds` and not abandoned (Optuna-optimized; stronger guessing deterrent). For unanswered/abandoned questions, `γ_time_penalty = 1.0` (no penalty).
   - **Degenerate case**: When `w_i = 1.0` (single-tag), `ΔP_tag = Δ_total × 1.0 = Δ_total` — identical to MVP formula.
   - `series_answer_count` is incremented **for each tag** independently when a question involving that tag is answered.
 
   After `series_answer_count` reaches **10** for a topic, the accumulated practice gains are incorporated into `official_point`, then `practice_point` is reset to the new baseline:
 
   ```text
-  official_point  = 0.7 × exam_anchor + 0.3 × practice_point   ← blend (already calculated)
+  official_point  = 0.55 × exam_anchor + 0.45 × practice_point   ← blend (already calculated)
   practice_point ← official_point                               ← reset to new baseline
   series_answer_count ← 0
   ```

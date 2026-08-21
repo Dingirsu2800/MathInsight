@@ -207,7 +207,7 @@ Returns aggregate statistics computed from the student's graded sessions.
 
   `TagWeightEntry` — represents a question's tag assignment with its weight:
   - `TagId` (`Guid`) — topic tag ID from `QuestionTopic`
-  - `Weight` (`decimal`) — role-based weight `w_{iq}`: `1.0` for single-tag questions, `w_main ∈ [0.60, 0.70]` (default `0.65`) for Tag Chính, `(1 − w_main) / N_sub` for each Tag Phụ (BR-13/14/15)
+  - `Weight` (`decimal`) — role-based weight `w_{iq}`: `1.0` for single-tag questions, `w_main ∈ [0.60, 0.80]` (default `0.77`, Optuna-optimized) for Tag Chính, `(1 − w_main) / N_sub` for each Tag Phụ (BR-13/14/15)
   - `IsPrimary` (`bool`) — true if `QuestionTopic.IsPrimary = true`
 
   `GradedAnswerDto` contains:

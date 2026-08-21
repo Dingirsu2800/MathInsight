@@ -14,7 +14,7 @@ namespace MathInsight.Modules.Grading_Analytics.Services;
 /// </summary>
 public class GradingOrchestrator : IGradingOrchestrator
 {
-    private const decimal PrimaryTagWeight = 0.65m;
+    private const decimal PrimaryTagWeight = 0.77m;
 
     private readonly GradingDbContext _db;
     private readonly IGradingEngine _gradingEngine;

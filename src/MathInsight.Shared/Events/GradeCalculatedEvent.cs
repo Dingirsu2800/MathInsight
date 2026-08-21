@@ -67,7 +67,7 @@ public sealed record GradedAnswerDto
     /// Used by Recommender for multi-tag Elo delta distribution (Çông thức 2, Bước 2).
     /// Weight rules (BR-13/14/15):
     ///   - Single tag: w = 1.0
-    ///   - Tag Chính (primary): w_main ∈ [0.60, 0.70], default 0.65
+    ///   - Tag Chính (primary): w_main ∈ [0.60, 0.80], default 0.77 (Optuna-optimized)
     ///   - Tag Phụ (secondary): w_sub_i = (1 − w_main) / N_sub
     /// </summary>
     public IReadOnlyList<TagWeightEntry> TagWeights { get; init; } = [];
@@ -113,7 +113,7 @@ public sealed record TagWeightEntry
 /// TopicScore uses the weighted ratio formula (v4.2):
 ///   TopicScore(i) = sum(PointsEarned_q × w_{iq}) / sum(MaxPoints_q × w_{iq}) × 10
 ///   where w_{iq} is the tag weight for tag i on question q (1.0 for single-tag,
-///   0.65 for primary tag, (1-0.65)/N for each secondary tag in multi-tag questions).
+///   0.77 for primary tag, (1-0.77)/N for each secondary tag in multi-tag questions).
 /// For single-tag questions (w=1.0), this equals the traditional formula:
 ///   T_j^{(i)} = SUM(PointsEarned) / SUM(MaxPoints) × 10.
 /// This formula allows TopicScore to reach 10.0 for both single-tag and multi-tag questions

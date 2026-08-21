@@ -14,8 +14,8 @@ namespace MathInsight.Modules.Recommender.Handlers;
 /// </summary>
 public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalculatedEvent>
 {
-    private const decimal Beta = 0.8m;
-    private const int MaxExamHistory = 5;
+    private const decimal Beta = 0.976m;
+    private const int MaxExamHistory = 10;
     private const decimal MasteredThreshold = 7.50m;
 
     private readonly RecommenderDbContext _db;
@@ -112,7 +112,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             mastery.ExamHistory = JsonSerializer.Serialize(history);
 
             mastery.OfficialPoint = Math.Clamp(
-                0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
+                0.55m * mastery.ExamAnchor + 0.45m * mastery.PracticePoint,
                 0.00m, 10.00m);
         }
         else if (string.Equals(evt.TestFormat, "Practice", StringComparison.OrdinalIgnoreCase))
@@ -153,7 +153,7 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             }
 
             mastery.OfficialPoint = Math.Clamp(
-                0.7m * mastery.ExamAnchor + 0.3m * mastery.PracticePoint,
+                0.55m * mastery.ExamAnchor + 0.45m * mastery.PracticePoint,
                 0.00m, 10.00m);
 
             if (mastery.SeriesAnswerCount >= 10)
@@ -252,10 +252,10 @@ public sealed class TopicResultIngestionHandler : INotificationHandler<GradeCalc
             4 => 2.0m,
             _ => 1.0m
         };
-        var timePenalty = answer.TimeSpent < 5 && !answer.IsAbandoned ? 1.5m : 1.0m;
+        var timePenalty = answer.TimeSpent < 5 && !answer.IsAbandoned ? 1.91m : 1.0m;
         return isCorrect
-            ? 0.05m * difficultyWeight
-            : -0.05m * (5.0m - difficultyWeight) * timePenalty;
+            ? 0.30m * difficultyWeight
+            : -0.30m * (5.0m - difficultyWeight) * timePenalty;
     }
 
     private static bool HasTag(GradedAnswerDto answer, string tagId)
