@@ -5,7 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    allowedHosts: 'all',
+    allowedHosts: [
+      'mathinsight-frontend.livelydune-15e29de0.eastasia.azurecontainerapps.io',
+    ],
   },
   preview: {
     port: 4173,
