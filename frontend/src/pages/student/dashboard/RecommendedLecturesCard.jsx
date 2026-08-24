@@ -76,9 +76,6 @@ export default function RecommendedLecturesCard({ layoutVariant = 'dashboard' })
           </span>
           Bài giảng đề xuất dành riêng cho bạn
         </h3>
-        <Link className="text-primary text-xs font-bold hover:underline" to="/student/lectures">
-          Xem tất cả
-        </Link>
       </div>
 
       {loading && (
