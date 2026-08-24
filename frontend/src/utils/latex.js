@@ -73,12 +73,16 @@ export function tabularToMarkdownTable(tabularStr) {
 export function preprocessLatex(content) {
   if (!content || typeof content !== 'string') return content || '';
 
-  // 1. Convert all \begin{tabular}...\end{tabular} into Markdown tables
-  let processed = content.replace(/\\begin\{tabular\}[\s\S]*?\\end\{tabular\}/g, (match) => {
+  // 1. Escape leading "number." patterns so Markdown does not parse them as ordered lists
+  //    e.g. "1." → "1\.", "25." → "25\."  (only at the start of a line)
+  let processed = content.replace(/^(\d+)\./gm, '$1\\.');
+
+  // 2. Convert all \begin{tabular}...\end{tabular} into Markdown tables
+  processed = processed.replace(/\\begin\{tabular\}[\s\S]*?\\end\{tabular\}/g, (match) => {
     return tabularToMarkdownTable(match);
   });
 
-  // 2. Auto-wrap other unwrapped LaTeX environments in $$...$$
+  // 3. Auto-wrap other unwrapped LaTeX environments in $$...$$
   const envPattern = /\\begin\{(array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases|align\*?|equation\*?|gather\*?)\}[\s\S]*?\\end\{\1\}/g;
 
   processed = processed.replace(envPattern, (match, envName, offset, fullString) => {
