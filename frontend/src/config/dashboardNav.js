@@ -34,6 +34,16 @@ export const expertNavItems = [
 
 export const adminNavItems = [
   {
+    label: "Ngân hàng câu hỏi",
+    path: "/admin/questions",
+    icon: "database"
+  },
+  {
+    label: "Báo cáo câu hỏi",
+    path: "/admin/reports/questions",
+    icon: "report_problem"
+  },
+  {
     label: "Quản lý tài khoản",
     path: "/admin/accounts",
     icon: "group"

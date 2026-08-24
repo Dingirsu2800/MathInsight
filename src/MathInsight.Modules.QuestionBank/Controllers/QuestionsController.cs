@@ -25,7 +25,6 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace MathInsight.Modules.QuestionBank.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Expert")]
 [Route("api/question-bank/questions")]
 public class QuestionsController : ControllerBase
 {
@@ -36,6 +35,7 @@ public class QuestionsController : ControllerBase
         _mediator = mediator;
     }
 
+    [Authorize(Roles = "Expert,Admin")]
     [HttpGet]
     public async Task<IActionResult> GetQuestions(
         [FromQuery] int pageIndex,
@@ -116,6 +116,7 @@ public class QuestionsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [Authorize(Roles = "Expert,Admin")]
     [HttpGet("{questionId}")]
     public async Task<IActionResult> GetQuestionDetail(
         string questionId,
@@ -134,6 +135,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert,Admin")]
     [HttpGet("{questionId}/versions")]
     public async Task<IActionResult> GetQuestionVersions(
         string questionId,
@@ -152,6 +154,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost]
     public async Task<IActionResult> CreateQuestion(
         [FromBody] CreateQuestionRequest? request,
@@ -208,6 +211,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPut("{questionId}")]
     public async Task<IActionResult> UpdateQuestion(
         string questionId,
@@ -241,6 +245,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPut("{questionId}/active")]
     public async Task<IActionResult> ToggleQuestionActive(
         string questionId,
@@ -266,6 +271,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpDelete("{questionId}")]
     public async Task<IActionResult> DeleteQuestion(
         string questionId,

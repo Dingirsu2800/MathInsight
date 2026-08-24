@@ -66,6 +66,18 @@ export const questionBankApi = {
     return client.get("/api/question-bank/reports/mine", { params });
   },
 
+  getAdminQuestionReports(params) {
+    return client.get("/api/question-bank/admin/reports/mine", { params });
+  },
+
+  approveAdminQuestionReport(reportId) {
+    return client.post(`/api/question-bank/admin/reports/${reportId}/approve`);
+  },
+
+  rejectAdminQuestionReport(reportId, payload) {
+    return client.post(`/api/question-bank/admin/reports/${reportId}/reject`, payload);
+  },
+
   getQuestionReports(questionId, params) {
     return client.get(`/api/question-bank/questions/${questionId}/reports`, { params });
   },

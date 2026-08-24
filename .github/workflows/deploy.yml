@@ -1,4 +1,4 @@
-﻿name: Deploy to Azure Container Apps
+name: Deploy to Azure Container Apps
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  RESOURCE_GROUP: rg-mathinsight
+  RESOURCE_GROUP: math-insight
   ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
 
 jobs:

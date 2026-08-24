@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ExpertLayout from "./ExpertLayout";
+import AdminLayout from "../admin/AdminLayout";
 import VersionHistoryDrawer from "./VersionHistoryDrawer";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import { cn } from "../../utils/cn";
@@ -21,9 +22,11 @@ import {
 import LatexPreview from "../../components/expert/LatexPreview";
 import QuestionExcelImportDialog from "../../components/expert/QuestionExcelImportDialog";
 
-export default function QuestionBankListPage() {
+export default function QuestionBankListPage({ mode = "expert" }) {
   const navigate = useNavigate();
   const [urlParams, setUrlParams] = useSearchParams();
+  const isAdminMode = mode === "admin";
+  const PageLayout = isAdminMode ? AdminLayout : ExpertLayout;
 
   // Dialog / Drawer states
   const [selectedQuestion, setSelectedQuestion] = React.useState(null);
@@ -386,27 +389,41 @@ export default function QuestionBankListPage() {
   };
 
   return (
-    <ExpertLayout>
+    <PageLayout>
       <div className="p-gutter flex flex-col gap-6 w-full max-w-screen-2xl mx-auto">
 
         {/* Page Header */}
         <DashboardPageHeader
-          title="Ngân hàng câu hỏi"
-          subtitle="Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học."
+          title={isAdminMode ? "Ngân hàng câu hỏi" : "Ngân hàng câu hỏi"}
+          subtitle={
+            isAdminMode
+              ? "Xem ngân hàng câu hỏi và gửi báo cáo khi phát hiện nội dung sai, thiếu logic hoặc không phù hợp."
+              : "Quản lý, tìm kiếm và lọc dữ liệu câu hỏi môn Toán học."
+          }
         >
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsImportExcelOpen(true)}
-              className="normal-case text-xs font-bold"
-            >
-              <span className="material-symbols-outlined text-[18px] mr-1.5">upload_file</span>
-              Nhập Excel
-            </Button>
-            <Button onClick={() => navigate("/expert/questions/new")}>
-              <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
-              Tạo câu hỏi mới
-            </Button>
+            {!isAdminMode && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsImportExcelOpen(true)}
+                  className="normal-case text-xs font-bold"
+                >
+                  <span className="material-symbols-outlined text-[18px] mr-1.5">upload_file</span>
+                  Nhập Excel
+                </Button>
+                <Button onClick={() => navigate("/expert/questions/new")}>
+                  <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
+                  Tạo câu hỏi mới
+                </Button>
+              </>
+            )}
+            {isAdminMode && (
+              <Button variant="outline" onClick={() => navigate("/admin/reports/questions")} className="normal-case text-xs font-bold">
+                <span className="material-symbols-outlined text-[18px] mr-1.5">report_problem</span>
+                Xem báo cáo
+              </Button>
+            )}
           </div>
         </DashboardPageHeader>
 
@@ -903,7 +920,7 @@ export default function QuestionBankListPage() {
             </DialogContent>
 
             <DialogFooter>
-              {selectedQuestionDetails && selectedQuestionDetails.expertId !== currentAccountId && (
+              {(isAdminMode || (selectedQuestionDetails && selectedQuestionDetails.expertId !== currentAccountId)) && (
                 <Button
                   variant="outline"
                   className="border-error text-error hover:bg-error/5 normal-case h-9 text-xs mr-auto flex items-center gap-1.5"
@@ -1042,11 +1059,13 @@ export default function QuestionBankListPage() {
       </Dialog>
 
       {/* Excel Import Dialog */}
-      <QuestionExcelImportDialog
-        isOpen={isImportExcelOpen}
-        onClose={() => setIsImportExcelOpen(false)}
-        onImportSuccess={() => fetchQuestions()}
-      />
-    </ExpertLayout>
+      {!isAdminMode && (
+        <QuestionExcelImportDialog
+          isOpen={isImportExcelOpen}
+          onClose={() => setIsImportExcelOpen(false)}
+          onImportSuccess={() => fetchQuestions()}
+        />
+      )}
+    </PageLayout>
   );
 }

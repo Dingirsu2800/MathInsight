@@ -34,6 +34,7 @@ import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import AccountManagementPage from './pages/admin/AccountManagementPage.jsx';
 import TeacherApplicationsPage from './pages/admin/TeacherApplicationsPage.jsx';
 import RolesPermissionsPage from './pages/admin/RolesPermissionsPage.jsx';
+import QuestionReportsPage from './pages/admin/QuestionReportsPage.jsx';
 import { getAccessToken, getRoleName, getApplicationStatus } from './services/authStorage.js';
 import { resolveHomePath } from './utils/roleRoutes.js';
 import { NavigationGuardProvider } from './contexts/NavigationGuardContext.jsx';
@@ -124,6 +125,8 @@ export default function App() {
       </Route>
       {/* Admin Routes */}
       <Route element={<ProtectedRoute />}>
+        <Route path="/admin/questions" element={<QuestionBankListPage mode="admin" />} />
+        <Route path="/admin/reports/questions" element={<QuestionReportsPage />} />
         <Route path="/admin/accounts" element={<AccountManagementPage />} />
         <Route path="/admin/applications" element={<TeacherApplicationsPage />} />
         <Route path="/admin/roles" element={<RolesPermissionsPage />} />

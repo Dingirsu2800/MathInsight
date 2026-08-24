@@ -44,28 +44,37 @@ public sealed class GetAdminQuestionReportsQueryHandler
             where report.ReporterRole == "Admin" &&
                   report.ReporterAccountId == request.AdminAccountId &&
                   report.Status == status
-            select new AdminQuestionReportListItemResponse(
-                report.ReportId,
-                question.QuestionId,
-                question.QuestionContent,
-                question.Status,
-                question.ExpertId,
-                expert == null ? null : expert.FirstName + " " + expert.LastName,
-                report.ReportReason,
-                report.ReviewNote,
-                report.Status,
-                report.CreatedTime,
-                report.SubmittedTime,
-                report.ReviewedTime,
-                report.ReviewedBy);
+            select new
+            {
+                Report = report,
+                Question = question,
+                Expert = expert
+            };
 
         var totalCount = await reports.CountAsync(cancellationToken);
-        var items = await reports
-            .OrderByDescending(report => report.SubmittedTime ?? report.CreatedTime)
-            .ThenByDescending(report => report.ReportId)
+        var orderedReports = await reports
+            .OrderByDescending(report => report.Report.SubmittedTime ?? report.Report.CreatedTime)
+            .ThenByDescending(report => report.Report.ReportId)
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
+
+        var items = orderedReports
+            .Select(item => new AdminQuestionReportListItemResponse(
+                item.Report.ReportId,
+                item.Question.QuestionId,
+                item.Question.QuestionContent,
+                item.Question.Status,
+                item.Question.ExpertId,
+                item.Expert == null ? null : item.Expert.FirstName + " " + item.Expert.LastName,
+                item.Report.ReportReason,
+                item.Report.ReviewNote,
+                item.Report.Status,
+                item.Report.CreatedTime,
+                item.Report.SubmittedTime,
+                item.Report.ReviewedTime,
+                item.Report.ReviewedBy))
+            .ToList();
 
         var totalPages = totalCount == 0
             ? 0

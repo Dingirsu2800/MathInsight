@@ -44,7 +44,7 @@ export async function getStudentHistoryStats() {
 export async function reportSessionQuestion(sessionId, questionId, reportReason) {
   const response = await api.post(
     `/tests/sessions/${sessionId}/questions/${questionId}/report`,
-    { reportReason }
+    { reason: reportReason }
   );
   return response.data;
 }
