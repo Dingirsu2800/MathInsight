@@ -162,7 +162,7 @@ public sealed class GetSessionResultQueryHandler
                     IsCorrect = a.IsCorrect,               // null when InProgress (BR-UC55-03)
                     PointsEarned = a.PointsEarned,
                     MachinePointsEarned = a.PointsEarned,
-                    EffectivePoints = (tq?.IsScoreInvalidated == true) ? 0m : a.PointsEarned,
+                    EffectivePoints = (tq?.IsScoreInvalidated == true) ? maxPoints : a.PointsEarned,
                     MaxPoints = maxPoints,
                     TimeSpent = a.TimeSpent,
                     IsScoreInvalidated = tq?.IsScoreInvalidated ?? false,
