@@ -5,7 +5,7 @@
  * neutrals (official_point = 5.00) and are excluded to avoid skewing the real average.
  */
 import { useEffect, useRef, useState } from 'react';
-import { getAllTagsMastery } from '../../../services/recommenderApi';
+import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
 
 function InfoPopover({ content }) {
   const [open, setOpen] = useState(false);
@@ -66,12 +66,11 @@ export default function CompetencySummaryCard() {
       .then((data) => {
         if (cancelled) return;
         const all = data ?? [];
-        // Score only from practiced topics (numberDone > 0)
         const practiced = all.filter((t) => t.numberDone > 0);
         setUnpracticedCount(all.length - practiced.length);
-        if (practiced.length > 0) {
-          const avg = practiced.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / practiced.length;
-          setScore(Math.round(avg * 10) / 10);
+        const overall = calculateOverallCompetencyScore(all);
+        if (overall != null) {
+          setScore(overall);
         }
       })
       .catch(() => { if (!cancelled) setError(true); })

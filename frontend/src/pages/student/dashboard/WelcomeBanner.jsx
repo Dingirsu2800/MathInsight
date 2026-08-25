@@ -3,23 +3,8 @@ import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import useCurrentUser from '../../../hooks/useCurrentUser';
 import { getTargets } from '../../../services/gamificationApi';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
 import { getStudentHistoryStats } from '../../../services/gradingApi';
-
-/**
- * Tính điểm năng lực trung bình từ danh sách chủ đề yếu.
- * Nếu không có dữ liệu weak-tags, fallback sang averageScore của grading.
- */
-function resolveCompetencyPoint(weakTags, stats) {
-  if (Array.isArray(weakTags) && weakTags.length > 0) {
-    const avg = weakTags.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / weakTags.length;
-    return Math.round(avg * 10) / 10;
-  }
-  if (stats?.averageScore != null) {
-    return Math.round(Number(stats.averageScore) * 10) / 10;
-  }
-  return null;
-}
 
 /**
  * Tính phần trăm tiến độ mục tiêu trung bình từ danh sách targets.
@@ -47,19 +32,18 @@ export default function WelcomeBanner() {
     let isMounted = true;
 
     async function load() {
-      const [weakTagsResult, targetsResult, statsResult] = await Promise.allSettled([
-        getWeakTags(),
+      const [tagMasteryResult, targetsResult, statsResult] = await Promise.allSettled([
+        getAllTagsMastery(),
         getTargets(),
         getStudentHistoryStats(),
       ]);
 
       if (!isMounted) return;
 
-      const weakTags = weakTagsResult.status === 'fulfilled' ? weakTagsResult.value : null;
+      const tagMastery = tagMasteryResult.status === 'fulfilled' ? tagMasteryResult.value : null;
       const targets = targetsResult.status === 'fulfilled' ? targetsResult.value : null;
-      const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
 
-      setCompetencyPoint(resolveCompetencyPoint(weakTags, stats));
+      setCompetencyPoint(calculateOverallCompetencyScore(tagMastery));
       setWeeklyProgress(resolveWeeklyProgress(targets));
       setLoading(false);
     }
