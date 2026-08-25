@@ -35,7 +35,7 @@ export function validateBlueprint(state, isSubmit = false) {
 
     if (!(section.sectionName || "").trim()) errors.push(`${label}: Tên phần không được để trống.`);
     if (!isInteger(section.totalQuestions, isSubmit)) errors.push(`${label}: Số câu không hợp lệ.`);
-    if (!isValidScore(section.scoreBudget)) errors.push(`${label}: Quỹ điểm không hợp lệ.`);
+    if (!isValidScore(section.scoreBudget)) errors.push(`${label}: Tổng điểm của phần không hợp lệ.`);
     if ((section.details || []).length === 0) errors.push(`${label}: Phải có ít nhất một dòng phân bổ.`);
 
     totalQuestions += Number.isFinite(sectionQuestions) ? sectionQuestions : 0;
@@ -43,7 +43,7 @@ export function validateBlueprint(state, isSubmit = false) {
 
     const isComposite = section.questionType === "Composite";
     if (isComposite) {
-      if (!isInteger(section.partCountPerQuestion, true)) errors.push(`${label}: Số phần mỗi câu phải lớn hơn 0.`);
+      if (!isInteger(section.partCountPerQuestion, true)) errors.push(`${label}: Số mệnh đề trong mỗi câu phải lớn hơn 0.`);
       if (!["TieredTrueFalse", "WeightedParts"].includes(section.scoringRule)) {
         errors.push(`${label}: Quy tắc chấm Composite không hợp lệ.`);
       }
@@ -78,12 +78,12 @@ export function validateBlueprint(state, isSubmit = false) {
   });
 
   if (totalQuestions !== Number(state.totalQuestions)) {
-    const message = `Tổng số câu của các phần (${totalQuestions}) phải bằng tổng số câu của cấu trúc (${Number(state.totalQuestions) || 0}).`;
+    const message = `Tổng số câu của các phần (${totalQuestions}) phải bằng tổng số câu của cấu trúc đề (${Number(state.totalQuestions) || 0}).`;
     (isSubmit ? errors : warnings).push(message);
   }
 
   if (Math.abs(totalBudget - Number(state.totalScore)) > 0.001) {
-    errors.push(`Tổng quỹ điểm các phần (${totalBudget.toFixed(2)}) phải bằng tổng điểm (${Number(state.totalScore || 0).toFixed(2)}).`);
+    errors.push(`Tổng điểm của các phần (${totalBudget.toFixed(2)}) phải bằng tổng điểm của cấu trúc đề (${Number(state.totalScore || 0).toFixed(2)} điểm).`);
   }
 
   return { isValid: errors.length === 0, errors, warnings };

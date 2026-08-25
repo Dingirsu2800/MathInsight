@@ -49,7 +49,8 @@ public sealed class GetSharedBlueprintExamsQueryHandler
                 test.GeneratedForStudentId == null &&
                 test.Blueprint != null &&
                 test.Blueprint.Status == BlueprintStatuses.Active &&
-                test.Blueprint.Grade == grade)
+                test.Blueprint.Grade == grade &&
+                !test.Questions.Any(question => question.IsScoreInvalidated))
             .Select(test => new
             {
                 test.TestId,

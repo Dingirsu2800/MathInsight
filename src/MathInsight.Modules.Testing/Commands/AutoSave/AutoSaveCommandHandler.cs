@@ -65,9 +65,12 @@ public sealed class AutoSaveCommandHandler
                 return Result<AutoSaveResponse>.Failure(TestingErrors.AnswerNotInVersion);
             }
 
+            if (!QuestionSnapshotReader.HasValidNumericShortAnswers(snapshot, dto))
+                return Result<AutoSaveResponse>.Failure(TestingErrors.ShortAnswerNumericRequired);
+
             // Update basic answer fields
             answer.AnswerId = dto.AnswerId;
-            answer.ShortAnswerText = dto.ShortAnswerText;
+            answer.ShortAnswerText = QuestionSnapshotReader.NormalizeShortAnswerText(snapshot, dto.ShortAnswerText);
             answer.TimeSpent = dto.TimeSpent;
             answer.UpdateChoiceTime = now;
 
@@ -102,7 +105,7 @@ public sealed class AutoSaveCommandHandler
                     if (existingPart is not null)
                     {
                         existingPart.BooleanAnswer = partDto.BooleanAnswer;
-                        existingPart.TextAnswer = partDto.TextAnswer;
+                        existingPart.TextAnswer = QuestionSnapshotReader.NormalizePartText(snapshot, partDto.PartId, partDto.TextAnswer);
                         existingPart.NumericAnswer = partDto.NumericAnswer;
                     }
                     else
@@ -112,7 +115,7 @@ public sealed class AutoSaveCommandHandler
                             TestAnswerId = answer.TestAnswerId,
                             PartId = partDto.PartId,
                             BooleanAnswer = partDto.BooleanAnswer,
-                            TextAnswer = partDto.TextAnswer,
+                            TextAnswer = QuestionSnapshotReader.NormalizePartText(snapshot, partDto.PartId, partDto.TextAnswer),
                             NumericAnswer = partDto.NumericAnswer,
                             PointsEarned = 0
                         });

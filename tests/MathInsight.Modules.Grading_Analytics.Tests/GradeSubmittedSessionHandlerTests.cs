@@ -100,7 +100,7 @@ public class GradeSubmittedSessionHandlerTests
         }
         for (int i = 0; i < 10; i++)
         {
-            TestDataBuilder.AddShortAnswer(session, 1.5m, "answer", "answer");
+            TestDataBuilder.AddShortAnswer(session, 1.5m, "1.5", "1,5");
         }
         for (int i = 0; i < 10; i++)
         {
@@ -144,7 +144,7 @@ public class GradeSubmittedSessionHandlerTests
         TestDataBuilder.AddSingleChoiceAnswer(session, 2.0m, Guid.NewGuid().ToString("D"), null);
 
         // Correct short answer (1pt)
-        TestDataBuilder.AddShortAnswer(session, 1.0m, "hello", "HELLO");
+        TestDataBuilder.AddShortAnswer(session, 1.0m, "3", "3");
 
         // Act
         var result = _engine.Grade(session);

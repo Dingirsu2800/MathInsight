@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import QuestionOcrDraftReviewDialog, { getDetectedMarkLabel } from './QuestionOcrDraftReviewDialog';
 
@@ -21,7 +21,7 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-describe('QuestionOcrDraftReviewDialog - OCR Mark Untrusted Observations', () => {
+describe('QuestionOcrDraftReviewDialog - OCR Mark Untrusted Observations & Simplified Review', () => {
   const baseOcrResult = {
     pageConfidence: 0.95,
     extractedImages: [],
@@ -85,5 +85,86 @@ describe('QuestionOcrDraftReviewDialog - OCR Mark Untrusted Observations', () =>
     expect(
       screen.getByText('Ký hiệu chỉ là dữ liệu quan sát từ ảnh, không phải đáp án đã xác nhận.')
     ).toBeInTheDocument();
+
+    // Raw Mistral Markdown diagnostics section must NOT be rendered
+    expect(screen.queryByText(/Mã Markdown gốc từ Mistral OCR/i)).not.toBeInTheDocument();
+  });
+
+  it('hides empty solution by default and reveals solution editor on "Thêm lời giải" click', () => {
+    const reviewDraft = {
+      suggestedQuestionType: 'SINGLE_CHOICE',
+      questionContent: 'Đề bài',
+      solutionContent: '',
+      answers: [],
+    };
+
+    const setReviewDraft = vi.fn();
+
+    render(
+      <QuestionOcrDraftReviewDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        ocrResult={baseOcrResult}
+        reviewDraft={reviewDraft}
+        setReviewDraft={setReviewDraft}
+        attachSourceImage={false}
+        setAttachSourceImage={vi.fn()}
+        selectedExtractedImageId={null}
+        setSelectedExtractedImageId={vi.fn()}
+        manualCropSelection={null}
+        setManualCropSelection={vi.fn()}
+        ocrImageUploading={false}
+        ocrImageUploadError=""
+        onApplyDraft={vi.fn()}
+        ocrPreviewUrl=""
+        isOcrBusy={false}
+      />
+    );
+
+    // Empty solution textarea should NOT be visible by default
+    expect(screen.queryByPlaceholderText(/Nhập hướng dẫn giải/i)).not.toBeInTheDocument();
+
+    // "Thêm lời giải" button should be visible
+    const addSolutionBtn = screen.getByRole('button', { name: /Thêm lời giải/i });
+    expect(addSolutionBtn).toBeInTheDocument();
+
+    // Click "Thêm lời giải"
+    fireEvent.click(addSolutionBtn);
+
+    // Solution textarea should now be visible
+    expect(screen.getByPlaceholderText(/Nhập hướng dẫn giải/i)).toBeInTheDocument();
+  });
+
+  it('displays solution editor immediately when OCR returned explicit solution', () => {
+    const reviewDraft = {
+      suggestedQuestionType: 'SINGLE_CHOICE',
+      questionContent: 'Đề bài',
+      solutionContent: 'Lời giải chi tiết từ OCR',
+      answers: [],
+    };
+
+    render(
+      <QuestionOcrDraftReviewDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        ocrResult={baseOcrResult}
+        reviewDraft={reviewDraft}
+        setReviewDraft={vi.fn()}
+        attachSourceImage={false}
+        setAttachSourceImage={vi.fn()}
+        selectedExtractedImageId={null}
+        setSelectedExtractedImageId={vi.fn()}
+        manualCropSelection={null}
+        setManualCropSelection={vi.fn()}
+        ocrImageUploading={false}
+        ocrImageUploadError=""
+        onApplyDraft={vi.fn()}
+        ocrPreviewUrl=""
+        isOcrBusy={false}
+      />
+    );
+
+    expect(screen.getByPlaceholderText(/Nhập hướng dẫn giải/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Lời giải chi tiết từ OCR')).toBeInTheDocument();
   });
 });

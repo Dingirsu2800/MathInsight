@@ -85,6 +85,35 @@ public sealed class GetSessionResultQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_InvalidatedQuestion_AwardsTheSnapshotMaximumWithoutChangingMachinePoints()
+    {
+        await using var db = CreateDbContext();
+
+        var session = TestDataBuilder.CreateSession(testFormat: "Practice", status: "Graded");
+        session.StudentId = "student-123";
+        var answer = TestDataBuilder.AddShortAnswer(session, 1m, "2", "1");
+        answer.PointsEarned = 0m;
+        db.TestSessions.Add(session);
+        db.TestQuestions.Add(new TestQuestion
+        {
+            TestId = session.TestId,
+            QuestionId = answer.QuestionId,
+            MaxPointsSnapshot = 1m,
+            IsScoreInvalidated = true
+        });
+        await db.SaveChangesAsync();
+
+        var result = await new GetSessionResultQueryHandler(db).Handle(
+            new GetSessionResultQuery(session.SessionId, "student-123"),
+            CancellationToken.None);
+
+        var resultAnswer = Assert.Single(result!.Answers);
+        Assert.True(resultAnswer.IsScoreInvalidated);
+        Assert.Equal(0m, resultAnswer.MachinePointsEarned);
+        Assert.Equal(1m, resultAnswer.EffectivePoints);
+    }
+
+    [Fact]
     public async Task Handle_NonOwner_ThrowsUnauthorizedAccessException()
     {
         await using var db = CreateDbContext();

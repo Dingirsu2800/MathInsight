@@ -1,3 +1,5 @@
+import { normalizeNumericShortAnswer } from '../../../utils/numericShortAnswer';
+
 export function toFiniteNumericAnswer(rawValue) {
   if (rawValue == null) return null;
 
@@ -12,13 +14,13 @@ export function toAutoSavePayload(answers) {
   return Object.entries(answers).map(([questionId, answer]) => ({
     questionId,
     answerId: answer.answerId || null,
-    shortAnswerText: answer.shortAnswerText?.trim() || null,
+    shortAnswerText: normalizeNumericShortAnswer(answer.shortAnswerText),
     timeSpent: answer.timeSpent || 0,
     selectedOptions: (answer.selectedOptions || []).map((answerId) => ({ answerId })),
     parts: (answer.parts || []).map((part) => ({
       partId: part.partId,
       booleanAnswer: part.booleanAnswer ?? null,
-      textAnswer: part.textAnswer?.trim() || null,
+      textAnswer: normalizeNumericShortAnswer(part.textAnswer),
       numericAnswer: toFiniteNumericAnswer(part.numericAnswer),
     })),
   }));

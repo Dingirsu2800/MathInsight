@@ -5,6 +5,7 @@ using MathInsight.Modules.QuestionBank.Commands.PreviewQuestionImport;
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Entities;
+using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Imports;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +79,26 @@ public sealed class QuestionExcelImportTests
         Assert.True(item.IsValid);
         Assert.NotNull(item.Draft);
         Assert.Equal(questionType, item.Draft!.QuestionType);
+    }
+
+    [Fact]
+    public async Task Preview_TextualShortAnswer_ReturnsNumericAnswerValidationError()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await SeedTaxonomyAsync(database);
+        using var workbook = BuildValidWorkbook("SHORT_ANSWER");
+        workbook.Worksheet("Answers").Cell(2, 2).Value = "pi";
+        var handler = new PreviewQuestionImportCommandHandler(
+            new QuestionImportWorkbookParser(),
+            new QuestionImportValidationService(database.Context));
+
+        var result = await handler.Handle(
+            new PreviewQuestionImportCommand(CreateWorkbookFile(workbook)),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Value!.Items);
+        Assert.False(item.IsValid);
+        Assert.Contains(item.Errors, error => error.Code == QuestionBankErrors.QuestionShortAnswerNumericRequired.Code);
     }
 
     [Fact]
@@ -604,14 +625,14 @@ public sealed class QuestionExcelImportTests
                 IsActive = true
             },
             new TagTopic
-        {
-            TagId = "topic-1",
-            ParentTagId = "root-topic-1",
-            TagName = "Functions",
-            Grade = topicGrade,
-            DisplayOrder = 1,
-            IsActive = topicIsActive
-        });
+            {
+                TagId = "topic-1",
+                ParentTagId = "root-topic-1",
+                TagName = "Functions",
+                Grade = topicGrade,
+                DisplayOrder = 1,
+                IsActive = topicIsActive
+            });
         await database.Context.SaveChangesAsync();
     }
 

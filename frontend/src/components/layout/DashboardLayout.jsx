@@ -23,13 +23,14 @@ function DashboardLayoutShell({
   showSidebarLogout = false,
   showThemeToggle = true,
   showNotifications = true,
+  hideTopbar = false,
   children
 }) {
   const location = useLocation();
   const { confirmNavigation } = useNavigationGuard();
   const [darkMode, setDarkMode] = React.useState(() => {
     return localStorage.getItem("theme") === "dark" || 
-      (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      (!localStorage.getItem("theme") && typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)")?.matches);
   });
 
   React.useEffect(() => {
@@ -61,25 +62,27 @@ function DashboardLayoutShell({
 
       {/* Main viewport area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Top header bar */}
-        <DashboardTopbar
-          appTitle={appTitle}
-          logoPath={logoPath}
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-          topNavItems={topNavItems}
-          userAvatarUrl={userAvatarUrl}
-          userName={userName}
-          userRoleLabel={userRoleLabel}
-          userInitials={userInitials}
-          profilePath={profilePath}
-          onLogout={onLogout}
-          onExport={onExport}
-          exportLabel={exportLabel}
-          showThemeToggle={showThemeToggle}
-          showNotifications={showNotifications}
-          onBeforeNavigate={confirmNavigation}
-        />
+        {/* Top header bar (optional for roles like Expert) */}
+        {!hideTopbar && (
+          <DashboardTopbar
+            appTitle={appTitle}
+            logoPath={logoPath}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
+            topNavItems={topNavItems}
+            userAvatarUrl={userAvatarUrl}
+            userName={userName}
+            userRoleLabel={userRoleLabel}
+            userInitials={userInitials}
+            profilePath={profilePath}
+            onLogout={onLogout}
+            onExport={onExport}
+            exportLabel={exportLabel}
+            showThemeToggle={showThemeToggle}
+            showNotifications={showNotifications}
+            onBeforeNavigate={confirmNavigation}
+          />
+        )}
 
         {/* Dynamic page content container */}
         <main className="flex-1 overflow-y-auto bg-canvas-white">

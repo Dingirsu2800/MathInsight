@@ -2,7 +2,6 @@ import React from "react";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../../utils/cn";
-import ImageCropSelector from "./ImageCropSelector";
 
 export function stabilizeSelectedFile(file) {
   if (!file) return file;
@@ -22,8 +21,6 @@ export default function QuestionOcrUploadDrawer({
   ocrScanError,
   onFileSelect,
   onFileClear,
-  ocrCropSelection,
-  onCropSelectionChange,
   onScan,
   isOcrBusy
 }) {
@@ -51,7 +48,6 @@ export default function QuestionOcrUploadDrawer({
   };
 
   const handleContainerClick = (e) => {
-    // Avoid triggering input click if target is a button or is busy
     if (isOcrBusy) return;
     if (e.target.closest("button") || e.target.closest("input")) return;
     fileInputRef.current?.click();
@@ -61,7 +57,6 @@ export default function QuestionOcrUploadDrawer({
     const file = e.target.files?.[0];
     if (file) {
       onFileSelect(stabilizeSelectedFile(file));
-      // Reset input value to allow selecting same file again
       e.target.value = "";
     }
   };
@@ -155,31 +150,11 @@ export default function QuestionOcrUploadDrawer({
           </div>
         )}
 
-        {/* Crop before OCR */}
+        {/* Source Image Preview */}
         {ocrPreviewUrl && (
           <div className="space-y-3">
-            <ImageCropSelector
-              sourceUrl={ocrPreviewUrl}
-              selection={ocrCropSelection}
-              onSelectionChange={onCropSelectionChange}
-              disabled={isOcrBusy}
-            />
-            <button
-              type="button"
-              onClick={() => onCropSelectionChange({ x: 0, y: 0, width: 1, height: 1 })}
-              disabled={isOcrBusy}
-              className="w-full h-9 px-3 border border-outline-variant rounded-lg text-xs font-bold text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
-            >
-              Dùng toàn bộ ảnh
-            </button>
-            <p className="text-[10px] text-on-surface-variant">
-              Dùng lựa chọn này khi ảnh chỉ chứa đúng một câu hỏi.
-            </p>
-            <div className="border border-outline-variant rounded-xl p-2.5 bg-surface-container-low max-w-full flex items-center justify-center">
-              <img src={ocrPreviewUrl} alt="Ảnh đề bài đã chọn" className="max-h-40 max-w-full w-auto object-contain rounded bg-pure-surface" />
-            </div>
             <div className="flex items-center justify-between border-b border-outline-variant pb-1.5 select-none">
-              <h4 className="text-[10px] font-bold text-on-surface-variant">Ảnh gốc sẽ chỉ được dùng để đối chiếu.</h4>
+              <h4 className="text-xs font-bold text-on-surface">Ảnh đề bài đã chọn:</h4>
               {!isOcrBusy && (
                 <button
                   type="button"
@@ -194,7 +169,7 @@ export default function QuestionOcrUploadDrawer({
             <div className="border border-outline-variant rounded-xl p-2.5 bg-surface-container-low max-w-full flex items-center justify-center">
               <img
                 src={ocrPreviewUrl}
-                alt="OCR Upload Preview"
+                alt="Ảnh đề bài đã chọn"
                 className="max-h-64 max-w-full w-auto object-contain rounded shadow-sm bg-pure-surface"
               />
             </div>
@@ -216,7 +191,7 @@ export default function QuestionOcrUploadDrawer({
           type="button"
           variant="primary"
           onClick={onScan}
-          disabled={isOcrBusy || !ocrFile || !ocrCropSelection}
+          disabled={isOcrBusy || !ocrFile}
           className="normal-case text-xs font-bold flex items-center gap-1.5 cursor-pointer"
         >
           {ocrScanning ? (

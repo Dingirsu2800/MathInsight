@@ -243,6 +243,28 @@ public sealed class SharedBlueprintExamControllerTests
         mediator.VerifyAll();
     }
 
+    [Fact]
+    public async Task ResolveCode_InvalidatedQuestionMapsTo409()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(instance => instance.Send(
+                It.IsAny<ResolveSharedTestCodeQuery>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<SharedBlueprintExamResponse>.Failure(
+                TestGenerationErrors.TestContainsInvalidatedQuestion));
+        var controller = CreateGeneratedTestsController(mediator.Object, StudentId, "Student");
+
+        var result = await controller.ResolveTestCode(
+            new ResolveTestCodeRequest { TestCode = "INVALID01" },
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.Equal(
+            TestGenerationErrors.TestContainsInvalidatedQuestion.Code,
+            Assert.IsType<ApiErrorResponse>(conflict.Value).Code);
+    }
+
     private static GenerateSharedBlueprintExamResponse GenerationResponse()
         => new(
             "controller-test",

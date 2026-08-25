@@ -118,6 +118,8 @@ public sealed class GeneratedTestsController : ControllerBase
         }
         if (error == TestGenerationErrors.QuestionVersionMissing)
             return UnprocessableEntity(new ApiErrorResponse(error));
+        if (error == TestGenerationErrors.TestContainsInvalidatedQuestion)
+            return Conflict(new ApiErrorResponse(error));
 
         return BadRequest(new ApiErrorResponse(error));
     }

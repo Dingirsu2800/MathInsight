@@ -68,6 +68,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpGet("import-template")]
     public async Task<IActionResult> DownloadQuestionImportTemplate(CancellationToken cancellationToken)
     {
@@ -78,6 +79,7 @@ public class QuestionsController : ControllerBase
         return File(result.Value!.Content, result.Value.ContentType, result.Value.FileName);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost("import-preview")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(21 * 1024 * 1024)]
@@ -92,6 +94,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost("import-confirm")]
     public async Task<IActionResult> ConfirmQuestionImport(
         [FromBody] ConfirmQuestionImportRequest? request,
@@ -177,6 +180,7 @@ public class QuestionsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost("image-upload")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadQuestionImage(
@@ -193,6 +197,7 @@ public class QuestionsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost("ocr-draft")]
     [Consumes("multipart/form-data")]
     [EnableRateLimiting(QuestionOcrRateLimit.PolicyName)]

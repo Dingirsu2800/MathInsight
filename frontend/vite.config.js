@@ -6,6 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     allowedHosts: [
+      'mathinsight.me',
+      'www.mathinsight.me',
       'mathinsight-frontend.livelydune-15e29de0.eastasia.azurecontainerapps.io',
     ],
   },
