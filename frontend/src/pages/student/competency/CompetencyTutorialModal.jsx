@@ -106,7 +106,7 @@ const TUTORIAL_STEPS = [
               </span>
             </div>
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Đánh giá áp lực phòng thi. Hệ thống tự động ưu tiên bài thi gần nhất bằng thuật toán suy giảm lũy thừa.
+              Đánh giá áp lực phòng thi. Hệ thống tự động ưu tiên các bài thi gần nhất bằng thuật toán suy giảm lũy thừa.
             </p>
           </div>
 
