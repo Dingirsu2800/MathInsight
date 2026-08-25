@@ -128,9 +128,13 @@ public sealed class QuestionOcrDraftTests
     {
         var annotation = new
         {
-            questionContent = "Chọn đáp án đúng.", solutionContent = "", suggestedQuestionType = "SINGLE_CHOICE",
+            questionContent = "Chọn đáp án đúng.",
+            solutionContent = "",
+            suggestedQuestionType = "SINGLE_CHOICE",
             answers = new[] { new { content = "A", suggestedIsCorrect = true, detectedMark = "circled" } },
-            parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
+            parts = Array.Empty<object>(),
+            warnings = Array.Empty<string>(),
+            visualContentDetected = false
         };
         using var client = CreateJsonClient(CreateProviderResponse(annotation));
         var service = CreateMistralService(client);
@@ -151,9 +155,14 @@ public sealed class QuestionOcrDraftTests
     {
         var annotation = new
         {
-            questionContent = "Chọn đáp án.", solutionContent = "Lời giải được in sẵn.", solutionExplicitlyVisible = true, suggestedQuestionType = "SINGLE_CHOICE",
+            questionContent = "Chọn đáp án.",
+            solutionContent = "Lời giải được in sẵn.",
+            solutionExplicitlyVisible = true,
+            suggestedQuestionType = "SINGLE_CHOICE",
             answers = new[] { new { content = "A", suggestedIsCorrect = true, detectedMark = providerMark } },
-            parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
+            parts = Array.Empty<object>(),
+            warnings = Array.Empty<string>(),
+            visualContentDetected = false
         };
         using var client = CreateJsonClient(CreateProviderResponse(annotation));
         var service = CreateMistralService(client);
@@ -205,8 +214,13 @@ public sealed class QuestionOcrDraftTests
     {
         var annotation = new
         {
-            questionContent = "Bảng số liệu sau đây.", solutionContent = "", suggestedQuestionType = "SHORT_ANSWER",
-            answers = Array.Empty<object>(), parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = true
+            questionContent = "Bảng số liệu sau đây.",
+            solutionContent = "",
+            suggestedQuestionType = "SHORT_ANSWER",
+            answers = Array.Empty<object>(),
+            parts = Array.Empty<object>(),
+            warnings = Array.Empty<string>(),
+            visualContentDetected = true
         };
         using var client = CreateJsonClient(CreateProviderResponse(annotation, images: Array.Empty<object>()));
         var service = CreateMistralService(client);
@@ -223,8 +237,13 @@ public sealed class QuestionOcrDraftTests
         const string markdown = "| Nhóm | Tần số |\n| --- | --- |\n| [8;10) | 3 |";
         var annotation = new
         {
-            questionContent = "Dựa vào bảng sau.", solutionContent = "", suggestedQuestionType = "SHORT_ANSWER",
-            answers = Array.Empty<object>(), parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = true
+            questionContent = "Dựa vào bảng sau.",
+            solutionContent = "",
+            suggestedQuestionType = "SHORT_ANSWER",
+            answers = Array.Empty<object>(),
+            parts = Array.Empty<object>(),
+            warnings = Array.Empty<string>(),
+            visualContentDetected = true
         };
         using var client = CreateJsonClient(CreateProviderResponse(annotation, markdown: markdown));
         var service = CreateMistralService(client);
@@ -250,8 +269,12 @@ public sealed class QuestionOcrDraftTests
     {
         var annotation = new
         {
-            questionContent = " ", solutionContent = "", suggestedQuestionType = "UNKNOWN",
-            answers = Array.Empty<object>(), parts = Array.Empty<object>(), warnings = Array.Empty<string>()
+            questionContent = " ",
+            solutionContent = "",
+            suggestedQuestionType = "UNKNOWN",
+            answers = Array.Empty<object>(),
+            parts = Array.Empty<object>(),
+            warnings = Array.Empty<string>()
         };
         var payload = JsonSerializer.Serialize(new { pages = Array.Empty<object>(), document_annotation = JsonSerializer.Serialize(annotation) });
         using var client = new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -295,9 +318,13 @@ public sealed class QuestionOcrDraftTests
     {
         var annotation = new
         {
-            questionContent = "Tính $x$.", solutionContent = "", suggestedQuestionType = "SINGLE_CHOICE",
+            questionContent = "Tính $x$.",
+            solutionContent = "",
+            suggestedQuestionType = "SINGLE_CHOICE",
             answers = new[] { new { content = "$x=1$", suggestedIsCorrect = false, detectedMark = "" } },
-            parts = Array.Empty<object>(), warnings = Array.Empty<string>(), visualContentDetected = false
+            parts = Array.Empty<object>(),
+            warnings = Array.Empty<string>(),
+            visualContentDetected = false
         };
         return CreateProviderResponse(annotation);
     }
