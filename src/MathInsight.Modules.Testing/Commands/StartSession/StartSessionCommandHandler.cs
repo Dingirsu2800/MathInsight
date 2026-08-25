@@ -70,9 +70,6 @@ public sealed class StartSessionCommandHandler
         if (test.TestStatus != "Active")
             return Result<StartSessionResponse>.Failure(TestingErrors.TestNotActive);
 
-        if (test.Questions.Any(question => question.IsScoreInvalidated))
-            return Result<StartSessionResponse>.Failure(TestingErrors.TestContainsInvalidatedQuestion);
-
         var student = await _db.Students
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.StudentId == request.StudentId, cancellationToken);
@@ -89,6 +86,9 @@ public sealed class StartSessionCommandHandler
 
         if (!hasAccess)
             return Result<StartSessionResponse>.Failure(TestingErrors.TestAccessDenied);
+
+        if (test.Questions.Any(question => question.IsScoreInvalidated))
+            return Result<StartSessionResponse>.Failure(TestingErrors.TestContainsInvalidatedQuestion);
 
         // BR-15: Check no existing InProgress session for same (StudentID, TestID).
         var existingSession = await _db.TestSessions

@@ -831,6 +831,25 @@ public sealed class ExpertQuestionAndTagCoverageTests
     }
 
     [Fact]
+    public async Task UpdateQuestion_WithTextualShortAnswer_RejectsNumericAnswerKey()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var createResult = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(CreateQuestionRequest("difficulty-1", "topic-1"), "expert-1"), CancellationToken.None);
+        var request = ToUpdateQuestionRequest(CreateQuestionRequest("difficulty-1", "topic-1"));
+        request.QuestionType = "SHORT_ANSWER";
+        request.Answers = [new CreateAnswerRequest { AnswerContent = "pi", IsCorrect = true }];
+
+        var result = await new UpdateQuestionCommandHandler(database.Context)
+            .Handle(new UpdateQuestionCommand(createResult.Value!.QuestionId, request, "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionShortAnswerNumericRequired, result.Error);
+    }
+
+    [Fact]
     public async Task CreateQuestion_WithNumericCompositeShortAnswerPart_AcceptsDecimalComma()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
