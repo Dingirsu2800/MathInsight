@@ -9,7 +9,7 @@ import BlueprintTopicPicker from "../../components/expert/BlueprintTopicPicker";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { questionBankApi } from "../../services/questionBankApi";
 import { detailToEditorState, editorStateToBlueprintRequest } from "../../utils/blueprintMappers";
-import { validateBlueprintForDraft } from "../../utils/blueprintValidation";
+import { validateBlueprint, validateBlueprintForDraft, validateBlueprintForSubmit } from "../../utils/blueprintValidation";
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { getBlueprintActions } from "../../utils/blueprintAuth";
 import { getQuestionTypeLabel } from "../../utils/blueprintLabels";
@@ -291,15 +291,15 @@ export default function BlueprintEditorPage() {
     e.preventDefault();
     setFeedback(null);
 
-    // 1. Run Client-side validator first to prevent NaN issues
-    const validationResult = validateBlueprintForDraft(form);
+    // 1. Run Client-side validator first to prevent invalid submissions
+    const validationResult = validateBlueprint(form, true);
     if (!validationResult.isValid) {
       setFeedback({
         type: "error",
         message: `Dữ liệu không hợp lệ. Vui lòng sửa các lỗi sau:\n` + validationResult.errors.join("\n")
       });
       // Scroll to top to see error banner
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo?.({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -316,9 +316,12 @@ export default function BlueprintEditorPage() {
         });
       } else {
         response = await testGeneratorApi.createBlueprint(payload);
-        const newId = response.data.blueprintId;
+        const newId = response.data?.blueprintId || response.data?.id;
         navigate(`/expert/blueprints/${newId}`, {
-          state: { feedback: { type: "success", message: "Tạo cấu trúc đề nháp thành công!" } }
+          state: {
+            newlyCreatedBlueprintId: newId,
+            feedback: { type: "success", message: "Tạo cấu trúc đề nháp thành công!" }
+          }
         });
       }
     } catch (err) {
@@ -450,7 +453,7 @@ export default function BlueprintEditorPage() {
 
                 <div className="col-span-3 select-text">
                   <label className="block text-xs font-bold text-on-surface-variant mb-1">
-                    Tổng số câu mục tiêu <span className="text-error">*</span>
+                    Số câu của đề <span className="text-error">*</span>
                   </label>
                   <input
                     type="number"
@@ -468,7 +471,7 @@ export default function BlueprintEditorPage() {
                   </label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.25"
                     value={form.totalScore}
                     onChange={(e) => setForm(prev => ({ ...prev, totalScore: e.target.value }))}
                     min="0.01"
@@ -574,7 +577,7 @@ export default function BlueprintEditorPage() {
                             { value: "MultipleChoice", label: "Trắc nghiệm nhiều lựa chọn" },
                             { value: "TrueFalse", label: "Đúng/Sai" },
                             { value: "ShortAnswer", label: "Tự luận ngắn" },
-                            { value: "Composite", label: "Hỗn hợp (Composite)" }
+                            { value: "Composite", label: "Câu hỏi gồm nhiều mệnh đề" }
                           ]}
                         />
                       </div>
@@ -604,10 +607,10 @@ export default function BlueprintEditorPage() {
                         />
                       </div>
                       <div className="col-span-3">
-                        <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Quỹ điểm phần <span className="text-error">*</span></label>
+                        <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Tổng điểm của phần <span className="text-error">*</span></label>
                         <input
                           type="number"
-                          step="0.01"
+                          step="0.25"
                           value={sec.scoreBudget}
                           onChange={(e) => updateSectionField(secIdx, "scoreBudget", e.target.value)}
                           placeholder="VD: 3.0"
@@ -622,8 +625,8 @@ export default function BlueprintEditorPage() {
                     {isComposite && (
                       <div className="grid grid-cols-12 gap-4 bg-surface-container-low p-4 rounded-xl border border-whisper-border select-text">
                         <div className="col-span-6">
-                          <label className="block text-[11px] font-bold text-primary mb-1">
-                            Số phần mỗi câu (Composite) <span className="text-error">*</span>
+                          <label className="block text-xs font-bold text-primary mb-1">
+                            Số mệnh đề trong mỗi câu <span className="text-error">*</span>
                           </label>
                           <input
                             type="number"
@@ -635,7 +638,7 @@ export default function BlueprintEditorPage() {
                           />
                         </div>
                         <div className="col-span-6">
-                          <label className="block text-[11px] font-bold text-primary mb-1">
+                          <label className="block text-xs font-bold text-primary mb-1">
                             Quy tắc chấm <span className="text-error">*</span>
                           </label>
                           <CustomSelect
@@ -647,6 +650,9 @@ export default function BlueprintEditorPage() {
                             ]}
                           />
                         </div>
+                        <p className="col-span-12 text-[13px] text-on-surface-variant leading-relaxed">
+                          Hệ thống sẽ chỉ chọn các câu hỏi có chính xác số lượng mệnh đề đã cấu hình.
+                        </p>
                       </div>
                     )}
 
