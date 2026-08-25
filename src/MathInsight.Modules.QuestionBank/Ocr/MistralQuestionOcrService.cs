@@ -159,7 +159,7 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
                 Set every suggested correctness value to null.
                 Set solutionExplicitlyVisible true only when an explicit printed solution is visible in the source image. Otherwise set it false and leave solutionContent and every parts[].explanation empty.
                 Set visualContentDetected to true when a table, chart, graph, geometry figure, or diagram is visible. Preserve tables as GitHub-Flavored Markdown.
-                Put uncertain, omitted, or ambiguous information in warnings.
+                Return concise Vietnamese warnings only when the Expert must verify or complete content.
                 """,
             document_annotation_format = new
             {
@@ -200,12 +200,9 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
             .Cast<string>()
             .ToList() ?? [];
 
-        if (pageConfidence is not null && pageConfidence < LowConfidenceThreshold)
-            warnings.Add("OCR confidence is low; verify all mathematical text and answer suggestions.");
-
         var questionType = NormalizeQuestionType(annotation.SuggestedQuestionType);
         if (questionType == "UNKNOWN")
-            warnings.Add("OCR could not determine the question type; choose it manually.");
+            warnings.Add("Chưa xác định được loại câu hỏi. Hãy chọn loại câu hỏi trước khi lưu.");
 
         var answers = annotation.Answers?
             .Take(20)
@@ -231,19 +228,19 @@ public sealed class MistralQuestionOcrService : IQuestionOcrService
             .ToList() ?? [];
 
         if (questionType == "COMPOSITE" && parts.Count == 0)
-            warnings.Add("OCR identified a composite question but no valid statements were extracted.");
+            warnings.Add("Câu hỏi nhiều mệnh đề chưa trích xuất được các mệnh đề hợp lệ. Hãy bổ sung thủ công.");
 
         if (questionType is "SINGLE_CHOICE" or "MULTIPLE_CHOICE" or "TRUE_FALSE" && answers.Count == 0)
-            warnings.Add("OCR identified an option-based question but did not extract answer options.");
+            warnings.Add("Chưa trích xuất được các phương án trả lời. Hãy bổ sung trước khi lưu.");
 
         if (extractedImages.Count > 0)
-            warnings.Add("OCR detected one or more visual candidates. Select an image manually before attaching it to the question.");
+            warnings.Add("Đã phát hiện hình ảnh trong đề. Hãy chọn hình cần đính kèm.");
 
         if (annotation.VisualContentDetected && extractedImages.Count == 0)
-            warnings.Add("OCR detected visual content but did not extract an image candidate; verify the table, graph, or diagram manually.");
+            warnings.Add("Phát hiện bảng, biểu đồ hoặc hình minh họa nhưng chưa trích xuất được. Hãy kiểm tra và bổ sung thủ công.");
 
         if (answers.Any(answer => answer.DetectedMark != QuestionOcrDetectedMarks.None))
-            warnings.Add("OCR observed answer marks only; verify the answer key manually before saving.");
+            warnings.Add("Phát hiện dấu khoanh hoặc đánh dấu đáp án. Hãy kiểm tra đáp án trước khi lưu.");
 
         return new QuestionOcrDraftResponse(
             rawMarkdown,

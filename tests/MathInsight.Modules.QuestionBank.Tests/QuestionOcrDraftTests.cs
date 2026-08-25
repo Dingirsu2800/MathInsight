@@ -214,7 +214,7 @@ public sealed class QuestionOcrDraftTests
         var result = await service.ExtractDraftAsync(new MemoryStream(PngHeader), "image/png", CancellationToken.None);
 
         Assert.Empty(result.ExtractedImages);
-        Assert.Contains(result.Warnings, warning => warning.Contains("visual content", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Warnings, warning => warning.Contains("Phát hiện bảng", StringComparison.Ordinal));
     }
 
     [Fact]
