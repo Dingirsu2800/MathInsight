@@ -97,6 +97,9 @@ public class TestSessionsController : ControllerBase
             if (result.Error.Code == "TESTING_TEST_ACCESS_DENIED")
                 return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(result.Error));
 
+            if (result.Error.Code == "TESTING_TEST_CONTAINS_INVALIDATED_QUESTION")
+                return Conflict(new ApiErrorResponse(result.Error));
+
             return BadRequest(new ApiErrorResponse(result.Error));
         }
 

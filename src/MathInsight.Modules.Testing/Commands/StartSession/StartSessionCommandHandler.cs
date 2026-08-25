@@ -70,6 +70,9 @@ public sealed class StartSessionCommandHandler
         if (test.TestStatus != "Active")
             return Result<StartSessionResponse>.Failure(TestingErrors.TestNotActive);
 
+        if (test.Questions.Any(question => question.IsScoreInvalidated))
+            return Result<StartSessionResponse>.Failure(TestingErrors.TestContainsInvalidatedQuestion);
+
         var student = await _db.Students
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.StudentId == request.StudentId, cancellationToken);

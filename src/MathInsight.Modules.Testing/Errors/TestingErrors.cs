@@ -12,6 +12,10 @@ public static class TestingErrors
         "TESTING_TEST_NOT_ACTIVE",
         "The test is not in Active status and cannot be started.");
 
+    public static readonly Error TestContainsInvalidatedQuestion = new(
+        "TESTING_TEST_CONTAINS_INVALIDATED_QUESTION",
+        "This test contains a question whose score was invalidated and cannot accept a new session.");
+
     public static readonly Error TestAccessDenied = new(
         "TESTING_TEST_ACCESS_DENIED",
         "The student is not allowed to start this test.");

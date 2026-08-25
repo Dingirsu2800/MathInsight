@@ -58,12 +58,15 @@ public sealed class ResolveSharedTestCodeQueryHandler
                 test.TotalQuestions,
                 test.MaxScore,
                 test.CreatedTime,
+                HasInvalidatedQuestion = test.Questions.Any(question => question.IsScoreInvalidated),
                 SelectionReasons = test.Questions.Select(question => question.SelectionReason).ToList()
             })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (result is null)
             return Result<SharedBlueprintExamResponse>.Failure(TestGenerationErrors.TestCodeNotAvailable);
+        if (result.HasInvalidatedQuestion)
+            return Result<SharedBlueprintExamResponse>.Failure(TestGenerationErrors.TestContainsInvalidatedQuestion);
         if (!SharedBlueprintExamGenerationTypeClassifier.TryClassify(result.SelectionReasons, out var generationType))
             return Result<SharedBlueprintExamResponse>.Failure(TestGenerationErrors.SharedExamGenerationTypeInvalid);
 
