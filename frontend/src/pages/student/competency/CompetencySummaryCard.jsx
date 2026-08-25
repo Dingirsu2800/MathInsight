@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
+import CompetencyTutorialModal from './CompetencyTutorialModal';
 
 function InfoPopover({ content }) {
   const [open, setOpen] = useState(false);
@@ -57,6 +58,7 @@ export default function CompetencySummaryCard() {
   const [unpracticedCount, setUnpracticedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,8 +173,24 @@ export default function CompetencySummaryCard() {
               </span>
             </div>
           )}
+
+          {/* Link button: Sao điểm của mình trông lạ thế? */}
+          <button
+            type="button"
+            onClick={() => setShowTutorial(true)}
+            className="mt-4 text-xs font-medium text-primary hover:underline flex items-center gap-1 transition-colors group focus:outline-none focus:ring-2 focus:ring-primary/40 rounded px-1.5 py-0.5"
+          >
+            <span className="material-symbols-outlined text-[15px] group-hover:scale-110 transition-transform">help_outline</span>
+            <span>Sao điểm của mình trông lạ thế?</span>
+          </button>
         </>
       )}
+
+      {/* Tutorial Modal */}
+      <CompetencyTutorialModal
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import useCurrentUser from '../../../hooks/useCurrentUser';
 import { getTargets } from '../../../services/gamificationApi';
 import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
 import { getStudentHistoryStats } from '../../../services/gradingApi';
+import CompetencyTutorialModal from '../competency/CompetencyTutorialModal';
 
 /**
  * Tính phần trăm tiến độ mục tiêu trung bình từ danh sách targets.
@@ -27,6 +28,7 @@ export default function WelcomeBanner() {
   const [competencyPoint, setCompetencyPoint] = useState(null);
   const [weeklyProgress, setWeeklyProgress] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,8 +147,22 @@ export default function WelcomeBanner() {
           <p className="text-xs text-white/60 mt-2">
             Tính trên các chủ đề đã học
           </p>
+          <button
+            type="button"
+            onClick={() => setShowTutorial(true)}
+            className="mt-3 text-xs text-white/80 hover:text-white underline flex items-center gap-1 transition-colors group focus:outline-none"
+          >
+            <span className="material-symbols-outlined text-[14px]">help_outline</span>
+            <span>Về cách tính điểm năng lực cho mỗi chủ đề</span>
+          </button>
         </div>
       </div>
+
+      {/* Competency Explanation Tutorial Modal */}
+      <CompetencyTutorialModal
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
     </section>
   );
 }
