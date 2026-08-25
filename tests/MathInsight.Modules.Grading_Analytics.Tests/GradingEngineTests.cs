@@ -523,7 +523,7 @@ public class GradingEngineTests
             defaultPoint: 4.0m,
             parts:
             [
-                ("SHORT_ANSWER", "A", 2.0m, "a"),       // correct (case insensitive)
+                ("SHORT_ANSWER", "2.5", 2.0m, "2,5"),   // correct after numeric normalization
                 ("TRUE_FALSE", "True", 2.0m, "True"),    // correct
             ]);
 
@@ -546,8 +546,8 @@ public class GradingEngineTests
             defaultPoint: 2.0m,
             parts:
             [
-                ("SHORT_ANSWER", "A", 1.5m, "A"),    // correct â†’ 1.5
-                ("SHORT_ANSWER", "B", 1.5m, "B"),    // correct â†’ 1.5
+                ("SHORT_ANSWER", "1", 1.5m, "1"),    // correct â†’ 1.5
+                ("SHORT_ANSWER", "2", 1.5m, "2"),    // correct â†’ 1.5
             ]);
 
         // Act
