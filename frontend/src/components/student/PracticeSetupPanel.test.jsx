@@ -76,7 +76,7 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
     expect(screen.getByRole('button', { name: /Luyện tập chủ đề Lượng giác 11/i })).toBeInTheDocument();
   });
 
-  it('refreshing options while in recommended mode does not show false stale-difficulty warning', async () => {
+  it('handles difficulty-unavailable error in recommended mode by awaiting refresh and showing actionable message', async () => {
     testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: sampleData });
 
     render(
@@ -90,22 +90,32 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
 
     expect(screen.getByText('Tạo bài luyện tập chủ đề')).toBeInTheDocument();
 
-    // Re-fetch options
-    const updatedData = {
+    // Trigger generate failure in recommended mode
+    testGeneratorApi.generateTopicPractice.mockRejectedValueOnce({
+      response: { data: { code: 'TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE' } },
+    });
+
+    const refreshedData = {
       grade: 12,
       topics: [
         {
           ...sampleData.topics[0],
-          difficultyAvailability: [
-            { difficultyId: 'DIFF-1', levelValue: 1, canGenerate: false, availableQuestionCount: 5 },
-          ],
+          recommendedDifficultyLevel: 2,
         },
       ],
     };
-    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: updatedData });
+    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: refreshedData });
 
-    // Open another modal or refresh
-    expect(screen.queryByText(/Mức độ khó đã chọn không còn khả dụng/i)).not.toBeInTheDocument();
+    const submitBtn = screen.getByRole('button', { name: /Bắt đầu làm bài/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Độ khó phù hợp đã được làm mới theo ngân hàng câu hỏi. Vui lòng bấm bắt đầu lại.')
+      ).toBeInTheDocument();
+    });
+
+    expect(testGeneratorApi.getTopicPracticeOptions).toHaveBeenCalledTimes(2);
   });
 
   it('closes dialog and displays notice when stale topic becomes unavailable after refresh', async () => {

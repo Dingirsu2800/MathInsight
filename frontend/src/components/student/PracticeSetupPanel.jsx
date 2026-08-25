@@ -238,7 +238,11 @@ export default function PracticeSetupPanel() {
       }
 
       if (errCode === "TOPIC_PRACTICE_DIFFICULTY_NOT_FOUND" || errCode === "TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE") {
-        fetchOptions();
+        await fetchOptions();
+        if (!payloadDifficultyId) {
+          setGenerationError("Độ khó phù hợp đã được làm mới theo ngân hàng câu hỏi. Vui lòng bấm bắt đầu lại.");
+          return;
+        }
       }
 
       setGenerationError(getTopicPracticeErrorMessage(err, "Không thể tạo bài luyện tập. Vui lòng thử lại sau."));

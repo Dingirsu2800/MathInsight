@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import React, { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReportReasonChips from './ReportReasonChips';
 
@@ -44,14 +45,25 @@ describe('ReportReasonChips component', () => {
     expect(onChange).toHaveBeenCalledWith('Nội dung sai hoặc thiếu; Công thức hoặc hình ảnh bị lỗi');
   });
 
-  it('clicking "Khác" does not append "Khác" to the reason text', () => {
+  it('clicking "Khác" focuses the textarea without appending text', () => {
     const onChange = vi.fn();
-    render(<ReportReasonChips value="Ghi chú ban đầu" onChange={onChange} />);
+    const onFocusTextarea = vi.fn();
+    render(
+      <div>
+        <ReportReasonChips
+          value="Ghi chú ban đầu"
+          onChange={onChange}
+          onFocusTextarea={onFocusTextarea}
+        />
+        <textarea data-testid="custom-textarea" />
+      </div>
+    );
 
     const otherChip = screen.getByRole('button', { name: 'Khác' });
     expect(otherChip).toHaveAttribute('type', 'button');
     fireEvent.click(otherChip);
 
     expect(onChange).not.toHaveBeenCalled();
+    expect(onFocusTextarea).toHaveBeenCalledTimes(1);
   });
 });

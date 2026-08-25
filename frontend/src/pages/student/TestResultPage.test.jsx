@@ -118,4 +118,59 @@ describe('TestResultPage score invalidation and reporting', () => {
     const textarea = screen.getByLabelText(/Lý do báo cáo/i);
     expect(textarea.value).toContain('Đáp án chưa chính xác');
   });
+
+  it('renders adjusted score banner with effectivePoints on invalidated COMPOSITE question', async () => {
+    const compositeResultData = {
+      sessionId: 'sess-123',
+      testName: 'Đề kiểm tra nhiều mệnh đề',
+      status: 'Graded',
+      totalScore: 10,
+      maxScore: 10,
+      answers: [
+        {
+          questionId: 'q-composite-1',
+          questionNo: 1,
+          questionContent: 'Cho hình hộp chữ nhật ABCD.A\'B\'C\'D\'...',
+          questionType: 'COMPOSITE',
+          difficulty: 2,
+          isCorrect: false,
+          machinePointsEarned: 0.25,
+          effectivePoints: 1.0,
+          maxPoints: 1.0,
+          isScoreInvalidated: true,
+          reportReason: 'Mệnh đề c bị lỗi ký hiệu hình học.',
+          answerParts: [
+            {
+              questionPartId: 'qp-1',
+              partOrder: 1,
+              partLabel: 'a',
+              partType: 'TRUE_FALSE',
+              partContent: 'AC vuông góc BD',
+              correctAnswer: 'Sai',
+              studentAnswer: 'Đúng',
+              isCorrect: false,
+              pointsEarned: 0,
+              defaultWeight: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    getSessionResult.mockResolvedValue(compositeResultData);
+
+    render(
+      <BrowserRouter>
+        <TestResultPage />
+      </BrowserRouter>
+    );
+
+    expect(
+      await screen.findByText('Câu hỏi đã bị vô hiệu hóa sau khi chấm')
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/Điểm máy chấm:\s*0\.25\s*·\s*Điểm hiệu lực:\s*1\.00\s*\/\s*1\.00/i)
+    ).toBeInTheDocument();
+  });
 });

@@ -202,73 +202,6 @@ export default function QuestionOcrDraftReviewDialog({
       </DialogHeader>
 
       <DialogContent className="space-y-5 pr-2">
-        {/* Source Image Crop for Illustration */}
-        {ocrPreviewUrl && (
-          <ManualImageCropSelector
-            sourceUrl={ocrPreviewUrl}
-            selection={manualCropSelection}
-            onSelectionChange={setManualCropSelection}
-            disabled={isOcrBusy}
-          />
-        )}
-
-        {extractedImages.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h4 className="text-xs font-bold text-on-surface">Hình minh họa được phát hiện:</h4>
-                <p className="text-[10px] text-on-surface-variant">Chọn tối đa một hình để đính kèm khi áp dụng bản nháp.</p>
-              </div>
-              {selectedExtractedImageId && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedExtractedImageId(null)}
-                  disabled={isOcrBusy}
-                  className="text-[10px] font-bold text-primary hover:underline disabled:cursor-not-allowed cursor-pointer"
-                >
-                  Bỏ chọn
-                </button>
-              )}
-              {manualCropSelection && (
-                <span className="text-[10px] font-bold text-primary">Đang dùng vùng cắt thủ công</span>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {extractedImages.map((image, index) => {
-                const isSelected = image.id === selectedExtractedImageId;
-                return (
-                  <button
-                    key={image.id}
-                    type="button"
-                    onClick={() => setSelectedExtractedImageId(isSelected ? null : image.id)}
-                    disabled={isOcrBusy}
-                    className={cn(
-                      "overflow-hidden rounded-lg border p-2 text-left transition-colors disabled:cursor-not-allowed cursor-pointer",
-                      isSelected
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "border-whisper-border bg-pure-surface hover:border-primary/50"
-                    )}
-                  >
-                    <img
-                      src={image.dataUrl}
-                      alt={`Hình minh họa OCR ${index + 1}`}
-                      className="h-28 w-full rounded object-contain bg-surface-container-low"
-                    />
-                    <span className="mt-1 block text-[10px] font-bold text-on-surface">
-                      {isSelected ? "Sẽ đính kèm vào câu hỏi" : `Hình ${index + 1}`}
-                    </span>
-                    {image.annotation && (
-                      <span className="block truncate text-[10px] text-on-surface-variant" title={image.annotation}>
-                        {image.annotation}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Suggested Type & Confidence Info */}
         <div className="p-3 bg-surface-container rounded-xl flex flex-wrap items-center justify-between gap-3 border border-whisper-border/60">
           <div>
@@ -347,58 +280,6 @@ export default function QuestionOcrDraftReviewDialog({
             </div>
           )}
         </div>
-
-        {/* Editable Solution (shown if returned by OCR or manually opened) */}
-        {isSolutionVisible ? (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-on-surface flex items-center gap-1">
-                Lời giải chi tiết:
-                <span className="text-[10px] font-normal text-on-surface-variant">(Tùy chọn)</span>
-              </label>
-              {!hasSolution && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowManualSolution(false);
-                    setReviewDraft(prev => ({ ...prev, solutionContent: "" }));
-                  }}
-                  className="text-[10px] text-on-surface-variant hover:text-error cursor-pointer"
-                >
-                  Ẩn lời giải
-                </button>
-              )}
-            </div>
-            <textarea
-              value={reviewDraft.solutionContent || ""}
-              onChange={(e) => setReviewDraft(prev => ({ ...prev, solutionContent: e.target.value }))}
-              rows={3}
-              className="w-full text-xs border border-whisper-border rounded-xl p-3 bg-pure-surface focus:outline-none focus:border-primary font-mono leading-relaxed"
-              placeholder="Nhập hướng dẫn giải..."
-              disabled={isOcrBusy}
-            />
-            {reviewDraft.solutionContent && (
-              <div className="p-3 bg-surface-container rounded-lg border border-whisper-border/40 space-y-1">
-                <span className="text-[10px] font-bold text-on-surface-variant block">Xem trước lời giải:</span>
-                <div className="text-xs text-on-surface break-words">
-                  <LatexPreview content={reviewDraft.solutionContent} />
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-xl border border-whisper-border">
-            <span className="text-xs text-on-surface-variant">Không phát hiện lời giải trong ảnh.</span>
-            <button
-              type="button"
-              onClick={() => setShowManualSolution(true)}
-              className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span>
-              Thêm lời giải
-            </button>
-          </div>
-        )}
 
         {/* Editable Answers options */}
         {(suggestedType === "SINGLE_CHOICE" || suggestedType === "MULTIPLE_CHOICE") && (
@@ -494,6 +375,125 @@ export default function QuestionOcrDraftReviewDialog({
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Source Image Crop for Illustration */}
+        {ocrPreviewUrl && (
+          <ManualImageCropSelector
+            sourceUrl={ocrPreviewUrl}
+            selection={manualCropSelection}
+            onSelectionChange={setManualCropSelection}
+            disabled={isOcrBusy}
+          />
+        )}
+
+        {extractedImages.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-on-surface">Hình minh họa được phát hiện:</h4>
+                <p className="text-[10px] text-on-surface-variant">Chọn tối đa một hình để đính kèm khi áp dụng bản nháp.</p>
+              </div>
+              {selectedExtractedImageId && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedExtractedImageId(null)}
+                  disabled={isOcrBusy}
+                  className="text-[10px] font-bold text-primary hover:underline disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Bỏ chọn
+                </button>
+              )}
+              {manualCropSelection && (
+                <span className="text-[10px] font-bold text-primary">Đang dùng vùng cắt thủ công</span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {extractedImages.map((image, index) => {
+                const isSelected = image.id === selectedExtractedImageId;
+                return (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => setSelectedExtractedImageId(isSelected ? null : image.id)}
+                    disabled={isOcrBusy}
+                    className={cn(
+                      "overflow-hidden rounded-lg border p-2 text-left transition-colors disabled:cursor-not-allowed cursor-pointer",
+                      isSelected
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-whisper-border bg-pure-surface hover:border-primary/50"
+                    )}
+                  >
+                    <img
+                      src={image.dataUrl}
+                      alt={`Hình minh họa OCR ${index + 1}`}
+                      className="h-28 w-full rounded object-contain bg-surface-container-low"
+                    />
+                    <span className="mt-1 block text-[10px] font-bold text-on-surface">
+                      {isSelected ? "Sẽ đính kèm vào câu hỏi" : `Hình ${index + 1}`}
+                    </span>
+                    {image.annotation && (
+                      <span className="block truncate text-[10px] text-on-surface-variant" title={image.annotation}>
+                        {image.annotation}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Editable Solution (shown if returned by OCR or manually opened) */}
+        {isSolutionVisible ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-on-surface flex items-center gap-1">
+                Lời giải chi tiết:
+                <span className="text-[10px] font-normal text-on-surface-variant">(Tùy chọn)</span>
+              </label>
+              {!hasSolution && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualSolution(false);
+                    setReviewDraft(prev => ({ ...prev, solutionContent: "" }));
+                  }}
+                  className="text-[10px] text-on-surface-variant hover:text-error cursor-pointer"
+                >
+                  Ẩn lời giải
+                </button>
+              )}
+            </div>
+            <textarea
+              value={reviewDraft.solutionContent || ""}
+              onChange={(e) => setReviewDraft(prev => ({ ...prev, solutionContent: e.target.value }))}
+              rows={3}
+              className="w-full text-xs border border-whisper-border rounded-xl p-3 bg-pure-surface focus:outline-none focus:border-primary font-mono leading-relaxed"
+              placeholder="Nhập hướng dẫn giải..."
+              disabled={isOcrBusy}
+            />
+            {reviewDraft.solutionContent && (
+              <div className="p-3 bg-surface-container rounded-lg border border-whisper-border/40 space-y-1">
+                <span className="text-[10px] font-bold text-on-surface-variant block">Xem trước lời giải:</span>
+                <div className="text-xs text-on-surface break-words">
+                  <LatexPreview content={reviewDraft.solutionContent} />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-xl border border-whisper-border">
+            <span className="text-xs text-on-surface-variant">Không phát hiện lời giải trong ảnh.</span>
+            <button
+              type="button"
+              onClick={() => setShowManualSolution(true)}
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Thêm lời giải
+            </button>
           </div>
         )}
       </DialogContent>

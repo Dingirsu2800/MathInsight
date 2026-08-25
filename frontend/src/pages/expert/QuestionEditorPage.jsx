@@ -149,15 +149,27 @@ export default function QuestionEditorPage() {
     }
   }, [loading, formSnapshot]);
 
+  const isReportActionable = (rep) => {
+    const isRoleAdmin = rep.reporterRole === "Admin" || rep.role === "Admin";
+    if (isRoleAdmin) {
+      return rep.status === "PendingFix";
+    }
+    return rep.status === "Pending";
+  };
+
+  const actionableReports = React.useMemo(() => {
+    return pendingReports.filter(isReportActionable);
+  }, [pendingReports]);
+
   React.useEffect(() => {
     return registerGuard(() => {
-      if (fromReported && pendingReports.length > 0) {
+      if (fromReported && actionableReports.length > 0) {
         return window.confirm("Bạn vẫn còn báo cáo chưa xử lý. Bạn có chắc chắn muốn rời khỏi trang này?");
       }
       if (!isDirty) return true;
       return window.confirm("Bạn có thay đổi chưa lưu. Rời khỏi trang sẽ làm mất dữ liệu đang soạn.");
     });
-  }, [registerGuard, isDirty, fromReported, pendingReports]);
+  }, [registerGuard, isDirty, fromReported, actionableReports]);
 
   React.useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -373,7 +385,7 @@ export default function QuestionEditorPage() {
             : "NoScoreChange"
       });
       const refreshResult = await fetchPendingReports();
-      if (refreshResult.ok && refreshResult.reports.length === 0) {
+      if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
         navigate("/expert/questions/reported");
       }
     } catch (err) {
@@ -400,7 +412,7 @@ export default function QuestionEditorPage() {
     try {
       await questionBankApi.submitQuestionReportReview(reportId);
       const refreshResult = await fetchPendingReports();
-      if (refreshResult.ok && refreshResult.reports.length === 0) {
+      if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
         navigate("/expert/questions/reported");
       }
     } catch (err) {
@@ -1047,7 +1059,7 @@ export default function QuestionEditorPage() {
         setAdminReviewSubmitState("complete");
         setInfoMessage("Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
         const refreshResult = await fetchPendingReports();
-        if (refreshResult.ok && refreshResult.reports.length === 0) {
+        if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
           navigate("/expert/questions/reported");
         }
       } catch (submitErr) {
@@ -1072,7 +1084,7 @@ export default function QuestionEditorPage() {
       setAdminReviewSubmitState("complete");
       setInfoMessage("Đã gửi Admin xét duyệt thành công.");
       const refreshResult = await fetchPendingReports();
-      if (refreshResult.ok && refreshResult.reports.length === 0) {
+      if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
         navigate("/expert/questions/reported");
       }
     } catch (submitErr) {

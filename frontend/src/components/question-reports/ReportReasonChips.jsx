@@ -9,9 +9,23 @@ export const REPORT_REASONS = [
   'Khác',
 ];
 
-export default function ReportReasonChips({ value = '', onChange, className = '' }) {
+export default function ReportReasonChips({
+  value = '',
+  onChange,
+  onFocusTextarea,
+  textareaRef,
+  className = '',
+}) {
   const handleChipClick = (reason) => {
     if (reason === 'Khác') {
+      if (typeof onFocusTextarea === 'function') {
+        onFocusTextarea();
+      } else if (textareaRef?.current) {
+        textareaRef.current.focus();
+      } else if (typeof document !== 'undefined') {
+        const activeTextarea = document.querySelector('textarea:not([disabled])');
+        activeTextarea?.focus();
+      }
       return;
     }
 

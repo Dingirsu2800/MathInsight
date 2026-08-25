@@ -262,7 +262,7 @@ export default function TestResultPage() {
                         explanation: p.explanation,
                       }))}
                       maxScore={answer.maxPoints ?? 1}
-                      earnedScore={answer.isScoreInvalidated ? 0 : (answer.effectivePoints ?? answer.pointsEarned ?? 0)}
+                      earnedScore={answer.effectivePoints ?? answer.pointsEarned ?? 0}
                       machinePoints={answer.machinePointsEarned ?? answer.pointsEarned ?? 0}
                       isScoreInvalidated={answer.isScoreInvalidated}
                       reportReason={answer.reportReason}

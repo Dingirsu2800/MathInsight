@@ -256,4 +256,36 @@ describe('QuestionEditorPage reported question workflow', () => {
     expect(confirmSpy).toHaveBeenCalledWith('Bạn vẫn còn báo cáo chưa xử lý. Bạn có chắc chắn muốn rời khỏi trang này?');
     confirmSpy.mockRestore();
   });
+
+  it('does not trigger unresolved work warning when reports are in PendingReview status', async () => {
+    const pendingReviewReport = {
+      reportId: 'rep-admin-reviewing',
+      questionId: 'q-101',
+      reporterRole: 'Admin',
+      reason: 'Yêu cầu kiểm tra',
+      status: 'PendingReview',
+      submittedTime: '2026-08-20T10:00:00Z',
+    };
+    questionBankApi.getQuestionReports.mockResolvedValue({
+      data: [pendingReviewReport],
+    });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('Đang chờ Admin xét duyệt')).toBeInTheDocument();
+
+    const cancelBtn = screen.getByRole('button', { name: /Hủy/i });
+    fireEvent.click(cancelBtn);
+
+    // Should NOT trigger the "Bạn vẫn còn báo cáo chưa xử lý" warning
+    expect(confirmSpy).not.toHaveBeenCalledWith('Bạn vẫn còn báo cáo chưa xử lý. Bạn có chắc chắn muốn rời khỏi trang này?');
+    confirmSpy.mockRestore();
+  });
 });
