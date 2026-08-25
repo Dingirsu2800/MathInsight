@@ -102,6 +102,7 @@ export default function QuestionEditorPage() {
   const [reportsLoading, setReportsLoading] = React.useState(false);
   const [updatingReportId, setUpdatingReportId] = React.useState(null);
   const [reportsError, setReportsError] = React.useState("");
+  const [adminReviewSubmitState, setAdminReviewSubmitState] = React.useState("idle"); // idle | saving | submitting | retryable | complete
 
 
 
@@ -150,10 +151,13 @@ export default function QuestionEditorPage() {
 
   React.useEffect(() => {
     return registerGuard(() => {
+      if (fromReported && pendingReports.length > 0) {
+        return window.confirm("Bạn vẫn còn báo cáo chưa xử lý. Bạn có chắc chắn muốn rời khỏi trang này?");
+      }
       if (!isDirty) return true;
       return window.confirm("Bạn có thay đổi chưa lưu. Rời khỏi trang sẽ làm mất dữ liệu đang soạn.");
     });
-  }, [registerGuard, isDirty]);
+  }, [registerGuard, isDirty, fromReported, pendingReports]);
 
   React.useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -195,7 +199,7 @@ export default function QuestionEditorPage() {
   const showError = React.useCallback((msg) => {
     setError(msg);
     setInfoMessage(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo?.({ top: 0, behavior: "smooth" });
     setTimeout(() => {
       if (drawerErrorRef.current) {
         drawerErrorRef.current.focus();
@@ -895,27 +899,27 @@ export default function QuestionEditorPage() {
     }
   };
 
-  // Form validator & submit
-  const handleSaveQuestion = () => {
+  // Form validator
+  const validateForm = () => {
     setError(null);
 
     // Core fields validation
     if (!form.questionContent.trim()) {
       showError("Nội dung câu hỏi không được để trống!");
-      return;
+      return false;
     }
     if (!form.grade) {
       showError("Vui lòng chọn khối lớp cho câu hỏi!");
-      return;
+      return false;
     }
-    if (!form.difficultyId) {
+    if (!form.difficultyId || form.difficultyId === "NONE") {
       showError("Vui lòng chọn độ khó cho câu hỏi!");
-      return;
+      return false;
     }
     if (form.topics.length === 0) {
       openTopicPanel();
       showError("Vui lòng chọn ít nhất 1 chủ đề kiến thức!");
-      return;
+      return false;
     }
     const selectedParentTopic = form.topics.find((selectedTopic) => {
       const topic = topicList.find((item) => item.tagId === selectedTopic.tagId);
@@ -925,72 +929,78 @@ export default function QuestionEditorPage() {
     if (selectedParentTopic) {
       openTopicPanel();
       showError("Vui lòng chỉ chọn chủ đề con, không chọn nhóm chủ đề cha.");
-      return;
+      return false;
     }
     if (form.topics.filter((topic) => topic.isPrimary).length !== 1) {
       openTopicPanel();
       showError("Vui lòng chọn đúng 1 chủ đề chính cho câu hỏi!");
-      return;
+      return false;
     }
 
     // Type-specific validations
     if (form.questionType === "SINGLE_CHOICE") {
       if (form.options.some((option) => !option.content.trim())) {
         showError("Vui lòng nhập nội dung cho tất cả phương án trả lời.");
-        return;
+        return false;
       }
       const correctCount = form.options.filter(o => o.isCorrect).length;
       if (correctCount !== 1) {
         showError("Câu hỏi SingleChoice cần có đúng 1 đáp án được đánh dấu là ĐÚNG!");
-        return;
+        return false;
       }
     } else if (form.questionType === "MULTIPLE_CHOICE") {
       if (form.options.some((option) => !option.content.trim())) {
         showError("Vui lòng nhập nội dung cho tất cả phương án trả lời.");
-        return;
+        return false;
       }
       const correctCount = form.options.filter(o => o.isCorrect).length;
       if (correctCount < 1) {
         showError("Câu hỏi MultipleChoice cần chọn ít nhất 1 đáp án là ĐÚNG!");
-        return;
+        return false;
       }
     } else if (form.questionType === "TRUE_FALSE") {
       const tfOptions = normalizeTrueFalseOptions(form.options);
       const correctCount = tfOptions.filter(o => o.isCorrect).length;
       if (correctCount !== 1) {
         showError("Câu hỏi Đúng/Sai cần chọn chính xác một đáp án đúng.");
-        return;
+        return false;
       }
     } else if (form.questionType === "SHORT_ANSWER") {
       if (!form.shortAnswer.trim()) {
         showError("Vui lòng nhập chuỗi đáp án ngắn chính xác!");
-        return;
+        return false;
       }
     } else if (form.questionType === "COMPOSITE") {
       if (form.parts.length === 0) {
         showError("Mẫu câu hỏi Composite cần chứa ít nhất 1 phần câu hỏi phụ!");
-        return;
+        return false;
       }
       for (let i = 0; i < form.parts.length; i++) {
         const part = form.parts[i];
         if (!part.partContent.trim()) {
           showError(`Nội dung câu hỏi phụ phần (${part.partLabel}) không được để trống!`);
-          return;
+          return false;
         }
         if (part.partType === "TRUE_FALSE" && part.correctBoolean !== true && part.correctBoolean !== false) {
           showError(`Vui lòng chọn đáp án Đúng hoặc Sai cho câu hỏi phụ phần (${part.partLabel})!`);
-          return;
+          return false;
         }
         if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
           showError(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
-          return;
+          return false;
         }
         if (part.partType === "NUMERIC_ANSWER" && (part.correctNumeric === null || part.correctNumeric === "")) {
           showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
-          return;
+          return false;
         }
       }
     }
+
+    return true;
+  };
+
+  const handleSaveQuestion = () => {
+    if (!validateForm()) return;
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
 
@@ -1018,6 +1028,65 @@ export default function QuestionEditorPage() {
       });
   };
 
+  const handleSaveAndSubmitReview = async (reportId) => {
+    if (!validateForm()) return;
+
+    const payload = mapEditorStateToCreateUpdateRequest(form);
+    setAdminReviewSubmitState("saving");
+    setLoading(true);
+
+    try {
+      if (isEditMode) {
+        await questionBankApi.updateQuestion(id, payload);
+      } else {
+        await questionBankApi.createQuestion(payload);
+      }
+      initialFormSnapshotRef.current = JSON.stringify(form);
+      setHasSavedInSession(true);
+
+      setAdminReviewSubmitState("submitting");
+      try {
+        await questionBankApi.submitQuestionReportReview(reportId);
+        setAdminReviewSubmitState("complete");
+        setInfoMessage("Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
+        const refreshResult = await fetchPendingReports();
+        if (refreshResult.ok && refreshResult.reports.length === 0) {
+          navigate("/expert/questions/reported");
+        }
+      } catch (submitErr) {
+        console.error("Failed to submit review:", submitErr);
+        setAdminReviewSubmitState("retryable");
+        showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
+      }
+    } catch (saveErr) {
+      console.error("Failed to save question:", saveErr);
+      setAdminReviewSubmitState("idle");
+      showError("Lưu câu hỏi thất bại: " + (saveErr.response?.data?.message || saveErr.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRetrySubmitReview = async (reportId) => {
+    setAdminReviewSubmitState("submitting");
+    setLoading(true);
+    try {
+      await questionBankApi.submitQuestionReportReview(reportId);
+      setAdminReviewSubmitState("complete");
+      setInfoMessage("Đã gửi Admin xét duyệt thành công.");
+      const refreshResult = await fetchPendingReports();
+      if (refreshResult.ok && refreshResult.reports.length === 0) {
+        navigate("/expert/questions/reported");
+      }
+    } catch (submitErr) {
+      console.error("Failed to retry submit review:", submitErr);
+      setAdminReviewSubmitState("retryable");
+      showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const primaryTopicId = form.topics.find((topic) => topic.isPrimary)?.tagId;
   const primaryTopic = topicList.find((topic) => topic.tagId === primaryTopicId);
 
@@ -1028,6 +1097,12 @@ export default function QuestionEditorPage() {
       label: getTopicDisplayLabel(topic) || selectedTopic.tagId,
     };
   });
+
+  const adminPendingFixReport = pendingReports.find(
+    (rep) => (rep.reporterRole === "Admin" || rep.role === "Admin") && rep.status === "PendingFix"
+  );
+  const adminReportId = adminPendingFixReport?.reportId || adminPendingFixReport?.id;
+  const hasAdminPendingFix = Boolean(adminPendingFixReport);
 
   return (
     <ExpertLayout>
@@ -1087,13 +1162,33 @@ export default function QuestionEditorPage() {
             <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => {
               if (confirmNavigation()) navigate("/expert/questions");
             }}>Hủy</Button>
-            <Button
-              className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
-              onClick={handleSaveQuestion}
-              disabled={loading}
-            >
-              {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
-            </Button>
+            {hasAdminPendingFix ? (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={() => {
+                  if (adminReviewSubmitState === "retryable") {
+                    handleRetrySubmitReview(adminReportId);
+                  } else {
+                    handleSaveAndSubmitReview(adminReportId);
+                  }
+                }}
+                disabled={loading || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+              >
+                {adminReviewSubmitState === "retryable"
+                  ? "Gửi lại Admin xét duyệt"
+                  : adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"
+                  ? "Đang xử lý..."
+                  : "Cập nhật và gửi Admin xét duyệt"}
+              </Button>
+            ) : (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={handleSaveQuestion}
+                disabled={loading}
+              >
+                {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1949,17 +2044,26 @@ export default function QuestionEditorPage() {
                             <div className="flex justify-end pt-1 border-t border-error/10">
                               <button
                                 type="button"
-                                disabled={isUpdatingThisReport}
-                                onClick={() => handleSubmitReview(reportIdVal)}
+                                disabled={loading || isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+                                onClick={() => {
+                                  if (adminReviewSubmitState === "retryable") {
+                                    handleRetrySubmitReview(reportIdVal);
+                                  } else {
+                                    handleSaveAndSubmitReview(reportIdVal);
+                                  }
+                                }}
                                 className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95"
+                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95",
+                                  (loading || isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting") && "opacity-50 cursor-not-allowed"
                                 )}
                                 title="Gửi yêu cầu kiểm tra tới Admin"
                               >
-                                {isUpdatingThisReport ? (
+                                {isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting" ? (
                                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                ) : adminReviewSubmitState === "retryable" ? (
+                                  "Gửi lại Admin xét duyệt"
                                 ) : (
-                                  "Gửi Admin xét duyệt"
+                                  "Cập nhật và gửi Admin xét duyệt"
                                 )}
                               </button>
                             </div>
