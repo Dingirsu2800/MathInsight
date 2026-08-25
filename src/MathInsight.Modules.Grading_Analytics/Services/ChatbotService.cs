@@ -57,16 +57,19 @@ public class ChatbotService : IChatbotService
         string sessionId,
         CancellationToken cancellationToken = default)
     {
-        // ── A2: In-memory rate limiting ──────────────────────────────────────
-        var key = (studentId, sessionId);
-        EvictExpiredEntries();
-
-        if (!_rateLimitStore.TryAdd(key, DateTime.UtcNow))
+        // ── A2: In-memory rate limiting (Optional - disabled by default) ───
+        if (_options.EnableRateLimit)
         {
-            _logger.LogWarning(
-                "Chatbot rate limit hit for Student={StudentId}, Session={SessionId}",
-                studentId, sessionId);
-            throw new ChatbotRateLimitException(studentId, sessionId);
+            var key = (studentId, sessionId);
+            EvictExpiredEntries();
+
+            if (!_rateLimitStore.TryAdd(key, DateTime.UtcNow))
+            {
+                _logger.LogWarning(
+                    "Chatbot rate limit hit for Student={StudentId}, Session={SessionId}",
+                    studentId, sessionId);
+                throw new ChatbotRateLimitException(studentId, sessionId);
+            }
         }
 
         // ── Build Gemini API request ─────────────────────────────────────────
@@ -179,6 +182,12 @@ public class ChatbotOptions
     /// Base URL for the Gemini API.
     /// </summary>
     public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/";
+
+    /// <summary>
+    /// Enables in-memory rate limiting (1 request per student per session).
+    /// Default is false to allow continuous user interaction.
+    /// </summary>
+    public bool EnableRateLimit { get; set; } = false;
 }
 
 #region Gemini API DTOs (internal)
