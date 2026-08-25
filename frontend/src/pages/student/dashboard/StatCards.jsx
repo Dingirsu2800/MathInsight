@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import { getStreak, getBadges } from '../../../services/gamificationApi';
 import { getStudentHistoryStats } from '../../../services/gradingApi';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
 
 const STAT_META = [
   { key: 'competency', label: 'Điểm năng lực', icon: 'insights', colorClass: 'text-primary', hoverBg: 'group-hover:bg-primary' },
@@ -29,11 +29,11 @@ export default function StatCards() {
     setLoading(true);
 
     async function load() {
-      const [streakResult, badgesResult, statsResult, weakTagsResult] = await Promise.allSettled([
+      const [streakResult, badgesResult, statsResult, tagMasteryResult] = await Promise.allSettled([
         getStreak(),
         getBadges(),
         getStudentHistoryStats(),
-        getWeakTags(),
+        getAllTagsMastery(),
       ]);
 
       if (!isMounted) return;
@@ -41,12 +41,11 @@ export default function StatCards() {
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
 
       let competency = '—';
-      if (weakTagsResult.status === 'fulfilled' && Array.isArray(weakTagsResult.value) && weakTagsResult.value.length > 0) {
-        const tags = weakTagsResult.value;
-        const avg = tags.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / tags.length;
-        competency = `${Math.round(avg * 10) / 10} / 10`;
-      } else if (stats?.averageScore != null) {
-        competency = `${Math.round(Number(stats.averageScore) * 10) / 10} / 10`;
+      if (tagMasteryResult.status === 'fulfilled' && Array.isArray(tagMasteryResult.value)) {
+        const overallScore = calculateOverallCompetencyScore(tagMasteryResult.value);
+        if (overallScore != null) {
+          competency = `${overallScore} / 10`;
+        }
       }
 
       setValues({

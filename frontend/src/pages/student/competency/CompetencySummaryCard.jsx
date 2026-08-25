@@ -5,7 +5,8 @@
  * neutrals (official_point = 5.00) and are excluded to avoid skewing the real average.
  */
 import { useEffect, useRef, useState } from 'react';
-import { getAllTagsMastery } from '../../../services/recommenderApi';
+import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
+import CompetencyTutorialModal from './CompetencyTutorialModal';
 
 function InfoPopover({ content }) {
   const [open, setOpen] = useState(false);
@@ -57,6 +58,7 @@ export default function CompetencySummaryCard() {
   const [unpracticedCount, setUnpracticedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,12 +68,11 @@ export default function CompetencySummaryCard() {
       .then((data) => {
         if (cancelled) return;
         const all = data ?? [];
-        // Score only from practiced topics (numberDone > 0)
         const practiced = all.filter((t) => t.numberDone > 0);
         setUnpracticedCount(all.length - practiced.length);
-        if (practiced.length > 0) {
-          const avg = practiced.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / practiced.length;
-          setScore(Math.round(avg * 10) / 10);
+        const overall = calculateOverallCompetencyScore(all);
+        if (overall != null) {
+          setScore(overall);
         }
       })
       .catch(() => { if (!cancelled) setError(true); })
@@ -172,8 +173,24 @@ export default function CompetencySummaryCard() {
               </span>
             </div>
           )}
+
+          {/* Link button: Sao điểm của mình trông lạ thế? */}
+          <button
+            type="button"
+            onClick={() => setShowTutorial(true)}
+            className="mt-4 text-xs font-medium text-primary hover:underline flex items-center gap-1 transition-colors group focus:outline-none focus:ring-2 focus:ring-primary/40 rounded px-1.5 py-0.5"
+          >
+            <span className="material-symbols-outlined text-[15px] group-hover:scale-110 transition-transform">help_outline</span>
+            <span>Sao điểm của mình trông lạ thế?</span>
+          </button>
         </>
       )}
+
+      {/* Tutorial Modal */}
+      <CompetencyTutorialModal
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
     </div>
   );
 }

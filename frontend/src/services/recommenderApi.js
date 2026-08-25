@@ -25,6 +25,20 @@ export async function getAllTagsMastery() {
 }
 
 /**
+ * Tính điểm năng lực tổng quát từ danh sách topic mastery.
+ * Chỉ tính trung bình các chủ đề đã được làm bài (numberDone > 0).
+ * @param {TagMasteryDto[]} tagsMastery
+ * @returns {number|null} Điểm trung bình làm tròn 1 chữ số thập phân (0-10), hoặc null nếu chưa có bài làm.
+ */
+export function calculateOverallCompetencyScore(tagsMastery) {
+  if (!Array.isArray(tagsMastery) || tagsMastery.length === 0) return null;
+  const practiced = tagsMastery.filter((t) => t.numberDone > 0);
+  if (practiced.length === 0) return null;
+  const avg = practiced.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / practiced.length;
+  return Math.round(avg * 10) / 10;
+}
+
+/**
  * UC-53: Lấy bài giảng đề xuất dựa theo chủ đề yếu.
  * @returns {Promise<RecommendedLectureResponse[]>}
  * Array of { lectureId, title, description, tagId, tagName, officialPoint, isRemedial, difficultyLevel }

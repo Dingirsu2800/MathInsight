@@ -3,23 +3,9 @@ import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import useCurrentUser from '../../../hooks/useCurrentUser';
 import { getTargets } from '../../../services/gamificationApi';
-import { getWeakTags } from '../../../services/recommenderApi';
+import { getAllTagsMastery, calculateOverallCompetencyScore } from '../../../services/recommenderApi';
 import { getStudentHistoryStats } from '../../../services/gradingApi';
-
-/**
- * Tính điểm năng lực trung bình từ danh sách chủ đề yếu.
- * Nếu không có dữ liệu weak-tags, fallback sang averageScore của grading.
- */
-function resolveCompetencyPoint(weakTags, stats) {
-  if (Array.isArray(weakTags) && weakTags.length > 0) {
-    const avg = weakTags.reduce((sum, t) => sum + Number(t.officialPoint || 0), 0) / weakTags.length;
-    return Math.round(avg * 10) / 10;
-  }
-  if (stats?.averageScore != null) {
-    return Math.round(Number(stats.averageScore) * 10) / 10;
-  }
-  return null;
-}
+import CompetencyTutorialModal from '../competency/CompetencyTutorialModal';
 
 /**
  * Tính phần trăm tiến độ mục tiêu trung bình từ danh sách targets.
@@ -42,24 +28,24 @@ export default function WelcomeBanner() {
   const [competencyPoint, setCompetencyPoint] = useState(null);
   const [weeklyProgress, setWeeklyProgress] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
-      const [weakTagsResult, targetsResult, statsResult] = await Promise.allSettled([
-        getWeakTags(),
+      const [tagMasteryResult, targetsResult, statsResult] = await Promise.allSettled([
+        getAllTagsMastery(),
         getTargets(),
         getStudentHistoryStats(),
       ]);
 
       if (!isMounted) return;
 
-      const weakTags = weakTagsResult.status === 'fulfilled' ? weakTagsResult.value : null;
+      const tagMastery = tagMasteryResult.status === 'fulfilled' ? tagMasteryResult.value : null;
       const targets = targetsResult.status === 'fulfilled' ? targetsResult.value : null;
-      const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
 
-      setCompetencyPoint(resolveCompetencyPoint(weakTags, stats));
+      setCompetencyPoint(calculateOverallCompetencyScore(tagMastery));
       setWeeklyProgress(resolveWeeklyProgress(targets));
       setLoading(false);
     }
@@ -161,8 +147,22 @@ export default function WelcomeBanner() {
           <p className="text-xs text-white/60 mt-2">
             Tính trên các chủ đề đã học
           </p>
+          <button
+            type="button"
+            onClick={() => setShowTutorial(true)}
+            className="mt-3 text-xs text-white/80 hover:text-white underline flex items-center gap-1 transition-colors group focus:outline-none"
+          >
+            <span className="material-symbols-outlined text-[14px]">help_outline</span>
+            <span>Về cách tính điểm năng lực</span>
+          </button>
         </div>
       </div>
+
+      {/* Competency Explanation Tutorial Modal */}
+      <CompetencyTutorialModal
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
     </section>
   );
 }
