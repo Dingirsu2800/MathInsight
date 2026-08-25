@@ -31,7 +31,9 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
         parentTagName: 'Giải tích 12',
         canGenerate: true,
         availableQuestionCount: 15,
-        difficultyAvailability: [],
+        difficultyAvailability: [
+          { difficultyId: 'DIFF-1', levelValue: 1, canGenerate: true, availableQuestionCount: 15 },
+        ],
       },
       {
         tagId: 'TOPIC-G11-1',
@@ -72,6 +74,48 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
 
     expect(screen.getByRole('button', { name: /Luyện tập chủ đề Hàm số 12/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Luyện tập chủ đề Lượng giác 11/i })).toBeInTheDocument();
+  });
+
+  it('handles difficulty-unavailable error in recommended mode by awaiting refresh and showing actionable message', async () => {
+    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: sampleData });
+
+    render(
+      <BrowserRouter>
+        <PracticeSetupPanel />
+      </BrowserRouter>
+    );
+
+    const practiceBtn = await screen.findByRole('button', { name: /Luyện tập chủ đề Hàm số 12/i });
+    fireEvent.click(practiceBtn);
+
+    expect(screen.getByText('Tạo bài luyện tập chủ đề')).toBeInTheDocument();
+
+    // Trigger generate failure in recommended mode
+    testGeneratorApi.generateTopicPractice.mockRejectedValueOnce({
+      response: { data: { code: 'TOPIC_PRACTICE_DIFFICULTY_UNAVAILABLE' } },
+    });
+
+    const refreshedData = {
+      grade: 12,
+      topics: [
+        {
+          ...sampleData.topics[0],
+          recommendedDifficultyLevel: 2,
+        },
+      ],
+    };
+    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: refreshedData });
+
+    const submitBtn = screen.getByRole('button', { name: /Bắt đầu làm bài/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Độ khó phù hợp đã được làm mới theo ngân hàng câu hỏi. Vui lòng bấm bắt đầu lại.')
+      ).toBeInTheDocument();
+    });
+
+    expect(testGeneratorApi.getTopicPracticeOptions).toHaveBeenCalledTimes(2);
   });
 
   it('closes dialog and displays notice when stale topic becomes unavailable after refresh', async () => {

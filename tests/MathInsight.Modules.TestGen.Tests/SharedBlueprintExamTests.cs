@@ -485,6 +485,24 @@ public sealed class SharedBlueprintExamTests
     }
 
     [Fact]
+    public async Task Discovery_ExcludesTestsContainingInvalidatedQuestions()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentGrade12Id, 12);
+        var blueprint = AddBlueprint(testContext, "invalidated-catalog-blueprint", BlueprintStatuses.Active, OwnerExpertId, grade: 12);
+        var invalidated = AddGeneratedTest(testContext, "invalidated-catalog-test", blueprint, "INVALID01");
+        invalidated.Questions.Single().IsScoreInvalidated = true;
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new GetSharedBlueprintExamsQueryHandler(testContext.Context).Handle(
+            new GetSharedBlueprintExamsQuery(StudentGrade12Id, 1, 20),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!.Items);
+    }
+
+    [Fact]
     public async Task Discovery_FiltersGenerationTypeBeforeCountingAndPagination()
     {
         await using var testContext = TestGenInMemoryContext.Create();
@@ -558,6 +576,24 @@ public sealed class SharedBlueprintExamTests
         Assert.True(result.IsSuccess);
         Assert.Equal("resolvable-test", result.Value!.TestId);
         Assert.Equal("CODE2345", result.Value.TestCode);
+    }
+
+    [Fact]
+    public async Task ResolveCode_InvalidatedQuestion_ReturnsStableConflictError()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentGrade12Id, 12);
+        var blueprint = AddBlueprint(testContext, BlueprintId, BlueprintStatuses.Active, OwnerExpertId, grade: 12);
+        var test = AddGeneratedTest(testContext, "invalidated-code-test", blueprint, "INVALID02");
+        test.Questions.Single().IsScoreInvalidated = true;
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new ResolveSharedTestCodeQueryHandler(testContext.Context).Handle(
+            new ResolveSharedTestCodeQuery(StudentGrade12Id, "INVALID02"),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(TestGenerationErrors.TestContainsInvalidatedQuestion, result.Error);
     }
 
     [Theory]

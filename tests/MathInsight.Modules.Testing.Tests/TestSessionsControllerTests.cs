@@ -85,6 +85,26 @@ public sealed class TestSessionsControllerTests
         Assert.Equal("TESTING_TEST_ACCESS_DENIED", error.Code);
     }
 
+    [Fact]
+    public async Task StartSession_InvalidatedQuestion_Returns409WithStableCode()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(item => item.Send(
+                It.IsAny<StartSessionCommand>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<StartSessionResponse>.Failure(TestingErrors.TestContainsInvalidatedQuestion));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.StartSession(
+            new StartSessionRequest(TestDataSeeder.ActiveTestId),
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(TestingErrors.TestContainsInvalidatedQuestion.Code, error.Code);
+    }
+
     // ── TC-INT-TestSessionsController-003 ────────────────────────────────────
 
     /// <summary>

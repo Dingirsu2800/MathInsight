@@ -220,6 +220,14 @@ public static class QuestionBankErrors
         "QUESTION_SHORT_ANSWER_CORRECT_ANSWER_REQUIRED",
         "Short answer question requires exactly one correct answer.");
 
+    public static readonly Error QuestionShortAnswerNumericRequired = new(
+        "QUESTION_SHORT_ANSWER_NUMERIC_REQUIRED",
+        "Short answer question requires a fixed-point numeric answer.");
+
+    public static readonly Error QuestionShortAnswerPartNumericRequired = new(
+        "QUESTION_SHORT_ANSWER_PART_NUMERIC_REQUIRED",
+        "Short answer part requires a fixed-point numeric answer.");
+
     public static readonly Error TagRequestInvalid = new(
         "TAG_REQUEST_INVALID",
         "Request body is required.");

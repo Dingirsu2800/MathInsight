@@ -14,10 +14,12 @@ export default function BlueprintTopicPicker({
     const topicId = String(topic.tagId || topic.id || "");
     const topicName = topic.name || topic.tagName || "";
     const depth = Number(topic.depth) || 0;
+    const isRoot = depth === 0;
 
     return {
       value: topicId,
-      label: `${"\u00A0\u00A0".repeat(depth)}${topicName}`
+      label: isRoot ? `--- ${topicName} ---` : `${"\u00A0\u00A0".repeat(depth)}${topicName}`,
+      disabled: isRoot
     };
   });
 

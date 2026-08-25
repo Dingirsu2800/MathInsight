@@ -147,11 +147,11 @@ public class GradingEngineTests
     }
 
     [Fact]
-    public void ShortAnswer_DifferentCase_StillCorrect()
+    public void ShortAnswer_DecimalCommaAndDot_AreEquivalent()
     {
         // Arrange
         var session = TestDataBuilder.CreateSession();
-        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "Pi", studentAnswer: "pi");
+        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "1.5", studentAnswer: "1,50");
 
         // Act
         var result = _engine.Grade(session);
@@ -167,7 +167,7 @@ public class GradingEngineTests
     {
         // Arrange
         var session = TestDataBuilder.CreateSession();
-        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "answer", studentAnswer: "  answer  ");
+        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "-3", studentAnswer: "  -3  ");
 
         // Act
         var result = _engine.Grade(session);
@@ -523,7 +523,7 @@ public class GradingEngineTests
             defaultPoint: 4.0m,
             parts:
             [
-                ("SHORT_ANSWER", "A", 2.0m, "a"),       // correct (case insensitive)
+                ("SHORT_ANSWER", "2.5", 2.0m, "2,5"),   // correct after numeric normalization
                 ("TRUE_FALSE", "True", 2.0m, "True"),    // correct
             ]);
 
@@ -546,8 +546,8 @@ public class GradingEngineTests
             defaultPoint: 2.0m,
             parts:
             [
-                ("SHORT_ANSWER", "A", 1.5m, "A"),    // correct â†’ 1.5
-                ("SHORT_ANSWER", "B", 1.5m, "B"),    // correct â†’ 1.5
+                ("SHORT_ANSWER", "1", 1.5m, "1"),    // correct â†’ 1.5
+                ("SHORT_ANSWER", "2", 1.5m, "2"),    // correct â†’ 1.5
             ]);
 
         // Act

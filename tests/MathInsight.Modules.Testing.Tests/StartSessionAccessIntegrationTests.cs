@@ -65,6 +65,38 @@ public sealed class StartSessionAccessIntegrationTests
     }
 
     [Fact]
+    public async Task StartSession_InvalidatedQuestion_BlocksOnlyNewSessions()
+    {
+        await using var context = TestingInMemoryContext.Create();
+        var db = context.Context;
+        await TestDataSeeder.SeedActiveTestWithQuestions(db);
+        var testQuestion = await db.TestQuestions.FirstAsync(item => item.TestId == TestDataSeeder.ActiveTestId);
+        testQuestion.IsScoreInvalidated = true;
+        await db.SaveChangesAsync();
+
+        var result = await StartAsync(db, TestDataSeeder.ActiveTestId, TestDataSeeder.StudentId);
+
+        Assert.Equal("TESTING_TEST_CONTAINS_INVALIDATED_QUESTION", result.Error?.Code);
+        Assert.Empty(await db.TestSessions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task StartSession_InvalidatedPersonalTestForOtherStudent_ReturnsAccessDenied()
+    {
+        await using var context = TestingInMemoryContext.Create();
+        var db = context.Context;
+        await TestDataSeeder.SeedActiveTestWithQuestions(db);
+        var testQuestion = await db.TestQuestions.FirstAsync(item => item.TestId == TestDataSeeder.ActiveTestId);
+        testQuestion.IsScoreInvalidated = true;
+        await db.SaveChangesAsync();
+
+        var result = await StartAsync(db, TestDataSeeder.ActiveTestId, TestDataSeeder.OtherStudentId);
+
+        AssertAccessDenied(result.Error?.Code);
+        Assert.Empty(await db.TestSessions.ToListAsync());
+    }
+
+    [Fact]
     public async Task StartSession_NullOwnerUnsupportedMode_Denied()
     {
         await using var context = TestingInMemoryContext.Create();

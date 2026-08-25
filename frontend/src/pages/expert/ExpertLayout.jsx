@@ -6,14 +6,6 @@ import useCurrentUser from "../../hooks/useCurrentUser";
 
 export default function ExpertLayout({ children }) {
   const { displayName: profileName, initials: profileInitials, profile } = useCurrentUser("Expert");
-  const topNavItems = [
-    { label: "Tổng quan", to: "/expert/questions" },
-    { label: "Phê duyệt", to: "/expert/reviews", disabled: true },
-    { label: "Báo cáo", to: "/expert/reports", disabled: true }
-  ];
-
-  const userName = localStorage.getItem("UserName") || "Chuyên gia nội dung";
-  const userInitials = userName.substring(0, 2).toUpperCase() || "CG";
 
   return (
     <DashboardLayout
@@ -21,7 +13,6 @@ export default function ExpertLayout({ children }) {
       roleLabel="Chuyên gia nội dung"
       appTitle="Hệ thống Quản lý Toán học"
       navItems={expertNavItems}
-      topNavItems={topNavItems}
       userName={profileName}
       userRoleLabel="Expert"
       userInitials={profileInitials}
@@ -36,6 +27,7 @@ export default function ExpertLayout({ children }) {
       showSidebarLogout
       showThemeToggle={false}
       showNotifications={false}
+      hideTopbar={true}
     >
       {children}
     </DashboardLayout>

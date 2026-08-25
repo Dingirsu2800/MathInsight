@@ -12,6 +12,10 @@ public static class TestingErrors
         "TESTING_TEST_NOT_ACTIVE",
         "The test is not in Active status and cannot be started.");
 
+    public static readonly Error TestContainsInvalidatedQuestion = new(
+        "TESTING_TEST_CONTAINS_INVALIDATED_QUESTION",
+        "This test contains a question whose score was invalidated and cannot accept a new session.");
+
     public static readonly Error TestAccessDenied = new(
         "TESTING_TEST_ACCESS_DENIED",
         "The student is not allowed to start this test.");
@@ -59,4 +63,8 @@ public static class TestingErrors
     public static readonly Error AnswerNotInVersion = new(
         "ANSWER_NOT_IN_TEST_VERSION",
         "An answer or part does not belong to the question version used by this test.");
+
+    public static readonly Error ShortAnswerNumericRequired = new(
+        "ANSWER_SHORT_ANSWER_NUMERIC_REQUIRED",
+        "Short answer values must use fixed-point numeric format.");
 }

@@ -64,6 +64,41 @@ describe('TopicPracticeConfirmDialog - Contract 6E Manual Difficulty', () => {
     expect(handleConfirm).toHaveBeenCalledWith({ tagId: 'TOPIC-G12-COMPLEX' });
   });
 
+  it('does not display stale-difficulty warning when refreshed in recommended mode', () => {
+    const { rerender } = render(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={sampleTopic}
+        onConfirm={vi.fn()}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    const updatedTopic = {
+      ...sampleTopic,
+      difficultyAvailability: sampleTopic.difficultyAvailability.map((d) => ({
+        ...d,
+        canGenerate: false,
+        availableQuestionCount: 0,
+      })),
+    };
+
+    rerender(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={updatedTopic}
+        onConfirm={vi.fn()}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    expect(screen.queryByText(/Mức độ khó đã chọn không còn khả dụng/i)).not.toBeInTheDocument();
+  });
+
   it('switches to manual mode, disables unavailable levels, and submits with selected difficultyId', () => {
     const handleConfirm = vi.fn();
     render(
@@ -100,6 +135,71 @@ describe('TopicPracticeConfirmDialog - Contract 6E Manual Difficulty', () => {
       tagId: 'TOPIC-G12-COMPLEX',
       difficultyId: 'DIFF-2',
     });
+  });
+
+  it('in manual mode: clears stale selected difficulty on refresh, keeps dialog open, shows warning, and disables start', () => {
+    const handleConfirm = vi.fn();
+    const { rerender } = render(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={sampleTopic}
+        onConfirm={handleConfirm}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    // Switch to manual mode and select DIFF-2
+    const manualTab = screen.getByRole('button', { name: /Tự chọn độ khó/i });
+    fireEvent.click(manualTab);
+
+    const level2Btn = screen.getByRole('button', { name: /Mức 2: Thông hiểu/i });
+    fireEvent.click(level2Btn);
+
+    const submitBtn = screen.getByRole('button', { name: /Bắt đầu làm bài/i });
+    expect(submitBtn).not.toBeDisabled();
+
+    // Simulate options refresh where DIFF-2 is no longer canGenerate
+    const refreshedTopic = {
+      ...sampleTopic,
+      difficultyAvailability: [
+        { ...sampleTopic.difficultyAvailability[0] }, // DIFF-1 still canGenerate
+        { ...sampleTopic.difficultyAvailability[1], canGenerate: false, availableQuestionCount: 3 }, // DIFF-2 unavailable!
+        { ...sampleTopic.difficultyAvailability[2] },
+        { ...sampleTopic.difficultyAvailability[3] },
+      ],
+    };
+
+    rerender(
+      <TopicPracticeConfirmDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        topic={refreshedTopic}
+        onConfirm={handleConfirm}
+        submitting={false}
+        errorMessage=""
+      />
+    );
+
+    // Dialog remains open
+    expect(screen.getByText('Tạo bài luyện tập chủ đề')).toBeInTheDocument();
+
+    // Inline warning is shown
+    expect(
+      screen.getByText('Mức độ khó đã chọn không còn khả dụng. Danh sách các mức độ khó đã được cập nhật.')
+    ).toBeInTheDocument();
+
+    // Start button is disabled because selection was cleared
+    expect(screen.getByRole('button', { name: /Bắt đầu làm bài/i })).toBeDisabled();
+
+    // Select DIFF-1 (which is valid)
+    const level1Btn = screen.getByRole('button', { name: /Mức 1: Nhận biết/i });
+    fireEvent.click(level1Btn);
+
+    // Warning is cleared and start button is enabled
+    expect(screen.queryByText('Mức độ khó đã chọn không còn khả dụng. Danh sách các mức độ khó đã được cập nhật.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bắt đầu làm bài/i })).not.toBeDisabled();
   });
 
   it('renders qualified mastery copy when mastery data exists, and baseline copy otherwise', () => {

@@ -72,6 +72,13 @@ public sealed class SubmitSessionCommandHandler
             return Result<SubmitSessionResponse>.Failure(TestingErrors.AnswerNotInVersion);
         }
 
+        if (savedAnswers.Any(answer =>
+                snapshots.TryGetValue(answer.QuestionId, out var snapshot) &&
+                !QuestionSnapshotReader.HasValidNumericShortAnswers(snapshot, answer)))
+        {
+            return Result<SubmitSessionResponse>.Failure(TestingErrors.ShortAnswerNumericRequired);
+        }
+
         // Submission timestamps and type are persisted atomically by Grading.
         // 4. Count abandoned questions (BR-16b)
         session.NumAbandoned = await CountAbandonedAnswers(request.SessionId, cancellationToken);

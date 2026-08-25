@@ -212,10 +212,7 @@ public class GradingEngine : IGradingEngine
             return;
         }
 
-        answer.IsCorrect = string.Equals(
-            answer.ShortAnswerText.Trim(),
-            correctAnswer.AnswerContent?.Trim(),
-            StringComparison.OrdinalIgnoreCase);
+        answer.IsCorrect = NumericShortAnswer.AreEquivalent(answer.ShortAnswerText, correctAnswer.AnswerContent);
 
         answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
     }
@@ -297,10 +294,7 @@ public class GradingEngine : IGradingEngine
             {
                 if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
                 {
-                    partCorrect = string.Equals(
-                        answerPart.TextAnswer.Trim(),
-                        part.CorrectText.Trim(),
-                        StringComparison.OrdinalIgnoreCase);
+                    partCorrect = NumericShortAnswer.AreEquivalent(answerPart.TextAnswer, part.CorrectText);
                 }
             }
             else if (partTypeNormalized == "NUMERICANSWER")
@@ -352,10 +346,7 @@ public class GradingEngine : IGradingEngine
             {
                 if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
                 {
-                    partCorrect = string.Equals(
-                        answerPart.TextAnswer.Trim(),
-                        part.CorrectText.Trim(),
-                        StringComparison.OrdinalIgnoreCase);
+                    partCorrect = NumericShortAnswer.AreEquivalent(answerPart.TextAnswer, part.CorrectText);
                 }
             }
             else if (partTypeNormalized == "NUMERICANSWER")

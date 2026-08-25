@@ -4,14 +4,15 @@ import { cn } from "../../utils/cn";
 
 export const CustomSelect = React.forwardRef(
   ({ value, onValueChange, placeholder, items = [], className, disabled }, ref) => {
-    // Normalize items to array of { value, label }
+    // Normalize items to array of { value, label, disabled }
     const formattedItems = items.map(item => {
       if (typeof item === "string" || typeof item === "number") {
-        return { value: item.toString(), label: item.toString() };
+        return { value: item.toString(), label: item.toString(), disabled: false };
       }
       return {
         value: item.value?.toString() || "",
-        label: item.label?.toString() || item.name?.toString() || ""
+        label: item.label?.toString() || item.name?.toString() || "",
+        disabled: Boolean(item.disabled)
       };
     });
 
@@ -58,6 +59,7 @@ export const CustomSelect = React.forwardRef(
                   <SelectPrimitive.Item
                     key={idx}
                     value={item.value}
+                    disabled={item.disabled}
                     className="relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-3 pr-8 text-xs text-on-surface outline-none focus:bg-surface-container-low focus:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 transition-colors"
                   >
                     <SelectPrimitive.ItemText>{item.label}</SelectPrimitive.ItemText>

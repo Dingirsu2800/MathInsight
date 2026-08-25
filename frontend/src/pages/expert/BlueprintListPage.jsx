@@ -81,11 +81,17 @@ export default function BlueprintListPage() {
     setUrlParams(next, { replace: true });
   }, [activeTab, searchTerm, selectedGrade, selectedStatus, pageIndex, setUrlParams]);
 
+  const [pinnedBlueprintId, setPinnedBlueprintId] = useState(() => location.state?.newlyCreatedBlueprintId || null);
+
   // Read navigate state feedback once on mount or location change
   useEffect(() => {
     if (location.state?.feedback) {
       setFeedback(location.state.feedback);
-      // Clean location state so it doesn't reappear on Back/Refresh
+    }
+    if (location.state?.newlyCreatedBlueprintId) {
+      setPinnedBlueprintId(location.state.newlyCreatedBlueprintId);
+    }
+    if (location.state?.feedback || location.state?.newlyCreatedBlueprintId) {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location, navigate]);
@@ -205,6 +211,18 @@ export default function BlueprintListPage() {
       setCloneLoading(false);
     }
   };
+
+  const displayedBlueprints = React.useMemo(() => {
+    if (!pinnedBlueprintId) return blueprints;
+    const pinned = blueprints.find(
+      (b) => String(b.blueprintId || b.id) === String(pinnedBlueprintId)
+    );
+    if (!pinned) return blueprints;
+    const remaining = blueprints.filter(
+      (b) => String(b.blueprintId || b.id) !== String(pinnedBlueprintId)
+    );
+    return [pinned, ...remaining];
+  }, [blueprints, pinnedBlueprintId]);
 
   return (
     <ExpertLayout>
@@ -393,7 +411,7 @@ export default function BlueprintListPage() {
                       </div>
                     </td>
                   </tr>
-                ) : blueprints.length === 0 ? (
+                ) : displayedBlueprints.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-16 text-center text-on-surface-variant">
                       <div className="flex flex-col items-center gap-2">
@@ -403,20 +421,28 @@ export default function BlueprintListPage() {
                     </td>
                   </tr>
                 ) : (
-                  blueprints.map((bp) => {
+                  displayedBlueprints.map((bp) => {
                     const actions = getBlueprintActions(bp, currentAccountId);
                     const isMenuOpen = openMenuId === bp.blueprintId;
+                    const isPinned = String(bp.blueprintId || bp.id) === String(pinnedBlueprintId);
 
                     return (
                       <tr key={bp.blueprintId} className="hover:bg-surface-bright transition-colors group">
                         <td className="py-3 px-4 max-w-sm">
-                          <button
-                            onClick={() => navigate(`/expert/blueprints/${bp.blueprintId}`)}
-                            className="font-bold text-on-surface text-left hover:text-primary transition-colors cursor-pointer block w-full truncate max-w-xs md:max-w-sm whitespace-normal break-words line-clamp-2"
-                            title={bp.blueprintName}
-                          >
-                            {bp.blueprintName}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate(`/expert/blueprints/${bp.blueprintId}`)}
+                              className="font-bold text-on-surface text-left hover:text-primary transition-colors cursor-pointer block truncate max-w-xs md:max-w-sm whitespace-normal break-words line-clamp-2"
+                              title={bp.blueprintName}
+                            >
+                              {bp.blueprintName}
+                            </button>
+                            {isPinned && (
+                              <span className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                                Vừa tạo
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 font-semibold text-on-surface-variant">
                           Lớp {bp.grade}

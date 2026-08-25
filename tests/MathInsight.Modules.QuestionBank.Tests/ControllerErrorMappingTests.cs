@@ -28,13 +28,25 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 public sealed class ControllerErrorMappingTests
 {
     [Fact]
-    public void QuestionImageEndpoint_RequiresExpertRole()
+    public void ExpertOnlyImportAndOcrEndpoints_RequireExpertRole()
     {
-        var authorizeAttribute = typeof(QuestionsController)
-            .GetCustomAttribute<AuthorizeAttribute>();
+        var endpointNames = new[]
+        {
+            nameof(QuestionsController.DownloadQuestionImportTemplate),
+            nameof(QuestionsController.PreviewQuestionImport),
+            nameof(QuestionsController.ConfirmQuestionImport),
+            nameof(QuestionsController.UploadQuestionImage),
+            nameof(QuestionsController.ExtractQuestionOcrDraft)
+        };
 
-        Assert.NotNull(authorizeAttribute);
-        Assert.Equal("Expert", authorizeAttribute.Roles);
+        foreach (var endpointName in endpointNames)
+        {
+            var endpoint = typeof(QuestionsController).GetMethod(endpointName);
+            var authorizeAttribute = endpoint?.GetCustomAttribute<AuthorizeAttribute>();
+
+            Assert.NotNull(authorizeAttribute);
+            Assert.Equal("Expert", authorizeAttribute.Roles);
+        }
     }
 
     [Fact]

@@ -56,6 +56,10 @@ public static class TestGenerationErrors
         "TEST_CODE_NOT_AVAILABLE",
         "The test code is not available.");
 
+    public static readonly Error TestContainsInvalidatedQuestion = new(
+        "TEST_CONTAINS_INVALIDATED_QUESTION",
+        "This test contains a question whose score was invalidated and cannot be started.");
+
     public static readonly Error SharedExamGenerationTypeInvalid = new(
         "SHARED_EXAM_GENERATION_TYPE_INVALID",
         "The shared exam has unsupported or mixed generation metadata.");

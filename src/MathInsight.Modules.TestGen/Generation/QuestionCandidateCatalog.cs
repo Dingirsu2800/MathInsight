@@ -152,7 +152,14 @@ public sealed class QuestionCandidateCatalog : IQuestionCandidateCatalog
         if (snapshotAnswers.Count == 0 || snapshotAnswers.Any(answer => string.IsNullOrWhiteSpace(answer.AnswerId) || string.IsNullOrWhiteSpace(answer.AnswerContent)) || snapshotAnswers.Select(answer => answer.AnswerId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != snapshotAnswers.Count)
             return false;
         var correctCount = snapshotAnswers.Count(answer => answer.IsCorrect);
-        var validShape = questionType switch { "SingleChoice" => correctCount == 1, "TrueFalse" => snapshotAnswers.Count == 2 && correctCount == 1, "MultipleChoice" => correctCount > 0, "ShortAnswer" => correctCount == 1, _ => false };
+        var validShape = questionType switch
+        {
+            "SingleChoice" => correctCount == 1,
+            "TrueFalse" => snapshotAnswers.Count == 2 && correctCount == 1,
+            "MultipleChoice" => correctCount > 0,
+            "ShortAnswer" => correctCount == 1 && NumericShortAnswer.TryParse(snapshotAnswers.Single(answer => answer.IsCorrect).AnswerContent, out _),
+            _ => false
+        };
         if (!validShape || snapshotAnswers.Count != currentAnswers.Count)
             return false;
         var currentById = currentAnswers.ToDictionary(answer => answer.AnswerId, StringComparer.OrdinalIgnoreCase);
@@ -170,7 +177,7 @@ public sealed class QuestionCandidateCatalog : IQuestionCandidateCatalog
     private static bool HasValidPartAnswer(QuestionPartSnapshot part) => NormalizeType(part.PartType) switch
     {
         "TrueFalse" => part.CorrectBoolean is not null && part.CorrectText is null && part.CorrectNumeric is null && part.NumericTolerance is null,
-        "ShortAnswer" => part.CorrectBoolean is null && !string.IsNullOrWhiteSpace(part.CorrectText) && part.CorrectNumeric is null && part.NumericTolerance is null,
+        "ShortAnswer" => part.CorrectBoolean is null && NumericShortAnswer.TryParse(part.CorrectText, out _) && part.CorrectNumeric is null && part.NumericTolerance is null,
         "NumericAnswer" => part.CorrectBoolean is null && part.CorrectText is null && part.CorrectNumeric is not null && (part.NumericTolerance is null || part.NumericTolerance >= 0m),
         _ => false
     };
