@@ -11,31 +11,70 @@ import {
 const TUTORIAL_STEPS = [
   {
     step: 1,
-    title: 'Nguyên lý Điểm Năng Lực (Official Point)',
+    title: 'Điểm Năng Lực Tổng Quát (Overall Competency Score)',
     icon: 'analytics',
-    badge: 'Bước 1 / 3',
+    badge: 'Bước 1 / 4',
     content: (
       <div className="space-y-4">
         <p className="text-sm text-on-surface leading-relaxed">
-          Mỗi chủ đề Toán học trong MathInsight có một <strong>Điểm năng lực chính thức</strong> (thang điểm từ <strong>0.0 đến 10.0</strong>).
+          <strong>Điểm năng lực tổng quát</strong> (thang điểm từ <strong>0.0 đến 10.0</strong>) thể hiện trình độ Toán học chung của bạn ở Dashboard và trang Năng lực.
         </p>
+
+        <div className="bg-surface-container-low border border-whisper-border rounded-xl p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">functions</span>
+            <div className="text-xs text-on-surface-variant leading-relaxed">
+              <strong className="text-on-surface">Công thức Điểm tổng quát:</strong> Là trung bình cộng điểm năng lực chính thức của tất cả các chủ đề bạn <em>đã từng thực hành</em> (có ít nhất 1 bài làm).
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">do_not_disturb_on</span>
+            <div className="text-xs text-on-surface-variant leading-relaxed">
+              <strong className="text-on-surface">Bỏ qua chủ đề chưa học:</strong> Các chủ đề chưa làm bài lần nào sẽ không bị tính là 0 điểm, giúp bảo vệ điểm tổng quát của bạn không bị kéo xuống vô lý.
+            </div>
+          </div>
+        </div>
+
+        {/* Example Box */}
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 space-y-2 text-xs">
+          <div className="font-bold text-primary flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px]">lightbulb</span>
+            <span>Ví dụ tính Điểm năng lực tổng quát:</span>
+          </div>
+          <p className="text-on-surface-variant leading-relaxed">
+            Giả sử bạn đã thực hành <strong>3 chủ đề</strong>:
+            <br />
+            • Đại số: <strong className="text-on-surface">8.0</strong> | Hình học: <strong className="text-on-surface">6.0</strong> | Lượng giác: <strong className="text-on-surface">7.0</strong>
+            <br />
+            ➔ <span className="font-semibold text-primary">Điểm tổng quát = (8.0 + 6.0 + 7.0) / 3 = 7.0 / 10</span> (Trung bình - Khá)
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    step: 2,
+    title: 'Điểm Năng Lực Cho Mỗi Chủ Đề (Official Point)',
+    icon: 'tune',
+    badge: 'Bước 2 / 4',
+    content: (
+      <div className="space-y-4">
+        <p className="text-sm text-on-surface leading-relaxed">
+          Sau khi hiểu về Điểm tổng quát, hãy cùng tìm hiểu cách từng <strong>Điểm năng lực chủ đề</strong> được tạo ra.
+        </p>
+
         <div className="bg-surface-container-low border border-whisper-border rounded-xl p-4 space-y-3">
           <div className="flex items-start gap-3">
             <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">adjust</span>
-            <div className="text-xs text-on-surface-variant">
-              <strong className="text-on-surface">Điểm tổng quát:</strong> Là trung bình cộng điểm năng lực của tất cả các chủ đề bạn <em>đã từng thực hành</em> (có ít nhất 1 câu làm).
+            <div className="text-xs text-on-surface-variant leading-relaxed">
+              <strong className="text-on-surface">Điểm số độc lập:</strong> Mỗi chủ đề học tập (như <em>Hàm số</em>, <em>Phương trình</em>, <em>Hình không gian</em>...) giữ một điểm số riêng từ <strong>0.0 đến 10.0</strong>.
             </div>
           </div>
           <div className="flex items-start gap-3">
             <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">update</span>
-            <div className="text-xs text-on-surface-variant">
-              <strong className="text-on-surface">Tự động cập nhật:</strong> Điểm của từng chủ đề sẽ tự động tính toán lại ngay sau mỗi khi bạn nộp bài luyện tập hoặc đề thi.
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">do_not_disturb_on</span>
-            <div className="text-xs text-on-surface-variant">
-              <strong className="text-on-surface">Chủ đề chưa học:</strong> Được bỏ qua khỏi điểm trung bình tổng quát để không ảnh hưởng xấu đến thành tích thực tế của bạn.
+            <div className="text-xs text-on-surface-variant leading-relaxed">
+              <strong className="text-on-surface">Tự động cập nhật:</strong> Điểm của từng chủ đề sẽ tự động tính toán lại ngay sau mỗi khi bạn nộp bài luyện tập hoặc đề thi liên quan đến chủ đề đó.
             </div>
           </div>
         </div>
@@ -43,16 +82,16 @@ const TUTORIAL_STEPS = [
     ),
   },
   {
-    step: 2,
+    step: 3,
     title: 'Tỷ lệ trọng số (55% Đề thi + 45% Luyện tập)',
     icon: 'calculate',
-    badge: 'Bước 2 / 3',
+    badge: 'Bước 3 / 4',
     content: (
       <div className="space-y-4">
         <p className="text-sm text-on-surface leading-relaxed">
           Điểm chính thức của một chủ đề kết hợp từ <strong>2 nguồn làm bài</strong> theo tỷ lệ trọng số cố định:
         </p>
-        
+
         {/* Comparison grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Card Đề thi (55%) */}
@@ -109,10 +148,10 @@ const TUTORIAL_STEPS = [
     ),
   },
   {
-    step: 3,
+    step: 4,
     title: 'Ví dụ hành trình thực tế chi tiết',
     icon: 'route',
-    badge: 'Bước 3 / 3',
+    badge: 'Bước 4 / 4',
     content: (
       <div className="space-y-3">
         <p className="text-xs text-on-surface-variant leading-relaxed">

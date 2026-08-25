@@ -153,7 +153,7 @@ export default function WelcomeBanner() {
             className="mt-3 text-xs text-white/80 hover:text-white underline flex items-center gap-1 transition-colors group focus:outline-none"
           >
             <span className="material-symbols-outlined text-[14px]">help_outline</span>
-            <span>Về cách tính điểm năng lực cho mỗi chủ đề</span>
+            <span>Về cách tính điểm năng lực</span>
           </button>
         </div>
       </div>
