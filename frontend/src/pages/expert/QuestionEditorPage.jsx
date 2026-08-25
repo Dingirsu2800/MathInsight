@@ -721,10 +721,7 @@ export default function QuestionEditorPage() {
     setOcrScanning(true);
     setOcrScanError("");
     try {
-      const scanFile = ocrCropSelection
-        ? await createCroppedImageFile(ocrFile, ocrCropSelection, ocrPreviewUrl)
-        : ocrFile;
-      const res = await questionBankApi.extractQuestionOcrDraft(scanFile);
+      const res = await questionBankApi.extractQuestionOcrDraft(ocrFile);
       const data = res.data;
       if (!data || !data.draft) {
         throw new Error("Không nhận được dữ liệu bản nháp từ server.");

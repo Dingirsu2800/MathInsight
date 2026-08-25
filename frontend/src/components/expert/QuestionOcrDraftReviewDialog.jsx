@@ -101,8 +101,8 @@ function ManualImageCropSelector({ sourceUrl, selection: selectedCrop, onSelecti
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h4 className="text-xs font-bold text-on-surface">Cắt hình thủ công:</h4>
-          <p className="text-[10px] text-on-surface-variant">Kéo khung quanh hình minh họa cần đính kèm.</p>
+          <h4 className="text-xs font-bold text-on-surface">Cắt hình minh họa từ ảnh gốc (Tùy chọn):</h4>
+          <p className="text-[10px] text-on-surface-variant">Kéo khung quanh hình minh họa cần đính kèm vào câu hỏi.</p>
         </div>
         {selection && (
           <button
@@ -112,7 +112,7 @@ function ManualImageCropSelector({ sourceUrl, selection: selectedCrop, onSelecti
               onSelectionChange(null);
             }}
             disabled={disabled}
-            className="text-[10px] font-bold text-primary hover:underline disabled:cursor-not-allowed"
+            className="text-[10px] font-bold text-primary hover:underline disabled:cursor-not-allowed cursor-pointer"
           >
             Xóa vùng cắt
           </button>
@@ -120,13 +120,13 @@ function ManualImageCropSelector({ sourceUrl, selection: selectedCrop, onSelecti
       </div>
       <div
         ref={containerRef}
-        className="relative overflow-hidden rounded-lg border border-dashed border-primary/50 bg-surface-container-low touch-none"
+        className="relative overflow-hidden rounded-lg border border-dashed border-primary/50 bg-surface-container-low touch-none max-w-lg mx-auto"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        <img src={sourceUrl} alt="Chọn vùng cắt" draggable={false} className="block w-full select-none" />
+        <img src={sourceUrl} alt="Chọn vùng cắt hình minh họa" draggable={false} className="block w-full max-h-64 object-contain mx-auto select-none" />
         {selection && (
           <div
             className="pointer-events-none absolute border-2 border-primary bg-primary/15"
@@ -161,7 +161,7 @@ export default function QuestionOcrDraftReviewDialog({
   ocrPreviewUrl,
   isOcrBusy
 }) {
-  const [isDiagnosticOpen, setIsDiagnosticOpen] = React.useState(false);
+  const [showManualSolution, setShowManualSolution] = React.useState(false);
 
   if (!ocrResult || !reviewDraft) return null;
 
@@ -169,6 +169,8 @@ export default function QuestionOcrDraftReviewDialog({
   const confidence = ocrResult.pageConfidence ? Math.round(ocrResult.pageConfidence * 100) : null;
   const isTypeUnknown = suggestedType === "UNKNOWN";
   const extractedImages = ocrResult.extractedImages || [];
+  const hasSolution = Boolean(reviewDraft.solutionContent && reviewDraft.solutionContent.trim());
+  const isSolutionVisible = hasSolution || showManualSolution;
 
   const handlePartTypeChange = (idx, newType) => {
     const nextParts = [...(reviewDraft.parts || [])];
@@ -200,16 +202,7 @@ export default function QuestionOcrDraftReviewDialog({
       </DialogHeader>
 
       <DialogContent className="space-y-5 pr-2">
-        {/* Source Image Preview */}
-        <div className="space-y-1.5">
-          <h4 className="text-xs font-bold text-on-surface">Ảnh gốc đã quét:</h4>
-          {ocrPreviewUrl && (
-            <div className="border border-whisper-border rounded-xl overflow-hidden bg-surface-container-low p-2 max-w-md mx-auto">
-              <img src={ocrPreviewUrl} alt="Source OCR Preview" className="max-h-48 object-contain mx-auto rounded" />
-            </div>
-          )}
-        </div>
-
+        {/* Source Image Crop for Illustration */}
         {ocrPreviewUrl && (
           <ManualImageCropSelector
             sourceUrl={ocrPreviewUrl}
@@ -231,7 +224,7 @@ export default function QuestionOcrDraftReviewDialog({
                   type="button"
                   onClick={() => setSelectedExtractedImageId(null)}
                   disabled={isOcrBusy}
-                  className="text-[10px] font-bold text-primary hover:underline disabled:cursor-not-allowed"
+                  className="text-[10px] font-bold text-primary hover:underline disabled:cursor-not-allowed cursor-pointer"
                 >
                   Bỏ chọn
                 </button>
@@ -250,7 +243,7 @@ export default function QuestionOcrDraftReviewDialog({
                     onClick={() => setSelectedExtractedImageId(isSelected ? null : image.id)}
                     disabled={isOcrBusy}
                     className={cn(
-                      "overflow-hidden rounded-lg border p-2 text-left transition-colors disabled:cursor-not-allowed",
+                      "overflow-hidden rounded-lg border p-2 text-left transition-colors disabled:cursor-not-allowed cursor-pointer",
                       isSelected
                         ? "border-primary bg-primary/5 ring-1 ring-primary"
                         : "border-whisper-border bg-pure-surface hover:border-primary/50"
@@ -355,29 +348,57 @@ export default function QuestionOcrDraftReviewDialog({
           )}
         </div>
 
-        {/* Editable Solution */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-on-surface flex items-center gap-1">
-            Lời giải chi tiết:
-            <span className="text-[10px] font-normal text-on-surface-variant">(Tùy chọn)</span>
-          </label>
-          <textarea
-            value={reviewDraft.solutionContent || ""}
-            onChange={(e) => setReviewDraft(prev => ({ ...prev, solutionContent: e.target.value }))}
-            rows={3}
-            className="w-full text-xs border border-whisper-border rounded-xl p-3 bg-pure-surface focus:outline-none focus:border-primary font-mono leading-relaxed"
-            placeholder="Nhập hướng dẫn giải..."
-            disabled={isOcrBusy}
-          />
-          {reviewDraft.solutionContent && (
-            <div className="p-3 bg-surface-container rounded-lg border border-whisper-border/40 space-y-1">
-              <span className="text-[10px] font-bold text-on-surface-variant block">Xem trước lời giải:</span>
-              <div className="text-xs text-on-surface break-words">
-                <LatexPreview content={reviewDraft.solutionContent} />
-              </div>
+        {/* Editable Solution (shown if returned by OCR or manually opened) */}
+        {isSolutionVisible ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-on-surface flex items-center gap-1">
+                Lời giải chi tiết:
+                <span className="text-[10px] font-normal text-on-surface-variant">(Tùy chọn)</span>
+              </label>
+              {!hasSolution && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualSolution(false);
+                    setReviewDraft(prev => ({ ...prev, solutionContent: "" }));
+                  }}
+                  className="text-[10px] text-on-surface-variant hover:text-error cursor-pointer"
+                >
+                  Ẩn lời giải
+                </button>
+              )}
             </div>
-          )}
-        </div>
+            <textarea
+              value={reviewDraft.solutionContent || ""}
+              onChange={(e) => setReviewDraft(prev => ({ ...prev, solutionContent: e.target.value }))}
+              rows={3}
+              className="w-full text-xs border border-whisper-border rounded-xl p-3 bg-pure-surface focus:outline-none focus:border-primary font-mono leading-relaxed"
+              placeholder="Nhập hướng dẫn giải..."
+              disabled={isOcrBusy}
+            />
+            {reviewDraft.solutionContent && (
+              <div className="p-3 bg-surface-container rounded-lg border border-whisper-border/40 space-y-1">
+                <span className="text-[10px] font-bold text-on-surface-variant block">Xem trước lời giải:</span>
+                <div className="text-xs text-on-surface break-words">
+                  <LatexPreview content={reviewDraft.solutionContent} />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-xl border border-whisper-border">
+            <span className="text-xs text-on-surface-variant">Không phát hiện lời giải trong ảnh.</span>
+            <button
+              type="button"
+              onClick={() => setShowManualSolution(true)}
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Thêm lời giải
+            </button>
+          </div>
+        )}
 
         {/* Editable Answers options */}
         {(suggestedType === "SINGLE_CHOICE" || suggestedType === "MULTIPLE_CHOICE") && (
@@ -475,16 +496,6 @@ export default function QuestionOcrDraftReviewDialog({
             </div>
           </div>
         )}
-
-        {/* Collapsible Diagnostic Original Markdown section */}
-        <details className="border border-whisper-border rounded-lg bg-surface-container-low p-3 text-xs">
-          <summary className="font-bold text-on-surface cursor-pointer select-none outline-none">
-            Mã Markdown gốc từ Mistral OCR (Chẩn đoán)
-          </summary>
-          <div className="mt-2 p-3 bg-charcoal-ink text-inverse-on-surface rounded-lg font-mono text-[11px] overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner max-h-48">
-            {ocrResult.rawMarkdown || "Không có dữ liệu Markdown."}
-          </div>
-        </details>
       </DialogContent>
 
       <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-whisper-border pt-4 mt-auto">
@@ -516,7 +527,7 @@ export default function QuestionOcrDraftReviewDialog({
             variant="outline"
             onClick={onClose}
             disabled={isOcrBusy}
-            className="normal-case text-xs font-bold"
+            className="normal-case text-xs font-bold cursor-pointer"
           >
             Hủy
           </Button>
@@ -526,7 +537,7 @@ export default function QuestionOcrDraftReviewDialog({
             variant="secondary"
             onClick={() => onApplyDraft("content")}
             disabled={isOcrBusy}
-            className="normal-case text-xs font-bold"
+            className="normal-case text-xs font-bold cursor-pointer"
           >
             {ocrImageUploading ? "Đang xử lý..." : "Áp dụng nội dung"}
           </Button>
@@ -536,7 +547,7 @@ export default function QuestionOcrDraftReviewDialog({
             variant="primary"
             onClick={() => onApplyDraft("full")}
             disabled={isOcrBusy || isTypeUnknown}
-            className="normal-case text-xs font-bold"
+            className="normal-case text-xs font-bold cursor-pointer"
             title={isTypeUnknown ? "Không thể áp dụng toàn bộ vì loại câu hỏi không xác định" : ""}
           >
             {ocrImageUploading ? "Đang xử lý..." : "Áp dụng bản nháp"}
