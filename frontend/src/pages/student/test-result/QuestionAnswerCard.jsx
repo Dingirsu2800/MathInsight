@@ -63,11 +63,11 @@ export default function QuestionAnswerCard({
           <div className="mb-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 rounded-lg">
             <div className="flex items-center gap-2 font-bold">
               <MaterialIcon name="warning" size={18} />
-              Câu hỏi đã bị vô hiệu hóa sau khi chấm
+              Phiên bản câu hỏi đã được xác nhận có lỗi
             </div>
             <p className="mt-1">{reportReason || 'Câu hỏi hoặc đáp án của phiên bản này đã được xác nhận có lỗi.'}</p>
             <p className="mt-2 font-mono text-xs">
-              Điểm máy chấm: {Number(machinePoints).toFixed(2)} · Điểm hiệu lực: {Number(effectivePoints).toFixed(2)} / {Number(maxPoints).toFixed(2)}
+              Điểm ban đầu: {Number(machinePoints).toFixed(2)} · Điểm sau điều chỉnh: {Number(effectivePoints).toFixed(2)} / {Number(maxPoints).toFixed(2)}
             </p>
             {scoreAdjustedTime && (
               <p className="mt-1 text-xs">Điều chỉnh lúc {new Date(scoreAdjustedTime).toLocaleString('vi-VN')}</p>

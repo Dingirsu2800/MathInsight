@@ -21,6 +21,7 @@ import {
 } from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
 import QuestionExcelImportDialog from "../../components/expert/QuestionExcelImportDialog";
+import ReportReasonChips from "../../components/question-reports/ReportReasonChips";
 
 export default function QuestionBankListPage({ mode = "expert" }) {
   const navigate = useNavigate();
@@ -1033,6 +1034,11 @@ export default function QuestionBankListPage({ mode = "expert" }) {
             )}
             <div>
               <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Lý do báo cáo <span className="text-error">*</span></label>
+              <ReportReasonChips
+                value={reportReason}
+                onChange={setReportReason}
+                className="mb-2"
+              />
               <textarea
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}

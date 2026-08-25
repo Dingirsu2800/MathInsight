@@ -9,6 +9,7 @@ import ChatbotWidget from '../../components/student/ChatbotWidget';
 import { getSessionResult, reportSessionQuestion } from '../../services/gradingApi';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import ReportReasonChips from '../../components/question-reports/ReportReasonChips';
 import { normalizeQuestionType } from '../../utils/questionLabels';
 
 /** Map DifficultyLevel (1-4) to label and CSS class */
@@ -316,7 +317,7 @@ export default function TestResultPage() {
                     }))}
                     solution={answer.solutionContent ? [answer.solutionContent] : []}
                     machinePoints={answer.machinePointsEarned ?? answer.pointsEarned ?? 0}
-                    effectivePoints={answer.isScoreInvalidated ? 0 : (answer.effectivePoints ?? answer.pointsEarned ?? 0)}
+                    effectivePoints={answer.effectivePoints ?? answer.pointsEarned ?? 0}
                     maxPoints={answer.maxPoints ?? 1}
                     isScoreInvalidated={answer.isScoreInvalidated}
                     reportReason={answer.reportReason}
@@ -345,16 +346,21 @@ export default function TestResultPage() {
           </DialogDescription>
         </DialogHeader>
         <DialogContent>
-          <label className="block text-sm font-bold text-on-surface" htmlFor="student-question-report-reason">
+          <label className="block text-sm font-bold text-on-surface mb-2" htmlFor="student-question-report-reason">
             Lý do báo cáo
           </label>
+          <ReportReasonChips
+            value={reportReason}
+            onChange={setReportReason}
+            className="mb-3"
+          />
           <textarea
             id="student-question-report-reason"
             rows={5}
             maxLength={1000}
             value={reportReason}
             onChange={(event) => setReportReason(event.target.value)}
-            className="mt-2 w-full resize-y rounded-lg border border-outline-variant bg-pure-surface p-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="mt-1 w-full resize-y rounded-lg border border-outline-variant bg-pure-surface p-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <div className="mt-1 flex justify-between text-xs text-on-surface-variant">
             <span>{reportError && <span className="text-error">{reportError}</span>}</span>
