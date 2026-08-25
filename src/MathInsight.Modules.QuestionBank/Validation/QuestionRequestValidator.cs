@@ -1,6 +1,6 @@
-using System.Text.RegularExpressions;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
+using MathInsight.Shared.Questions;
 using MathInsight.Shared.Results;
 
 namespace MathInsight.Modules.QuestionBank.Validation;
@@ -93,9 +93,9 @@ internal static partial class QuestionRequestValidator
                 }
 
                 if (partType == "ShortAnswer" &&
-                    (part.CorrectBoolean is not null || !IsPlainShortAnswer(part.CorrectText) || part.CorrectNumeric is not null || part.NumericTolerance is not null))
+                    (part.CorrectBoolean is not null || !NumericShortAnswer.TryParse(part.CorrectText, out _) || part.CorrectNumeric is not null || part.NumericTolerance is not null))
                 {
-                    return QuestionBankErrors.QuestionShortAnswerPartAnswerInvalid;
+                    return QuestionBankErrors.QuestionShortAnswerPartNumericRequired;
                 }
 
                 if (partType == "NumericAnswer" &&
@@ -135,8 +135,8 @@ internal static partial class QuestionRequestValidator
         if (databaseQuestionType == "ShortAnswer" && request.Answers.Count(answer => answer.IsCorrect) != 1)
             return QuestionBankErrors.QuestionShortAnswerCorrectAnswerRequired;
 
-        if (databaseQuestionType == "ShortAnswer" && !IsPlainShortAnswer(request.Answers.Single(answer => answer.IsCorrect).AnswerContent))
-            return QuestionBankErrors.QuestionShortAnswerCorrectAnswerRequired;
+        if (databaseQuestionType == "ShortAnswer" && !NumericShortAnswer.TryParse(request.Answers.Single(answer => answer.IsCorrect).AnswerContent, out _))
+            return QuestionBankErrors.QuestionShortAnswerNumericRequired;
 
         return null;
     }
@@ -165,12 +165,6 @@ internal static partial class QuestionRequestValidator
                 _ => null
             };
 
-    private static bool IsPlainShortAnswer(string? value) =>
-        !string.IsNullOrWhiteSpace(value) &&
-        value.Length <= 100 &&
-        !MarkupRegex().IsMatch(value) &&
-        !value.Contains("![", StringComparison.Ordinal);
-
     private static bool FitsDecimal18Scale6(decimal value) =>
         value > -1_000_000_000_000m &&
         value < 1_000_000_000_000m &&
@@ -179,6 +173,4 @@ internal static partial class QuestionRequestValidator
     private static bool HasScaleAtMost(decimal value, int maximumScale) =>
         ((decimal.GetBits(value)[3] >> 16) & 0xFF) <= maximumScale;
 
-    [GeneratedRegex("<[^>]+>")]
-    private static partial Regex MarkupRegex();
 }
