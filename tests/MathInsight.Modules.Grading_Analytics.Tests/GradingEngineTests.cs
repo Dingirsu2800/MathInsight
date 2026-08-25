@@ -147,11 +147,11 @@ public class GradingEngineTests
     }
 
     [Fact]
-    public void ShortAnswer_DifferentCase_StillCorrect()
+    public void ShortAnswer_DecimalCommaAndDot_AreEquivalent()
     {
         // Arrange
         var session = TestDataBuilder.CreateSession();
-        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "Pi", studentAnswer: "pi");
+        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "1.5", studentAnswer: "1,50");
 
         // Act
         var result = _engine.Grade(session);
@@ -167,7 +167,7 @@ public class GradingEngineTests
     {
         // Arrange
         var session = TestDataBuilder.CreateSession();
-        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "answer", studentAnswer: "  answer  ");
+        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2.0m, correctAnswer: "-3", studentAnswer: "  -3  ");
 
         // Act
         var result = _engine.Grade(session);

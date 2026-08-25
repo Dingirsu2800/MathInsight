@@ -59,4 +59,8 @@ public static class TestingErrors
     public static readonly Error AnswerNotInVersion = new(
         "ANSWER_NOT_IN_TEST_VERSION",
         "An answer or part does not belong to the question version used by this test.");
+
+    public static readonly Error ShortAnswerNumericRequired = new(
+        "ANSWER_SHORT_ANSWER_NUMERIC_REQUIRED",
+        "Short answer values must use fixed-point numeric format.");
 }

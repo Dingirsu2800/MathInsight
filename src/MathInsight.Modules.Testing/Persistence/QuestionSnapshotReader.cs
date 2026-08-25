@@ -47,6 +47,26 @@ internal static class QuestionSnapshotReader
             !string.Equals(item.PartId, part.PartId, StringComparison.OrdinalIgnoreCase))) != true;
     }
 
+    public static bool HasValidNumericShortAnswers(TestQuestionSnapshot row, AutoSaveAnswerDto answer)
+    {
+        if (IsShortAnswer(row.Snapshot.QuestionType) &&
+            !string.IsNullOrWhiteSpace(answer.ShortAnswerText) &&
+            !NumericShortAnswer.TryParse(answer.ShortAnswerText, out _))
+        {
+            return false;
+        }
+
+        return answer.Parts?.All(part =>
+        {
+            var snapshotPart = row.Snapshot.Parts.FirstOrDefault(item =>
+                string.Equals(item.PartId, part.PartId, StringComparison.OrdinalIgnoreCase));
+            return snapshotPart is null ||
+                !IsShortAnswer(snapshotPart.PartType) ||
+                string.IsNullOrWhiteSpace(part.TextAnswer) ||
+                NumericShortAnswer.TryParse(part.TextAnswer, out _);
+        }) ?? true;
+    }
+
     public static bool IsValid(TestQuestionSnapshot row, TestAnswer answer)
     {
         var snapshot = row.Snapshot;
@@ -66,6 +86,40 @@ internal static class QuestionSnapshotReader
             string.Equals(item.PartId, part.PartId, StringComparison.OrdinalIgnoreCase)));
     }
 
+    public static bool HasValidNumericShortAnswers(TestQuestionSnapshot row, TestAnswer answer)
+    {
+        if (IsShortAnswer(row.Snapshot.QuestionType) &&
+            !string.IsNullOrWhiteSpace(answer.ShortAnswerText) &&
+            !NumericShortAnswer.TryParse(answer.ShortAnswerText, out _))
+        {
+            return false;
+        }
+
+        return answer.Parts.All(part =>
+        {
+            var snapshotPart = row.Snapshot.Parts.FirstOrDefault(item =>
+                string.Equals(item.PartId, part.PartId, StringComparison.OrdinalIgnoreCase));
+            return snapshotPart is null ||
+                !IsShortAnswer(snapshotPart.PartType) ||
+                string.IsNullOrWhiteSpace(part.TextAnswer) ||
+                NumericShortAnswer.TryParse(part.TextAnswer, out _);
+        });
+    }
+
+    public static string? NormalizeShortAnswerText(TestQuestionSnapshot row, string? value) =>
+        IsShortAnswer(row.Snapshot.QuestionType)
+            ? NumericShortAnswer.NormalizeOrNull(value)
+            : value;
+
+    public static string? NormalizePartText(TestQuestionSnapshot row, string partId, string? value)
+    {
+        var snapshotPart = row.Snapshot.Parts.FirstOrDefault(item =>
+            string.Equals(item.PartId, partId, StringComparison.OrdinalIgnoreCase));
+        return snapshotPart is not null && IsShortAnswer(snapshotPart.PartType)
+            ? NumericShortAnswer.NormalizeOrNull(value)
+            : value;
+    }
+
     private static QuestionSnapshotV2 Deserialize(TestQuestion testQuestion)
     {
         var version = testQuestion.QuestionVersion
@@ -79,6 +133,9 @@ internal static class QuestionSnapshotReader
             ?? throw new InvalidOperationException(
                 $"Invalid snapshot JSON for version '{version.VersionId}'.");
     }
+
+    private static bool IsShortAnswer(string value) =>
+        string.Equals(value.Replace("_", string.Empty, StringComparison.Ordinal), "SHORTANSWER", StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed record TestQuestionSnapshot(
