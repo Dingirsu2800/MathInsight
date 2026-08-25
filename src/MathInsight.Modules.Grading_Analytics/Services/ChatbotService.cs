@@ -105,7 +105,14 @@ public class ChatbotService : IChatbotService
             studentId, sessionId);
 
         var response = await _httpClient.PostAsJsonAsync(apiUrl, requestBody, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorDetails = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError(
+                "Gemini API returned HTTP {StatusCode} for Model={Model}: {Details}",
+                (int)response.StatusCode, _options.Model, errorDetails);
+            response.EnsureSuccessStatusCode();
+        }
 
         var geminiResponse = await response.Content.ReadFromJsonAsync<GeminiResponse>(cancellationToken: cancellationToken);
 
@@ -174,9 +181,9 @@ public class ChatbotOptions
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gemini model name. Defaults to gemini-3.5-flash.
+    /// Gemini model name. Defaults to gemini-1.5-flash.
     /// </summary>
-    public string Model { get; set; } = "gemini-3.5-flash";
+    public string Model { get; set; } = "gemini-1.5-flash";
 
     /// <summary>
     /// Base URL for the Gemini API.

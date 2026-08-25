@@ -23,7 +23,7 @@ public class ChatbotServiceTests
         var options = Options.Create(new ChatbotOptions
         {
             ApiKey = "test-api-key",
-            Model = "gemini-3.5-flash",
+            Model = "gemini-1.5-flash",
             BaseUrl = "https://generativelanguage.googleapis.com/",
             EnableRateLimit = enableRateLimit
         });
