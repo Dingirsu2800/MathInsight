@@ -18,13 +18,14 @@ public class ChatbotServiceTests
     private readonly ILogger<ChatbotService> _logger =
         new Mock<ILogger<ChatbotService>>().Object;
 
-    private ChatbotService CreateService(HttpClient httpClient)
+    private ChatbotService CreateService(HttpClient httpClient, bool enableRateLimit = false)
     {
         var options = Options.Create(new ChatbotOptions
         {
             ApiKey = "test-api-key",
             Model = "gemini-3.5-flash",
-            BaseUrl = "https://generativelanguage.googleapis.com/"
+            BaseUrl = "https://generativelanguage.googleapis.com/",
+            EnableRateLimit = enableRateLimit
         });
 
         return new ChatbotService(httpClient, options, _logger);
@@ -118,7 +119,7 @@ public class ChatbotServiceTests
             JsonSerializer.Serialize(geminiResponse));
 
         var httpClient = CreateMockHttpClient(handler);
-        var service = CreateService(httpClient);
+        var service = CreateService(httpClient, enableRateLimit: true);
 
         var studentId = Guid.NewGuid().ToString("D");
         var sessionId = Guid.NewGuid().ToString("D");
