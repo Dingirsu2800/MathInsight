@@ -31,7 +31,9 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
         parentTagName: 'Giải tích 12',
         canGenerate: true,
         availableQuestionCount: 15,
-        difficultyAvailability: [],
+        difficultyAvailability: [
+          { difficultyId: 'DIFF-1', levelValue: 1, canGenerate: true, availableQuestionCount: 15 },
+        ],
       },
       {
         tagId: 'TOPIC-G11-1',
@@ -72,6 +74,38 @@ describe('PracticeSetupPanel - Grade Filtering & Stale Option Sync', () => {
 
     expect(screen.getByRole('button', { name: /Luyện tập chủ đề Hàm số 12/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Luyện tập chủ đề Lượng giác 11/i })).toBeInTheDocument();
+  });
+
+  it('refreshing options while in recommended mode does not show false stale-difficulty warning', async () => {
+    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: sampleData });
+
+    render(
+      <BrowserRouter>
+        <PracticeSetupPanel />
+      </BrowserRouter>
+    );
+
+    const practiceBtn = await screen.findByRole('button', { name: /Luyện tập chủ đề Hàm số 12/i });
+    fireEvent.click(practiceBtn);
+
+    expect(screen.getByText('Tạo bài luyện tập chủ đề')).toBeInTheDocument();
+
+    // Re-fetch options
+    const updatedData = {
+      grade: 12,
+      topics: [
+        {
+          ...sampleData.topics[0],
+          difficultyAvailability: [
+            { difficultyId: 'DIFF-1', levelValue: 1, canGenerate: false, availableQuestionCount: 5 },
+          ],
+        },
+      ],
+    };
+    testGeneratorApi.getTopicPracticeOptions.mockResolvedValueOnce({ data: updatedData });
+
+    // Open another modal or refresh
+    expect(screen.queryByText(/Mức độ khó đã chọn không còn khả dụng/i)).not.toBeInTheDocument();
   });
 
   it('closes dialog and displays notice when stale topic becomes unavailable after refresh', async () => {

@@ -88,7 +88,6 @@ export default function PracticeSetupPanel() {
         if (!prevTag) return null;
         const fresh = rawTopics.find((t) => String(t.tagId) === String(prevTag.tagId));
         if (fresh && fresh.canGenerate) {
-          setGenerationError("Mức độ khó đã chọn không còn khả dụng. Danh sách các mức độ khó đã được cập nhật.");
           return fresh;
         } else {
           setIsConfirmOpen(false);

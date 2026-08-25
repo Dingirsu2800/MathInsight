@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../../utils/cn";
@@ -14,6 +14,10 @@ export default function TopicPracticeConfirmDialog({
 }) {
   const [mode, setMode] = useState("recommended"); // "recommended" | "manual"
   const [selectedDifficultyId, setSelectedDifficultyId] = useState(null);
+  const [staleDifficultyWarning, setStaleDifficultyWarning] = useState("");
+
+  const prevOpenRef = useRef(isOpen);
+  const prevTagIdRef = useRef(topic?.tagId);
 
   const availableLevels = useMemo(() => {
     return Array.isArray(topic?.difficultyAvailability) ? topic.difficultyAvailability : [];
@@ -21,16 +25,55 @@ export default function TopicPracticeConfirmDialog({
 
   const hasManualLevels = availableLevels.length > 0;
 
-  // Reset states on modal open or topic change
+  // Manage state on open/topic-change vs in-dialog options refresh
   useEffect(() => {
-    if (isOpen) {
+    const isNewOpen = (!prevOpenRef.current && isOpen) || (prevTagIdRef.current !== topic?.tagId);
+    prevOpenRef.current = isOpen;
+    prevTagIdRef.current = topic?.tagId;
+
+    if (!isOpen) {
       setMode("recommended");
+      setSelectedDifficultyId(null);
+      setStaleDifficultyWarning("");
+      return;
+    }
+
+    if (isNewOpen) {
+      setMode("recommended");
+      setSelectedDifficultyId(null);
+      setStaleDifficultyWarning("");
+      return;
+    }
+
+    // Modal was already open and received updated topic data
+    if (mode === "manual") {
+      if (selectedDifficultyId) {
+        const stillAvailable = availableLevels.find(
+          (d) => d.difficultyId === selectedDifficultyId && d.canGenerate
+        );
+        if (!stillAvailable) {
+          setSelectedDifficultyId(null);
+          setStaleDifficultyWarning("Mức độ khó đã chọn không còn khả dụng. Danh sách các mức độ khó đã được cập nhật.");
+        }
+      }
+    } else {
+      setSelectedDifficultyId(null);
+      setStaleDifficultyWarning("");
+    }
+  }, [isOpen, topic, availableLevels, mode, selectedDifficultyId]);
+
+  if (!topic) return null;
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    setStaleDifficultyWarning("");
+    if (newMode === "recommended") {
+      setSelectedDifficultyId(null);
+    } else if (newMode === "manual" && !selectedDifficultyId) {
       const firstAvailable = availableLevels.find((d) => d.canGenerate);
       setSelectedDifficultyId(firstAvailable ? firstAvailable.difficultyId : null);
     }
-  }, [isOpen, topic, availableLevels]);
-
-  if (!topic) return null;
+  };
 
   const handleConfirmClick = () => {
     if (mode === "manual") {
@@ -42,6 +85,7 @@ export default function TopicPracticeConfirmDialog({
   };
 
   const isManualDisabled = mode === "manual" && !selectedDifficultyId;
+  const activeError = staleDifficultyWarning || errorMessage;
 
   return (
     <Dialog isOpen={isOpen} onClose={() => !submitting && onClose()} isCloseDisabled={submitting} className="max-w-lg">
@@ -67,7 +111,7 @@ export default function TopicPracticeConfirmDialog({
                 <div className="grid grid-cols-2 gap-2 bg-surface-container-low p-1 rounded-xl border border-whisper-border">
                   <button
                     type="button"
-                    onClick={() => setMode("recommended")}
+                    onClick={() => handleModeChange("recommended")}
                     className={cn(
                       "py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5",
                       mode === "recommended"
@@ -83,7 +127,7 @@ export default function TopicPracticeConfirmDialog({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMode("manual")}
+                    onClick={() => handleModeChange("manual")}
                     className={cn(
                       "py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5",
                       mode === "manual"
@@ -153,7 +197,12 @@ export default function TopicPracticeConfirmDialog({
                         key={lvl.difficultyId}
                         type="button"
                         disabled={!canSelect}
-                        onClick={() => canSelect && setSelectedDifficultyId(lvl.difficultyId)}
+                        onClick={() => {
+                          if (canSelect) {
+                            setSelectedDifficultyId(lvl.difficultyId);
+                            setStaleDifficultyWarning("");
+                          }
+                        }}
                         className={cn(
                           "p-3 rounded-xl border flex items-center justify-between transition-all text-xs font-semibold cursor-pointer",
                           !canSelect
@@ -189,10 +238,10 @@ export default function TopicPracticeConfirmDialog({
             )}
 
             {/* Error Message */}
-            {errorMessage && (
+            {activeError && (
               <div role="alert" className="p-3.5 bg-error/10 border border-error/20 rounded-xl text-error text-xs font-semibold flex items-start gap-2">
                 <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
-                <p className="flex-1 leading-relaxed">{errorMessage}</p>
+                <p className="flex-1 leading-relaxed">{activeError}</p>
               </div>
             )}
           </div>
