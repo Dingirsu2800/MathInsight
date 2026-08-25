@@ -1,4 +1,5 @@
 import MathMarkdown from '../../../components/ui/MathMarkdown';
+import { isNumericShortAnswerEditingValue } from '../../../utils/numericShortAnswer';
 
 /**
  * Renders a single question with its answer options.
@@ -138,11 +139,16 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
           <div>
             <input
               type="text"
+              inputMode="decimal"
               maxLength={100}
               className="w-full border border-whisper-border rounded-xl px-4 py-3 text-sm text-on-surface bg-pure-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
               placeholder="Nhập đáp án ngắn..."
               value={answer?.shortAnswerText || ''}
-              onChange={(e) => handleShortAnswer(e.target.value)}
+              onChange={(e) => {
+                if (isNumericShortAnswerEditingValue(e.target.value)) {
+                  handleShortAnswer(e.target.value);
+                }
+              }}
             />
           </div>
         )}
@@ -186,11 +192,16 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                   ) : (
                     <input
                       type="text"
-                      maxLength={255}
+                      inputMode="decimal"
+                      maxLength={100}
                       className="w-full border border-whisper-border rounded-lg px-3 py-2 text-sm text-on-surface bg-pure-surface focus:border-primary outline-none transition-colors"
                       placeholder="Nhập đáp án ngắn..."
                       value={partAnswer?.textAnswer || ''}
-                      onChange={(e) => handlePartAnswer(part.partId, 'textAnswer', e.target.value)}
+                      onChange={(e) => {
+                        if (isNumericShortAnswerEditingValue(e.target.value)) {
+                          handlePartAnswer(part.partId, 'textAnswer', e.target.value);
+                        }
+                      }}
                     />
                   )}
                 </div>
