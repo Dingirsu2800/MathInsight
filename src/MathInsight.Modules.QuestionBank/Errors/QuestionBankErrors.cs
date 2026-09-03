@@ -36,6 +36,10 @@ public static class QuestionBankErrors
         "QUESTION_CONTENT_REQUIRED",
         "Question content is required.");
 
+    public static readonly Error QuestionSolutionContentRequired = new(
+        "QUESTION_SOLUTION_CONTENT_REQUIRED",
+        "Detailed solution content is required.");
+
     public static readonly Error ImageRequired = new(
         "IMAGE_REQUIRED",
         "An image file is required.");

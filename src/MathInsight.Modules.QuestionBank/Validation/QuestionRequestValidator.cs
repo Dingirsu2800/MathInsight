@@ -16,6 +16,9 @@ internal static partial class QuestionRequestValidator
         if (string.IsNullOrWhiteSpace(request.QuestionContent))
             return QuestionBankErrors.QuestionContentRequired;
 
+        if (string.IsNullOrWhiteSpace(request.SolutionContent))
+            return QuestionBankErrors.QuestionSolutionContentRequired;
+
         if (string.IsNullOrWhiteSpace(request.DifficultyId))
             return QuestionBankErrors.QuestionDifficultyRequired;
 
