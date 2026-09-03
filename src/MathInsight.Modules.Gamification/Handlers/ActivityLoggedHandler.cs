@@ -72,6 +72,7 @@ public sealed class ActivityLoggedHandler : INotificationHandler<ActivityLoggedE
             activityType,
             notification.DurationSeconds,
             activityDate,
+            notification.VideoDurationSeconds,
             cancellationToken);
 
         await _badgeService.CheckAndAwardBadgesAsync(notification.StudentId, cancellationToken);
