@@ -57,6 +57,7 @@ public sealed class BadgeService : IBadgeService
                         cancellationToken);
 
         int totalCorrectAnswers = await GetTotalCorrectAnswersAsync(studentId, cancellationToken);
+        int targetsAchieved = await GetTargetsAchievedAsync(studentId, cancellationToken);
 
         // 5. Check conditions and award
         var newAwards = new List<StudentBadge>();
@@ -67,6 +68,7 @@ public sealed class BadgeService : IBadgeService
                 ConditionType.STREAK_DAYS => currentStreak >= badge.ConditionValue,
                 ConditionType.TESTS_COMPLETED => testsCompleted >= badge.ConditionValue,
                 ConditionType.TOTAL_CORRECT_ANSWERS => totalCorrectAnswers >= badge.ConditionValue,
+                ConditionType.TARGETS_ACHIEVED => targetsAchieved >= badge.ConditionValue,
                 _ => false
             };
 
@@ -126,6 +128,37 @@ public sealed class BadgeService : IBadgeService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not cross-read TestAnswer for TOTAL_CORRECT_ANSWERS. Defaulting to 0.");
+            return 0;
+        }
+    }
+
+    private async Task<int> GetTargetsAchievedAsync(string studentId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var command = _dbContext.Database.GetDbConnection().CreateCommand();
+            command.CommandText = @"
+                SELECT COUNT(*) 
+                FROM [TargetScore] ts
+                INNER JOIN [TagsMastery] tm ON ts.StudentID = tm.StudentID AND ts.TagID = tm.TagId
+                WHERE ts.StudentID = @studentId AND tm.OfficialPoint >= ts.TargetPoint";
+            
+            var param = command.CreateParameter();
+            param.ParameterName = "@studentId";
+            param.Value = studentId;
+            command.Parameters.Add(param);
+
+            if (command.Connection?.State != ConnectionState.Open) 
+            {
+                await _dbContext.Database.OpenConnectionAsync(cancellationToken);
+            }
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+
+            return result != DBNull.Value && result != null ? Convert.ToInt32(result) : 0;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not count TARGETS_ACHIEVED. Defaulting to 0.");
             return 0;
         }
     }

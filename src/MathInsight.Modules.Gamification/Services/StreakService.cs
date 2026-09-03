@@ -30,10 +30,11 @@ public class StreakService : IStreakService
         ActivityType activityType,
         int durationSeconds,
         DateOnly activityDate,
+        int? videoDurationSeconds = null,
         CancellationToken cancellationToken = default)
     {
         // BR-39: non-qualifying activity never touches the streak (no row, no update).
-        if (!Qualifies(activityType, durationSeconds))
+        if (!Qualifies(activityType, durationSeconds, videoDurationSeconds))
         {
             return;
         }
@@ -88,12 +89,22 @@ public class StreakService : IStreakService
     }
 
     // BR-39 qualification, centralised here so callers never reimplement it.
-    private static bool Qualifies(ActivityType activityType, int durationSeconds) =>
-        activityType switch
+    private static bool Qualifies(ActivityType activityType, int durationSeconds, int? videoDurationSeconds = null)
+    {
+        if (activityType == ActivityType.VIEW_LECTURE)
+        {
+            if (videoDurationSeconds.HasValue && videoDurationSeconds.Value > 0)
+            {
+                return durationSeconds >= (videoDurationSeconds.Value / 2.0);
+            }
+            return durationSeconds >= MinLectureQualifyingSeconds;
+        }
+
+        return activityType switch
         {
             ActivityType.PRACTICE => durationSeconds > 0,
             ActivityType.EXAM => durationSeconds > 0,
-            ActivityType.VIEW_LECTURE => durationSeconds >= MinLectureQualifyingSeconds,
             _ => false // DOWNLOAD_MATERIAL never qualifies.
         };
+    }
 }

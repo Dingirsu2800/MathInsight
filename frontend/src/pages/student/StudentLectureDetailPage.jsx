@@ -57,10 +57,11 @@ export default function StudentLectureDetailPage() {
   const [replyContent, setReplyContent] = useState({});
   const [submittingReply, setSubmittingReply] = useState(null);
 
-  // Anti-skip & Progress tracking state
-  const [maxTimeWatched, setMaxTimeWatched] = useState(0);
+  // Progress tracking state
   const ytPlayerRef = React.useRef(null);
-  const [ytIsPlaying, setYtIsPlaying] = useState(false);
+  const isVideoPlayingRef = React.useRef(false);
+  const actualWatchSecondsRef = React.useRef(0);
+  const videoDurationRef = React.useRef(0);
   const hasSentVideoLogRef = React.useRef(false);
   const fetchDiscussionsData = async () => {
     try {
@@ -123,30 +124,44 @@ export default function StudentLectureDetailPage() {
 
   const lastLoggedIdRef = React.useRef(null);
 
-  // Timer logic for tracking lecture view duration (for non-video)
+  // Timer logic for tracking lecture view duration
   useEffect(() => {
     let seconds = 0;
     let timerId = null;
     let hasSentTextLog = false;
     hasSentVideoLogRef.current = false; // Reset on new lecture
+    actualWatchSecondsRef.current = 0;
 
     // Log immediately on enter (0s) to update Heatmap instantly (only once per lecture id)
     if (lastLoggedIdRef.current !== id) {
       lastLoggedIdRef.current = id;
-      logLectureView(id, 0).catch(err => console.error("Error logging initial view:", err));
+      logLectureView(id, 0, 0).catch(err => console.error("Error logging initial view:", err));
     }
 
     // Only count when the document is visible
     const tick = () => {
       if (!document.hidden) {
         seconds++;
-        // Hit 600 seconds (10 mins) -> log for non-video lectures
-        // If it's a video lecture, they must watch the video to get credit.
         const hasVideo = !!lecture?.videoUrl;
         
+        if (hasVideo && isVideoPlayingRef.current) {
+          actualWatchSecondsRef.current += 1;
+          const duration = videoDurationRef.current;
+          if (duration > 0 && actualWatchSecondsRef.current >= duration / 2 && !hasSentVideoLogRef.current) {
+            hasSentVideoLogRef.current = true;
+            logLectureView(id, Math.floor(actualWatchSecondsRef.current), Math.floor(duration))
+              .then(() => {
+                window.dispatchEvent(new Event("gamification_updated"));
+                toast.success("Tuyệt vời! Bạn đã xem đủ thời lượng bài giảng và nhận chuỗi học tập hôm nay 🔥");
+              })
+              .catch(console.error);
+          }
+        }
+        
+        // Hit 600 seconds (10 mins) -> log for non-video lectures
         if (seconds === 600 && !hasSentTextLog && !hasVideo) {
           hasSentTextLog = true;
-          logLectureView(id, seconds)
+          logLectureView(id, seconds, 0)
             .then(() => {
               window.dispatchEvent(new Event("gamification_updated"));
               toast.success("Tuyệt vời! Bạn đã đạt chuỗi học tập hôm nay 🔥");
@@ -163,60 +178,7 @@ export default function StudentLectureDetailPage() {
     };
   }, [id, lecture]); 
 
-  // --- HTML5 Video Anti-skip logic ---
-  const handleHtml5TimeUpdate = (e) => {
-    const video = e.target;
-    if (!video.seeking) {
-      if (video.currentTime > maxTimeWatched) {
-        setMaxTimeWatched(video.currentTime);
-      }
-      checkVideoProgress(video.currentTime, video.duration);
-    }
-  };
-
-  const handleHtml5Seeking = (e) => {
-    const video = e.target;
-    if (video.currentTime > maxTimeWatched + 2) {
-      video.currentTime = maxTimeWatched;
-      toast.error("Vui lòng không tua video");
-    }
-  };
-
-  // --- YouTube Anti-skip logic ---
-  useEffect(() => {
-    let interval;
-    if (ytIsPlaying && ytPlayerRef.current) {
-      interval = setInterval(async () => {
-        try {
-          const currentTime = await ytPlayerRef.current.getCurrentTime();
-          const duration = await ytPlayerRef.current.getDuration();
-          
-          if (currentTime > maxTimeWatched + 2) {
-            ytPlayerRef.current.seekTo(maxTimeWatched, true);
-            toast.error("Vui lòng không tua video");
-          } else {
-            if (currentTime > maxTimeWatched) {
-              setMaxTimeWatched(currentTime);
-            }
-            checkVideoProgress(currentTime, duration);
-          }
-        } catch (err) {
-          // Player might not be ready
-        }
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [ytIsPlaying, maxTimeWatched]);
-
-  const checkVideoProgress = (current, duration) => {
-    if (duration > 0 && current >= duration * 0.9 && !hasSentVideoLogRef.current) {
-      hasSentVideoLogRef.current = true;
-      logLectureView(id, Math.floor(current)).then(() => {
-        window.dispatchEvent(new Event("gamification_updated"));
-        toast.success("Tuyệt vời! Bạn đã xem xong bài giảng và nhận chuỗi học tập hôm nay 🔥");
-      }).catch(console.error);
-    }
-  };
+  // --- End Timer Logic ---
 
   const handleLikeToggle = async () => {
     try {
@@ -365,10 +327,16 @@ export default function StudentLectureDetailPage() {
                       height: '100%',
                       playerVars: { autoplay: 0, rel: 0, modestbranding: 1 }
                     }}
-                    onReady={(e) => { ytPlayerRef.current = e.target; }}
+                    onReady={(e) => { 
+                      ytPlayerRef.current = e.target; 
+                      e.target.getDuration().then(d => videoDurationRef.current = d);
+                    }}
                     onStateChange={(e) => {
-                      if (e.data === YouTube.PlayerState.PLAYING) setYtIsPlaying(true);
-                      else setYtIsPlaying(false);
+                      if (e.data === YouTube.PlayerState.PLAYING) {
+                        isVideoPlayingRef.current = true;
+                        e.target.getDuration().then(d => videoDurationRef.current = d);
+                      }
+                      else isVideoPlayingRef.current = false;
                     }}
                   />
                 ) : (
@@ -377,8 +345,9 @@ export default function StudentLectureDetailPage() {
                     controls 
                     className="w-full h-full object-cover" 
                     poster={lecture.thumbnailUrl}
-                    onTimeUpdate={handleHtml5TimeUpdate}
-                    onSeeking={handleHtml5Seeking}
+                    onPlay={() => isVideoPlayingRef.current = true}
+                    onPause={() => isVideoPlayingRef.current = false}
+                    onLoadedMetadata={(e) => videoDurationRef.current = e.target.duration}
                   />
                 )
               ) : (
@@ -597,7 +566,7 @@ export default function StudentLectureDetailPage() {
                             <span className="material-symbols-outlined text-sm">delete</span>
                           </button>
                         </>
-                      ) : (
+                      ) : (ans.role !== "Teacher" && ans.role !== "Giáo viên" && ans.role !== "Admin" && ans.role !== "Quản trị viên") && (
                         <button 
                           onClick={() => setReportModal({ isOpen: true, targetId: ans.id, isQuestion: false, reason: "" })}
                           className="text-on-surface-variant hover:text-[#f59e0b] p-1"
@@ -734,7 +703,7 @@ export default function StudentLectureDetailPage() {
               </button>
             </div>
             <div className="p-6">
-              <p className="text-[14px] text-on-surface-variant mb-4">Vui lòng cung cấp lý do báo cáo bình luận này. Quản trị viên sẽ xem xét và xử lý.</p>
+              <p className="text-[14px] text-on-surface-variant mb-4">Vui lòng cung cấp lý do báo cáo bình luận này. Giáo viên sẽ xem xét và xử lý.</p>
               <textarea 
                 className="w-full bg-pure-surface border border-outline-variant rounded-lg px-4 py-3 text-[14px] focus:ring-primary focus:border-primary resize-y min-h-[100px]"
                 placeholder="Lý do báo cáo (VD: Ngôn từ đả kích, Spam, ...)"

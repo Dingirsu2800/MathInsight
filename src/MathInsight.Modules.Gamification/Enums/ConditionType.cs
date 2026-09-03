@@ -8,5 +8,6 @@ public enum ConditionType
 {
     TOTAL_CORRECT_ANSWERS,
     STREAK_DAYS,
-    TESTS_COMPLETED
+    TESTS_COMPLETED,
+    TARGETS_ACHIEVED
 }

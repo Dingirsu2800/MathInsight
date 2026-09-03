@@ -7,5 +7,6 @@ public record ActivityLoggedEvent(
     string ActivityType,
     string? LectureId,
     string? MaterialId,
-    int DurationSeconds
+    int DurationSeconds,
+    int? VideoDurationSeconds = null
 ) : INotification;
