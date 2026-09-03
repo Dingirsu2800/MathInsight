@@ -483,26 +483,28 @@ export default function StudentLectureDetailPage() {
             {discussions.map((disc) => (
               <div key={disc.id} className={`bg-pure-surface rounded-xl border border-whisper-border p-6 relative group ${disc.status === "Hidden" ? "opacity-60 bg-surface-container-lowest" : ""}`}>
                 {/* Actions Question */}
-                <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border">
-                  {disc.authorId === currentAccountId ? (
-                    <>
-                      <button onClick={() => startEdit(disc.id, disc.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
-                        <span className="material-symbols-outlined text-sm">edit</span>
+                {disc.status !== "Hidden" && (
+                  <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border">
+                    {disc.authorId === currentAccountId ? (
+                      <>
+                        <button onClick={() => startEdit(disc.id, disc.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button onClick={() => handleDeleteComment(disc.id, true)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button 
+                        onClick={() => setReportModal({ isOpen: true, targetId: disc.id, isQuestion: true, reason: "" })}
+                        className="text-on-surface-variant hover:text-[#f59e0b] p-1"
+                        title="Báo cáo vi phạm"
+                      >
+                        <span className="material-symbols-outlined text-sm">flag</span>
                       </button>
-                      <button onClick={() => handleDeleteComment(disc.id, true)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
-                    </>
-                  ) : (
-                    <button 
-                      onClick={() => setReportModal({ isOpen: true, targetId: disc.id, isQuestion: true, reason: "" })}
-                      className="text-on-surface-variant hover:text-[#f59e0b] p-1"
-                      title="Báo cáo vi phạm"
-                    >
-                      <span className="material-symbols-outlined text-sm">flag</span>
-                    </button>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Question */}
                 <div className="flex gap-4">
@@ -556,26 +558,28 @@ export default function StudentLectureDetailPage() {
                 {disc.answers?.map((ans) => (
                   <div key={ans.id} className={`mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans ${ans.status === "Hidden" ? "opacity-60" : ""}`}>
                     {/* Actions Answer */}
-                    <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
-                      {ans.authorId === currentAccountId ? (
-                        <>
-                          <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
-                            <span className="material-symbols-outlined text-sm">edit</span>
+                    {ans.status !== "Hidden" && (
+                      <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
+                        {ans.authorId === currentAccountId ? (
+                          <>
+                            <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
+                              <span className="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                            <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                              <span className="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                          </>
+                        ) : (ans.role !== "Teacher" && ans.role !== "Giáo viên" && ans.role !== "Admin" && ans.role !== "Quản trị viên") && (
+                          <button 
+                            onClick={() => setReportModal({ isOpen: true, targetId: ans.id, isQuestion: false, reason: "" })}
+                            className="text-on-surface-variant hover:text-[#f59e0b] p-1"
+                            title="Báo cáo vi phạm"
+                          >
+                            <span className="material-symbols-outlined text-sm">flag</span>
                           </button>
-                          <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
-                        </>
-                      ) : (ans.role !== "Teacher" && ans.role !== "Giáo viên" && ans.role !== "Admin" && ans.role !== "Quản trị viên") && (
-                        <button 
-                          onClick={() => setReportModal({ isOpen: true, targetId: ans.id, isQuestion: false, reason: "" })}
-                          className="text-on-surface-variant hover:text-[#f59e0b] p-1"
-                          title="Báo cáo vi phạm"
-                        >
-                          <span className="material-symbols-outlined text-sm">flag</span>
-                        </button>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center font-medium shrink-0">
                       {ans.author?.[0] || "GV"}
