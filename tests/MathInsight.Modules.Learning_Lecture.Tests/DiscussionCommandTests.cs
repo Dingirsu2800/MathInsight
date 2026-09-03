@@ -111,7 +111,8 @@ public sealed class DiscussionCommandTests
         });
         await database.Context.SaveChangesAsync();
 
-        var handler = new ResolveModerationCommandHandler(database.Context);
+        var mockPublisher = new Mock<IPublisher>();
+        var handler = new ResolveModerationCommandHandler(database.Context, mockPublisher.Object);
         // IsDismissed = true => Status = Dismissed
         var command = new ResolveModerationCommand(reportId, "admin-1", true); 
 

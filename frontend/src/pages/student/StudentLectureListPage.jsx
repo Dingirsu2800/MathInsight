@@ -1,20 +1,47 @@
 import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import { getLectures, getTopics, getDifficulties } from "../../services/learningApi";
 import RecommendedLecturesCard from "./dashboard/RecommendedLecturesCard";
 export default function StudentLectureListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const search = searchParams.get("search") || "";
+  const gradeFilter = searchParams.get("grade") || "";
+  const topicFilter = searchParams.get("topic") || "";
+  const difficultyFilter = searchParams.get("difficulty") || "";
+  const page = parseInt(searchParams.get("page") || "1", 10);
+
+  const updateSearchParam = (key, value) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      if (value) {
+        newParams.set(key, value);
+      } else {
+        newParams.delete(key);
+      }
+      if (key !== 'page') {
+        newParams.set('page', '1');
+      }
+      return newParams;
+    }, { replace: true });
+  };
+
+  const setSearch = (val) => updateSearchParam("search", val);
+  const setGradeFilter = (val) => updateSearchParam("grade", val);
+  const setTopicFilter = (val) => updateSearchParam("topic", val);
+  const setDifficultyFilter = (val) => updateSearchParam("difficulty", val);
+  const setPage = (val) => {
+    const newPage = typeof val === 'function' ? val(page) : val;
+    updateSearchParam("page", newPage.toString());
+  };
+
   const [lectures, setLectures] = useState([]);
-  const [search, setSearch] = useState("");
-  const [gradeFilter, setGradeFilter] = useState("");
-  const [topicFilter, setTopicFilter] = useState("");
-  const [difficultyFilter, setDifficultyFilter] = useState("");
   const [topics, setTopics] = useState([]);
   const [difficulties, setDifficulties] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const PAGE_SIZE = 12;
   useEffect(() => {
@@ -28,20 +55,15 @@ export default function StudentLectureListPage() {
           });
         });
         setTopics(flat);
-        setTopicFilter("");
       })
       .catch(err => console.error(err));
       
-    getDifficulties()
+      getDifficulties()
       .then(res => {
         setDifficulties(res.data);
       })
       .catch(err => console.error(err));
   }, [gradeFilter]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, gradeFilter, topicFilter, difficultyFilter]);
 
   const fetchLectures = useCallback(async () => {
     setLoading(true);
@@ -93,7 +115,10 @@ export default function StudentLectureListPage() {
           <select 
             className="w-full md:w-48 px-4 py-3 bg-pure-surface border border-outline-variant rounded-xl text-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             value={gradeFilter}
-            onChange={(e) => setGradeFilter(e.target.value)}
+            onChange={(e) => {
+              setGradeFilter(e.target.value);
+              setTopicFilter("");
+            }}
           >
             <option value="">Tất cả các lớp</option>
             <option value="12">Lớp 12</option>
