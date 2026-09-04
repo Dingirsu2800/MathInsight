@@ -53,17 +53,20 @@ function InfoPopover({ content }) {
   );
 }
 
-const SVG_SIZE = 400;
-const CENTER = SVG_SIZE / 2;
-const MAX_R = 160; // outermost polygon radius
+const SVG_WIDTH = 580;
+const SVG_HEIGHT = 400;
+const CENTER_X = SVG_WIDTH / 2;
+const CENTER_Y = SVG_HEIGHT / 2;
+const MAX_R = 120; // outermost polygon radius (leaves ample margin for text around polygon)
+const LABEL_R = MAX_R + 18; // radius where label anchors sit
 
 /** Calculate SVG polygon point given angle & normalized value (0–1). */
-function polarToXY(index, total, value) {
+function polarToXY(index, total, value, maxR = MAX_R, cx = CENTER_X, cy = CENTER_Y) {
   const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
-  const r = MAX_R * value;
+  const r = maxR * value;
   return {
-    x: CENTER + r * Math.cos(angle),
-    y: CENTER + r * Math.sin(angle),
+    x: cx + r * Math.cos(angle),
+    y: cy + r * Math.sin(angle),
   };
 }
 
@@ -83,6 +86,33 @@ function gridPolygon(count, scale) {
     const { x, y } = polarToXY(i, count, scale);
     return `${x},${y}`;
   }).join(' ');
+}
+
+/** Wrap long Vietnamese topic titles into at most 2 lines */
+function splitLabel(text, maxChars = 18) {
+  if (!text) return [];
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return [trimmed];
+  const words = trimmed.split(/\s+/);
+  if (words.length <= 1) return [trimmed];
+
+  const lines = [];
+  let current = '';
+  for (const w of words) {
+    const candidate = current ? `${current} ${w}` : w;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = w;
+    }
+  }
+  if (current) lines.push(current);
+
+  if (lines.length > 2) {
+    return [lines[0], lines.slice(1).join(' ')];
+  }
+  return lines;
 }
 
 export default function RadarChartCard() {
@@ -171,7 +201,7 @@ export default function RadarChartCard() {
         </div>
       </div>
 
-      <div className="h-[320px] w-full relative flex items-center justify-center">
+      <div className="h-[360px] sm:h-[400px] w-full relative flex items-center justify-center">
         {loading && (
           <div className="w-[280px] h-[280px] rounded-full bg-surface-container animate-pulse" />
         )}
@@ -183,7 +213,10 @@ export default function RadarChartCard() {
         )}
 
         {!loading && n >= 3 && (
-          <svg className="w-full h-full max-w-[380px]" viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}>
+          <svg
+            className="w-full h-full max-w-[620px] max-h-[400px] overflow-visible"
+            viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+          >
             {/* Background grid (3 rings) */}
             {[1, 0.66, 0.33].map((scale) => (
               <polygon
@@ -202,8 +235,13 @@ export default function RadarChartCard() {
               return (
                 <line
                   key={i}
-                  x1={CENTER} y1={CENTER} x2={x} y2={y}
-                  stroke="currentColor" strokeWidth="1" className="text-surface-variant"
+                  x1={CENTER_X}
+                  y1={CENTER_Y}
+                  x2={x}
+                  y2={y}
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  className="text-surface-variant"
                 />
               );
             })}
@@ -216,7 +254,9 @@ export default function RadarChartCard() {
               return (
                 <circle
                   key={`target-${tag.tagId}`}
-                  cx={x} cy={y} r="6"
+                  cx={x}
+                  cy={y}
+                  r="6"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -240,8 +280,13 @@ export default function RadarChartCard() {
               const { x, y } = polarToXY(i, n, v);
               return (
                 <circle
-                  key={i} cx={x} cy={y} r="5"
-                  fill="white" stroke="currentColor" strokeWidth="2.5"
+                  key={i}
+                  cx={x}
+                  cy={y}
+                  r="5"
+                  fill="white"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
                   className="text-primary"
                 />
               );
@@ -249,19 +294,54 @@ export default function RadarChartCard() {
 
             {/* Labels */}
             {axes.map((tag, i) => {
-              const { x, y } = polarToXY(i, n, 1.18);
+              const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+              const cos = Math.cos(angle);
+              const sin = Math.sin(angle);
+              const rawX = CENTER_X + LABEL_R * cos;
+              const rawY = CENTER_Y + LABEL_R * sin;
+
               let anchor = 'middle';
-              if (x < CENTER - 10) anchor = 'end';
-              else if (x > CENTER + 10) anchor = 'start';
+              let x = rawX;
+              let y = rawY;
+
+              if (cos > 0.25) {
+                anchor = 'start';
+                x += 6;
+              } else if (cos < -0.25) {
+                anchor = 'end';
+                x -= 6;
+              }
+
+              const lines = splitLabel(tag.tagName, 18);
+              const isTop = sin < -0.55;
+              const isBottom = sin > 0.55;
+
               return (
                 <text
                   key={tag.tagId}
-                  className="fill-on-surface-variant text-xs"
+                  className="fill-on-surface text-[11px] sm:text-xs font-medium select-none"
                   textAnchor={anchor}
-                  x={x} y={y}
-                  dominantBaseline="central"
+                  x={x}
+                  y={y}
                 >
-                  {tag.tagName}
+                  <title>{`${tag.tagName}: ${(Number(tag.officialPoint || 0)).toFixed(1)}/10`}</title>
+                  {lines.map((line, idx) => {
+                    let dy = '0.35em';
+                    if (lines.length > 1) {
+                      if (idx === 0) {
+                        dy = isTop ? '-1.3em' : isBottom ? '0.8em' : '-0.3em';
+                      } else {
+                        dy = '1.25em';
+                      }
+                    } else {
+                      dy = isTop ? '-0.4em' : isBottom ? '1.0em' : '0.35em';
+                    }
+                    return (
+                      <tspan key={idx} x={x} dy={dy}>
+                        {line}
+                      </tspan>
+                    );
+                  })}
                 </text>
               );
             })}
