@@ -646,7 +646,7 @@ export default function BlueprintEditorPage() {
                             onValueChange={(value) => updateSectionField(secIdx, "scoringRule", value)}
                             items={[
                               { value: "WeightedParts", label: "Theo trọng số từng phần" },
-                              { value: "TieredTrueFalse", label: "Đúng/Sai theo bậc 0-10-25-50-100%" }
+                              { value: "TieredTrueFalse", label: "Đúng/Sai phân bậc (sai 1 mệnh đề chia đôi điểm)" }
                             ]}
                           />
                         </div>

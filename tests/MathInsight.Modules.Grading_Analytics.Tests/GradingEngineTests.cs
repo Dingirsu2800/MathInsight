@@ -446,7 +446,7 @@ public class GradingEngineTests
     // â”€â”€ COMPOSITE GENERAL (MIXED PARTS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
-    public void TieredTrueFalse_WithNonFourPartSnapshot_ThrowsContractError()
+    public void TieredTrueFalse_WithLessThanTwoParts_ThrowsContractError()
     {
         var session = TestDataBuilder.CreateSession();
         var answer = TestDataBuilder.AddCompositeAllTrueFalse(
@@ -454,8 +454,6 @@ public class GradingEngineTests
             defaultPoint: 2.0m,
             parts:
             [
-                ("True", "True"),
-                ("False", "False"),
                 ("True", "True"),
             ]);
 
@@ -486,7 +484,68 @@ public class GradingEngineTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => _engine.Grade(session));
 
-        Assert.Contains("exactly four TrueFalse parts", exception.Message);
+        Assert.Contains("at least two TrueFalse parts", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0, 0.00)]
+    [InlineData(1, 0.50)] // 25% of 2.0 = 0.50
+    [InlineData(2, 1.00)] // 50% of 2.0 = 1.00
+    [InlineData(3, 2.00)] // 100% of 2.0 = 2.00
+    public void TieredTrueFalse_ThreeParts_GradesWithHalvingRule(int numCorrect, decimal expectedPoints)
+    {
+        var session = TestDataBuilder.CreateSession();
+        var partAnswers = new List<(string answerKey, string? studentAnswer)>();
+        for (int i = 0; i < 3; i++)
+        {
+            if (i < numCorrect)
+                partAnswers.Add(("True", "True"));
+            else
+                partAnswers.Add(("True", "False"));
+        }
+
+        var answer = TestDataBuilder.AddCompositeAllTrueFalse(
+            session,
+            defaultPoint: 2.0m,
+            parts: partAnswers);
+
+        answer.MaxPointsSnapshot = 2.0m;
+        answer.ScoringRuleSnapshot = ScoringRules.TieredTrueFalse;
+
+        _engine.Grade(session);
+
+        Assert.Equal(expectedPoints, answer.PointsEarned);
+        Assert.Equal(numCorrect == 3, answer.IsCorrect);
+    }
+
+    [Theory]
+    [InlineData(0, 0.00)]
+    [InlineData(1, 1.00)] // 50% of 2.0 = 1.00
+    [InlineData(2, 2.00)] // 100% of 2.0 = 2.00
+    public void TieredTrueFalse_TwoParts_GradesWithHalvingRule(int numCorrect, decimal expectedPoints)
+    {
+        var session = TestDataBuilder.CreateSession();
+        var partAnswers = new List<(string answerKey, string? studentAnswer)>();
+        for (int i = 0; i < 2; i++)
+        {
+            if (i < numCorrect)
+                partAnswers.Add(("True", "True"));
+            else
+                partAnswers.Add(("True", "False"));
+        }
+
+        var answer = TestDataBuilder.AddCompositeAllTrueFalse(
+            session,
+            defaultPoint: 2.0m,
+            parts: partAnswers);
+
+        answer.MaxPointsSnapshot = 2.0m;
+        answer.ScoringRuleSnapshot = ScoringRules.TieredTrueFalse;
+
+        _engine.Grade(session);
+
+        Assert.Equal(expectedPoints, answer.PointsEarned);
+        Assert.Equal(numCorrect == 2, answer.IsCorrect);
     }
 
     [Fact]

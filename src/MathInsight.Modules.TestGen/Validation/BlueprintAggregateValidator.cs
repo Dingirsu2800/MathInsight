@@ -160,7 +160,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
         {
             return section.PartCountPerQuestion > 0 &&
                 scoringRule is ScoringRules.TieredTrueFalse or ScoringRules.WeightedParts &&
-                (scoringRule != ScoringRules.TieredTrueFalse || section.PartCountPerQuestion == 4);
+                (scoringRule != ScoringRules.TieredTrueFalse || section.PartCountPerQuestion >= 2);
         }
 
         return section.PartCountPerQuestion is null && scoringRule == ScoringRules.AllOrNothing;

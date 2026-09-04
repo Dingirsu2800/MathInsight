@@ -11,8 +11,6 @@ namespace MathInsight.Modules.Grading_Analytics.Services;
 /// </summary>
 public class GradingEngine : IGradingEngine
 {
-    private static readonly decimal[] CompositeAllTfScoreTable = [0.00m, 0.10m, 0.25m, 0.50m, 1.00m];
-
     public GradingResult Grade(TestSession session)
     {
         var correct = 0;
@@ -237,9 +235,9 @@ public class GradingEngine : IGradingEngine
         TestAnswer answer, Question question, decimal maxPoints)
     {
         var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
-        if (parts.Count != 4 || parts.Any(p => NormalizeType(p.PartType) != "TRUEFALSE"))
+        if (parts.Count < 2 || parts.Any(p => NormalizeType(p.PartType) != "TRUEFALSE"))
         {
-            throw new InvalidOperationException("TieredTrueFalse scoring requires exactly four TrueFalse parts.");
+            throw new InvalidOperationException("TieredTrueFalse scoring requires at least two TrueFalse parts.");
         }
 
         int correctCount = 0;
@@ -261,11 +259,33 @@ public class GradingEngine : IGradingEngine
 
         answer.IsCorrect = correctCount == totalParts && totalParts > 0;
 
-        decimal fraction = correctCount < CompositeAllTfScoreTable.Length
-            ? CompositeAllTfScoreTable[correctCount]
-            : 1.00m;
+        decimal fraction = CalculateTieredTrueFalseFraction(correctCount, totalParts);
 
         answer.PointsEarned = Math.Round(fraction * maxPoints, 2);
+    }
+
+    private static decimal CalculateTieredTrueFalseFraction(int correctCount, int totalParts)
+    {
+        if (correctCount <= 0 || totalParts <= 0) return 0.00m;
+        if (correctCount >= totalParts) return 1.00m;
+
+        // Quy chuẩn Bộ GD&ĐT cho câu 4 mệnh đề: 0 - 10% - 25% - 50% - 100%
+        if (totalParts == 4)
+        {
+            return correctCount switch
+            {
+                1 => 0.10m,
+                2 => 0.25m,
+                3 => 0.50m,
+                4 => 1.00m,
+                _ => 0.00m
+            };
+        }
+
+        // Quy tắc phân bậc chia đôi cho các số mệnh đề khác (ví dụ: N=3: 0 - 25% - 50% - 100%, N=2: 0 - 50% - 100%)
+        int wrongCount = totalParts - correctCount;
+        decimal fraction = 1.00m / (1 << wrongCount);
+        return Math.Round(fraction, 4);
     }
 
     private static void GradeCompositeGeneral(

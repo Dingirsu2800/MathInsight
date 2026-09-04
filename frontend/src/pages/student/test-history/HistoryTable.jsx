@@ -30,6 +30,24 @@ function formatDate(isoString) {
   return { date, time };
 }
 
+/** Convert a YYYY-MM-DD date string to start of day ISO in local timezone */
+export function toStartOfDayIso(dateStr) {
+  if (!dateStr) return undefined;
+  if (dateStr.includes('T')) return dateStr;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return dateStr;
+  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
+}
+
+/** Convert a YYYY-MM-DD date string to end of day ISO in local timezone */
+export function toEndOfDayIso(dateStr) {
+  if (!dateStr) return undefined;
+  if (dateStr.includes('T')) return dateStr;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return dateStr;
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+}
+
 /**
  * HistoryTable: paginated list of graded sessions from GET /api/v1/grading/student/history.
  * Accepts filter state from parent (TestHistoryPage) via props.
@@ -57,8 +75,8 @@ export default function HistoryTable({ filters = {}, onViewDetail }) {
           pageIndex: page,
           pageSize: PAGE_SIZE,
           testFormat: filters.testFormat || undefined,
-          fromDate: filters.fromDate || undefined,
-          toDate: filters.toDate || undefined,
+          fromDate: toStartOfDayIso(filters.fromDate),
+          toDate: toEndOfDayIso(filters.toDate),
         });
         setRows(data.items ?? []);
         setTotalCount(data.totalCount ?? 0);

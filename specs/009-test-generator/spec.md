@@ -70,7 +70,7 @@ The current table has no `CreatedTime`. List queries use stable ordering by `Blu
 - `QuestionType` uses DB values `SingleChoice`, `MultipleChoice`, `TrueFalse`, `ShortAnswer`, or `Composite`.
 - `TotalQuestions >= 0`; `ScoreBudget` is required, greater than 0, and at most 100.
 - `ScoringRule` is `AllOrNothing`, `TieredTrueFalse`, or `WeightedParts`.
-- A `Composite` section requires `PartCountPerQuestion > 0` and uses `TieredTrueFalse` or `WeightedParts`; tiered scoring requires exactly four TrueFalse parts.
+- A `Composite` section requires `PartCountPerQuestion > 0` and uses `TieredTrueFalse` or `WeightedParts`; tiered scoring requires at least two TrueFalse parts.
 - Non-composite sections must leave `PartCountPerQuestion` null and use `AllOrNothing`.
 - The sum of section `ScoreBudget` values must equal `Blueprint.TotalScore` exactly to two decimal places.
 

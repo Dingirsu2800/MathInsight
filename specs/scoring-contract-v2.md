@@ -15,7 +15,7 @@
 ## Scoring Rules
 
 - `AllOrNothing`: correct receives the full question MaxPointsSnapshot.
-- `TieredTrueFalse`: exactly four Boolean parts; 0/1/2/3/4 correct receive 0/10/25/50/100 percent.
+- `TieredTrueFalse`: Boolean parts (N >= 2); 0 correct receive 0%; each incorrect part halves points (e.g. 3 parts: 0/25/50/100%; 4 parts: 0/10/25/50/100% MOET standard).
 - `WeightedParts`: parent MaxPointsSnapshot is split by immutable part weights.
 - Cent rounding uses largest remainder with QuestionOrder or PartOrder as the stable tie-breaker.
 

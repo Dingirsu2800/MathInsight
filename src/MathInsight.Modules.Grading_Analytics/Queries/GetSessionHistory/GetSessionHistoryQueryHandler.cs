@@ -36,10 +36,24 @@ public sealed class GetSessionHistoryQueryHandler
             query = query.Where(s => s.TestFormat == request.TestFormat);
 
         if (request.FromDate.HasValue)
-            query = query.Where(s => s.EndTime >= request.FromDate.Value);
+        {
+            var fromDate = request.FromDate.Value;
+            query = query.Where(s => (s.EndTime ?? s.StartTime) >= fromDate);
+        }
 
         if (request.ToDate.HasValue)
-            query = query.Where(s => s.EndTime <= request.ToDate.Value);
+        {
+            var toDate = request.ToDate.Value;
+            if (toDate.TimeOfDay == TimeSpan.Zero)
+            {
+                var nextDay = toDate.Date.AddDays(1);
+                query = query.Where(s => (s.EndTime ?? s.StartTime) < nextDay);
+            }
+            else
+            {
+                query = query.Where(s => (s.EndTime ?? s.StartTime) <= toDate);
+            }
+        }
 
         var totalCount = await query.CountAsync(cancellationToken);
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);

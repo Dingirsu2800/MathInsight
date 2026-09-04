@@ -47,8 +47,8 @@ export function validateBlueprint(state, isSubmit = false) {
       if (!["TieredTrueFalse", "WeightedParts"].includes(section.scoringRule)) {
         errors.push(`${label}: Quy tắc chấm Composite không hợp lệ.`);
       }
-      if (section.scoringRule === "TieredTrueFalse" && Number(section.partCountPerQuestion) !== 4) {
-        errors.push(`${label}: TieredTrueFalse chỉ áp dụng cho đúng 4 mệnh đề.`);
+      if (section.scoringRule === "TieredTrueFalse" && Number(section.partCountPerQuestion) < 2) {
+        errors.push(`${label}: TieredTrueFalse chỉ áp dụng cho câu hỏi có từ 2 mệnh đề trở lên.`);
       }
     } else if (section.scoringRule !== "AllOrNothing") {
       errors.push(`${label}: Câu không phải Composite phải dùng AllOrNothing.`);

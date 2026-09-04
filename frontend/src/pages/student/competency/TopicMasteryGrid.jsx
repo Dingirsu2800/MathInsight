@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MaterialIcon from '../../../components/ui/MaterialIcon';
 import ProgressBar from '../../../components/ui/ProgressBar';
+import useCurrentUser from '../../../hooks/useCurrentUser';
 import { getAllTagsMastery } from '../../../services/recommenderApi';
 
 // Icon pool cycled per index (no icon field in DTO)
@@ -69,11 +70,39 @@ function getTopicStyle(masteryStatus, officialPoint) {
   };
 }
 
+/**
+ * Helper to identify whether a topic belongs to a specific grade.
+ * Uses topic.grade if present; falls back to parsing topic.tagName.
+ */
+export function isTopicInGrade(topic, grade) {
+  if (!grade) return true;
+  if (topic?.grade) {
+    return Number(topic.grade) === Number(grade);
+  }
+  const gradeStr = String(grade);
+  const name = topic?.tagName || '';
+  const regex = new RegExp(`(?:Lớp|Khối|K)\\s*${gradeStr}\\b`, 'i');
+  return regex.test(name);
+}
+
+/**
+ * Extract the grade number from topic.grade or topic.tagName.
+ */
+export function getTopicGrade(topic) {
+  if (topic?.grade) return Number(topic.grade);
+  const match = (topic?.tagName || '').match(/(?:Lớp|Khối|K)\s*(\d{1,2})\b/i);
+  return match ? Number(match[1]) : null;
+}
+
 export default function TopicMasteryGrid() {
+  const { profile } = useCurrentUser('Học sinh');
+  const currentGrade = profile?.student?.currentGrade;
+
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [sortBy, setSortBy] = useState('progress'); // 'progress' | 'score'
+  const [filterScope, setFilterScope] = useState('current'); // 'current' | 'all'
 
   useEffect(() => {
     let cancelled = false;
@@ -87,8 +116,16 @@ export default function TopicMasteryGrid() {
     return () => { cancelled = true; };
   }, []);
 
+  // When student has no currentGrade set, fall back to viewing all
+  const effectiveScope = currentGrade ? filterScope : 'all';
+
+  const filteredTopics = topics.filter((topic) => {
+    if (effectiveScope === 'all') return true;
+    return isTopicInGrade(topic, currentGrade);
+  });
+
   // Sort
-  const sorted = [...topics].sort((a, b) => {
+  const sorted = [...filteredTopics].sort((a, b) => {
     if (sortBy === 'score') return Number(b.officialPoint) - Number(a.officialPoint);
     // progress: flagged (weak) first, then ascending score
     const sa = Number(a.officialPoint);
@@ -100,27 +137,78 @@ export default function TopicMasteryGrid() {
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-on-surface">Chi tiết từng chủ đề</h3>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSortBy('progress')}
-            className={`px-4 py-2 rounded-lg font-mono text-xs border transition-colors ${sortBy === 'progress'
-                ? 'bg-primary text-white border-primary'
-                : 'bg-pure-surface border-whisper-border hover:bg-surface-container'
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold text-on-surface">Chi tiết từng chủ đề</h3>
+          {!loading && !error && (
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+              {sorted.length} chủ đề
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Grade filter pills */}
+          <div className="inline-flex p-1 bg-surface-container-low rounded-xl border border-whisper-border">
+            <button
+              type="button"
+              onClick={() => setFilterScope('current')}
+              disabled={!currentGrade}
+              title={!currentGrade ? 'Chưa cập nhật thông tin khối lớp' : `Chỉ hiển thị chủ đề Lớp ${currentGrade}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                effectiveScope === 'current'
+                  ? 'bg-primary text-white shadow-sm'
+                  : currentGrade
+                  ? 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
+                  : 'text-outline/50 cursor-not-allowed'
               }`}
-          >
-            Theo tiến độ
-          </button>
-          <button
-            onClick={() => setSortBy('score')}
-            className={`px-4 py-2 rounded-lg font-mono text-xs border transition-colors ${sortBy === 'score'
-                ? 'bg-primary text-white border-primary'
-                : 'bg-pure-surface border-whisper-border hover:bg-surface-container'
+            >
+              <MaterialIcon name="school" className="text-sm" />
+              <span>{currentGrade ? `Lớp ${currentGrade}` : 'Lớp hiện tại'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterScope('all')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                effectiveScope === 'all'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
               }`}
-          >
-            Theo điểm số
-          </button>
+            >
+              <MaterialIcon name="apps" className="text-sm" />
+              <span>Hiển thị toàn bộ</span>
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="hidden sm:block h-5 w-[1px] bg-whisper-border" />
+
+          {/* Sort buttons */}
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSortBy('progress')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                sortBy === 'progress'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-pure-surface border-whisper-border text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              Theo tiến độ
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortBy('score')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                sortBy === 'score'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-pure-surface border-whisper-border text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              Theo điểm số
+            </button>
+          </div>
         </div>
       </div>
 
@@ -145,35 +233,66 @@ export default function TopicMasteryGrid() {
         </p>
       )}
 
-      {/* Empty */}
+      {/* Empty - Overall */}
       {!loading && !error && topics.length === 0 && (
         <p className="text-sm text-outline text-center py-8">
           Chưa có dữ liệu chuyên đề nào.
         </p>
       )}
 
+      {/* Empty - Filter result */}
+      {!loading && !error && topics.length > 0 && sorted.length === 0 && (
+        <div className="bg-pure-surface border border-whisper-border rounded-xl p-8 text-center">
+          <div className="inline-flex p-3 rounded-full bg-surface-container mb-3 text-on-surface-variant">
+            <MaterialIcon name="school" className="text-2xl" />
+          </div>
+          <h4 className="text-sm font-semibold text-on-surface mb-1">
+            Không có chủ đề nào thuộc Lớp {currentGrade}
+          </h4>
+          <p className="text-xs text-outline mb-4">
+            Hiện tại chưa có chủ đề tương ứng cho khối lớp của bạn.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFilterScope('all')}
+            className="px-4 py-2 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary-hover transition-colors"
+          >
+            Hiển thị toàn bộ chủ đề
+          </button>
+        </div>
+      )}
+
       {/* Data */}
-      {!loading && !error && topics.length > 0 && (
+      {!loading && !error && sorted.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {sorted.map((topic, idx) => {
             const score = Number(topic.officialPoint || 0);
             const style = getTopicStyle(topic.masteryStatus, score);
             const icon = ICON_POOL[idx % ICON_POOL.length];
+            const topicGrade = getTopicGrade(topic);
 
             const card = (
               <div
-                className={`bg-pure-surface border rounded-xl p-5 flex flex-col relative overflow-hidden transition-transform hover:-translate-y-1 ${style.flagged
+                className={`bg-pure-surface border rounded-xl p-5 flex flex-col relative overflow-hidden transition-transform hover:-translate-y-1 ${
+                  style.flagged
                     ? 'border-2 border-deep-rose/30'
                     : 'border-whisper-border'
-                  }`}
+                }`}
               >
                 <div className="flex justify-between items-start mb-4">
                   <div className={`p-2 rounded-lg ${icon.bg}`}>
                     <MaterialIcon name={icon.name} className={icon.color} />
                   </div>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full uppercase font-bold ${style.statusClass}`}>
-                    {style.status}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {topicGrade && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-surface-container text-on-surface-variant border border-whisper-border">
+                        Lớp {topicGrade}
+                      </span>
+                    )}
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full uppercase font-bold ${style.statusClass}`}>
+                      {style.status}
+                    </span>
+                  </div>
                 </div>
 
                 <h4 className="text-base font-bold mb-1 text-on-surface">{topic.tagName}</h4>
