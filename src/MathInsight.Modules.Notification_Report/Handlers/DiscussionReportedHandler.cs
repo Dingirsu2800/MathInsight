@@ -17,11 +17,11 @@ public sealed class DiscussionReportedHandler : INotificationHandler<DiscussionR
 
     public Task Handle(DiscussionReportedEvent notification, CancellationToken cancellationToken)
     {
-        string targetName = notification.TargetType == "Question" ? "question" : "answer";
+        string targetName = notification.TargetType == "Question" ? "câu hỏi" : "câu trả lời";
         return _notificationService.SendAsync(
             notification.TeacherId,
-            "Comment Reported",
-            $"A {targetName} on your lecture has been reported for: {notification.Reason}",
+            "Có báo cáo vi phạm",
+            $"Một {targetName} trong bài giảng của bạn đã bị báo cáo vì: {notification.Reason}",
             "/teacher/moderation",
             cancellationToken);
     }
