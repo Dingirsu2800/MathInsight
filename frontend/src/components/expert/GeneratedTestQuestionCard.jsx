@@ -23,6 +23,19 @@ export default function GeneratedTestQuestionCard({ question, index }) {
     }
   };
 
+  const getTieredDescription = (partCount) => {
+    if (partCount === 4) {
+      return "Đúng 1 mệnh đề = 10% điểm, Đúng 2 mệnh đề = 25% điểm, Đúng 3 mệnh đề = 50% điểm, Đúng cả 4 mệnh đề = 100% điểm.";
+    }
+    if (partCount === 3) {
+      return "Đúng 1 mệnh đề = 25% điểm, Đúng 2 mệnh đề = 50% điểm, Đúng cả 3 mệnh đề = 100% điểm.";
+    }
+    if (partCount === 2) {
+      return "Đúng 1 mệnh đề = 50% điểm, Đúng cả 2 mệnh đề = 100% điểm.";
+    }
+    return "Sai 1 mệnh đề điểm chia đôi, đúng tất cả mệnh đề = 100% điểm.";
+  };
+
   const sortedParts = question.parts
     ? [...question.parts].sort((a, b) => (a.partOrder || 0) - (b.partOrder || 0))
     : [];
@@ -225,7 +238,8 @@ export default function GeneratedTestQuestionCard({ question, index }) {
             <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl text-xs text-primary leading-relaxed flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">info</span>
               <div>
-                <strong>Quy tắc chấm Đúng/Sai theo bậc (Tiered True/False):</strong> Đúng 1 mệnh đề = 10% điểm, Đúng 2 mệnh đề = 25% điểm, Đúng 3 mệnh đề = 50% điểm, Đúng cả 4 mệnh đề = 100% điểm.
+                <strong>Quy tắc chấm Đúng/Sai theo bậc (Tiered True/False):</strong>{" "}
+                {getTieredDescription(sortedParts.length)}
               </div>
             </div>
           )}

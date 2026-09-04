@@ -225,15 +225,10 @@ Returns aggregate statistics computed from the student's graded sessions.
   - `IsScoreInvalidated` (`bool`) — true when the question was invalidated via confirmed report; effective points = MaxPoints
 
   Consumers must be **idempotent** — duplicate events for the same `SessionId` must be safe to ignore.
-- **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`** (or `ScoringRuleSnapshot = 'TieredTrueFalse'`), the `points_earned` for the parent answer is determined by the **count of correct parts**, using the following non-linear table (relative to `TestQuestion.MaxPointsSnapshot`):
+- **BR-23 (COMPOSITE True/False scoring)**: When a `COMPOSITE` question has **all `QuestionPart` rows with `part_type = TRUE_FALSE`** (or `ScoringRuleSnapshot = 'TieredTrueFalse'`), the `points_earned` for the parent answer is determined by the **count of correct parts**, using the tiered halving scoring rule (relative to `TestQuestion.MaxPointsSnapshot`):
 
-  | Correct parts | Points earned |
-  |---------------|---------------|
-  | 0             | 0.00          |
-  | 1             | 0.10 × `max_points_snapshot` |
-  | 2             | 0.25 × `max_points_snapshot` |
-  | 3             | 0.50 × `max_points_snapshot` |
-  | N (all)       | 1.00 × `max_points_snapshot` |
+  - For $N = 4$ parts (MOET standard): 0 correct = 0.00; 1 = 0.10 × `max_points_snapshot`; 2 = 0.25 × `max_points_snapshot`; 3 = 0.50 × `max_points_snapshot`; 4 = 1.00 × `max_points_snapshot`.
+  - For other $N \ge 2$ parts: 0 correct = 0.00; each incorrect part halves points: $1.00 / 2^{N - \text{correct}}$ (e.g. 3 parts: 0/3 = 0.00, 1/3 = 0.25 × mp, 2/3 = 0.50 × mp, 3/3 = 1.00 × mp; 2 parts: 0/2 = 0.00, 1/2 = 0.50 × mp, 2/2 = 1.00 × mp).
 
   This rule applies regardless of **which** specific parts are correct. `is_correct` on the parent `TestAnswer` is `true` only when all parts are correct. Each child `TestAnswerPart.is_correct` is still recorded individually for solution display.
 

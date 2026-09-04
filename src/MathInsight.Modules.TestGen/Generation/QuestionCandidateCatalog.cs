@@ -99,7 +99,7 @@ public sealed class QuestionCandidateCatalog : IQuestionCandidateCatalog
                 return;
             partCount = parts.Count;
             rules.Add(ScoringRules.WeightedParts);
-            if (parts.Count == 4 && parts.All(part => string.Equals(NormalizeType(part.PartType), "TrueFalse", StringComparison.OrdinalIgnoreCase)))
+            if (parts.Count >= 2 && parts.All(part => string.Equals(NormalizeType(part.PartType), "TrueFalse", StringComparison.OrdinalIgnoreCase)))
                 rules.Add(ScoringRules.TieredTrueFalse);
         }
         candidates.Add(new BlueprintExamCandidate(question.QuestionId, string.Empty, question.DefaultWeight, question.DifficultyId, question.QuestionType, topics.Select(topic => topic.TagId).ToHashSet(StringComparer.OrdinalIgnoreCase), rules, partCount));
@@ -133,7 +133,7 @@ public sealed class QuestionCandidateCatalog : IQuestionCandidateCatalog
             if (snapshot.Answers.Count != 0 || currentAnswers.Count != 0 || !PartsMatch(snapshot.Parts, currentParts))
                 return null;
             rules.Add(ScoringRules.WeightedParts);
-            if (snapshot.Parts.Count == 4 && snapshot.Parts.All(part => string.Equals(NormalizeType(part.PartType), "TrueFalse", StringComparison.OrdinalIgnoreCase)))
+            if (snapshot.Parts.Count >= 2 && snapshot.Parts.All(part => string.Equals(NormalizeType(part.PartType), "TrueFalse", StringComparison.OrdinalIgnoreCase)))
                 rules.Add(ScoringRules.TieredTrueFalse);
         }
         return new BlueprintExamCandidate(question.QuestionId, version.VersionId, snapshot.DefaultWeight, question.DifficultyId, question.QuestionType, snapshot.Topics.Select(topic => topic.TagId).ToHashSet(StringComparer.OrdinalIgnoreCase), rules, snapshot.Parts.Count);
