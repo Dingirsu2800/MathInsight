@@ -69,7 +69,8 @@ public sealed class RecommenderService : IRecommenderService, IStudentRecommenda
                 tm != null ? tm.OfficialPoint : 3.27m,
                 tm != null ? tm.NumberDone : 0,
                 tm != null ? tm.MasteryStatus : "NotLearned",
-                tm != null ? tm.RecommendedDifficultyLevel : (byte)1)
+                tm != null ? tm.RecommendedDifficultyLevel : (byte)1,
+                tt.Grade)
         ).ToListAsync(cancellationToken);
 
         return allMastery;
