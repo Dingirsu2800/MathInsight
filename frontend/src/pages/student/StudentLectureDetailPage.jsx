@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import StudentLayout from "../../components/layout/StudentLayout";
 import { getLecture, getDiscussions, askQuestion, answerQuestion, reportDiscussion, likeLecture, unlikeLecture, updateComment, deleteComment, logLectureView } from "../../services/learningApi";
 import { toast } from "../../components/common/Toast";
@@ -29,14 +29,41 @@ const parseUtcDate = (dateStr) => {
   return new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
 };
 
+const formatTimeAgo = (createdTime, updatedTime) => {
+  const created = parseUtcDate(createdTime);
+  const updated = parseUtcDate(updatedTime);
+  if (!created) return "";
+  if (updated && updated.getTime() - created.getTime() > 2000) {
+    return `${updated.toLocaleString("vi-VN")} (Đã chỉnh sửa)`;
+  }
+  return created.toLocaleString("vi-VN");
+};
+
+const getAccountIdFromToken = () => {
+  const token = localStorage.getItem("access_token");
+  if (!token) return localStorage.getItem("account_id") || localStorage.getItem("AccountId");
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    const payload = JSON.parse(jsonPayload);
+    return payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || payload.account_id || payload.AccountId || localStorage.getItem("account_id");
+  } catch (e) {
+    return localStorage.getItem("account_id") || localStorage.getItem("AccountId");
+  }
+};
+
 export default function StudentLectureDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [lecture, setLecture] = useState(null);
   const [loading, setLoading] = useState(true);
   const [discussions, setDiscussions] = useState([]);
   const [newQuestionTitle, setNewQuestionTitle] = useState("");
-  const currentAccountId = localStorage.getItem("account_id") || localStorage.getItem("AccountId");
+  const currentAccountId = getAccountIdFromToken();
   const userRole = localStorage.getItem("role_name") || localStorage.getItem("RoleName");
   
   const getFormatIcon = (format) => {
@@ -49,6 +76,7 @@ export default function StudentLectureDetailPage() {
   const [newQuestionContent, setNewQuestionContent] = useState("");
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [reportModal, setReportModal] = useState({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, targetId: null, isQuestion: false });
   const [isLiked, setIsLiked] = useState(false);
   
   const [editingComment, setEditingComment] = useState(null);
@@ -71,7 +99,7 @@ export default function StudentLectureDetailPage() {
         authorId: d.studentId,
         author: d.authorName || "Học sinh ẩn danh",
         authorInitials: d.authorName ? d.authorName.substring(0, 2).toUpperCase() : "HS",
-        timeAgo: parseUtcDate(d.createdTime).toLocaleString("vi-VN"),
+        timeAgo: formatTimeAgo(d.createdTime, d.updatedTime),
         title: d.title,
         content: d.content,
         status: d.status,
@@ -81,7 +109,7 @@ export default function StudentLectureDetailPage() {
           authorId: a.accountId,
           author: a.authorName || "Ẩn danh",
           role: a.roleName || "Giáo viên",
-          timeAgo: parseUtcDate(a.createdTime).toLocaleString("vi-VN"),
+          timeAgo: formatTimeAgo(a.createdTime, a.updatedTime),
           content: a.content,
           status: a.status,
           moderationReason: a.moderationReason
@@ -123,6 +151,22 @@ export default function StudentLectureDetailPage() {
   }, [id]);
 
   const lastLoggedIdRef = React.useRef(null);
+
+  useEffect(() => {
+    const targetId = searchParams.get("discussionId");
+    if (targetId && discussions.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`discussion-${targetId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add("ring-2", "ring-primary", "ring-offset-2", "bg-primary/5", "transition-all", "duration-1000");
+          setTimeout(() => {
+             el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "bg-primary/5");
+          }, 3000);
+        }
+      }, 300);
+    }
+  }, [discussions, searchParams]);
 
   // Timer logic for tracking lecture view duration
   useEffect(() => {
@@ -209,7 +253,7 @@ export default function StudentLectureDetailPage() {
       await fetchDiscussionsData();
     } catch (err) {
       console.error("Lỗi khi gửi câu hỏi", err);
-      alert("Lỗi khi gửi câu hỏi!");
+      toast.error("Lỗi khi gửi câu hỏi!");
     } finally {
       setSubmittingQuestion(false);
     }
@@ -225,7 +269,7 @@ export default function StudentLectureDetailPage() {
       await fetchDiscussionsData();
     } catch (err) {
       console.error("Lỗi khi gửi câu trả lời", err);
-      alert("Lỗi khi gửi câu trả lời!");
+      toast.error("Lỗi khi gửi câu trả lời!");
     } finally {
       setSubmittingReply(null);
     }
@@ -240,22 +284,26 @@ export default function StudentLectureDetailPage() {
         reason: reportModal.reason
       };
       await reportDiscussion(payload);
-      alert("Đã gửi báo cáo vi phạm thành công!");
+      toast.success("Đã gửi báo cáo vi phạm thành công!");
       setReportModal({ isOpen: false, targetId: null, isQuestion: false, reason: "" });
     } catch (err) {
       console.error("Lỗi khi gửi báo cáo:", err);
-      alert("Lỗi khi gửi báo cáo vi phạm!");
+      toast.error(err.response?.data?.message || err.response?.data?.detail || "Lỗi khi gửi báo cáo vi phạm!");
     }
   };
 
-  const handleDeleteComment = async (id, isQuestion) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
+  const handleDeleteCommentConfirm = async () => {
+    const { targetId, isQuestion } = deleteModal;
+    if (!targetId) return;
     try {
-      await deleteComment(id, isQuestion);
+      await deleteComment(targetId, isQuestion);
       await fetchDiscussionsData();
+      toast.success("Đã xóa bình luận!");
     } catch (err) {
       console.error("Lỗi khi xóa bình luận", err);
-      alert("Lỗi khi xóa bình luận!");
+      toast.error("Lỗi khi xóa bình luận!");
+    } finally {
+      setDeleteModal({ isOpen: false, targetId: null, isQuestion: false });
     }
   };
 
@@ -268,7 +316,7 @@ export default function StudentLectureDetailPage() {
       await fetchDiscussionsData();
     } catch (err) {
       console.error("Lỗi khi sửa bình luận", err);
-      alert("Lỗi khi sửa bình luận!");
+      toast.error("Lỗi khi sửa bình luận!");
     }
   };
 
@@ -329,12 +377,12 @@ export default function StudentLectureDetailPage() {
                     }}
                     onReady={(e) => { 
                       ytPlayerRef.current = e.target; 
-                      e.target.getDuration().then(d => videoDurationRef.current = d);
+                      videoDurationRef.current = e.target.getDuration();
                     }}
                     onStateChange={(e) => {
                       if (e.data === YouTube.PlayerState.PLAYING) {
                         isVideoPlayingRef.current = true;
-                        e.target.getDuration().then(d => videoDurationRef.current = d);
+                        videoDurationRef.current = e.target.getDuration();
                       }
                       else isVideoPlayingRef.current = false;
                     }}
@@ -481,16 +529,16 @@ export default function StudentLectureDetailPage() {
           
           <div className="space-y-6">
             {discussions.map((disc) => (
-              <div key={disc.id} className={`bg-pure-surface rounded-xl border border-whisper-border p-6 relative group ${disc.status === "Hidden" ? "opacity-60 bg-surface-container-lowest" : ""}`}>
+              <div id={`discussion-${disc.id}`} key={disc.id} className={`bg-pure-surface rounded-xl border border-whisper-border p-6 relative group ${disc.status === "Hidden" ? "opacity-60 bg-surface-container-lowest" : ""}`}>
                 {/* Actions Question */}
                 {disc.status !== "Hidden" && (
                   <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border">
-                    {disc.authorId === currentAccountId ? (
+                    {disc.authorId?.toLowerCase() === currentAccountId?.toLowerCase() ? (
                       <>
                         <button onClick={() => startEdit(disc.id, disc.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
                           <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
-                        <button onClick={() => handleDeleteComment(disc.id, true)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                        <button onClick={() => setDeleteModal({ isOpen: true, targetId: disc.id, isQuestion: true })} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
                           <span className="material-symbols-outlined text-sm">delete</span>
                         </button>
                       </>
@@ -556,16 +604,16 @@ export default function StudentLectureDetailPage() {
 
                 {/* Answers */}
                 {disc.answers?.map((ans) => (
-                  <div key={ans.id} className={`mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans ${ans.status === "Hidden" ? "opacity-60" : ""}`}>
+                  <div id={`discussion-${ans.id}`} key={ans.id} className={`mt-4 ml-14 pl-4 border-l-2 border-whisper-border flex gap-4 relative group/ans ${ans.status === "Hidden" ? "opacity-60" : ""}`}>
                     {/* Actions Answer */}
                     {ans.status !== "Hidden" && (
                       <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/ans:opacity-100 transition-opacity bg-pure-surface px-2 rounded-md shadow-sm border border-whisper-border z-10">
-                        {ans.authorId === currentAccountId ? (
+                        {ans.authorId?.toLowerCase() === currentAccountId?.toLowerCase() ? (
                           <>
                             <button onClick={() => startEdit(ans.id, ans.content)} className="text-on-surface-variant hover:text-primary p-1" title="Sửa">
                               <span className="material-symbols-outlined text-sm">edit</span>
                             </button>
-                            <button onClick={() => handleDeleteComment(ans.id, false)} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
+                            <button onClick={() => setDeleteModal({ isOpen: true, targetId: ans.id, isQuestion: false })} className="text-on-surface-variant hover:text-error p-1" title="Xóa">
                               <span className="material-symbols-outlined text-sm">delete</span>
                             </button>
                           </>
@@ -729,6 +777,41 @@ export default function StudentLectureDetailPage() {
                 disabled={!reportModal.reason.trim()}
               >
                 Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}></div>
+          <div className="relative bg-pure-surface w-full max-w-sm rounded-xl shadow-lg border border-outline-variant flex flex-col m-4">
+            <div className="px-6 py-4 border-b border-whisper-border flex justify-between items-center">
+              <h3 className="text-[20px] font-semibold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-error">delete</span>
+                Xác nhận xóa
+              </h3>
+              <button className="text-on-surface-variant hover:text-on-surface transition-colors" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-[14px] text-on-surface-variant">Bạn có chắc chắn muốn xóa bình luận này không? Hành động này không thể hoàn tác.</p>
+            </div>
+            <div className="px-6 py-4 bg-surface-container-low border-t border-whisper-border flex justify-end gap-3 rounded-b-xl">
+              <button 
+                className="px-4 py-2 border border-outline-variant rounded-lg text-[16px] font-medium text-on-surface hover:bg-surface-variant transition-colors"
+                onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+              >
+                Hủy
+              </button>
+              <button 
+                className="px-4 py-2 bg-error rounded-lg text-[16px] font-medium text-on-error hover:opacity-90 transition-opacity"
+                onClick={handleDeleteCommentConfirm}
+              >
+                Xóa bình luận
               </button>
             </div>
           </div>
