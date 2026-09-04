@@ -76,6 +76,7 @@ public sealed class TestSubmittedHandler : INotificationHandler<TestSubmittedEve
             activityType,
             1, // Hardcoded to 1 because PRACTICE/EXAM always qualify and the event lacks duration
             activityDate,
+            null,
             cancellationToken);
 
         await _badgeService.CheckAndAwardBadgesAsync(studentId, cancellationToken);

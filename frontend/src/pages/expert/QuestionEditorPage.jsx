@@ -917,6 +917,10 @@ export default function QuestionEditorPage() {
       showError("Nội dung câu hỏi không được để trống!");
       return false;
     }
+    if (!form.solutionContent.trim()) {
+      showError("Vui lòng nhập lời giải chi tiết!");
+      return false;
+    }
     if (!form.grade) {
       showError("Vui lòng chọn khối lớp cho câu hỏi!");
       return false;
@@ -1925,7 +1929,7 @@ export default function QuestionEditorPage() {
 
               {/* 4. Lời giải chi tiết */}
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">LỜI GIẢI CHI TIẾT</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">LỜI GIẢI CHI TIẾT <span className="text-error">*</span></label>
                 <div className="border border-outline-variant rounded-xl overflow-hidden focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                   <textarea
                     value={form.solutionContent}

@@ -45,6 +45,7 @@ public sealed class GetBadgeProgressQueryHandler : IRequestHandler<GetBadgeProgr
                         cancellationToken);
 
         int totalCorrect = await GetTotalCorrectAnswersAsync(request.StudentId, cancellationToken);
+        int targetsAchieved = await GetTargetsAchievedAsync(request.StudentId, cancellationToken);
 
         // 3. Map to DTO
         var result = new List<BadgeProgressDto>();
@@ -55,6 +56,7 @@ public sealed class GetBadgeProgressQueryHandler : IRequestHandler<GetBadgeProgr
                 ConditionType.STREAK_DAYS => currentStreak,
                 ConditionType.TESTS_COMPLETED => testsCompleted,
                 ConditionType.TOTAL_CORRECT_ANSWERS => totalCorrect,
+                ConditionType.TARGETS_ACHIEVED => targetsAchieved,
                 _ => 0
             };
 
@@ -88,6 +90,37 @@ public sealed class GetBadgeProgressQueryHandler : IRequestHandler<GetBadgeProgr
             command.Parameters.Add(param);
 
             await _dbContext.Database.OpenConnectionAsync(cancellationToken);
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            await _dbContext.Database.CloseConnectionAsync();
+
+            return result != DBNull.Value && result != null ? Convert.ToInt32(result) : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private async Task<int> GetTargetsAchievedAsync(string studentId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var command = _dbContext.Database.GetDbConnection().CreateCommand();
+            command.CommandText = @"
+                SELECT COUNT(*) 
+                FROM [TargetScore] ts
+                INNER JOIN [TagsMastery] tm ON ts.StudentID = tm.StudentID AND ts.TagID = tm.TagId
+                WHERE ts.StudentID = @studentId AND tm.OfficialPoint >= ts.TargetPoint";
+            
+            var param = command.CreateParameter();
+            param.ParameterName = "@studentId";
+            param.Value = studentId;
+            command.Parameters.Add(param);
+
+            if (command.Connection?.State != ConnectionState.Open) 
+            {
+                await _dbContext.Database.OpenConnectionAsync(cancellationToken);
+            }
             var result = await command.ExecuteScalarAsync(cancellationToken);
             await _dbContext.Database.CloseConnectionAsync();
 

@@ -22,6 +22,24 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 public sealed class ExpertQuestionAndTagCoverageTests
 {
     [Fact]
+    public async Task CreateQuestion_WhenSolutionContentIsBlank_ReturnsValidationErrorAndWritesNothing()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        await AddDifficultyAsync(database, "difficulty-1", 1);
+        await AddTopicAsync(database, "topic-1", 10);
+        var request = CreateQuestionRequest("difficulty-1", "topic-1");
+        request.SolutionContent = "   ";
+
+        var result = await new CreateQuestionCommandHandler(database.Context)
+            .Handle(new CreateQuestionCommand(request, "expert-1"), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.QuestionSolutionContentRequired, result.Error);
+        Assert.Empty(await database.Context.Questions.ToListAsync());
+        Assert.Empty(await database.Context.QuestionVersions.ToListAsync());
+    }
+
+    [Fact]
     public async Task CreateQuestion_WhenDifficultyDoesNotExist_ReturnsNotFoundAndWritesNothing()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();

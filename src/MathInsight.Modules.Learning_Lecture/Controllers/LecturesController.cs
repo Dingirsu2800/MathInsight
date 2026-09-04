@@ -133,7 +133,7 @@ public class LecturesController : ControllerBase
     public async Task<IActionResult> LogLectureView(string id, [FromBody] LogLectureViewRequest request, CancellationToken cancellationToken)
     {
         if (!IsStudent) return Forbid();
-        var cmd = new LogLectureViewCommand(id, CurrentUserId, request.DurationSeconds);
+        var cmd = new LogLectureViewCommand(id, CurrentUserId, request.DurationSeconds, request.VideoDurationSeconds);
         var result = await _mediator.Send(cmd, cancellationToken);
         if (result.IsFailure)
         {
@@ -194,4 +194,4 @@ public class LecturesController : ControllerBase
 
 public record CreateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, string? DifficultyId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
 public record UpdateLectureRequest(string Title, string? Content, string? VideoUrl, string? ThumbnailUrl, string TagId, string? DifficultyId, System.Collections.Generic.List<string>? MaterialIds, string? NextLectureId);
-public record LogLectureViewRequest(int DurationSeconds);
+public record LogLectureViewRequest(int DurationSeconds, int? VideoDurationSeconds);

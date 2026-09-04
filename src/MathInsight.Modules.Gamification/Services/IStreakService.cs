@@ -22,5 +22,6 @@ public interface IStreakService
         ActivityType activityType,
         int durationSeconds,
         DateOnly activityDate,
+        int? videoDurationSeconds = null,
         CancellationToken cancellationToken = default);
 }

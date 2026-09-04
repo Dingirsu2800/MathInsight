@@ -141,6 +141,25 @@ describe('QuestionEditorPage reported question workflow', () => {
     expect(await screen.findByText(/Độ khó chưa đúng/i)).toBeInTheDocument();
   });
 
+  it('does not save when the detailed solution is blank', async () => {
+    questionBankApi.getQuestionReports.mockResolvedValue({ data: [] });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    const solutionInput = await screen.findByPlaceholderText(/Nhập lời giải chi tiết/i);
+    fireEvent.change(solutionInput, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /Cập nhật câu hỏi/i }));
+
+    expect(await screen.findByText(/Vui lòng nhập lời giải chi tiết/i)).toBeInTheDocument();
+    expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+  });
+
   it('Admin PendingFix primary action calls save then submit-review sequentially', async () => {
     questionBankApi.getQuestionReports.mockResolvedValue({
       data: [adminPendingFixReport],

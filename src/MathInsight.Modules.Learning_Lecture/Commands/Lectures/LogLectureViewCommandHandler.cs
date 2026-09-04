@@ -36,7 +36,8 @@ public class LogLectureViewCommandHandler : IRequestHandler<LogLectureViewComman
             ActivityType: "VIEW_LECTURE",
             LectureId: request.LectureId,
             MaterialId: null,
-            DurationSeconds: request.DurationSeconds
+            DurationSeconds: request.DurationSeconds,
+            VideoDurationSeconds: request.VideoDurationSeconds
         ), cancellationToken);
 
         return Result<bool>.Success(true);
