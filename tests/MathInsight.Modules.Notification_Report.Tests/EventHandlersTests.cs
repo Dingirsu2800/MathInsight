@@ -130,7 +130,7 @@ public class EventHandlersTests
         var mock = NewNotificationServiceMock();
         var handler = new DiscussionAnsweredHandler(mock.Object);
 
-        var evt = new DiscussionAnsweredEvent("answer-1", "q-1", "lecture-1", "teacher-1", "student-1");
+        var evt = new DiscussionAnsweredEvent("answer-1", "q-1", "lecture-1", "teacher-1", "student-1", "teacher-1");
         await handler.Handle(evt, CancellationToken.None);
 
         mock.Verify(s => s.SendAsync(
