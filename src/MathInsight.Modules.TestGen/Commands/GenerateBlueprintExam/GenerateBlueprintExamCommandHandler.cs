@@ -170,6 +170,7 @@ public sealed class GenerateBlueprintExamCommandHandler
                 WeightSnapshot = prepared.Candidate.DefaultWeight,
                 MaxPointsSnapshot = prepared.MaxPoints,
                 ScoringRuleSnapshot = prepared.ScoringRule,
+                GradingPolicyVersion = GradingPolicyVersions.UniversalHalving,
                 IsScoreInvalidated = false,
                 InvalidatedByReportId = null
             });

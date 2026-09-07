@@ -269,6 +269,7 @@ public sealed class GenerateSharedBlueprintExamCommandHandler
                 WeightSnapshot = prepared.Candidate.DefaultWeight,
                 MaxPointsSnapshot = prepared.MaxPoints,
                 ScoringRuleSnapshot = prepared.ScoringRule,
+                GradingPolicyVersion = GradingPolicyVersions.UniversalHalving,
                 IsScoreInvalidated = false
             });
         }

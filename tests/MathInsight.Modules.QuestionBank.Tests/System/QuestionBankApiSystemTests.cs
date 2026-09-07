@@ -57,14 +57,24 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
                 DisplayOrder = 1,
                 IsActive = true
             });
-            db.TagTopics.Add(new TagTopic
-            {
-                TagId = "l3-topic",
-                TagName = "L3 Topic",
-                Grade = 10,
-                DisplayOrder = 1,
-                IsActive = true
-            });
+            db.TagTopics.AddRange(
+                new TagTopic
+                {
+                    TagId = "l3-topic-root",
+                    TagName = "L3 Topic Root",
+                    Grade = 10,
+                    DisplayOrder = 1,
+                    IsActive = true
+                },
+                new TagTopic
+                {
+                    TagId = "l3-topic",
+                    ParentTagId = "l3-topic-root",
+                    TagName = "L3 Topic",
+                    Grade = 10,
+                    DisplayOrder = 2,
+                    IsActive = true
+                });
         });
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/question-bank/questions")
@@ -93,7 +103,9 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
 
         var response = await _client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(
+            response.StatusCode == HttpStatusCode.Created,
+            $"Expected Created but received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         var questionId = await _factory.AssertQuestionWasPersistedAsync("What is 2 + 2?", "expert_l3");
 
         using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/api/question-bank/questions/{questionId}")
@@ -227,11 +239,69 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     }
 
     [QuestionBankSqlServerFact]
+    public async Task Expert_SubmitsAdminIncidentCorrection_ThroughIncidentRoute()
+    {
+        var (questionId, versionId) = await _factory.SeedIncidentReportableQuestionAsync();
+
+        using var reportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
+        {
+            Content = new StringContent("{ \"reportReason\": \"The answer needs correction.\" }", Encoding.UTF8, "application/json")
+        };
+        reportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        reportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var reportResponse = await _client.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.Created, reportResponse.StatusCode);
+
+        var incidentId = await _factory.GetIncidentIdAsync(questionId, versionId);
+        var submissionPayload = $$"""
+                {
+                  "expectedRevision": 0,
+                  "expectedQuestionVersionId": "{{versionId}}",
+                  "submissionKey": "sql-incident-submit-1",
+                  "resolutionAction": "NoScoreChange",
+                  "reportDecisions": [{ "reportId": "{{(await _factory.GetOnlyReportIdAsync(questionId))}}", "disposition": "Resolved", "reviewNote": "Corrected." }],
+                  "correction": {
+                    "questionContent": "Corrected SQL incident question",
+                    "solutionContent": "The corrected solution is documented.",
+                    "difficultyId": "l3-report-difficulty",
+                    "grade": 10,
+                    "questionType": "SINGLE_CHOICE",
+                    "defaultWeight": 1.0,
+                    "topics": [{ "tagId": "l3-incident-topic", "isPrimary": true }],
+                    "answers": [{ "answerContent": "Correct", "isCorrect": true }, { "answerContent": "Wrong", "isCorrect": false }],
+                    "parts": []
+                  }
+                }
+                """;
+        HttpRequestMessage CreateSubmitRequest()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/question-report-incidents/{incidentId}/submit")
+            {
+                Content = new StringContent(submissionPayload, Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+            request.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Expert");
+            return request;
+        }
+
+        using var firstSubmitRequest = CreateSubmitRequest();
+        using var secondSubmitRequest = CreateSubmitRequest();
+        var submitResponses = await Task.WhenAll(
+            _client.SendAsync(firstSubmitRequest),
+            _client.SendAsync(secondSubmitRequest));
+
+        Assert.All(submitResponses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        await _factory.AssertIncidentSubmissionPendingAdminReviewAsync(incidentId, questionId);
+    }
+
+    [QuestionBankSqlServerFact]
     public async Task Expert_PreviewsThenConfirmsValidWorkbook_ThroughHostedApi()
     {
         await _factory.SeedAsync(db =>
         {
-            db.TagTopics.Add(new TagTopic { TagId = "l3-import-topic", TagName = "L3 import topic", Grade = 10, DisplayOrder = 11, IsActive = true });
+            db.TagTopics.AddRange(
+                new TagTopic { TagId = "l3-import-topic-root", TagName = "L3 import topic root", Grade = 10, DisplayOrder = 10, IsActive = true },
+                new TagTopic { TagId = "l3-import-topic", ParentTagId = "l3-import-topic-root", TagName = "L3 import topic", Grade = 10, DisplayOrder = 11, IsActive = true });
         });
 
         using var form = new MultipartFormDataContent();
@@ -249,7 +319,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(preview);
         var previewItem = Assert.Single(preview!.Items);
-        Assert.True(previewItem.IsValid);
+        Assert.True(previewItem.IsValid, string.Join(" | ", previewItem.Errors));
         Assert.NotNull(previewItem.Draft);
 
         var confirm = new ConfirmQuestionImportRequest
@@ -323,7 +393,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         ExecuteNonQueryAsync(_masterConnectionString, $"CREATE DATABASE [{_databaseName}]").GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "001_Create_MathInsight_Azure.sql")).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "005_Align_TestGen_QuestionBank_Contract.sql")).GetAwaiter().GetResult();
-        ApplyAzureQuestionReportSchemaAsync(_sqlConnectionString).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "006_MentorFollowUp_CompositePolicy.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
                 ('role-expert-l3', N'Expert', N'L3 test role'),
@@ -437,6 +507,90 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         return questionId;
     }
 
+    public async Task<(string QuestionId, string VersionId)> SeedIncidentReportableQuestionAsync()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..16];
+        var questionId = $"l3-incident-{suffix}";
+        var versionId = $"l3-version-{suffix}";
+        await SeedAsync(db =>
+        {
+            db.TagTopics.AddRange(
+                new TagTopic { TagId = "l3-incident-root", TagName = "L3 incident root", Grade = 10, DisplayOrder = 30, IsActive = true },
+                new TagTopic { TagId = "l3-incident-topic", ParentTagId = "l3-incident-root", TagName = "L3 incident topic", Grade = 10, DisplayOrder = 31, IsActive = true });
+            db.Questions.Add(new Question
+            {
+                QuestionId = questionId,
+                QuestionContent = "Original SQL incident question",
+                SolutionContent = "Original documented solution",
+                DifficultyId = "l3-report-difficulty",
+                Grade = 10,
+                Status = "Approved",
+                QuestionType = "SingleChoice",
+                ExpertId = "expert_l3",
+                DefaultWeight = 1m,
+                IsActive = true,
+                CreatedTime = DateTime.UtcNow,
+                UpdatedTime = DateTime.UtcNow,
+                Answers =
+                [
+                    new Answer { AnswerId = $"l3-answer-a-{suffix}", AnswerContent = "Original", IsCorrect = true },
+                    new Answer { AnswerId = $"l3-answer-b-{suffix}", AnswerContent = "Other", IsCorrect = false }
+                ],
+                QuestionTopics =
+                [
+                    new QuestionTopic { QuestionTopicId = $"l3-topic-link-{suffix}", TagId = "l3-incident-topic", IsPrimary = true }
+                ],
+                Versions =
+                [
+                    new QuestionVersion
+                    {
+                        VersionId = versionId,
+                        QuestionContent = "Original SQL incident question",
+                        QuestionAnswer = "Original documented solution",
+                        AnswersSnapshot = "{}",
+                        VersionNumber = 1,
+                        SnapshotSchemaVersion = 2,
+                        CreatedTime = DateTime.UtcNow,
+                        ExpertId = "expert_l3"
+                    }
+                ]
+            });
+        });
+        return (questionId, versionId);
+    }
+
+    public async Task<string> GetIncidentIdAsync(string questionId, string versionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        return await db.QuestionReportIncidents
+            .Where(item => item.QuestionId == questionId && item.QuestionVersionId == versionId)
+            .Select(item => item.IncidentId)
+            .SingleAsync();
+    }
+
+    public async Task<string> GetOnlyReportIdAsync(string questionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        return await db.QuestionReports
+            .Where(item => item.QuestionId == questionId)
+            .Select(item => item.ReportId)
+            .SingleAsync();
+    }
+
+    public async Task AssertIncidentSubmissionPendingAdminReviewAsync(string incidentId, string questionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var incident = await db.QuestionReportIncidents.SingleAsync(item => item.IncidentId == incidentId);
+        var report = await db.QuestionReports.SingleAsync(item => item.IncidentId == incidentId);
+        Assert.Equal("PendingAdminReview", incident.Status);
+        Assert.NotNull(incident.SubmittedCorrectionVersionId);
+        Assert.Equal("PendingReview", report.Status);
+        Assert.Equal(2, await db.QuestionVersions.CountAsync(item => item.QuestionId == questionId));
+    }
+
     public async Task AssertReportWasResolvedAsync(string reportId, string questionId)
     {
         using var scope = Services.CreateScope();
@@ -540,31 +694,17 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
     private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
     {
         var script = await File.ReadAllTextAsync(scriptPath);
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
         foreach (var batch in global::System.Text.RegularExpressions.Regex.Split(script, @"(?im)^\s*GO\s*(?:--.*)?$"))
         {
             if (!string.IsNullOrWhiteSpace(batch))
-                await ExecuteNonQueryAsync(connectionString, batch);
+            {
+                await using var command = new SqlCommand(batch, connection);
+                await command.ExecuteNonQueryAsync();
+            }
         }
     }
-
-    // Test-only, disposable-schema alignment. Azure already contains these columns; this does not
-    // run against Azure or modify repository database scripts.
-    private static Task ApplyAzureQuestionReportSchemaAsync(string connectionString) => ExecuteNonQueryAsync(connectionString, """
-        IF COL_LENGTH(N'dbo.QuestionReport', N'SessionID') IS NULL
-            ALTER TABLE dbo.QuestionReport ADD SessionID VARCHAR(36) NULL;
-        IF COL_LENGTH(N'dbo.QuestionReport', N'QuestionVersionID') IS NULL
-            ALTER TABLE dbo.QuestionReport ADD QuestionVersionID VARCHAR(36) NULL;
-        IF COL_LENGTH(N'dbo.QuestionReport', N'ResolutionAction') IS NULL
-            ALTER TABLE dbo.QuestionReport ADD ResolutionAction VARCHAR(30) NULL;
-        IF COL_LENGTH(N'dbo.QuestionReport', N'ScoreAdjustedTime') IS NULL
-            ALTER TABLE dbo.QuestionReport ADD ScoreAdjustedTime DATETIME2(0) NULL;
-        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_QuestionReport_QuestionVersion_QuestionVersionID')
-            EXEC(N'ALTER TABLE dbo.QuestionReport ADD CONSTRAINT FK_QuestionReport_QuestionVersion_QuestionVersionID
-                FOREIGN KEY (QuestionVersionID) REFERENCES dbo.QuestionVersion(VersionID)');
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_QuestionReport_Version_ResolutionAction' AND object_id = OBJECT_ID(N'dbo.QuestionReport'))
-            EXEC(N'CREATE INDEX IX_QuestionReport_Version_ResolutionAction ON dbo.QuestionReport (QuestionVersionID, ResolutionAction)
-                WHERE QuestionVersionID IS NOT NULL');
-        """);
 
     private static async Task ExecuteNonQueryAsync(string connectionString, string commandText)
     {

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MathInsight.Modules.Grading_Analytics.Persistence;
 using MathInsight.Modules.Grading_Analytics.Services;
+using MathInsight.Modules.Grading_Analytics.BackgroundJobs;
 using MathInsight.Shared.Scoring;
 using Polly;
 using Polly.CircuitBreaker;
@@ -31,6 +32,7 @@ public static class GradingModuleExtensions
         // GradingEngine: per-question-type grading algorithm
         services.AddScoped<Services.IGradingEngine, Services.GradingEngine>();
         services.AddScoped<IScoreAdjustmentService, ScoreAdjustmentService>();
+        services.AddHostedService<ScoreAdjustmentDispatchBackgroundService>();
 
         // GradingOrchestrator: shared grading flow used by both MediatR handler (Practice)
         // and MassTransit consumer (Exam). Encapsulates session loading, validation,

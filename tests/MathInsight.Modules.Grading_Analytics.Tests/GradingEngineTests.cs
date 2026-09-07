@@ -163,6 +163,18 @@ public class GradingEngineTests
     }
 
     [Fact]
+    public void ShortAnswer_PiAlias_IsEquivalent()
+    {
+        var session = TestDataBuilder.CreateSession();
+        TestDataBuilder.AddShortAnswer(session, defaultPoint: 2m, correctAnswer: "π", studentAnswer: "pi");
+
+        _engine.Grade(session);
+
+        Assert.True(session.TestAnswers.First().IsCorrect);
+        Assert.Equal(2m, session.TestAnswers.First().PointsEarned);
+    }
+
+    [Fact]
     public void ShortAnswer_WithWhitespace_StillCorrect()
     {
         // Arrange
@@ -290,9 +302,9 @@ public class GradingEngineTests
     }
 
     [Fact]
-    public void CompositeAllTF_1ofN_Correct_PointsEarned_0_10_Times_DefaultWeight()
+    public void CompositeAllTF_1ofN_Correct_PointsEarned_HalfForEachWrongPart()
     {
-        // BR-23: 1 correct â†’ 0.10 Ã— dp
+        // 3 wrong parts halve the score three times: 0.125 × 2.0 = 0.25.
         var session = TestDataBuilder.CreateSession();
         TestDataBuilder.AddCompositeAllTrueFalse(
             session,
@@ -311,7 +323,36 @@ public class GradingEngineTests
         // Assert
         var answer = session.TestAnswers.First();
         Assert.False(answer.IsCorrect); // Not all correct
-        Assert.Equal(0.20m, answer.PointsEarned); // 0.10 Ã— 2.0 = 0.20
+        Assert.Equal(0.25m, answer.PointsEarned);
+    }
+
+    [Fact]
+    public void CompositeAllTF_LegacyFourPartSnapshot_RetainsLegacyScoreTable()
+    {
+        var session = TestDataBuilder.CreateSession();
+        var answer = TestDataBuilder.AddCompositeAllTrueFalse(
+            session,
+            defaultPoint: 2.0m,
+            parts:
+            [
+                ("True", "True"),
+                ("False", "True"),
+                ("True", "False"),
+                ("False", "True")
+            ]);
+
+        answer.TestQuestion = new Persistence.Entities.TestQuestion
+        {
+            TestId = session.TestId,
+            QuestionId = answer.QuestionId,
+            MaxPointsSnapshot = 2.0m,
+            ScoringRuleSnapshot = ScoringRules.TieredTrueFalse,
+            GradingPolicyVersion = GradingPolicyVersions.LegacyMoetFourPart
+        };
+
+        _engine.Grade(session);
+
+        Assert.Equal(0.20m, answer.PointsEarned);
     }
 
     [Fact]

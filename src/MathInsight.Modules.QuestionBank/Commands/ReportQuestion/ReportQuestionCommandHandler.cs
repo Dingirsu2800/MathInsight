@@ -4,6 +4,7 @@ using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -16,10 +17,12 @@ public sealed class ReportQuestionCommandHandler
 {
     private const int MaxReasonLength = 2000;
     private readonly QuestionBankDbContext _context;
+    private readonly IPublisher? _publisher;
 
-    public ReportQuestionCommandHandler(QuestionBankDbContext context)
+    public ReportQuestionCommandHandler(QuestionBankDbContext context, IPublisher? publisher = null)
     {
         _context = context;
+        _publisher = publisher;
     }
 
     public async Task<Result<ReportQuestionResponse>> Handle(
@@ -37,7 +40,7 @@ public sealed class ReportQuestionCommandHandler
         if (reporterRole is null || string.IsNullOrWhiteSpace(command.ReporterAccountId))
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
-        if ((command.SessionId is null) != (command.QuestionVersionId is null))
+        if (command.SessionId is not null && command.QuestionVersionId is null)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
 
         return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
@@ -55,14 +58,23 @@ public sealed class ReportQuestionCommandHandler
         if (question is null)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.QuestionNotFound);
 
-        if (command.QuestionVersionId is not null)
+        var questionVersionId = command.QuestionVersionId;
+        if (questionVersionId is not null)
         {
             var versionExists = await _context.QuestionVersions.AnyAsync(
-                version => version.VersionId == command.QuestionVersionId &&
+                version => version.VersionId == questionVersionId &&
                            version.QuestionId == question.QuestionId,
                 cancellationToken);
             if (!versionExists)
                 return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
+        }
+        else
+        {
+            questionVersionId = await _context.QuestionVersions
+                .Where(version => version.QuestionId == question.QuestionId)
+                .OrderByDescending(version => version.VersionNumber)
+                .Select(version => version.VersionId)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         if (reporterRole == "Admin")
@@ -88,18 +100,79 @@ public sealed class ReportQuestionCommandHandler
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.QuestionSelfReportForbidden);
         }
 
-        var hasActiveReportFromReporter = await _context.QuestionReports.AnyAsync(
+        var hasReportFromReporter = await _context.QuestionReports.AnyAsync(
             report => report.QuestionId == question.QuestionId &&
                       report.ReporterAccountId == command.ReporterAccountId &&
-                      (report.Status == QuestionReportWorkflow.Pending ||
-                       report.Status == QuestionReportWorkflow.PendingFix ||
-                       report.Status == QuestionReportWorkflow.PendingReview),
+                      report.QuestionVersionId == questionVersionId,
             cancellationToken);
 
-        if (hasActiveReportFromReporter)
+        if (hasReportFromReporter)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportAlreadyPending);
 
         var createdTime = DateTime.UtcNow;
+        QuestionReportIncident? incident = null;
+        if (!string.IsNullOrWhiteSpace(questionVersionId))
+        {
+            incident = await _context.QuestionReportIncidents
+                .FirstOrDefaultAsync(
+                    item => item.QuestionId == question.QuestionId && item.QuestionVersionId == questionVersionId,
+                    cancellationToken);
+        }
+
+        if (incident is null && !string.IsNullOrWhiteSpace(questionVersionId))
+        {
+            incident = new QuestionReportIncident
+            {
+                IncidentId = Guid.NewGuid().ToString(),
+                QuestionId = question.QuestionId,
+                QuestionVersionId = questionVersionId,
+                Status = "Open",
+                RequiresAdminReview = reporterRole == "Admin",
+                AssignedAdminId = reporterRole == "Admin" ? command.ReporterAccountId : null,
+                CreatedTime = createdTime,
+                UpdatedTime = createdTime
+            };
+            _context.QuestionReportIncidents.Add(incident);
+        }
+        else if (incident is not null)
+        {
+            if (incident.Status is "Closed" or "AdjustmentPending")
+                return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportIncidentClosed);
+
+            if (incident.Status == "PendingAdminReview")
+            {
+                // The submitted correction cannot be approved after the incident changes.
+                incident.Status = "Open";
+                incident.SubmittedCorrectionVersionId = null;
+                incident.ProposedResolutionAction = null;
+                incident.ApprovedResolutionAction = null;
+                incident.AdjustmentStatus = null;
+                incident.SubmissionKey = null;
+                incident.SubmissionPayloadHash = null;
+
+                foreach (var existingReport in await _context.QuestionReports
+                    .Where(item => item.IncidentId == incident.IncidentId)
+                    .ToListAsync(cancellationToken))
+                {
+                    existingReport.ProposedStatus = null;
+                    existingReport.ProposedReviewNote = null;
+                    if (existingReport.Status == QuestionReportWorkflow.PendingReview)
+                        existingReport.Status = existingReport.ReporterRole == "Admin"
+                            ? QuestionReportWorkflow.PendingFix
+                            : QuestionReportWorkflow.Pending;
+                }
+            }
+
+            if (reporterRole == "Admin" && !incident.RequiresAdminReview)
+            {
+                incident.RequiresAdminReview = true;
+                incident.AssignedAdminId = command.ReporterAccountId;
+            }
+
+            incident.Revision++;
+            incident.UpdatedTime = createdTime;
+        }
+
         var report = new QuestionReport
         {
             ReportId = Guid.NewGuid().ToString(),
@@ -112,7 +185,8 @@ public sealed class ReportQuestionCommandHandler
                 : QuestionReportWorkflow.Pending,
             CreatedTime = createdTime,
             SessionId = command.SessionId,
-            QuestionVersionId = command.QuestionVersionId
+            QuestionVersionId = questionVersionId,
+            IncidentId = incident?.IncidentId
         };
 
         _context.QuestionReports.Add(report);
@@ -127,6 +201,16 @@ public sealed class ReportQuestionCommandHandler
 
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
+
+        if (_publisher is not null)
+        {
+            await _publisher.Publish(new NotificationRequestedEvent(
+                question.ExpertId,
+                "Câu hỏi có báo cáo mới",
+                "Một câu hỏi của bạn vừa nhận được báo cáo và cần được xem xét.",
+                $"/expert/questions/{question.QuestionId}/reports",
+                $"question-report:{incident?.IncidentId}:expert"), cancellationToken);
+        }
 
         return Result<ReportQuestionResponse>.Success(new ReportQuestionResponse(
             report.ReportId,

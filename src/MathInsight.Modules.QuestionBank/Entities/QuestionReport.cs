@@ -17,9 +17,13 @@ public class QuestionReport
     public string? ReviewedBy { get; set; }
     public string? SessionId { get; set; }
     public string? QuestionVersionId { get; set; }
+    public string? IncidentId { get; set; }
     public string? ResolutionAction { get; set; }
+    public string? ProposedStatus { get; set; }
+    public string? ProposedReviewNote { get; set; }
     public DateTime? ScoreAdjustedTime { get; set; }
 
     public Question Question { get; set; } = default!;
     public QuestionVersion? QuestionVersion { get; set; }
+    public QuestionReportIncident? Incident { get; set; }
 }

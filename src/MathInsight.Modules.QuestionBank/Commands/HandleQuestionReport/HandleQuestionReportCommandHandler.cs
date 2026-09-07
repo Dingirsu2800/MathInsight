@@ -60,6 +60,7 @@ public sealed class HandleQuestionReportCommandHandler
 
         var report = await _context.QuestionReports
             .Include(item => item.Question)
+            .Include(item => item.Incident)
             .FirstOrDefaultAsync(item => item.ReportId == command.ReportId, cancellationToken);
 
         if (report is null)
@@ -69,6 +70,9 @@ public sealed class HandleQuestionReportCommandHandler
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
         if (report.ReporterRole == "Admin")
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
+
+        if (report.Incident?.RequiresAdminReview == true)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
 
         if (report.Status != QuestionReportWorkflow.Pending)
@@ -106,19 +110,36 @@ public sealed class HandleQuestionReportCommandHandler
         report.ResolvedTime = DateTime.UtcNow;
         report.ResolvedBy = command.ExpertAccountId;
 
+        var hasIncident = !string.IsNullOrWhiteSpace(report.IncidentId);
         var otherBlockingReportsRemain = await _context.QuestionReports.AnyAsync(
-            item => item.QuestionId == report.QuestionId &&
+            item => (!hasIncident
+                        ? item.QuestionId == report.QuestionId
+                        : item.IncidentId == report.IncidentId) &&
                     item.ReportId != report.ReportId &&
-                    ((item.ReporterRole == "Expert" && item.Status == QuestionReportWorkflow.Pending) ||
-                     (item.ReporterRole == "Admin" &&
-                      (item.Status == QuestionReportWorkflow.PendingFix ||
-                       item.Status == QuestionReportWorkflow.PendingReview))),
+                    (item.Status == QuestionReportWorkflow.Pending ||
+                     item.Status == QuestionReportWorkflow.PendingFix ||
+                     item.Status == QuestionReportWorkflow.PendingReview) &&
+                    (hasIncident || item.ReporterRole == "Expert" || item.ReporterRole == "Admin"),
             cancellationToken);
 
         if (!otherBlockingReportsRemain && report.Question.Status == "Reported")
         {
             report.Question.Status = "Approved";
             report.Question.UpdatedTime = report.ResolvedTime.Value;
+        }
+
+        if (report.Incident is not null && !otherBlockingReportsRemain)
+        {
+            report.Incident.Status = resolutionAction == "InvalidateAndAwardFull"
+                ? "AdjustmentPending"
+                : "Closed";
+            report.Incident.ProposedResolutionAction = resolutionAction;
+            report.Incident.ApprovedResolutionAction = resolutionAction;
+            report.Incident.AdjustmentStatus = resolutionAction == "InvalidateAndAwardFull"
+                ? "Pending"
+                : "NotRequired";
+            report.Incident.Revision++;
+            report.Incident.UpdatedTime = report.ResolvedTime;
         }
 
         await _context.SaveChangesAsync(cancellationToken);

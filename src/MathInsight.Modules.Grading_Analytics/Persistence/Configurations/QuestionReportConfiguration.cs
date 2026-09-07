@@ -17,6 +17,7 @@ public sealed class QuestionReportConfiguration : IEntityTypeConfiguration<Quest
         builder.Property(item => item.Status).HasColumnName("Status").HasMaxLength(20).IsUnicode(false);
         builder.Property(item => item.SessionId).HasColumnName("SessionID").HasMaxLength(36).IsUnicode(false);
         builder.Property(item => item.QuestionVersionId).HasColumnName("QuestionVersionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(item => item.IncidentId).HasColumnName("IncidentID").HasMaxLength(36).IsUnicode(false);
         builder.Property(item => item.ResolutionAction).HasColumnName("ResolutionAction").HasMaxLength(30).IsUnicode(false);
         builder.Property(item => item.ScoreAdjustedTime).HasColumnName("ScoreAdjustedTime");
     }

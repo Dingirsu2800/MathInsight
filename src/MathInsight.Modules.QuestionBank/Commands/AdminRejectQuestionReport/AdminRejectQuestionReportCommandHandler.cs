@@ -3,6 +3,7 @@ using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -15,10 +16,12 @@ public sealed class AdminRejectQuestionReportCommandHandler
 {
     private const int MaxReviewNoteLength = 2000;
     private readonly QuestionBankDbContext _context;
+    private readonly IPublisher? _publisher;
 
-    public AdminRejectQuestionReportCommandHandler(QuestionBankDbContext context)
+    public AdminRejectQuestionReportCommandHandler(QuestionBankDbContext context, IPublisher? publisher = null)
     {
         _context = context;
+        _publisher = publisher;
     }
 
     public async Task<Result<QuestionReportResponse>> Handle(
@@ -55,6 +58,7 @@ public sealed class AdminRejectQuestionReportCommandHandler
 
         var report = await _context.QuestionReports
             .Include(item => item.Question)
+            .Include(item => item.Incident)
             .FirstOrDefaultAsync(item => item.ReportId == command.ReportId, cancellationToken);
 
         if (report is null)
@@ -74,6 +78,34 @@ public sealed class AdminRejectQuestionReportCommandHandler
         var now = DateTime.UtcNow;
         report.ReviewedTime = now;
         report.ReviewedBy = command.AdminAccountId;
+
+        if (report.Incident is not null)
+        {
+            await _context.Entry(report.Incident)
+                .Collection(item => item.Reports)
+                .LoadAsync(cancellationToken);
+
+            report.Incident.Status = "Open";
+            report.Incident.SubmittedCorrectionVersionId = null;
+            report.Incident.ProposedResolutionAction = null;
+            report.Incident.ApprovedResolutionAction = null;
+            report.Incident.AdjustmentStatus = null;
+            report.Incident.SubmissionKey = null;
+            report.Incident.SubmissionPayloadHash = null;
+            report.Incident.Revision++;
+            report.Incident.UpdatedTime = now;
+
+            foreach (var relatedReport in report.Incident.Reports)
+            {
+                relatedReport.ProposedStatus = null;
+                relatedReport.ProposedReviewNote = null;
+                relatedReport.SubmittedTime = null;
+                if (relatedReport.Status == QuestionReportWorkflow.PendingReview)
+                    relatedReport.Status = relatedReport.ReporterRole == "Admin"
+                        ? QuestionReportWorkflow.PendingFix
+                        : QuestionReportWorkflow.Pending;
+            }
+        }
         report.Question.Status = "Rejected";
         report.Question.UpdatedTime = now;
 
@@ -81,6 +113,16 @@ public sealed class AdminRejectQuestionReportCommandHandler
 
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
+
+        if (_publisher is not null && report.Incident is not null)
+        {
+            await _publisher.Publish(new NotificationRequestedEvent(
+                report.Question.ExpertId,
+                "Bản sửa câu hỏi cần được cập nhật",
+                "Admin đã từ chối bản sửa và gửi phản hồi để bạn cập nhật.",
+                $"/expert/questions/{report.QuestionId}/reports",
+                $"question-report:{report.Incident.IncidentId}:review:{report.Incident.Revision}:rejected"), cancellationToken);
+        }
 
         return Result<QuestionReportResponse>.Success(
             await QuestionReportResponseMapper.CreateAsync(_context, report, cancellationToken));

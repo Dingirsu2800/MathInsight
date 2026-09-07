@@ -67,4 +67,8 @@ public static class TestingErrors
     public static readonly Error ShortAnswerNumericRequired = new(
         "ANSWER_SHORT_ANSWER_NUMERIC_REQUIRED",
         "Short answer values must use fixed-point numeric format.");
+
+    public static readonly Error ShortAnswerInvalid = new(
+        "ANSWER_SHORT_ANSWER_INVALID",
+        "Short answer contains unsupported characters or exceeds 100 characters.");
 }

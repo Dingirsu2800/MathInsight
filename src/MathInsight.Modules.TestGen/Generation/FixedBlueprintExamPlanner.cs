@@ -102,7 +102,6 @@ public static class FixedBlueprintExamPlanner
         => string.Equals(candidate.DifficultyId, requirement.DifficultyId, StringComparison.OrdinalIgnoreCase) &&
            string.Equals(candidate.QuestionType, requirement.QuestionType, StringComparison.OrdinalIgnoreCase) &&
            candidate.SupportedScoringRules.Contains(requirement.ScoringRule) &&
-           (requirement.PartCountPerQuestion is null || candidate.PartCount == requirement.PartCountPerQuestion) &&
            candidate.TagIds.Contains(requirement.TagId);
 
     private static FixedBlueprintExamSelectionResult Failure(FixedBlueprintExamSelectionError error)

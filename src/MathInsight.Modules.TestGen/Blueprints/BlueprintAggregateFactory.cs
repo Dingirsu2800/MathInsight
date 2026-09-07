@@ -63,7 +63,7 @@ internal static class BlueprintAggregateFactory
                 TotalQuestions = sourceSection.TotalQuestions,
                 ScoreBudget = sourceSection.ScoreBudget,
                 ScoringRule = sourceSection.ScoringRule,
-                PartCountPerQuestion = sourceSection.PartCountPerQuestion
+                PartCountPerQuestion = null
             };
 
             foreach (var sourceDetail in sourceSection.Details)
@@ -116,7 +116,7 @@ internal static class BlueprintAggregateFactory
                 TotalQuestions = sectionRequest.TotalQuestions,
                 ScoreBudget = sectionRequest.ScoreBudget,
                 ScoringRule = sectionRequest.ScoringRule,
-                PartCountPerQuestion = sectionRequest.PartCountPerQuestion
+                PartCountPerQuestion = null
             };
 
             foreach (var detailRequest in sectionRequest.Details)

@@ -11,10 +11,16 @@ namespace MathInsight.Shared.Events;
 /// </summary>
 public sealed record GradeCalculatedEvent : MediatR.INotification
 {
+    public const string InitialGradingCause = "InitialGrading";
+    public const string ScoreAdjustmentCause = "ScoreAdjustment";
+
     public string SessionId { get; init; } = string.Empty;
     public string StudentId { get; init; } = string.Empty;
     public string TestId { get; init; } = string.Empty;
     public int GradeRevision { get; init; }
+    public string Cause { get; init; } = InitialGradingCause;
+    public string? ReportId { get; init; }
+    public string? IncidentId { get; init; }
     public string TestFormat { get; init; } = string.Empty;
 
     /// <summary>

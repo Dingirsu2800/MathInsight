@@ -134,6 +134,8 @@ public sealed class TestGenModelMetadataTests
         Assert.Equal(5, Column(entity, nameof(TestQuestion.WeightSnapshot)).GetPrecision());
         Assert.Equal(5, Column(entity, nameof(TestQuestion.MaxPointsSnapshot)).GetPrecision());
         AssertStringColumn(entity, nameof(TestQuestion.ScoringRuleSnapshot), "ScoringRuleSnapshot", 30, nullable: false);
+        Assert.Equal("GradingPolicyVersion", Column(entity, nameof(TestQuestion.GradingPolicyVersion)).GetColumnName());
+        Assert.Equal(1, Column(entity, nameof(TestQuestion.GradingPolicyVersion)).GetDefaultValue());
 
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "UQ_TestQuestion_Test_Order" && x.IsUnique);
         Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "IX_TestQuestion_RecommendedTag_Difficulty");

@@ -1,4 +1,5 @@
 using MathInsight.Modules.QuestionBank.Commands.HandleQuestionReport;
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Entities;
@@ -23,6 +24,42 @@ public sealed class QuestionReportingTests
         Assert.Equal("Approved", question.Status);
         Assert.True(question.IsActive);
         Assert.Single(await database.Context.QuestionReports.ToListAsync());
+    }
+
+    [Fact]
+    public async Task StudentReport_ForSnapshotVersion_CreatesAndJoinsOneIncident()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "versioned-report", "Approved", true);
+        var version = AddVersion(database, question, 1);
+        await database.Context.SaveChangesAsync();
+        var handler = new ReportQuestionCommandHandler(database.Context);
+
+        var first = await handler.Handle(
+            new ReportQuestionCommand(
+                question.QuestionId,
+                new ReportQuestionRequest { ReportReason = "First reason" },
+                "student-1",
+                "Student",
+                "session-1",
+                version.VersionId),
+            CancellationToken.None);
+        var second = await handler.Handle(
+            new ReportQuestionCommand(
+                question.QuestionId,
+                new ReportQuestionRequest { ReportReason = "Second reason" },
+                "student-2",
+                "Student",
+                "session-2",
+                version.VersionId),
+            CancellationToken.None);
+
+        Assert.True(first.IsSuccess);
+        Assert.True(second.IsSuccess);
+        var incident = Assert.Single(await database.Context.QuestionReportIncidents.ToListAsync());
+        var reports = await database.Context.QuestionReports.OrderBy(item => item.ReporterAccountId).ToListAsync();
+        Assert.All(reports, report => Assert.Equal(incident.IncidentId, report.IncidentId));
+        Assert.Equal(version.VersionId, incident.QuestionVersionId);
     }
 
     [Theory]
@@ -104,6 +141,46 @@ public sealed class QuestionReportingTests
         Assert.True(firstResult.IsSuccess);
         Assert.True(duplicateResult.IsFailure);
         Assert.Equal(QuestionBankErrors.ReportAlreadyPending, duplicateResult.Error);
+    }
+
+    [Fact]
+    public async Task ResolvedReport_FromSameAccountAndVersion_CannotBeReportedAgain()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "resolved-duplicate-report", "Approved", true);
+        var version = AddVersion(database, question, 1);
+        await database.Context.SaveChangesAsync();
+        var handler = new ReportQuestionCommandHandler(database.Context);
+
+        var first = await handler.Handle(
+            new ReportQuestionCommand(
+                question.QuestionId,
+                new ReportQuestionRequest { ReportReason = "First report." },
+                "student-1",
+                "Student",
+                "session-1",
+                version.VersionId),
+            CancellationToken.None);
+        Assert.True(first.IsSuccess);
+
+        var report = await database.Context.QuestionReports.SingleAsync();
+        report.Status = QuestionReportWorkflow.Resolved;
+        report.ResolvedTime = DateTime.UtcNow;
+        await database.Context.SaveChangesAsync();
+
+        var duplicate = await handler.Handle(
+            new ReportQuestionCommand(
+                question.QuestionId,
+                new ReportQuestionRequest { ReportReason = "Second report." },
+                "student-1",
+                "Student",
+                "session-2",
+                version.VersionId),
+            CancellationToken.None);
+
+        Assert.True(duplicate.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportAlreadyPending, duplicate.Error);
+        Assert.Single(await database.Context.QuestionReports.ToListAsync());
     }
 
     [Theory]
@@ -432,5 +509,12 @@ public sealed class QuestionReportingTests
             AdjustedReportId = reportId;
             return Task.CompletedTask;
         }
+
+        public Task DispatchPendingAdjustmentsAsync(
+            string? reportId = null,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task RecoverPendingAdjustmentsAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

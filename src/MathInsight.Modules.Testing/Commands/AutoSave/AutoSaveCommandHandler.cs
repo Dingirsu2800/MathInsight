@@ -65,8 +65,8 @@ public sealed class AutoSaveCommandHandler
                 return Result<AutoSaveResponse>.Failure(TestingErrors.AnswerNotInVersion);
             }
 
-            if (!QuestionSnapshotReader.HasValidNumericShortAnswers(snapshot, dto))
-                return Result<AutoSaveResponse>.Failure(TestingErrors.ShortAnswerNumericRequired);
+            if (!QuestionSnapshotReader.HasValidShortAnswers(snapshot, dto))
+                return Result<AutoSaveResponse>.Failure(TestingErrors.ShortAnswerInvalid);
 
             // Update basic answer fields
             answer.AnswerId = dto.AnswerId;

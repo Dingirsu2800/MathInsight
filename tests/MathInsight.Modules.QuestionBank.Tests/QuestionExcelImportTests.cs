@@ -82,7 +82,7 @@ public sealed class QuestionExcelImportTests
     }
 
     [Fact]
-    public async Task Preview_TextualShortAnswer_ReturnsNumericAnswerValidationError()
+    public async Task Preview_TextualShortAnswer_ReturnsValidDraft()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await SeedTaxonomyAsync(database);
@@ -97,8 +97,8 @@ public sealed class QuestionExcelImportTests
             CancellationToken.None);
 
         var item = Assert.Single(result.Value!.Items);
-        Assert.False(item.IsValid);
-        Assert.Contains(item.Errors, error => error.Code == QuestionBankErrors.QuestionShortAnswerNumericRequired.Code);
+        Assert.True(item.IsValid);
+        Assert.NotNull(item.Draft);
     }
 
     [Fact]
