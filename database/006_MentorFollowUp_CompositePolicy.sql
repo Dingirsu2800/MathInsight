@@ -20,6 +20,13 @@ IF NOT EXISTS (
         ON dbo.Notification (UserID, DeduplicationKey)
         WHERE DeduplicationKey IS NOT NULL;
 
+-- Grade revisions make per-session topic results idempotent when a score adjustment is replayed.
+IF COL_LENGTH(N'dbo.StudentTopicSessionResult', N'GradeRevision') IS NULL
+    ALTER TABLE dbo.StudentTopicSessionResult
+        ADD GradeRevision INT NOT NULL
+            CONSTRAINT DF_StudentTopicSessionResult_GradeRevision DEFAULT (1) WITH VALUES;
+GO
+
 IF OBJECT_ID(N'dbo.QuestionReportIncident', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.QuestionReportIncident (

@@ -157,6 +157,7 @@ public sealed class QuestionReportQueryTests
         adminReport.IncidentId = incident.IncidentId;
         adminReport.QuestionVersionId = version.VersionId;
         adminReport.ProposedStatus = "Dismissed";
+        adminReport.ReviewNote = "Bản sửa cần kiểm tra lại trước khi duyệt.";
         await database.Context.SaveChangesAsync();
 
         var handler = new GetQuestionReportIncidentQueryHandler(database.Context);
@@ -175,6 +176,9 @@ public sealed class QuestionReportQueryTests
         Assert.Equal(version.VersionId, ownerResult.Value.OriginalVersion.VersionId);
         Assert.Equal(2, ownerResult.Value.Reports.Count);
         Assert.Contains(ownerResult.Value.Reports, item => item.ReportId == studentReport.ReportId && item.ProposedStatus == "Resolved");
+        Assert.Contains(ownerResult.Value.Reports, item =>
+            item.ReportId == adminReport.ReportId &&
+            item.ReviewNote == "Bản sửa cần kiểm tra lại trước khi duyệt.");
         Assert.True(adminResult.IsSuccess);
         Assert.Equal("InvalidateAndAwardFull", adminResult.Value!.ProposedResolutionAction);
         Assert.True(otherAdmin.IsFailure);

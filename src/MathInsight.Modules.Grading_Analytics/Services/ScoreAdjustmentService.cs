@@ -274,6 +274,7 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
             var incident = await _db.QuestionReportIncidents
                 .FirstAsync(item => item.IncidentId == adjustedReport.IncidentId, cancellationToken);
             incident.AdjustmentStatus = "Completed";
+            incident.Status = "Closed";
 
             var relatedReports = await _db.QuestionReports
                 .Where(item => item.IncidentId == incident.IncidentId && item.ScoreAdjustedTime == null)
