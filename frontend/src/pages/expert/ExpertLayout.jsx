@@ -26,8 +26,8 @@ export default function ExpertLayout({ children }) {
       onLogout={logout}
       showSidebarLogout
       showThemeToggle={false}
-      showNotifications={false}
-      hideTopbar={true}
+      showNotifications={true}
+      hideTopbar={false}
     >
       {children}
     </DashboardLayout>

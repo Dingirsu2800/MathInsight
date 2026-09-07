@@ -104,6 +104,10 @@ export const questionBankApi = {
     return client.post(`/api/question-bank/reports/${reportId}/submit-review`);
   },
 
+  submitQuestionReportIncident(incidentId, payload) {
+    return client.post(`/api/question-report-incidents/${incidentId}/submit`, payload);
+  },
+
   extractQuestionOcrDraft(file) {
     const formData = new FormData();
     formData.append("file", file);

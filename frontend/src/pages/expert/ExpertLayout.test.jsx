@@ -16,12 +16,18 @@ vi.mock('../../hooks/useCurrentUser', () => ({
   }),
 }));
 
+vi.mock('../../services/notificationApi', () => ({
+  getNotifications: vi.fn().mockResolvedValue({ notifications: [], unreadCount: 0 }),
+  markNotificationRead: vi.fn().mockResolvedValue({}),
+  connectNotificationHub: vi.fn().mockReturnValue(() => {}),
+}));
+
 afterEach(() => {
   cleanup();
 });
 
-describe('ExpertLayout topbar removal & sidebar persistence', () => {
-  it('renders sidebar and children without rendering the dashboard topbar', () => {
+describe('ExpertLayout topbar restoration & notification bell', () => {
+  it('renders sidebar, children, dashboard topbar, and notification bell', () => {
     render(
       <BrowserRouter>
         <NavigationGuardProvider>
@@ -39,8 +45,11 @@ describe('ExpertLayout topbar removal & sidebar persistence', () => {
     expect(screen.getByText('MathInsight')).toBeInTheDocument();
     expect(screen.getByText('Chuyên gia nội dung')).toBeInTheDocument();
 
-    // DashboardTopbar features (e.g. notifications, theme toggle in topbar) are NOT rendered
-    expect(screen.queryByLabelText(/Thông báo/i)).not.toBeInTheDocument();
+    // DashboardTopbar is rendered with app title and NotificationBell
+    expect(screen.getByText('Hệ thống Quản lý Toán học')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Thông báo/i)).toBeInTheDocument();
+
+    // Theme toggle in topbar is disabled for Expert
     expect(screen.queryByLabelText(/Giao diện/i)).not.toBeInTheDocument();
   });
 });

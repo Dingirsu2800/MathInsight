@@ -11,6 +11,8 @@ import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/ques
 import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
 import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
+import ShortAnswerInput from "../../components/questions/ShortAnswerInput";
+import { validateShortAnswer, isNumericAnswerPrecisionValid } from "../../utils/shortAnswer";
 import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
 
 function getRoleLabel(role) {
@@ -96,6 +98,9 @@ export default function QuestionEditorPage() {
 
   const searchParams = new URLSearchParams(location.search);
   const fromReported = searchParams.get("from") === "reported";
+  const paramIncidentId = searchParams.get("incidentId") || searchParams.get("incident");
+  const submissionKeyRef = React.useRef(null);
+  const formHashAtKeyCreationRef = React.useRef("");
 
   const [hasSavedInSession, setHasSavedInSession] = React.useState(false);
   const [pendingReports, setPendingReports] = React.useState([]);
@@ -979,8 +984,9 @@ export default function QuestionEditorPage() {
         return false;
       }
     } else if (form.questionType === "SHORT_ANSWER") {
-      if (!form.shortAnswer.trim()) {
-        showError("Vui lòng nhập chuỗi đáp án ngắn chính xác!");
+      const saVal = validateShortAnswer(form.shortAnswer, { required: true });
+      if (!saVal.isValid) {
+        showError(saVal.error || "Vui lòng nhập chuỗi đáp án ngắn chính xác!");
         return false;
       }
     } else if (form.questionType === "COMPOSITE") {
@@ -998,13 +1004,22 @@ export default function QuestionEditorPage() {
           showError(`Vui lòng chọn đáp án Đúng hoặc Sai cho câu hỏi phụ phần (${part.partLabel})!`);
           return false;
         }
-        if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
-          showError(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
-          return false;
+        if (part.partType === "SHORT_ANSWER") {
+          const partVal = validateShortAnswer(part.correctText, { required: true });
+          if (!partVal.isValid) {
+            showError(`Phần (${part.partLabel}): ${partVal.error || "Đáp án không hợp lệ!"}`);
+            return false;
+          }
         }
-        if (part.partType === "NUMERIC_ANSWER" && (part.correctNumeric === null || part.correctNumeric === "")) {
-          showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
-          return false;
+        if (part.partType === "NUMERIC_ANSWER") {
+          if (part.correctNumeric === null || part.correctNumeric === "") {
+            showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
+            return false;
+          }
+          if (!isNumericAnswerPrecisionValid(part.correctNumeric)) {
+            showError(`Phần (${part.partLabel}): Đáp án số không hợp lệ hoặc vượt quá độ chính xác cho phép (tối đa 12 chữ số nguyên và 6 chữ số thập phân).`);
+            return false;
+          }
         }
       }
     }
@@ -1041,8 +1056,86 @@ export default function QuestionEditorPage() {
       });
   };
 
+  const getSubmissionKey = (formContentHash) => {
+    if (submissionKeyRef.current && formHashAtKeyCreationRef.current === formContentHash) {
+      return submissionKeyRef.current;
+    }
+    const newKey = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    submissionKeyRef.current = newKey;
+    formHashAtKeyCreationRef.current = formContentHash;
+    return newKey;
+  };
+
   const handleSaveAndSubmitReview = async (reportId) => {
     if (!validateForm()) return;
+
+    const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
+    const incidentId = paramIncidentId || currentRep?.incidentId || form.incidentId;
+
+    if (incidentId) {
+      setAdminReviewSubmitState("submitting");
+      setLoading(true);
+      try {
+        const correctionPayload = mapEditorStateToCreateUpdateRequest(form);
+        const formHash = JSON.stringify(correctionPayload);
+        const key = getSubmissionKey(formHash);
+
+        const activeReports = pendingReports.filter(r =>
+          r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
+        );
+        const reportDecisions = activeReports.map(r => ({
+          reportId: String(r.reportId || r.id),
+          disposition: "Resolved",
+          reviewNote: "Đã cập nhật câu hỏi theo phản hồi của Admin."
+        }));
+
+        const submitPayload = {
+          expectedRevision: currentRep?.incidentRevision ?? form.revision ?? 0,
+          expectedQuestionVersionId: String(form.questionVersionId || currentRep?.questionVersionId || ""),
+          submissionKey: key,
+          resolutionAction: activeReports.some(r => r.reporterRole === "Student")
+            ? "InvalidateAndAwardFull"
+            : "NoScoreChange",
+          reportDecisions: reportDecisions.length > 0 ? reportDecisions : [{
+            reportId: String(reportId),
+            disposition: "Resolved",
+            reviewNote: "Đã cập nhật câu hỏi theo phản hồi của Admin."
+          }],
+          correction: correctionPayload
+        };
+
+        await questionBankApi.submitQuestionReportIncident(incidentId, submitPayload);
+        initialFormSnapshotRef.current = JSON.stringify(form);
+        setHasSavedInSession(true);
+        setAdminReviewSubmitState("complete");
+        setInfoMessage("Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
+        const refreshResult = await fetchPendingReports();
+        if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
+          navigate("/expert/questions/reported");
+        }
+      } catch (err) {
+        console.error("Failed to submit incident review:", err);
+        const code = err.response?.data?.code;
+        if (code === "REPORT_SUBMISSION_KEY_CONFLICT") {
+          submissionKeyRef.current = null;
+          showError("Xung đột khóa gửi dữ liệu. Khóa mới đã được tạo, vui lòng thử lại.");
+        } else if (code === "REPORT_INCIDENT_CONFLICT") {
+          showError("Sự cố hoặc báo cáo đã bị thay đổi trên máy chủ. Đang làm mới dữ liệu...");
+          await fetchPendingReports();
+        } else if (code === "REPORT_VERSION_STALE") {
+          showError("Phiên bản câu hỏi đã cũ so với sự cố trên máy chủ. Đang làm mới...");
+          await fetchPendingReports();
+        } else {
+          showError("Nội dung chưa gửi được Admin xét duyệt: " + (err.response?.data?.message || err.message));
+        }
+        setAdminReviewSubmitState("retryable");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
     setAdminReviewSubmitState("saving");
@@ -1068,8 +1161,13 @@ export default function QuestionEditorPage() {
         }
       } catch (submitErr) {
         console.error("Failed to submit review:", submitErr);
+        const code = submitErr.response?.data?.code;
+        if (code === "ADMIN_REPORT_REQUIRES_REVIEW") {
+          showError("Báo cáo thuộc sự cố cần xử lý qua quy trình xét duyệt của sự cố.");
+        } else {
+          showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
+        }
         setAdminReviewSubmitState("retryable");
-        showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
       }
     } catch (saveErr) {
       console.error("Failed to save question:", saveErr);
@@ -1081,6 +1179,12 @@ export default function QuestionEditorPage() {
   };
 
   const handleRetrySubmitReview = async (reportId) => {
+    const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
+    const incidentId = paramIncidentId || currentRep?.incidentId || form.incidentId;
+    if (incidentId) {
+      await handleSaveAndSubmitReview(reportId);
+      return;
+    }
     setAdminReviewSubmitState("submitting");
     setLoading(true);
     try {
@@ -1764,12 +1868,10 @@ export default function QuestionEditorPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Đáp án đúng chính xác:</label>
-                      <input
+                      <ShortAnswerInput
                         value={form.shortAnswer}
-                        onChange={(e) => handleFieldChange("shortAnswer", e.target.value)}
-                        className="w-full p-3 text-[14px] bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all font-mono font-bold"
-                        placeholder="Nhập chuỗi đáp án đúng (ví dụ: 1/3 hoặc x=5)"
-                        type="text"
+                        onChange={(val) => handleFieldChange("shortAnswer", val)}
+                        placeholder="Nhập chuỗi đáp án đúng (ví dụ: 1/3, -5/2, √(2), π, ...)"
                       />
                     </div>
                   </div>
@@ -1849,12 +1951,11 @@ export default function QuestionEditorPage() {
                         {part.partType === "SHORT_ANSWER" && (
                           <div>
                             <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Đáp án chuỗi đúng:</label>
-                            <input
+                            <ShortAnswerInput
                               value={part.correctText || ""}
-                              onChange={(e) => handlePartFieldChange(pIdx, "correctText", e.target.value)}
-                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-bold outline-none"
+                              onChange={(val) => handlePartFieldChange(pIdx, "correctText", val)}
                               placeholder="Nhập đáp án text chính xác"
-                              type="text"
+                              showExample={false}
                             />
                           </div>
                         )}

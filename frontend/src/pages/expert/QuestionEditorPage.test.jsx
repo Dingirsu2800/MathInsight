@@ -26,6 +26,7 @@ vi.mock('../../services/questionBankApi', () => ({
     getQuestionReports: vi.fn(),
     updateQuestionReportStatus: vi.fn(),
     submitQuestionReportReview: vi.fn(),
+    submitQuestionReportIncident: vi.fn(),
   },
 }));
 
@@ -306,5 +307,53 @@ describe('QuestionEditorPage reported question workflow', () => {
     // Should NOT trigger the "Bạn vẫn còn báo cáo chưa xử lý" warning
     expect(confirmSpy).not.toHaveBeenCalledWith('Bạn vẫn còn báo cáo chưa xử lý. Bạn có chắc chắn muốn rời khỏi trang này?');
     confirmSpy.mockRestore();
+  });
+
+  it('submits atomic incident payload and preserves submissionKey on retry when incidentId is present', async () => {
+    const adminIncidentReport = {
+      ...adminPendingFixReport,
+      incidentId: 'incident-101',
+      incidentRevision: 0,
+      questionVersionId: 'ver-101',
+    };
+    questionBankApi.getQuestionReports.mockResolvedValue({
+      data: [adminIncidentReport],
+    });
+    questionBankApi.submitQuestionReportIncident
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({ data: { success: true } });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+
+    const actionBtns = await screen.findAllByRole('button', { name: /Cập nhật và gửi Admin xét duyệt/i });
+    fireEvent.click(actionBtns[0]);
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[0][1];
+    expect(firstCallPayload.expectedRevision).toBe(0);
+    expect(firstCallPayload.submissionKey).toBeDefined();
+    expect(firstCallPayload.reportDecisions[0].reportId).toBe('503');
+
+    // Retry button appears
+    const retryBtns = await screen.findAllByRole('button', { name: /Gửi lại Admin xét duyệt/i });
+    fireEvent.click(retryBtns[0]);
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(2);
+    });
+
+    const secondCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[1][1];
+    expect(secondCallPayload.submissionKey).toBe(firstCallPayload.submissionKey);
   });
 });

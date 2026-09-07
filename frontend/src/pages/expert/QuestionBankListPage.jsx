@@ -383,7 +383,23 @@ export default function QuestionBankListPage({ mode = "expert" }) {
       fetchQuestions();
     } catch (err) {
       console.error(err);
-      setReportError(err.response?.data?.message || err.message || "Báo cáo câu hỏi thất bại.");
+      const code = err.response?.data?.code;
+      if (code === "REPORT_ALREADY_REPORTED_VERSION" || code === "REPORT_ALREADY_PENDING") {
+        setReportError("Bạn đã báo cáo phiên bản câu hỏi này rồi.");
+      } else if (code === "REPORT_INCIDENT_CLOSED") {
+        setReportError("Sự cố cho phiên bản câu hỏi này đã được xử lý và đóng.");
+      } else if (code === "QUESTION_SELF_REPORT_FORBIDDEN") {
+        setReportError("Bạn không thể tự báo cáo câu hỏi của chính mình.");
+      } else if (code === "ADMIN_REPORT_WORKFLOW_ALREADY_EXISTS") {
+        setReportError("Đã có báo cáo của Admin đang trong quy trình xử lý cho câu hỏi này.");
+      } else if (code === "REPORT_VERSION_STALE") {
+        setReportError("Phiên bản câu hỏi đã cũ. Vui lòng làm mới danh sách.");
+      } else {
+        setReportError(err.response?.data?.message || err.message || "Báo cáo câu hỏi thất bại.");
+      }
+      if (err.response?.status === 409) {
+        fetchQuestions();
+      }
     } finally {
       setReportLoading(false);
     }
@@ -922,20 +938,33 @@ export default function QuestionBankListPage({ mode = "expert" }) {
 
             <DialogFooter>
               {(isAdminMode || (selectedQuestionDetails && selectedQuestionDetails.expertId !== currentAccountId)) && (
-                <Button
-                  variant="outline"
-                  className="border-error text-error hover:bg-error/5 normal-case h-9 text-xs mr-auto flex items-center gap-1.5"
-                  onClick={() => {
-                    setIsPreviewOpen(false);
-                    setReportTarget(selectedQuestion);
-                    setReportReason("");
-                    setReportError("");
-                    setIsReportDialogOpen(true);
-                  }}
-                >
-                  <span className="material-symbols-outlined text-[16px]">report</span>
-                  Báo cáo câu hỏi
-                </Button>
+                selectedQuestionDetails?.reportEligibility?.canReport === false ? (
+                  <div className="text-xs font-bold text-on-surface-variant flex items-center gap-1.5 mr-auto px-3 py-1.5 bg-surface-container-low rounded-lg border border-whisper-border">
+                    <span className="material-symbols-outlined text-[16px] text-amber-600">info</span>
+                    <span>
+                      {selectedQuestionDetails.reportEligibility.reasonCode === 'ALREADY_REPORTED_VERSION' || selectedQuestionDetails.reportEligibility.myReportId
+                        ? `Đã báo cáo (${selectedQuestionDetails.reportEligibility.myReportStatus || 'Đang xử lý'})`
+                        : selectedQuestionDetails.reportEligibility.incidentStatus === 'Closed'
+                          ? 'Đã xử lý sự cố'
+                          : 'Không thể báo cáo'}
+                    </span>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="border-error text-error hover:bg-error/5 normal-case h-9 text-xs mr-auto flex items-center gap-1.5"
+                    onClick={() => {
+                      setIsPreviewOpen(false);
+                      setReportTarget(selectedQuestion);
+                      setReportReason("");
+                      setReportError("");
+                      setIsReportDialogOpen(true);
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">report</span>
+                    Báo cáo câu hỏi
+                  </Button>
+                )
               )}
               <Button
                 variant="outline"
