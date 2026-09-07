@@ -7,4 +7,7 @@ public sealed record ReportEligibilityResponse(
     string? MyReportStatus,
     string? IncidentId,
     string? IncidentStatus,
-    string? QuestionVersionId);
+    string? QuestionVersionId,
+    bool RequiresAdminReview = false,
+    string? ResolutionAction = null,
+    string? AdjustmentStatus = null);

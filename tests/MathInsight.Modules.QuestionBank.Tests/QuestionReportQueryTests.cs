@@ -202,6 +202,19 @@ public sealed class QuestionReportQueryTests
         await AddReportAsync(database, question.QuestionId, "expert-2", "Expert", "Pending", DateTime.UtcNow);
         var report = await database.Context.QuestionReports.SingleAsync();
         report.QuestionVersionId = version.VersionId;
+        report.IncidentId = "detail-eligibility-incident";
+        database.Context.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = report.IncidentId,
+            QuestionId = question.QuestionId,
+            QuestionVersionId = version.VersionId,
+            Revision = 2,
+            Status = "PendingAdminReview",
+            RequiresAdminReview = true,
+            ProposedResolutionAction = "InvalidateAndAwardFull",
+            AdjustmentStatus = "Pending",
+            CreatedTime = DateTime.UtcNow
+        });
         await database.Context.SaveChangesAsync();
 
         var handler = new GetQuestionDetailQueryHandler(database.Context);
@@ -217,6 +230,10 @@ public sealed class QuestionReportQueryTests
 
         Assert.False(alreadyReported.Value!.ReportEligibility.CanReport);
         Assert.Equal("ALREADY_REPORTED_VERSION", alreadyReported.Value.ReportEligibility.ReasonCode);
+        Assert.Equal(version.VersionId, alreadyReported.Value.ReportEligibility.QuestionVersionId);
+        Assert.True(alreadyReported.Value.ReportEligibility.RequiresAdminReview);
+        Assert.Equal("InvalidateAndAwardFull", alreadyReported.Value.ReportEligibility.ResolutionAction);
+        Assert.Equal("Pending", alreadyReported.Value.ReportEligibility.AdjustmentStatus);
         Assert.True(eligibleAdmin.Value!.ReportEligibility.CanReport);
         Assert.False(selfReporter.Value!.ReportEligibility.CanReport);
         Assert.Equal("SELF_REPORT_FORBIDDEN", selfReporter.Value.ReportEligibility.ReasonCode);

@@ -136,7 +136,16 @@ public sealed class GetSessionResultQueryHandlerTests
             ReporterAccountId = session.StudentId,
             ReporterRole = "Student",
             Status = "Pending",
-            ReportReason = "The source data is incomplete."
+            ReportReason = "The source data is incomplete.",
+            IncidentId = "student-incident-1"
+        });
+        db.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = "student-incident-1",
+            Status = "PendingAdminReview",
+            RequiresAdminReview = true,
+            ApprovedResolutionAction = "InvalidateAndAwardFull",
+            AdjustmentStatus = "Processing"
         });
         await db.SaveChangesAsync();
 
@@ -150,6 +159,10 @@ public sealed class GetSessionResultQueryHandlerTests
         Assert.False(resultAnswer.ReportEligibility!.CanReport);
         Assert.Equal("ALREADY_REPORTED_VERSION", resultAnswer.ReportEligibility.ReasonCode);
         Assert.Equal("student-report-1", resultAnswer.ReportEligibility.MyReportId);
+        Assert.Equal("snapshot-v1", resultAnswer.ReportEligibility.QuestionVersionId);
+        Assert.True(resultAnswer.ReportEligibility.RequiresAdminReview);
+        Assert.Equal("InvalidateAndAwardFull", resultAnswer.ReportEligibility.ResolutionAction);
+        Assert.Equal("Processing", resultAnswer.ReportEligibility.AdjustmentStatus);
     }
 
     [Fact]

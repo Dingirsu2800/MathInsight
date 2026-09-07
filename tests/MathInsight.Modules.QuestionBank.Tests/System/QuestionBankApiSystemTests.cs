@@ -8,6 +8,7 @@ using ClosedXML.Excel;
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Persistence;
+using MathInsight.Modules.Grading_Analytics.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -242,6 +243,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     public async Task Expert_SubmitsAdminIncidentCorrection_ThroughIncidentRoute()
     {
         var (questionId, versionId) = await _factory.SeedIncidentReportableQuestionAsync();
+        var studentSessionId = await _factory.SeedStudentSessionForQuestionAsync(questionId, versionId);
 
         using var reportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
         {
@@ -251,15 +253,74 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
         reportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
         var reportResponse = await _client.SendAsync(reportRequest);
         Assert.Equal(HttpStatusCode.Created, reportResponse.StatusCode);
+        using var adminReportJson = JsonDocument.Parse(await reportResponse.Content.ReadAsStringAsync());
+        var adminReportId = adminReportJson.RootElement.GetProperty("reportId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(adminReportId));
+
+        using var studentReportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
+        {
+            Content = new StringContent("{ \"reportReason\": \"The question is incorrect in my session.\" }", Encoding.UTF8, "application/json")
+        };
+        studentReportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "student_l3");
+        studentReportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Student");
+        var studentReportResponse = await _client.SendAsync(studentReportRequest);
+        Assert.Equal(HttpStatusCode.Created, studentReportResponse.StatusCode);
+        using var studentReportJson = JsonDocument.Parse(await studentReportResponse.Content.ReadAsStringAsync());
+        var studentReportId = studentReportJson.RootElement.GetProperty("reportId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(studentReportId));
+
+        using var secondReportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
+        {
+            Content = new StringContent("{ \"reportReason\": \"The difficulty also needs review.\" }", Encoding.UTF8, "application/json")
+        };
+        secondReportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_reporter_l3");
+        secondReportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Expert");
+        var secondReportResponse = await _client.SendAsync(secondReportRequest);
+        Assert.Equal(HttpStatusCode.Created, secondReportResponse.StatusCode);
+        using var expertReportJson = JsonDocument.Parse(await secondReportResponse.Content.ReadAsStringAsync());
+        var expertReportId = expertReportJson.RootElement.GetProperty("reportId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(expertReportId));
 
         var incidentId = await _factory.GetIncidentIdAsync(questionId, versionId);
+        using var adminDetailRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/question-bank/questions/{questionId}");
+        adminDetailRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        adminDetailRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var adminDetailResponse = await _client.SendAsync(adminDetailRequest);
+        Assert.Equal(HttpStatusCode.OK, adminDetailResponse.StatusCode);
+        using var adminDetailJson = JsonDocument.Parse(await adminDetailResponse.Content.ReadAsStringAsync());
+        var adminEligibility = adminDetailJson.RootElement.GetProperty("reportEligibility");
+        Assert.Equal(versionId, adminEligibility.GetProperty("questionVersionId").GetString());
+        Assert.Equal(incidentId, adminEligibility.GetProperty("incidentId").GetString());
+        Assert.Equal("Open", adminEligibility.GetProperty("incidentStatus").GetString());
+        Assert.True(adminEligibility.GetProperty("requiresAdminReview").GetBoolean());
+        using var expertListRequest = new HttpRequestMessage(HttpMethod.Get, "/api/question-bank/reports/mine?status=Pending&pageIndex=1&pageSize=10");
+        expertListRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+        var expertListResponse = await _client.SendAsync(expertListRequest);
+        Assert.Equal(HttpStatusCode.OK, expertListResponse.StatusCode);
+        using var expertListJson = JsonDocument.Parse(await expertListResponse.Content.ReadAsStringAsync());
+        Assert.Equal(incidentId, expertListJson.RootElement.GetProperty("items")[0].GetProperty("incidentId").GetString());
+
+        using var expertIncidentRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/question-report-incidents/{incidentId}");
+        expertIncidentRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+        expertIncidentRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Expert");
+        var expertIncidentResponse = await _client.SendAsync(expertIncidentRequest);
+        Assert.Equal(HttpStatusCode.OK, expertIncidentResponse.StatusCode);
+        using var expertIncidentJson = JsonDocument.Parse(await expertIncidentResponse.Content.ReadAsStringAsync());
+        Assert.Equal(versionId, expertIncidentJson.RootElement.GetProperty("originalVersion").GetProperty("versionId").GetString());
+        Assert.Equal(3, expertIncidentJson.RootElement.GetProperty("reports").GetArrayLength());
+        var incidentRevision = expertIncidentJson.RootElement.GetProperty("revision").GetInt32();
+
         var submissionPayload = $$"""
                 {
-                  "expectedRevision": 0,
+                  "expectedRevision": {{incidentRevision}},
                   "expectedQuestionVersionId": "{{versionId}}",
                   "submissionKey": "sql-incident-submit-1",
                   "resolutionAction": "NoScoreChange",
-                  "reportDecisions": [{ "reportId": "{{(await _factory.GetOnlyReportIdAsync(questionId))}}", "disposition": "Resolved", "reviewNote": "Corrected." }],
+                  "reportDecisions": [
+                    { "reportId": "{{adminReportId}}", "disposition": "Resolved", "reviewNote": "Corrected." },
+                    { "reportId": "{{studentReportId}}", "disposition": "Resolved", "reviewNote": "Confirmed against the submitted session." },
+                    { "reportId": "{{expertReportId}}", "disposition": "Dismissed", "reviewNote": "Not reproducible." }
+                  ],
                   "correction": {
                     "questionContent": "Corrected SQL incident question",
                     "solutionContent": "The corrected solution is documented.",
@@ -286,12 +347,57 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
 
         using var firstSubmitRequest = CreateSubmitRequest();
         using var secondSubmitRequest = CreateSubmitRequest();
-        var submitResponses = await Task.WhenAll(
-            _client.SendAsync(firstSubmitRequest),
-            _client.SendAsync(secondSubmitRequest));
-
-        Assert.All(submitResponses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        var firstSubmitResponse = await _client.SendAsync(firstSubmitRequest);
+        Assert.True(firstSubmitResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected OK but received {(int)firstSubmitResponse.StatusCode}: {await firstSubmitResponse.Content.ReadAsStringAsync()}");
+        var secondSubmitResponse = await _client.SendAsync(secondSubmitRequest);
+        Assert.True(secondSubmitResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected idempotent OK but received {(int)secondSubmitResponse.StatusCode}: {await secondSubmitResponse.Content.ReadAsStringAsync()}");
         await _factory.AssertIncidentSubmissionPendingAdminReviewAsync(incidentId, questionId);
+
+        using var adminListRequest = new HttpRequestMessage(HttpMethod.Get, "/api/question-bank/admin/reports/mine?status=PendingReview&pageIndex=1&pageSize=10");
+        adminListRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        adminListRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var adminListResponse = await _client.SendAsync(adminListRequest);
+        Assert.Equal(HttpStatusCode.OK, adminListResponse.StatusCode);
+        using var adminListJson = JsonDocument.Parse(await adminListResponse.Content.ReadAsStringAsync());
+        Assert.Equal(incidentId, adminListJson.RootElement.GetProperty("items")[0].GetProperty("incidentId").GetString());
+
+        using var adminIncidentRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/question-report-incidents/{incidentId}");
+        adminIncidentRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        adminIncidentRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var adminIncidentResponse = await _client.SendAsync(adminIncidentRequest);
+        Assert.Equal(HttpStatusCode.OK, adminIncidentResponse.StatusCode);
+        using var adminIncidentJson = JsonDocument.Parse(await adminIncidentResponse.Content.ReadAsStringAsync());
+        Assert.Equal("NoScoreChange", adminIncidentJson.RootElement.GetProperty("proposedResolutionAction").GetString());
+        var proposedReports = adminIncidentJson.RootElement.GetProperty("reports").EnumerateArray().ToList();
+        Assert.Equal(3, proposedReports.Count);
+        Assert.Equal("Resolved", proposedReports.Single(item => item.GetProperty("reportId").GetString() == adminReportId).GetProperty("proposedStatus").GetString());
+        Assert.Equal("Resolved", proposedReports.Single(item => item.GetProperty("reportId").GetString() == studentReportId).GetProperty("proposedStatus").GetString());
+        Assert.Equal("Dismissed", proposedReports.Single(item => item.GetProperty("reportId").GetString() == expertReportId).GetProperty("proposedStatus").GetString());
+
+        using var approveRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/admin/reports/{adminReportId}/approve");
+        approveRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
+        approveRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
+        var approveResponse = await _client.SendAsync(approveRequest);
+        Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
+        await _factory.AssertIncidentWasApprovedWithIndividualDispositionsAsync(incidentId, adminReportId!, expertReportId!);
+
+        using var studentResultRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/grading/sessions/{studentSessionId}");
+        studentResultRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "student_l3");
+        studentResultRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Student");
+        var studentResultResponse = await _client.SendAsync(studentResultRequest);
+        Assert.Equal(HttpStatusCode.OK, studentResultResponse.StatusCode);
+        using var studentResultJson = JsonDocument.Parse(await studentResultResponse.Content.ReadAsStringAsync());
+        var studentAnswer = Assert.Single(studentResultJson.RootElement.GetProperty("answers").EnumerateArray());
+        var eligibility = studentAnswer.GetProperty("reportEligibility");
+        Assert.Equal(versionId, eligibility.GetProperty("questionVersionId").GetString());
+        Assert.False(eligibility.GetProperty("canReport").GetBoolean());
+        Assert.Equal(studentReportId, eligibility.GetProperty("myReportId").GetString());
+        Assert.Equal("Resolved", eligibility.GetProperty("myReportStatus").GetString());
+        Assert.Equal("Closed", eligibility.GetProperty("incidentStatus").GetString());
+        Assert.False(eligibility.GetProperty("requiresAdminReview").GetBoolean());
+        Assert.Equal("NoScoreChange", eligibility.GetProperty("resolutionAction").GetString());
     }
 
     [QuestionBankSqlServerFact]
@@ -397,15 +503,18 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
                 ('role-expert-l3', N'Expert', N'L3 test role'),
-                ('role-admin-l3', N'Admin', N'L3 test role');
+                ('role-admin-l3', N'Admin', N'L3 test role'),
+                ('role-student-l3', N'Student', N'L3 test role');
             INSERT INTO dbo.Account (AccountID, Username, PasswordHash, Email, FirstName, LastName, RoleID, isActive)
             VALUES
                 ('expert_l3', N'expert_l3', 'hash', 'expert_l3@example.test', N'Expert', N'L3', 'role-expert-l3', 1),
                 ('expert_reporter_l3', N'expert_reporter_l3', 'hash', 'expert_reporter_l3@example.test', N'Reporter', N'L3', 'role-expert-l3', 1),
-                ('admin_l3', N'admin_l3', 'hash', 'admin_l3@example.test', N'Admin', N'L3', 'role-admin-l3', 1);
+                ('admin_l3', N'admin_l3', 'hash', 'admin_l3@example.test', N'Admin', N'L3', 'role-admin-l3', 1),
+                ('student_l3', N'student_l3', 'hash', 'student_l3@example.test', N'Student', N'L3', 'role-student-l3', 1);
             INSERT INTO dbo.Expert (ExpertID, Specialty) VALUES
                 ('expert_l3', N'L3 test owner'),
                 ('expert_reporter_l3', N'L3 test reporter');
+            INSERT INTO dbo.Student (StudentID, CurrentGrade) VALUES ('student_l3', 10);
             INSERT INTO dbo.TagDifficulty (DifficultyID, DifficultyName, Description, LevelValue, DisplayOrder, IsActive)
             VALUES ('l3-report-difficulty', N'L3 Report Difficulty', N'Shared report-test difficulty', 2, 2, 1);
             """).GetAwaiter().GetResult();
@@ -569,6 +678,25 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
             .SingleAsync();
     }
 
+    public async Task<string> SeedStudentSessionForQuestionAsync(string questionId, string versionId)
+    {
+        const string sessionId = "l3-student-session";
+        const string testId = "l3-student-test";
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<GradingDbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO dbo.Test (TestID, TestStatus, TestMode, GeneratedForStudentID, GeneratedBy, TestName, DurationMinutes, TotalQuestions, MaxScore, ScoringPolicy)
+            VALUES ({testId}, 'Active', 'AdaptivePractice', 'student_l3', 'System', N'L3 student result test', 30, 1, 1.00, 'NormalizedWeight');
+            INSERT INTO dbo.TestSession (SessionID, TestID, StudentID, TestFormat, Status, SubmissionType, Duration, StartTime, EndTime, TotalQuestion, NumCorrect, NumIncorrect, NumAbandoned, Score, GradeRevision)
+            VALUES ({sessionId}, {testId}, 'student_l3', 'Practice', 'Graded', 'StudentSubmit', 30, SYSUTCDATETIME(), SYSUTCDATETIME(), 1, 1, 0, 0, 1.00, 0);
+            INSERT INTO dbo.TestQuestion (TestID, QuestionID, QuestionOrder, SelectionReason, IsAdaptiveSelected, QuestionVersionID, WeightSnapshot, MaxPointsSnapshot, ScoringRuleSnapshot, GradingPolicyVersion, IsScoreInvalidated)
+            VALUES ({testId}, {questionId}, 1, 'TopicPractice', 0, {versionId}, 1.00, 1.00, 'AllOrNothing', 1, 0);
+            INSERT INTO dbo.TestAnswer (TestAnswerID, SessionID, QuestionID, QuestionNo, TimeSpent, IsCorrect, PointsEarned)
+            VALUES ('l3-student-answer', {sessionId}, {questionId}, 1, 5, 1, 1.00);
+            """);
+        return sessionId;
+    }
+
     public async Task<string> GetOnlyReportIdAsync(string questionId)
     {
         using var scope = Services.CreateScope();
@@ -584,11 +712,28 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
         var incident = await db.QuestionReportIncidents.SingleAsync(item => item.IncidentId == incidentId);
-        var report = await db.QuestionReports.SingleAsync(item => item.IncidentId == incidentId);
+        var reports = await db.QuestionReports.Where(item => item.IncidentId == incidentId).ToListAsync();
         Assert.Equal("PendingAdminReview", incident.Status);
         Assert.NotNull(incident.SubmittedCorrectionVersionId);
-        Assert.Equal("PendingReview", report.Status);
+        Assert.Contains(reports, item => item.Status == "PendingReview" && item.ReporterRole == "Admin");
+        Assert.Contains(reports, item => item.Status == "Pending" && item.ReporterRole == "Expert");
         Assert.Equal(2, await db.QuestionVersions.CountAsync(item => item.QuestionId == questionId));
+    }
+
+    public async Task AssertIncidentWasApprovedWithIndividualDispositionsAsync(
+        string incidentId,
+        string resolvedReportId,
+        string dismissedReportId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var incident = await db.QuestionReportIncidents.SingleAsync(item => item.IncidentId == incidentId);
+        var reports = await db.QuestionReports.Where(item => item.IncidentId == incidentId).ToListAsync();
+
+        Assert.Equal("Closed", incident.Status);
+        Assert.Equal("NoScoreChange", incident.ApprovedResolutionAction);
+        Assert.Contains(reports, item => item.ReportId == resolvedReportId && item.Status == "Resolved");
+        Assert.Contains(reports, item => item.ReportId == dismissedReportId && item.Status == "Dismissed");
     }
 
     public async Task AssertReportWasResolvedAsync(string reportId, string questionId)

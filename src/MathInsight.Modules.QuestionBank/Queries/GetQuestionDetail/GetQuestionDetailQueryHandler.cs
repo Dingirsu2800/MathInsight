@@ -116,16 +116,26 @@ public sealed class GetQuestionDetailQueryHandler
             .OrderByDescending(report => report.CreatedTime)
             .Select(report => new { report.ReportId, report.Status, report.IncidentId })
             .FirstOrDefaultAsync(cancellationToken);
+        var incident = existingReport?.IncidentId is { Length: > 0 } incidentId
+            ? await _context.QuestionReportIncidents
+                .AsNoTracking()
+                .Where(item => item.IncidentId == incidentId)
+                .Select(item => new
+                {
+                    item.Status,
+                    item.RequiresAdminReview,
+                    ResolutionAction = item.ApprovedResolutionAction ?? item.ProposedResolutionAction,
+                    item.AdjustmentStatus
+                })
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
         if (existingReport is not null)
         {
-            var incidentStatus = string.IsNullOrWhiteSpace(existingReport.IncidentId)
-                ? null
-                : await _context.QuestionReportIncidents
-                    .Where(incident => incident.IncidentId == existingReport.IncidentId)
-                    .Select(incident => incident.Status)
-                    .FirstOrDefaultAsync(cancellationToken);
             return new(false, "ALREADY_REPORTED_VERSION", existingReport.ReportId, existingReport.Status,
-                existingReport.IncidentId, incidentStatus, versionId);
+                existingReport.IncidentId, incident?.Status, versionId,
+                incident?.RequiresAdminReview ?? false,
+                incident?.ResolutionAction,
+                incident?.AdjustmentStatus);
         }
 
         if (role == "EXPERT" && string.Equals(question.ExpertId, accountId, StringComparison.OrdinalIgnoreCase))

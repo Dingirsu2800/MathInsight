@@ -77,7 +77,11 @@ public sealed record ReportEligibilityDto(
     string? MyReportId,
     string? MyReportStatus,
     string? IncidentId,
-    string? IncidentStatus);
+    string? IncidentStatus,
+    string? QuestionVersionId = null,
+    bool RequiresAdminReview = false,
+    string? ResolutionAction = null,
+    string? AdjustmentStatus = null);
 
 /// <summary>
 /// API-layer projection of a question's tag weight assignment.

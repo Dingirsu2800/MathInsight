@@ -66,10 +66,20 @@ public sealed class GetSessionResultQueryHandler
             .Select(report => report.IncidentId!)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        var incidentStatusById = await _db.QuestionReportIncidents
+        var incidentById = await _db.QuestionReportIncidents
             .AsNoTracking()
             .Where(incident => incidentIds.Contains(incident.IncidentId))
-            .ToDictionaryAsync(incident => incident.IncidentId, incident => incident.Status, StringComparer.Ordinal, cancellationToken);
+            .ToDictionaryAsync(
+                incident => incident.IncidentId,
+                incident => new
+                {
+                    incident.Status,
+                    incident.RequiresAdminReview,
+                    ResolutionAction = incident.ApprovedResolutionAction,
+                    incident.AdjustmentStatus
+                },
+                StringComparer.Ordinal,
+                cancellationToken);
 
         var difficultyLevels = await _db.TagDifficulties
             .AsNoTracking()
@@ -88,6 +98,9 @@ public sealed class GetSessionResultQueryHandler
                 var myReport = studentReports.FirstOrDefault(report =>
                     report.QuestionId == a.QuestionId &&
                     report.QuestionVersionId == questionVersionId);
+                var incident = myReport?.IncidentId is { Length: > 0 } incidentId
+                    ? incidentById.GetValueOrDefault(incidentId)
+                    : null;
                 decimal maxPoints = tq?.MaxPointsSnapshot ?? a.Question.DefaultWeight;
 
                 byte difficultyLevel = 1;
@@ -200,9 +213,11 @@ public sealed class GetSessionResultQueryHandler
                         myReport?.ReportId,
                         myReport?.Status,
                         myReport?.IncidentId,
-                        myReport?.IncidentId is { } incidentId && incidentStatusById.TryGetValue(incidentId, out var incidentStatus)
-                            ? incidentStatus
-                            : null),
+                        incident?.Status,
+                        questionVersionId,
+                        incident?.RequiresAdminReview ?? false,
+                        incident?.ResolutionAction,
+                        incident?.AdjustmentStatus),
                 };
             })
             .ToList();
