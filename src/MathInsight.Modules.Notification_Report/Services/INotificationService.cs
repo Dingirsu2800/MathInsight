@@ -13,7 +13,8 @@ public interface INotificationService
         string title,
         string content,
         string? link = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? deduplicationKey = null);
 
     /// <summary>
     /// Marks a notification read. Fails with NotificationErrors.NotificationNotFound or

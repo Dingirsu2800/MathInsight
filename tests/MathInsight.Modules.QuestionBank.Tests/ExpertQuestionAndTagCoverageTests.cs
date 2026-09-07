@@ -832,7 +832,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     }
 
     [Fact]
-    public async Task CreateQuestion_WithTextualShortAnswer_RejectsNumericAnswerKey()
+    public async Task CreateQuestion_WithTextualShortAnswer_AcceptsCanonicalAnswerKey()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await AddDifficultyAsync(database, "difficulty-1", 1);
@@ -844,12 +844,11 @@ public sealed class ExpertQuestionAndTagCoverageTests
         var result = await new CreateQuestionCommandHandler(database.Context)
             .Handle(new CreateQuestionCommand(request, "expert-1"), CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(QuestionBankErrors.QuestionShortAnswerNumericRequired, result.Error);
+        Assert.True(result.IsSuccess);
     }
 
     [Fact]
-    public async Task UpdateQuestion_WithTextualShortAnswer_RejectsNumericAnswerKey()
+    public async Task UpdateQuestion_WithTextualShortAnswer_AcceptsCanonicalAnswerKey()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await AddDifficultyAsync(database, "difficulty-1", 1);
@@ -863,8 +862,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
         var result = await new UpdateQuestionCommandHandler(database.Context)
             .Handle(new UpdateQuestionCommand(createResult.Value!.QuestionId, request, "expert-1"), CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(QuestionBankErrors.QuestionShortAnswerNumericRequired, result.Error);
+        Assert.True(result.IsSuccess);
     }
 
     [Fact]
@@ -896,7 +894,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
     }
 
     [Fact]
-    public async Task CreateQuestion_WithTextualCompositeShortAnswerPart_RejectsNumericAnswerKey()
+    public async Task CreateQuestion_WithTextualCompositeShortAnswerPart_AcceptsCanonicalAnswerKey()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         await AddDifficultyAsync(database, "difficulty-1", 1);
@@ -919,8 +917,7 @@ public sealed class ExpertQuestionAndTagCoverageTests
         var result = await new CreateQuestionCommandHandler(database.Context)
             .Handle(new CreateQuestionCommand(request, "expert-1"), CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(QuestionBankErrors.QuestionShortAnswerPartNumericRequired, result.Error);
+        Assert.True(result.IsSuccess);
     }
 
     private static CreateQuestionRequest CreateQuestionRequest(string difficultyId, string topicId) => new()
@@ -1012,5 +1009,12 @@ public sealed class ExpertQuestionAndTagCoverageTests
             report.ScoreAdjustedTime = DateTime.UtcNow;
             await context.SaveChangesAsync(cancellationToken);
         }
+
+        public Task DispatchPendingAdjustmentsAsync(
+            string? reportId = null,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task RecoverPendingAdjustmentsAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

@@ -31,8 +31,7 @@ public static class BlueprintExamGenerationPlanner
                     detail.DifficultyId,
                     section.QuestionType,
                     section.ScoringRule,
-                    detail.Quantity,
-                    section.PartCountPerQuestion));
+                    detail.Quantity));
             }
         }
 

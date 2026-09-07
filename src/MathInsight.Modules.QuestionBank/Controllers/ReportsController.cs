@@ -5,11 +5,13 @@ using MathInsight.Modules.QuestionBank.Commands.HandleQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
 using MathInsight.Modules.QuestionBank.Commands.RetryScoreAdjustment;
 using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
+using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportIncident;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetOwnedReportedQuestions;
 using MathInsight.Modules.QuestionBank.Queries.GetAdminQuestionReports;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionReportIncident;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -139,6 +141,43 @@ public sealed class ReportsController : ControllerBase
     }
 
     [Authorize(Roles = "Expert")]
+    [HttpPost("~/api/question-report-incidents/{incidentId}/submit")]
+    public async Task<IActionResult> SubmitQuestionReportIncident(
+        string incidentId,
+        [FromBody] SubmitQuestionReportIncidentRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(QuestionBankErrors.QuestionRequestInvalid));
+
+        var expertId = GetAccountId();
+        if (string.IsNullOrWhiteSpace(expertId))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new SubmitQuestionReportIncidentCommand(incidentId, request, expertId),
+            cancellationToken);
+        return result.IsFailure ? ToReportErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Expert,Admin")]
+    [HttpGet("~/api/question-report-incidents/{incidentId}")]
+    public async Task<IActionResult> GetQuestionReportIncident(
+        string incidentId,
+        CancellationToken cancellationToken)
+    {
+        var accountId = GetAccountId();
+        var role = GetRole();
+        if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(role))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new GetQuestionReportIncidentQuery(incidentId, accountId, role),
+            cancellationToken);
+        return result.IsFailure ? ToReportErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Expert")]
     [HttpPost("reports/{reportId}/submit-review")]
     public async Task<IActionResult> SubmitQuestionReportReview(
         string reportId,
@@ -249,6 +288,10 @@ public sealed class ReportsController : ControllerBase
 
         if (error == QuestionBankErrors.ReportAlreadyPending ||
             error == QuestionBankErrors.ReportAlreadyHandled ||
+            error == QuestionBankErrors.ReportIncidentConflict ||
+            error == QuestionBankErrors.ReportSubmissionKeyConflict ||
+            error == QuestionBankErrors.ReportVersionStale ||
+            error == QuestionBankErrors.ReportIncidentClosed ||
             error == QuestionBankErrors.QuestionNotReportable ||
             error == QuestionBankErrors.AdminReportWorkflowAlreadyExists ||
             error == QuestionBankErrors.AdminReportRequiresReview ||

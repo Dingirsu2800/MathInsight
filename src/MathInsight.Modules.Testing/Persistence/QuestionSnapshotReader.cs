@@ -47,11 +47,11 @@ internal static class QuestionSnapshotReader
             !string.Equals(item.PartId, part.PartId, StringComparison.OrdinalIgnoreCase))) != true;
     }
 
-    public static bool HasValidNumericShortAnswers(TestQuestionSnapshot row, AutoSaveAnswerDto answer)
+    public static bool HasValidShortAnswers(TestQuestionSnapshot row, AutoSaveAnswerDto answer)
     {
         if (IsShortAnswer(row.Snapshot.QuestionType) &&
             !string.IsNullOrWhiteSpace(answer.ShortAnswerText) &&
-            !NumericShortAnswer.TryParse(answer.ShortAnswerText, out _))
+            !ShortAnswerPolicy.TryNormalize(answer.ShortAnswerText, out _))
         {
             return false;
         }
@@ -63,7 +63,7 @@ internal static class QuestionSnapshotReader
             return snapshotPart is null ||
                 !IsShortAnswer(snapshotPart.PartType) ||
                 string.IsNullOrWhiteSpace(part.TextAnswer) ||
-                NumericShortAnswer.TryParse(part.TextAnswer, out _);
+                ShortAnswerPolicy.TryNormalize(part.TextAnswer, out _);
         }) ?? true;
     }
 
@@ -86,11 +86,11 @@ internal static class QuestionSnapshotReader
             string.Equals(item.PartId, part.PartId, StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static bool HasValidNumericShortAnswers(TestQuestionSnapshot row, TestAnswer answer)
+    public static bool HasValidShortAnswers(TestQuestionSnapshot row, TestAnswer answer)
     {
         if (IsShortAnswer(row.Snapshot.QuestionType) &&
             !string.IsNullOrWhiteSpace(answer.ShortAnswerText) &&
-            !NumericShortAnswer.TryParse(answer.ShortAnswerText, out _))
+            !ShortAnswerPolicy.TryNormalize(answer.ShortAnswerText, out _))
         {
             return false;
         }
@@ -102,21 +102,21 @@ internal static class QuestionSnapshotReader
             return snapshotPart is null ||
                 !IsShortAnswer(snapshotPart.PartType) ||
                 string.IsNullOrWhiteSpace(part.TextAnswer) ||
-                NumericShortAnswer.TryParse(part.TextAnswer, out _);
+                ShortAnswerPolicy.TryNormalize(part.TextAnswer, out _);
         });
     }
 
     public static string? NormalizeShortAnswerText(TestQuestionSnapshot row, string? value) =>
-        IsShortAnswer(row.Snapshot.QuestionType)
-            ? NumericShortAnswer.NormalizeOrNull(value)
+        IsShortAnswer(row.Snapshot.QuestionType) && !string.IsNullOrWhiteSpace(value)
+            ? ShortAnswerPolicy.TryNormalize(value, out _) ? value : null
             : value;
 
     public static string? NormalizePartText(TestQuestionSnapshot row, string partId, string? value)
     {
         var snapshotPart = row.Snapshot.Parts.FirstOrDefault(item =>
             string.Equals(item.PartId, partId, StringComparison.OrdinalIgnoreCase));
-        return snapshotPart is not null && IsShortAnswer(snapshotPart.PartType)
-            ? NumericShortAnswer.NormalizeOrNull(value)
+        return snapshotPart is not null && IsShortAnswer(snapshotPart.PartType) && !string.IsNullOrWhiteSpace(value)
+            ? ShortAnswerPolicy.TryNormalize(value, out _) ? value : null
             : value;
     }
 

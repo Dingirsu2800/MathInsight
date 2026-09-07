@@ -57,6 +57,30 @@ public sealed class GetSessionResultQueryHandler
             .Where(tq => tq.TestId == session.TestId)
             .ToDictionaryAsync(tq => tq.QuestionId, cancellationToken);
 
+        var studentReports = await _db.QuestionReports
+            .AsNoTracking()
+            .Where(report => report.ReporterAccountId == request.AuthenticatedStudentId)
+            .ToListAsync(cancellationToken);
+        var incidentIds = studentReports
+            .Where(report => !string.IsNullOrWhiteSpace(report.IncidentId))
+            .Select(report => report.IncidentId!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var incidentById = await _db.QuestionReportIncidents
+            .AsNoTracking()
+            .Where(incident => incidentIds.Contains(incident.IncidentId))
+            .ToDictionaryAsync(
+                incident => incident.IncidentId,
+                incident => new
+                {
+                    incident.Status,
+                    incident.RequiresAdminReview,
+                    ResolutionAction = incident.ApprovedResolutionAction,
+                    incident.AdjustmentStatus
+                },
+                StringComparer.Ordinal,
+                cancellationToken);
+
         var difficultyLevels = await _db.TagDifficulties
             .AsNoTracking()
             .ToDictionaryAsync(td => td.DifficultyId, td => td.LevelValue, StringComparer.OrdinalIgnoreCase, cancellationToken);
@@ -70,6 +94,13 @@ public sealed class GetSessionResultQueryHandler
             .Select(a =>
             {
                 var tq = testQuestions.GetValueOrDefault(a.QuestionId);
+                var questionVersionId = tq?.QuestionVersionId;
+                var myReport = studentReports.FirstOrDefault(report =>
+                    report.QuestionId == a.QuestionId &&
+                    report.QuestionVersionId == questionVersionId);
+                var incident = myReport?.IncidentId is { Length: > 0 } incidentId
+                    ? incidentById.GetValueOrDefault(incidentId)
+                    : null;
                 decimal maxPoints = tq?.MaxPointsSnapshot ?? a.Question.DefaultWeight;
 
                 byte difficultyLevel = 1;
@@ -150,6 +181,7 @@ public sealed class GetSessionResultQueryHandler
                 return new GradedAnswerDetailDto
                 {
                     QuestionId = a.QuestionId,
+                    QuestionVersionId = questionVersionId ?? string.Empty,
                     QuestionNo = a.QuestionNo,
                     QuestionType = a.Question.QuestionType,
                     QuestionContent = a.Question.QuestionContent,
@@ -175,6 +207,17 @@ public sealed class GetSessionResultQueryHandler
                     AnswerOptions = answerOptions,
                     AnswerParts = answerParts,
                     TagWeights = BuildTagWeightDtos(a.Question.QuestionTopics, tagTopics),
+                    ReportEligibility = new ReportEligibilityDto(
+                        myReport is null,
+                        myReport is null ? null : "ALREADY_REPORTED_VERSION",
+                        myReport?.ReportId,
+                        myReport?.Status,
+                        myReport?.IncidentId,
+                        incident?.Status,
+                        questionVersionId,
+                        incident?.RequiresAdminReview ?? false,
+                        incident?.ResolutionAction,
+                        incident?.AdjustmentStatus),
                 };
             })
             .ToList();

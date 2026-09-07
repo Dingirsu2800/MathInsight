@@ -51,7 +51,12 @@ public class GradingEngine : IGradingEngine
 
             if (!string.IsNullOrEmpty(scoringRule))
             {
-                GradeByScoringRule(answer, question, maxPoints, scoringRule);
+                GradeByScoringRule(
+                    answer,
+                    question,
+                    maxPoints,
+                    scoringRule,
+                    testQuestion?.GradingPolicyVersion ?? GradingPolicyVersions.UniversalHalving);
             }
             else
             {
@@ -83,7 +88,12 @@ public class GradingEngine : IGradingEngine
         };
     }
 
-    private static void GradeByScoringRule(TestAnswer answer, Question question, decimal maxPoints, string scoringRule)
+    private static void GradeByScoringRule(
+        TestAnswer answer,
+        Question question,
+        decimal maxPoints,
+        string scoringRule,
+        int gradingPolicyVersion)
     {
         var ruleNormalized = scoringRule.Replace("_", "").Replace(" ", "").ToUpperInvariant();
 
@@ -94,7 +104,7 @@ public class GradingEngine : IGradingEngine
                 break;
 
             case "TIEREDTRUEFALSE":
-                GradeCompositeAllTrueFalse(answer, question, maxPoints);
+                GradeCompositeAllTrueFalse(answer, question, maxPoints, gradingPolicyVersion);
                 break;
 
             case "WEIGHTEDPARTS":
@@ -210,7 +220,7 @@ public class GradingEngine : IGradingEngine
             return;
         }
 
-        answer.IsCorrect = NumericShortAnswer.AreEquivalent(answer.ShortAnswerText, correctAnswer.AnswerContent);
+        answer.IsCorrect = ShortAnswerPolicy.AreEquivalent(correctAnswer.AnswerContent, answer.ShortAnswerText);
 
         answer.PointsEarned = answer.IsCorrect == true ? maxPoints : 0m;
     }
@@ -223,7 +233,11 @@ public class GradingEngine : IGradingEngine
 
         if (allTrueFalse)
         {
-            GradeCompositeAllTrueFalse(answer, question, maxPoints);
+            GradeCompositeAllTrueFalse(
+                answer,
+                question,
+                maxPoints,
+                gradingPolicyVersion: GradingPolicyVersions.UniversalHalving);
         }
         else
         {
@@ -232,7 +246,10 @@ public class GradingEngine : IGradingEngine
     }
 
     private static void GradeCompositeAllTrueFalse(
-        TestAnswer answer, Question question, decimal maxPoints)
+        TestAnswer answer,
+        Question question,
+        decimal maxPoints,
+        int gradingPolicyVersion = GradingPolicyVersions.UniversalHalving)
     {
         var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
         if (parts.Count < 2 || parts.Any(p => NormalizeType(p.PartType) != "TRUEFALSE"))
@@ -259,18 +276,18 @@ public class GradingEngine : IGradingEngine
 
         answer.IsCorrect = correctCount == totalParts && totalParts > 0;
 
-        decimal fraction = CalculateTieredTrueFalseFraction(correctCount, totalParts);
+        decimal fraction = CalculateTieredTrueFalseFraction(correctCount, totalParts, gradingPolicyVersion);
 
         answer.PointsEarned = Math.Round(fraction * maxPoints, 2);
     }
 
-    private static decimal CalculateTieredTrueFalseFraction(int correctCount, int totalParts)
+    private static decimal CalculateTieredTrueFalseFraction(int correctCount, int totalParts, int gradingPolicyVersion)
     {
         if (correctCount <= 0 || totalParts <= 0) return 0.00m;
         if (correctCount >= totalParts) return 1.00m;
 
-        // Quy chuẩn Bộ GD&ĐT cho câu 4 mệnh đề: 0 - 10% - 25% - 50% - 100%
-        if (totalParts == 4)
+        // Version 1 is retained for test questions generated before the universal halving policy.
+        if (gradingPolicyVersion <= GradingPolicyVersions.LegacyMoetFourPart && totalParts == 4)
         {
             return correctCount switch
             {
@@ -282,10 +299,12 @@ public class GradingEngine : IGradingEngine
             };
         }
 
-        // Quy tắc phân bậc chia đôi cho các số mệnh đề khác (ví dụ: N=3: 0 - 25% - 50% - 100%, N=2: 0 - 50% - 100%)
-        int wrongCount = totalParts - correctCount;
-        decimal fraction = 1.00m / (1 << wrongCount);
-        return Math.Round(fraction, 4);
+        var wrongCount = totalParts - correctCount;
+        var fraction = 1m;
+        for (var index = 0; index < wrongCount; index++)
+            fraction /= 2m;
+
+        return fraction;
     }
 
     private static void GradeCompositeGeneral(
@@ -314,7 +333,7 @@ public class GradingEngine : IGradingEngine
             {
                 if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
                 {
-                    partCorrect = NumericShortAnswer.AreEquivalent(answerPart.TextAnswer, part.CorrectText);
+                    partCorrect = ShortAnswerPolicy.AreEquivalent(part.CorrectText, answerPart.TextAnswer);
                 }
             }
             else if (partTypeNormalized == "NUMERICANSWER")
@@ -366,7 +385,7 @@ public class GradingEngine : IGradingEngine
             {
                 if (!string.IsNullOrWhiteSpace(answerPart.TextAnswer) && !string.IsNullOrWhiteSpace(part.CorrectText))
                 {
-                    partCorrect = NumericShortAnswer.AreEquivalent(answerPart.TextAnswer, part.CorrectText);
+                    partCorrect = ShortAnswerPolicy.AreEquivalent(part.CorrectText, answerPart.TextAnswer);
                 }
             }
             else if (partTypeNormalized == "NUMERICANSWER")

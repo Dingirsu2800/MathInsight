@@ -182,7 +182,7 @@ public sealed class AdminQuestionReportWorkflowTests
     }
 
     [Fact]
-    public async Task AdminApprove_WithOnlyStudentReport_RestoresQuestionToApproved()
+    public async Task AdminApprove_WithOnlyStudentReport_KeepsQuestionReportedUntilStudentReportIsResolved()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         var question = await AddQuestionAsync(database, "approve-happy-path", "Reported");
@@ -194,7 +194,7 @@ public sealed class AdminQuestionReportWorkflowTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Resolved", adminReport.Status);
-        Assert.Equal("Approved", question.Status);
+        Assert.Equal("Reported", question.Status);
         Assert.NotNull(adminReport.ResolvedTime);
         Assert.Equal("admin-1", adminReport.ResolvedBy);
     }

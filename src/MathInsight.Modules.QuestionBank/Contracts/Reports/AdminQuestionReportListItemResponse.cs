@@ -2,6 +2,7 @@ namespace MathInsight.Modules.QuestionBank.Contracts.Reports;
 
 public sealed record AdminQuestionReportListItemResponse(
     string ReportId,
+    string? IncidentId,
     string QuestionId,
     string QuestionContent,
     string QuestionStatus,

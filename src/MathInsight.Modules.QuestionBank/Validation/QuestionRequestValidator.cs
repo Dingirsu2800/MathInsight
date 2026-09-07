@@ -96,9 +96,9 @@ internal static partial class QuestionRequestValidator
                 }
 
                 if (partType == "ShortAnswer" &&
-                    (part.CorrectBoolean is not null || !NumericShortAnswer.TryParse(part.CorrectText, out _) || part.CorrectNumeric is not null || part.NumericTolerance is not null))
+                    (part.CorrectBoolean is not null || !ShortAnswerPolicy.TryNormalize(part.CorrectText, out _) || part.CorrectNumeric is not null || part.NumericTolerance is not null))
                 {
-                    return QuestionBankErrors.QuestionShortAnswerPartNumericRequired;
+                    return QuestionBankErrors.QuestionShortAnswerPartAnswerInvalid;
                 }
 
                 if (partType == "NumericAnswer" &&
@@ -138,8 +138,8 @@ internal static partial class QuestionRequestValidator
         if (databaseQuestionType == "ShortAnswer" && request.Answers.Count(answer => answer.IsCorrect) != 1)
             return QuestionBankErrors.QuestionShortAnswerCorrectAnswerRequired;
 
-        if (databaseQuestionType == "ShortAnswer" && !NumericShortAnswer.TryParse(request.Answers.Single(answer => answer.IsCorrect).AnswerContent, out _))
-            return QuestionBankErrors.QuestionShortAnswerNumericRequired;
+        if (databaseQuestionType == "ShortAnswer" && !ShortAnswerPolicy.TryNormalize(request.Answers.Single(answer => answer.IsCorrect).AnswerContent, out _))
+            return QuestionBankErrors.QuestionShortAnswerAnswerInvalid;
 
         return null;
     }

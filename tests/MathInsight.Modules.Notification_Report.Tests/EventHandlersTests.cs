@@ -55,6 +55,60 @@ public class EventHandlersTests
     }
 
     [Fact]
+    public async Task GradeCalculatedHandler_Adjustment_UsesIncidentSessionAndRevisionForDeduplication()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new GradeCalculatedHandler(mock.Object);
+
+        await handler.Handle(new GradeCalculatedEvent
+        {
+            SessionId = "session-1",
+            StudentId = "student-1",
+            GradeRevision = 2,
+            Cause = GradeCalculatedEvent.ScoreAdjustmentCause,
+            IncidentId = "incident-1",
+            Score = 9m
+        }, CancellationToken.None);
+
+        mock.Verify(service => service.SendAsync(
+            "student-1", "Score Adjusted", It.IsAny<string>(), "/student/test-result/session-1",
+            It.IsAny<CancellationToken>(), "score-adjustment:incident-1:session-1:2"), Times.Once);
+    }
+
+    [Fact]
+    public async Task BlueprintReviewedHandler_NotifiesTheBlueprintOwnerWithStableDeduplication()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new BlueprintReviewedHandler(mock.Object);
+
+        await handler.Handle(
+            new BlueprintReviewedEvent("blueprint-1", "expert-1", "Approved", null),
+            CancellationToken.None);
+
+        mock.Verify(service => service.SendAsync(
+            "expert-1",
+            "Cấu trúc đề đã được duyệt",
+            "Cấu trúc đề của bạn đã được duyệt.",
+            "/expert/blueprints/blueprint-1",
+            It.IsAny<CancellationToken>(),
+            "blueprint:blueprint-1:review:Approved"), Times.Once);
+    }
+
+    [Fact]
+    public async Task NotificationRequestedHandler_PreservesTheSpecifiedRecipientAndDeduplicationKey()
+    {
+        var mock = NewNotificationServiceMock();
+        var handler = new NotificationRequestedHandler(mock.Object);
+
+        await handler.Handle(
+            new NotificationRequestedEvent("expert-1", "Title", "Content", "/target", "report:1"),
+            CancellationToken.None);
+
+        mock.Verify(service => service.SendAsync(
+            "expert-1", "Title", "Content", "/target", It.IsAny<CancellationToken>(), "report:1"), Times.Once);
+    }
+
+    [Fact]
     public async Task BadgeAwardedHandler_SendsToStudent_WithBadgeName()
     {
         var mock = NewNotificationServiceMock();
@@ -130,7 +184,7 @@ public class EventHandlersTests
         var mock = NewNotificationServiceMock();
         var handler = new DiscussionAnsweredHandler(mock.Object);
 
-        var evt = new DiscussionAnsweredEvent("answer-1", "q-1", "lecture-1", "teacher-1", "student-1");
+        var evt = new DiscussionAnsweredEvent("answer-1", "q-1", "lecture-1", "teacher-1", "student-1", "teacher-1");
         await handler.Handle(evt, CancellationToken.None);
 
         mock.Verify(s => s.SendAsync(

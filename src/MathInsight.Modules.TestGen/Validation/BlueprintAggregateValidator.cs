@@ -94,7 +94,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
                 section.TotalQuestions,
                 section.ScoreBudget,
                 scoringRule,
-                section.PartCountPerQuestion,
+                null,
                 normalizedDetails));
         }
 
@@ -158,9 +158,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
     {
         if (questionType == BlueprintQuestionTypes.Composite)
         {
-            return section.PartCountPerQuestion > 0 &&
-                scoringRule is ScoringRules.TieredTrueFalse or ScoringRules.WeightedParts &&
-                (scoringRule != ScoringRules.TieredTrueFalse || section.PartCountPerQuestion >= 2);
+            return scoringRule is ScoringRules.TieredTrueFalse or ScoringRules.WeightedParts;
         }
 
         return section.PartCountPerQuestion is null && scoringRule == ScoringRules.AllOrNothing;

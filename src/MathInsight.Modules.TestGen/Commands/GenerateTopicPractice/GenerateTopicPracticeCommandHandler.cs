@@ -316,7 +316,8 @@ public sealed class GenerateTopicPracticeCommandHandler : IRequestHandler<Genera
             QuestionVersionId = question.Question.QuestionVersionId,
             WeightSnapshot = question.Question.DefaultWeight,
             MaxPointsSnapshot = question.MaxPoints,
-            ScoringRuleSnapshot = question.ScoringRule
+            ScoringRuleSnapshot = question.ScoringRule,
+            GradingPolicyVersion = GradingPolicyVersions.UniversalHalving
         };
     }
 

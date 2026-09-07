@@ -26,7 +26,7 @@ public class BlueprintSectionConfiguration : IEntityTypeConfiguration<BlueprintS
                 "[PartCountPerQuestion] IS NULL OR [PartCountPerQuestion] > 0");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_CompositePartMetadata",
-                "([QuestionType] = 'Composite' AND [PartCountPerQuestion] IS NOT NULL AND [ScoringRule] IN ('TieredTrueFalse', 'WeightedParts')) OR " +
+                "([QuestionType] = 'Composite' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] IN ('TieredTrueFalse', 'WeightedParts')) OR " +
                 "([QuestionType] <> 'Composite' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] = 'AllOrNothing')");
         });
 

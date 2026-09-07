@@ -15,6 +15,7 @@ public class QuestionBankDbContext : DbContext
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<QuestionPart> QuestionParts => Set<QuestionPart>();
     public DbSet<QuestionReport> QuestionReports => Set<QuestionReport>();
+    public DbSet<QuestionReportIncident> QuestionReportIncidents => Set<QuestionReportIncident>();
     public DbSet<QuestionTopic> QuestionTopics => Set<QuestionTopic>();
     public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
     public DbSet<TagDifficulty> TagDifficulties => Set<TagDifficulty>();

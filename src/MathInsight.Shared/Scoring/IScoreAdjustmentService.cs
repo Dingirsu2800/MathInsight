@@ -9,4 +9,10 @@ public interface IScoreAdjustmentService
     Task AdjustInvalidQuestionVersionAsync(
         string reportId,
         CancellationToken cancellationToken = default);
+
+    Task DispatchPendingAdjustmentsAsync(
+        string? reportId = null,
+        CancellationToken cancellationToken = default);
+
+    Task RecoverPendingAdjustmentsAsync(CancellationToken cancellationToken = default);
 }

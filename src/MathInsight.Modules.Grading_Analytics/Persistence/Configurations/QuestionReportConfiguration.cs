@@ -12,11 +12,13 @@ public sealed class QuestionReportConfiguration : IEntityTypeConfiguration<Quest
         builder.HasKey(item => item.ReportId);
         builder.Property(item => item.ReportId).HasColumnName("ReportID").HasMaxLength(36).IsUnicode(false);
         builder.Property(item => item.QuestionId).HasColumnName("QuestionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(item => item.ReporterAccountId).HasColumnName("ReporterAccountID").HasMaxLength(36).IsUnicode(false);
         builder.Property(item => item.ReporterRole).HasColumnName("ReporterRole").HasMaxLength(20).IsUnicode(false);
         builder.Property(item => item.ReportReason).HasColumnName("ReportReason");
         builder.Property(item => item.Status).HasColumnName("Status").HasMaxLength(20).IsUnicode(false);
         builder.Property(item => item.SessionId).HasColumnName("SessionID").HasMaxLength(36).IsUnicode(false);
         builder.Property(item => item.QuestionVersionId).HasColumnName("QuestionVersionID").HasMaxLength(36).IsUnicode(false);
+        builder.Property(item => item.IncidentId).HasColumnName("IncidentID").HasMaxLength(36).IsUnicode(false);
         builder.Property(item => item.ResolutionAction).HasColumnName("ResolutionAction").HasMaxLength(30).IsUnicode(false);
         builder.Property(item => item.ScoreAdjustedTime).HasColumnName("ScoreAdjustedTime");
     }

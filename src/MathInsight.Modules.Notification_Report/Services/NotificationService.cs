@@ -25,8 +25,20 @@ public class NotificationService : INotificationService
         string title,
         string content,
         string? link = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? deduplicationKey = null)
     {
+        if (!string.IsNullOrWhiteSpace(deduplicationKey))
+        {
+            var existing = await _dbContext.Notifications
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    item => item.UserId == accountId && item.DeduplicationKey == deduplicationKey,
+                    cancellationToken);
+            if (existing is not null)
+                return existing.NotificationId;
+        }
+
         var createdTime = DateTime.UtcNow;
         var notification = new Notification
         {
@@ -35,12 +47,30 @@ public class NotificationService : INotificationService
             Title = title,
             Content = content,
             Link = link,
+            DeduplicationKey = deduplicationKey,
             IsRead = false,
             CreatedTime = createdTime
         };
 
         _dbContext.Notifications.Add(notification);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException) when (!string.IsNullOrWhiteSpace(deduplicationKey))
+        {
+            // The unique database index is the race-safe authority when two retry workers read
+            // before either one inserts. A duplicate row means another worker persisted it.
+            _dbContext.Entry(notification).State = EntityState.Detached;
+            var existing = await _dbContext.Notifications
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    item => item.UserId == accountId && item.DeduplicationKey == deduplicationKey,
+                    cancellationToken);
+            if (existing is not null)
+                return existing.NotificationId;
+            throw;
+        }
 
         var payload = new NotificationDto(
             notification.NotificationId,
@@ -52,8 +82,19 @@ public class NotificationService : INotificationService
 
         // No-op if the account has no active SignalR connection — the DB row above is what makes
         // the notification visible on next GET /api/v1/notifications (BR-22 offline delivery).
-        await _hubContext.Clients.User(accountId)
-            .SendAsync("ReceiveNotification", payload, cancellationToken);
+        try
+        {
+            await _hubContext.Clients.User(accountId)
+                .SendAsync("ReceiveNotification", payload, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // The persisted inbox entry is the delivery guarantee; SignalR is best effort.
+        }
 
         return notification.NotificationId;
     }

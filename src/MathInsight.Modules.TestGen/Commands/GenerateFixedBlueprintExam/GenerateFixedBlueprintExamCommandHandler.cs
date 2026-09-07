@@ -182,6 +182,7 @@ public sealed class GenerateFixedBlueprintExamCommandHandler
                 SelectionReason = GeneratedTestValues.FixedExamReason, IsAdaptiveSelected = false,
                 QuestionVersionId = item.Candidate.QuestionVersionId, WeightSnapshot = item.Candidate.DefaultWeight,
                 MaxPointsSnapshot = item.MaxPoints, ScoringRuleSnapshot = item.ScoringRule,
+                GradingPolicyVersion = GradingPolicyVersions.UniversalHalving,
                 IsScoreInvalidated = false
             });
         }
