@@ -97,8 +97,9 @@ export default function QuestionEditorPage() {
   const initialFormSnapshotRef = React.useRef(null);
 
   const searchParams = new URLSearchParams(location.search);
-  const fromReported = searchParams.get("from") === "reported";
+  const isReportRoute = location.pathname?.endsWith("/reports") || location.pathname?.includes("/reports");
   const paramIncidentId = searchParams.get("incidentId") || searchParams.get("incident");
+  const fromReported = searchParams.get("from") === "reported" || isReportRoute || Boolean(paramIncidentId);
   const submissionKeyRef = React.useRef(null);
   const formHashAtKeyCreationRef = React.useRef("");
 
@@ -363,8 +364,21 @@ export default function QuestionEditorPage() {
     setReportsLoading(true);
     setReportsError("");
     try {
-      if (paramIncidentId) {
-        const res = await questionBankApi.getQuestionReportIncident(paramIncidentId);
+      let activeIncidentId = paramIncidentId;
+      if (!activeIncidentId) {
+        try {
+          const listRes = await questionBankApi.getMyReportedQuestions({ pageIndex: 1, pageSize: 50 });
+          const found = (listRes.data?.items || []).find(item => String(item.questionId) === String(id));
+          if (found?.incidentId) {
+            activeIncidentId = found.incidentId;
+          }
+        } catch (e) {
+          console.warn("Could not query incident ID from reported questions list:", e);
+        }
+      }
+
+      if (activeIncidentId) {
+        const res = await questionBankApi.getQuestionReportIncident(activeIncidentId);
         const incident = res.data;
         const reports = incident?.reports || [];
         setIncidentDetail(incident || null);
@@ -1085,7 +1099,7 @@ export default function QuestionEditorPage() {
 
   const handleSaveAndSubmitReview = async (reportId) => {
     const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
-    const incidentId = paramIncidentId || currentRep?.incidentId || form.incidentId;
+    const incidentId = paramIncidentId || incidentDetail?.incidentId || currentRep?.incidentId || form.incidentId;
 
     if (incidentId) {
       const activeReports = pendingReports.filter(r =>
@@ -1235,7 +1249,7 @@ export default function QuestionEditorPage() {
   );
   const adminReportId = adminPendingFixReport?.reportId || adminPendingFixReport?.id;
   const hasAdminPendingFix = Boolean(adminPendingFixReport);
-  const hasOpenIncident = Boolean(paramIncidentId && incidentDetail?.status === "Open");
+  const hasOpenIncident = Boolean(incidentDetail && incidentDetail.status === "Open");
 
   return (
     <ExpertLayout>
@@ -2119,7 +2133,7 @@ export default function QuestionEditorPage() {
                     Không còn báo cáo nào đang chờ xử lý.
                   </div>
                 ) : (
-                  <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
                     {pendingReports.map((rep) => {
                       const reportIdVal = rep.reportId || rep.id;
                       const time = rep.createdTime ? new Date(rep.createdTime).toLocaleString("vi-VN") : "Chưa rõ thời gian";
@@ -2144,6 +2158,17 @@ export default function QuestionEditorPage() {
                             <p className="text-on-surface font-medium leading-relaxed italic">
                               &ldquo;{rep.reportReason || rep.reason}&rdquo;
                             </p>
+                            {rep.reviewNote && (
+                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-error flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                                  <span>Lý do từ chối:</span>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
+                                  {rep.reviewNote}
+                                </div>
+                              </div>
+                            )}
                             <label className="block text-[10px] font-bold text-on-surface-variant">
                               Quyết định
                               <select
@@ -2175,6 +2200,17 @@ export default function QuestionEditorPage() {
                             <p className="text-on-surface font-medium leading-relaxed italic">
                               &ldquo;{rep.reportReason || rep.reason}&rdquo;
                             </p>
+                            {rep.reviewNote && (
+                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-error flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                                  <span>Lý do từ chối:</span>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
+                                  {rep.reviewNote}
+                                </div>
+                              </div>
+                            )}
                             <div className="flex justify-end gap-2 pt-1 border-t border-error/10">
                               <button
                                 type="button"
@@ -2230,9 +2266,14 @@ export default function QuestionEditorPage() {
                               &ldquo;{rep.reportReason || rep.reason}&rdquo;
                             </p>
                             {rep.reviewNote && (
-                              <div className="p-2 bg-error/10 border border-error/20 rounded text-on-surface-variant leading-relaxed text-[11px]">
-                                <span className="font-bold text-error">Phản hồi của Admin: </span>
-                                {rep.reviewNote}
+                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-error flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                                  <span>Lý do từ chối:</span>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
+                                  {rep.reviewNote}
+                                </div>
                               </div>
                             )}
                             <div className="flex justify-end pt-1 border-t border-error/10">
