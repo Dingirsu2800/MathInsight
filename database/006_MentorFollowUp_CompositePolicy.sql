@@ -74,17 +74,60 @@ BEGIN
 END;
 
 -- A historical student report with a session can be tied to the immutable test snapshot.
--- Never infer a version from the current mutable Question row.
+-- Never infer a version from the current mutable Question row. Map only one canonical
+-- report per reporter/version so rerunning after the filtered unique index exists cannot
+-- recreate a duplicate key collision.
+;WITH SessionBackfillCandidates AS (
+    SELECT report.ReportID,
+           report.QuestionVersionID,
+           testQuestion.QuestionVersionID AS SnapshotQuestionVersionID,
+           ROW_NUMBER() OVER (
+               PARTITION BY report.ReporterAccountID, testQuestion.QuestionVersionID
+               ORDER BY report.CreatedTime, report.ReportID) AS RowNumber
+    FROM dbo.QuestionReport report
+    INNER JOIN dbo.TestSession session ON session.SessionID = report.SessionID
+    INNER JOIN dbo.TestQuestion testQuestion
+        ON testQuestion.TestID = session.TestID
+       AND testQuestion.QuestionID = report.QuestionID
+    WHERE report.QuestionVersionID IS NULL
+      AND report.SessionID IS NOT NULL
+      AND testQuestion.QuestionVersionID IS NOT NULL
+)
+INSERT INTO dbo.QuestionReportLegacyAudit (ReportID, IssueCode, OriginalQuestionVersionID)
+SELECT candidate.ReportID, N'DUPLICATE_REPORTER_VERSION', candidate.SnapshotQuestionVersionID
+FROM SessionBackfillCandidates candidate
+WHERE candidate.RowNumber > 1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dbo.QuestionReportLegacyAudit audit
+      WHERE audit.ReportID = candidate.ReportID
+        AND audit.IssueCode = N'DUPLICATE_REPORTER_VERSION');
+
+;WITH SessionBackfillCandidates AS (
+    SELECT report.ReportID,
+           testQuestion.QuestionVersionID AS SnapshotQuestionVersionID,
+           ROW_NUMBER() OVER (
+               PARTITION BY report.ReporterAccountID, testQuestion.QuestionVersionID
+               ORDER BY report.CreatedTime, report.ReportID) AS RowNumber
+    FROM dbo.QuestionReport report
+    INNER JOIN dbo.TestSession session ON session.SessionID = report.SessionID
+    INNER JOIN dbo.TestQuestion testQuestion
+        ON testQuestion.TestID = session.TestID
+       AND testQuestion.QuestionID = report.QuestionID
+    WHERE report.QuestionVersionID IS NULL
+      AND report.SessionID IS NOT NULL
+      AND testQuestion.QuestionVersionID IS NOT NULL
+)
 UPDATE report
-SET QuestionVersionID = testQuestion.QuestionVersionID
+SET QuestionVersionID = candidate.SnapshotQuestionVersionID
 FROM dbo.QuestionReport report
-INNER JOIN dbo.TestSession session ON session.SessionID = report.SessionID
-INNER JOIN dbo.TestQuestion testQuestion
-    ON testQuestion.TestID = session.TestID
-   AND testQuestion.QuestionID = report.QuestionID
-WHERE report.QuestionVersionID IS NULL
-  AND report.SessionID IS NOT NULL
-  AND testQuestion.QuestionVersionID IS NOT NULL;
+INNER JOIN SessionBackfillCandidates candidate ON candidate.ReportID = report.ReportID
+WHERE candidate.RowNumber = 1
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dbo.QuestionReport existing
+      WHERE existing.ReporterAccountID = report.ReporterAccountID
+        AND existing.QuestionVersionID = candidate.SnapshotQuestionVersionID);
 
 ;WITH RankedDuplicateReports AS (
     SELECT ReportID,
@@ -123,6 +166,11 @@ INSERT INTO dbo.QuestionReportLegacyAudit (ReportID, IssueCode, OriginalQuestion
 SELECT report.ReportID, N'VERSION_UNAVAILABLE', NULL
 FROM dbo.QuestionReport report
 WHERE report.QuestionVersionID IS NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dbo.QuestionReportLegacyAudit audit
+      WHERE audit.ReportID = report.ReportID
+        AND audit.IssueCode = N'DUPLICATE_REPORTER_VERSION')
   AND NOT EXISTS (
       SELECT 1
       FROM dbo.QuestionReportLegacyAudit audit
