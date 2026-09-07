@@ -41,6 +41,9 @@ export default function QuestionReportsPage() {
   const [totalCount, setTotalCount] = React.useState(0);
   const [totalPages, setTotalPages] = React.useState(1);
   const [selectedReport, setSelectedReport] = React.useState(null);
+  const [incidentDetail, setIncidentDetail] = React.useState(null);
+  const [incidentOpen, setIncidentOpen] = React.useState(false);
+  const [incidentLoading, setIncidentLoading] = React.useState(false);
   const [rejectNote, setRejectNote] = React.useState("");
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
@@ -78,12 +81,37 @@ export default function QuestionReportsPage() {
     setActionError("");
     try {
       await questionBankApi.approveAdminQuestionReport(report.reportId);
+      setIncidentOpen(false);
+      setIncidentDetail(null);
+      setSelectedReport(null);
       await fetchReports();
     } catch (err) {
       console.error(err);
       setActionError(err.response?.data?.message || err.message || "Phê duyệt báo cáo thất bại.");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const openIncidentReview = async (report) => {
+    if (!report.incidentId) {
+      setActionError("Báo cáo này chưa có dữ liệu sự cố để xét duyệt. Hãy tải lại danh sách hoặc liên hệ quản trị hệ thống.");
+      return;
+    }
+
+    setSelectedReport(report);
+    setIncidentDetail(null);
+    setActionError("");
+    setIncidentLoading(true);
+    setIncidentOpen(true);
+    try {
+      const response = await questionBankApi.getQuestionReportIncident(report.incidentId);
+      setIncidentDetail(response.data || null);
+    } catch (err) {
+      console.error(err);
+      setActionError(err.response?.data?.message || err.message || "Không thể tải chi tiết sự cố để xét duyệt.");
+    } finally {
+      setIncidentLoading(false);
     }
   };
 
@@ -200,24 +228,21 @@ export default function QuestionReportsPage() {
                             variant="outline"
                             size="sm"
                             className="normal-case h-8 text-xs border-emerald-success text-emerald-success hover:bg-emerald-success/5"
-                            onClick={() => handleApprove(report)}
+                            onClick={() => openIncidentReview(report)}
                             disabled={actionLoading}
                           >
-                            Phê duyệt
+                            Xem và duyệt
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             className="normal-case h-8 text-xs border-error text-error hover:bg-error/5"
                             onClick={() => {
-                              setSelectedReport(report);
-                              setRejectNote("");
-                              setActionError("");
-                              setRejectOpen(true);
+                              openIncidentReview(report);
                             }}
                             disabled={actionLoading}
                           >
-                            Từ chối
+                            Xem để từ chối
                           </Button>
                         </div>
                       </td>
@@ -256,6 +281,99 @@ export default function QuestionReportsPage() {
           </div>
         </div>
       </div>
+
+      <Dialog
+        isOpen={incidentOpen}
+        onClose={() => {
+          if (!actionLoading) {
+            setIncidentOpen(false);
+            setIncidentDetail(null);
+            setActionError("");
+          }
+        }}
+        variant="modal"
+        isCloseDisabled={actionLoading}
+      >
+        <DialogHeader>
+          <DialogTitle>Xét duyệt xử lý sự cố</DialogTitle>
+          <DialogDescription>
+            Kiểm tra phiên bản sửa, phương án điểm và quyết định của từng báo cáo trước khi phê duyệt.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent className="space-y-4">
+          {actionError && (
+            <div className="p-3 text-xs font-bold text-error bg-error/5 border border-error/15 rounded-xl leading-relaxed">
+              {actionError}
+            </div>
+          )}
+          {incidentLoading ? (
+            <div className="py-8 text-center text-sm text-on-surface-variant">Đang tải chi tiết sự cố...</div>
+          ) : incidentDetail ? (
+            <>
+              <div className="grid grid-cols-1 gap-3 text-xs">
+                <div className="rounded-lg border border-whisper-border p-3">
+                  <div className="font-bold text-on-surface-variant mb-1">Phiên bản gốc</div>
+                  <LatexPreview content={incidentDetail.originalVersion?.questionContent || "Không có nội dung"} />
+                </div>
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <div className="font-bold text-primary mb-1">Phiên bản đã sửa</div>
+                  {incidentDetail.submittedCorrectionVersion ? (
+                    <LatexPreview content={incidentDetail.submittedCorrectionVersion.questionContent || "Không có nội dung"} />
+                  ) : (
+                    <span className="text-on-surface-variant">Không thay đổi phiên bản câu hỏi.</span>
+                  )}
+                </div>
+                <div className="rounded-lg border border-whisper-border p-3">
+                  <div className="font-bold text-on-surface-variant mb-1">Phương án điểm</div>
+                  <span>{incidentDetail.proposedResolutionAction === "InvalidateAndAwardFull"
+                    ? "Vô hiệu câu hỏi và cộng đủ điểm"
+                    : "Không điều chỉnh điểm"}</span>
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-sm text-on-surface mb-2">Quyết định theo từng báo cáo</div>
+                <div className="space-y-2">
+                  {(incidentDetail.reports || []).map((report) => (
+                    <div key={report.reportId} className="rounded-lg border border-whisper-border p-3 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold">{report.reporterRole || "Người báo cáo"}</span>
+                        <Badge variant={report.proposedStatus === "Resolved" ? "success" : "secondary"}>
+                          {report.proposedStatus === "Resolved" ? "Chấp nhận báo cáo" : "Không chấp nhận báo cáo"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-on-surface-variant">{report.reportReason || "-"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="py-8 text-center text-sm text-error">Không có dữ liệu sự cố để xét duyệt.</div>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIncidentOpen(false)} disabled={actionLoading}>Hủy</Button>
+          <Button
+            variant="outline"
+            className="normal-case border-error text-error hover:bg-error/5"
+            disabled={actionLoading || !incidentDetail || !selectedReport}
+            onClick={() => {
+              setIncidentOpen(false);
+              setRejectNote("");
+              setRejectOpen(true);
+            }}
+          >
+            Từ chối
+          </Button>
+          <Button
+            className="normal-case"
+            disabled={actionLoading || !incidentDetail || !selectedReport}
+            onClick={() => handleApprove(selectedReport)}
+          >
+            {actionLoading ? "Đang phê duyệt..." : "Phê duyệt"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       <Dialog isOpen={rejectOpen} onClose={() => setRejectOpen(false)} variant="modal">
         <DialogHeader>

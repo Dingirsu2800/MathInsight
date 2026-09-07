@@ -105,6 +105,7 @@ export default function App() {
         <Route path="/expert/questions/reported" element={<ReportedQuestionsPage />} />
         <Route path="/expert/questions/new" element={<QuestionEditorPage />} />
         <Route path="/expert/questions/:id/edit" element={<QuestionEditorPage />} />
+        <Route path="/expert/questions/:id/reports" element={<QuestionEditorPage />} />
         <Route path="/expert/tags" element={<TagManagementPage />} />
         <Route path="/expert/profile" element={<ExpertProfilePage />} />
         <Route path="/expert/blueprints" element={<BlueprintListPage />} />

@@ -11,7 +11,7 @@ const baseQuestion = {
 };
 
 describe('QuestionPanel short answer controls', () => {
-  it('renders numeric-only single-line short answer input accepting valid editing sequences', () => {
+  it('renders short answer input with symbol buttons accepting valid text and math symbols', () => {
     const onAnswer = vi.fn();
     render(
       <QuestionPanel
@@ -25,57 +25,41 @@ describe('QuestionPanel short answer controls', () => {
     expect(screen.getByText('Trả lời ngắn')).toBeInTheDocument();
     const input = screen.getByPlaceholderText('Nhập đáp án ngắn...');
     expect(input.tagName).toBe('INPUT');
-    expect(input).toHaveAttribute('inputmode', 'decimal');
-    expect(input).toHaveAttribute('maxlength', '100');
+    expect(screen.getByRole('button', { name: 'Chèn ký hiệu pi (π)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chèn căn bậc hai (√)' })).toBeInTheDocument();
 
-    // Valid typing steps
-    fireEvent.change(input, { target: { value: '-' } });
-    expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: '-' });
+    // Valid typing steps including text and math symbols
+    fireEvent.change(input, { target: { value: '2π' } });
+    expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: '2π' });
 
-    fireEvent.change(input, { target: { value: '-3' } });
-    expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: '-3' });
+    fireEvent.change(input, { target: { value: '√(2)' } });
+    expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: '√(2)' });
 
-    fireEvent.change(input, { target: { value: '1.5' } });
-    expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: '1.5' });
+    fireEvent.change(input, { target: { value: 'Hà Nội' } });
+    expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: 'Hà Nội' });
 
     fireEvent.change(input, { target: { value: '1,5' } });
     expect(onAnswer).toHaveBeenLastCalledWith('question-1', { shortAnswerText: '1,5' });
   });
 
-  it('rejects non-numeric characters, multiple separators, exponent letters, fractions, and symbols in short answer', () => {
+  it('inserts π symbol into short answer when π button is clicked', () => {
     const onAnswer = vi.fn();
     render(
       <QuestionPanel
         question={{ ...baseQuestion, questionType: 'SHORT_ANSWER' }}
-        answer={{ shortAnswerText: '1' }}
+        answer={{ shortAnswerText: '2' }}
         onAnswer={onAnswer}
         totalQuestions={1}
       />
     );
 
-    const input = screen.getByPlaceholderText('Nhập đáp án ngắn...');
+    const piBtn = screen.getByRole('button', { name: 'Chèn ký hiệu pi (π)' });
+    fireEvent.click(piBtn);
 
-    // Non-numeric inputs should be rejected and NOT trigger onAnswer
-    fireEvent.change(input, { target: { value: 'π' } });
-    expect(onAnswer).not.toHaveBeenCalled();
-
-    fireEvent.change(input, { target: { value: 'abc' } });
-    expect(onAnswer).not.toHaveBeenCalled();
-
-    fireEvent.change(input, { target: { value: '1/2' } });
-    expect(onAnswer).not.toHaveBeenCalled();
-
-    fireEvent.change(input, { target: { value: '1e3' } });
-    expect(onAnswer).not.toHaveBeenCalled();
-
-    fireEvent.change(input, { target: { value: '1.5.2' } });
-    expect(onAnswer).not.toHaveBeenCalled();
-
-    fireEvent.change(input, { target: { value: '1,5,2' } });
-    expect(onAnswer).not.toHaveBeenCalled();
+    expect(onAnswer).toHaveBeenCalledWith('question-1', { shortAnswerText: '2π' });
   });
 
-  it('restricts composite text parts to numeric short answers', () => {
+  it('allows text and symbols in composite text parts', () => {
     const onAnswer = vi.fn();
     render(
       <QuestionPanel
@@ -91,7 +75,6 @@ describe('QuestionPanel short answer controls', () => {
     );
 
     const input = screen.getByPlaceholderText('Nhập đáp án ngắn...');
-    expect(input).toHaveAttribute('inputmode', 'decimal');
 
     fireEvent.change(input, { target: { value: '-2,5' } });
     expect(onAnswer).toHaveBeenLastCalledWith('question-1', {
@@ -99,7 +82,9 @@ describe('QuestionPanel short answer controls', () => {
     });
 
     fireEvent.change(input, { target: { value: 'vô nghiệm' } });
-    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer).toHaveBeenLastCalledWith('question-1', {
+      parts: [{ partId: 'part-text', textAnswer: 'vô nghiệm' }],
+    });
   });
 
   it('keeps decimal comma as raw state in numeric parts', () => {
@@ -118,7 +103,6 @@ describe('QuestionPanel short answer controls', () => {
     );
 
     const input = screen.getByPlaceholderText('Nhập kết quả...');
-    expect(input).toHaveAttribute('inputmode', 'decimal');
     fireEvent.change(input, { target: { value: '-1,5' } });
     expect(onAnswer).toHaveBeenCalledWith('question-1', {
       parts: [{ partId: 'part-number', numericAnswer: '-1,5' }],

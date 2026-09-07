@@ -149,11 +149,18 @@ export default function TestResultPage() {
       await reportSessionQuestion(sessionId, reportTarget.questionId, reason);
       setReportTarget(null);
       setReportReason('');
+      await loadResult();
     } catch (requestError) {
       const code = requestError.response?.data?.code;
-      setReportError(code === 'REPORT_ALREADY_PENDING'
-        ? 'Bạn đã gửi báo cáo cho câu hỏi này và báo cáo đang được xử lý.'
-        : 'Không thể gửi báo cáo. Vui lòng thử lại.');
+      if (code === 'REPORT_ALREADY_PENDING' || code === 'REPORT_ALREADY_REPORTED_VERSION') {
+        setReportError('Bạn đã gửi báo cáo cho phiên bản câu hỏi này.');
+      } else if (code === 'REPORT_INCIDENT_CLOSED') {
+        setReportError('Phiên bản câu hỏi này đã được xử lý và đóng báo cáo.');
+      } else if (code === 'REPORT_SESSION_CONTEXT_INVALID') {
+        setReportError('Thông tin bài làm hoặc phiên bản câu hỏi không hợp lệ.');
+      } else {
+        setReportError(requestError.response?.data?.message || 'Không thể gửi báo cáo. Vui lòng thử lại.');
+      }
     } finally {
       setReportSubmitting(false);
     }
@@ -267,6 +274,7 @@ export default function TestResultPage() {
                       isScoreInvalidated={answer.isScoreInvalidated}
                       reportReason={answer.reportReason}
                       scoreAdjustedTime={answer.scoreAdjustedTime}
+                      reportEligibility={answer.reportEligibility}
                       solution={answer.solutionContent ? [answer.solutionContent] : []}
                       onReport={() => openReportDialog(answer)}
                       onAskChatbot={() => openChat({
@@ -322,6 +330,7 @@ export default function TestResultPage() {
                     isScoreInvalidated={answer.isScoreInvalidated}
                     reportReason={answer.reportReason}
                     scoreAdjustedTime={answer.scoreAdjustedTime}
+                    reportEligibility={answer.reportEligibility}
                     onReport={() => openReportDialog(answer)}
                     onAskChatbot={() => openChat({
                       sessionId,

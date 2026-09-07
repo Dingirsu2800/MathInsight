@@ -11,6 +11,8 @@ import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/ques
 import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
 import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
+import ShortAnswerInput from "../../components/questions/ShortAnswerInput";
+import { validateShortAnswer, isNumericAnswerPrecisionValid } from "../../utils/shortAnswer";
 import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
 
 function getRoleLabel(role) {
@@ -95,10 +97,17 @@ export default function QuestionEditorPage() {
   const initialFormSnapshotRef = React.useRef(null);
 
   const searchParams = new URLSearchParams(location.search);
-  const fromReported = searchParams.get("from") === "reported";
+  const isReportRoute = location.pathname?.endsWith("/reports") || location.pathname?.includes("/reports");
+  const paramIncidentId = searchParams.get("incidentId") || searchParams.get("incident");
+  const fromReported = searchParams.get("from") === "reported" || isReportRoute || Boolean(paramIncidentId);
+  const submissionKeyRef = React.useRef(null);
+  const formHashAtKeyCreationRef = React.useRef("");
 
   const [hasSavedInSession, setHasSavedInSession] = React.useState(false);
   const [pendingReports, setPendingReports] = React.useState([]);
+  const [incidentDetail, setIncidentDetail] = React.useState(null);
+  const [reportDispositions, setReportDispositions] = React.useState({});
+  const [resolutionAction, setResolutionAction] = React.useState("NoScoreChange");
   const [reportsLoading, setReportsLoading] = React.useState(false);
   const [updatingReportId, setUpdatingReportId] = React.useState(null);
   const [reportsError, setReportsError] = React.useState("");
@@ -355,6 +364,31 @@ export default function QuestionEditorPage() {
     setReportsLoading(true);
     setReportsError("");
     try {
+      let activeIncidentId = paramIncidentId;
+      if (!activeIncidentId) {
+        try {
+          const listRes = await questionBankApi.getMyReportedQuestions({ pageIndex: 1, pageSize: 50 });
+          const found = (listRes.data?.items || []).find(item => String(item.questionId) === String(id));
+          if (found?.incidentId) {
+            activeIncidentId = found.incidentId;
+          }
+        } catch (e) {
+          console.warn("Could not query incident ID from reported questions list:", e);
+        }
+      }
+
+      if (activeIncidentId) {
+        const res = await questionBankApi.getQuestionReportIncident(activeIncidentId);
+        const incident = res.data;
+        const reports = incident?.reports || [];
+        setIncidentDetail(incident || null);
+        setPendingReports(reports);
+        setResolutionAction(incident?.proposedResolutionAction || "NoScoreChange");
+        setReportDispositions(Object.fromEntries(reports
+          .filter(r => r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview")
+          .map(r => [String(r.reportId || r.id), r.proposedStatus || ""])));
+        return { ok: true, reports, incident };
+      }
       const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
       const reports = res.data || [];
       setPendingReports(reports);
@@ -979,8 +1013,9 @@ export default function QuestionEditorPage() {
         return false;
       }
     } else if (form.questionType === "SHORT_ANSWER") {
-      if (!form.shortAnswer.trim()) {
-        showError("Vui lòng nhập chuỗi đáp án ngắn chính xác!");
+      const saVal = validateShortAnswer(form.shortAnswer, { required: true });
+      if (!saVal.isValid) {
+        showError(saVal.error || "Vui lòng nhập chuỗi đáp án ngắn chính xác!");
         return false;
       }
     } else if (form.questionType === "COMPOSITE") {
@@ -998,13 +1033,22 @@ export default function QuestionEditorPage() {
           showError(`Vui lòng chọn đáp án Đúng hoặc Sai cho câu hỏi phụ phần (${part.partLabel})!`);
           return false;
         }
-        if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
-          showError(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
-          return false;
+        if (part.partType === "SHORT_ANSWER") {
+          const partVal = validateShortAnswer(part.correctText, { required: true });
+          if (!partVal.isValid) {
+            showError(`Phần (${part.partLabel}): ${partVal.error || "Đáp án không hợp lệ!"}`);
+            return false;
+          }
         }
-        if (part.partType === "NUMERIC_ANSWER" && (part.correctNumeric === null || part.correctNumeric === "")) {
-          showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
-          return false;
+        if (part.partType === "NUMERIC_ANSWER") {
+          if (part.correctNumeric === null || part.correctNumeric === "") {
+            showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
+            return false;
+          }
+          if (!isNumericAnswerPrecisionValid(part.correctNumeric)) {
+            showError(`Phần (${part.partLabel}): Đáp án số không hợp lệ hoặc vượt quá độ chính xác cho phép (tối đa 12 chữ số nguyên và 6 chữ số thập phân).`);
+            return false;
+          }
         }
       }
     }
@@ -1041,8 +1085,86 @@ export default function QuestionEditorPage() {
       });
   };
 
+  const getSubmissionKey = (formContentHash) => {
+    if (submissionKeyRef.current && formHashAtKeyCreationRef.current === formContentHash) {
+      return submissionKeyRef.current;
+    }
+    const newKey = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    submissionKeyRef.current = newKey;
+    formHashAtKeyCreationRef.current = formContentHash;
+    return newKey;
+  };
+
   const handleSaveAndSubmitReview = async (reportId) => {
-    if (!validateForm()) return;
+    const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
+    const incidentId = paramIncidentId || incidentDetail?.incidentId || currentRep?.incidentId || form.incidentId;
+
+    if (incidentId) {
+      const activeReports = pendingReports.filter(r =>
+        r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
+      );
+      const reportDecisions = activeReports.map(r => ({
+        reportId: String(r.reportId || r.id),
+        disposition: reportDispositions[String(r.reportId || r.id)] || "",
+        reviewNote: null
+      }));
+      if (reportDecisions.some(item => !item.disposition)) {
+        showError("Chọn quyết định cho từng báo cáo trước khi gửi xử lý.");
+        return;
+      }
+      const isNoEditDismissal = resolutionAction === "NoScoreChange" &&
+        reportDecisions.every(item => item.disposition === "Dismissed");
+      if (!isNoEditDismissal && !validateForm()) return;
+      setAdminReviewSubmitState("submitting");
+      setLoading(true);
+      try {
+        const correctionPayload = isNoEditDismissal ? null : mapEditorStateToCreateUpdateRequest(form);
+
+        const submitPayload = {
+          expectedRevision: incidentDetail?.revision ?? currentRep?.incidentRevision ?? form.revision ?? 0,
+          expectedQuestionVersionId: String(incidentDetail?.originalVersion?.versionId || form.questionVersionId || currentRep?.questionVersionId || ""),
+          resolutionAction,
+          reportDecisions,
+          correction: correctionPayload
+        };
+        const key = getSubmissionKey(JSON.stringify(submitPayload));
+        submitPayload.submissionKey = key;
+
+        await questionBankApi.submitQuestionReportIncident(incidentId, submitPayload);
+        initialFormSnapshotRef.current = JSON.stringify(form);
+        setHasSavedInSession(true);
+        setAdminReviewSubmitState("complete");
+          setInfoMessage(isNoEditDismissal
+            ? "Đã gửi quyết định không chỉnh sửa câu hỏi để Admin xét duyệt."
+            : "Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
+        const refreshResult = await fetchPendingReports();
+        if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
+          navigate("/expert/questions/reported");
+        }
+      } catch (err) {
+        console.error("Failed to submit incident review:", err);
+        const code = err.response?.data?.code;
+        if (code === "REPORT_SUBMISSION_KEY_CONFLICT") {
+          submissionKeyRef.current = null;
+          showError("Dữ liệu gửi không còn khớp với trạng thái máy chủ. Đang làm mới sự cố...");
+          await fetchPendingReports();
+        } else if (code === "REPORT_INCIDENT_CONFLICT") {
+          showError("Sự cố hoặc báo cáo đã bị thay đổi trên máy chủ. Đang làm mới dữ liệu...");
+          await fetchPendingReports();
+        } else if (code === "REPORT_VERSION_STALE") {
+          showError("Phiên bản câu hỏi đã cũ so với sự cố trên máy chủ. Đang làm mới...");
+          await fetchPendingReports();
+        } else {
+          showError("Nội dung chưa gửi được Admin xét duyệt: " + (err.response?.data?.message || err.message));
+        }
+        setAdminReviewSubmitState("retryable");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
     setAdminReviewSubmitState("saving");
@@ -1068,8 +1190,13 @@ export default function QuestionEditorPage() {
         }
       } catch (submitErr) {
         console.error("Failed to submit review:", submitErr);
+        const code = submitErr.response?.data?.code;
+        if (code === "ADMIN_REPORT_REQUIRES_REVIEW") {
+          showError("Báo cáo thuộc sự cố cần xử lý qua quy trình xét duyệt của sự cố.");
+        } else {
+          showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
+        }
         setAdminReviewSubmitState("retryable");
-        showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
       }
     } catch (saveErr) {
       console.error("Failed to save question:", saveErr);
@@ -1081,6 +1208,12 @@ export default function QuestionEditorPage() {
   };
 
   const handleRetrySubmitReview = async (reportId) => {
+    const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
+    const incidentId = paramIncidentId || currentRep?.incidentId || form.incidentId;
+    if (incidentId) {
+      await handleSaveAndSubmitReview(reportId);
+      return;
+    }
     setAdminReviewSubmitState("submitting");
     setLoading(true);
     try {
@@ -1116,6 +1249,7 @@ export default function QuestionEditorPage() {
   );
   const adminReportId = adminPendingFixReport?.reportId || adminPendingFixReport?.id;
   const hasAdminPendingFix = Boolean(adminPendingFixReport);
+  const hasOpenIncident = Boolean(incidentDetail && incidentDetail.status === "Open");
 
   return (
     <ExpertLayout>
@@ -1175,7 +1309,19 @@ export default function QuestionEditorPage() {
             <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => {
               if (confirmNavigation()) navigate("/expert/questions");
             }}>Hủy</Button>
-            {hasAdminPendingFix ? (
+            {hasOpenIncident ? (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={() => handleSaveAndSubmitReview(null)}
+                disabled={loading || adminReviewSubmitState === "submitting"}
+              >
+                {adminReviewSubmitState === "submitting"
+                  ? "Đang gửi xử lý..."
+                  : adminReviewSubmitState === "retryable"
+                  ? "Gửi lại quyết định xử lý"
+                  : "Gửi quyết định xử lý"}
+              </Button>
+            ) : hasAdminPendingFix ? (
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={() => {
@@ -1764,12 +1910,10 @@ export default function QuestionEditorPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Đáp án đúng chính xác:</label>
-                      <input
+                      <ShortAnswerInput
                         value={form.shortAnswer}
-                        onChange={(e) => handleFieldChange("shortAnswer", e.target.value)}
-                        className="w-full p-3 text-[14px] bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all font-mono font-bold"
-                        placeholder="Nhập chuỗi đáp án đúng (ví dụ: 1/3 hoặc x=5)"
-                        type="text"
+                        onChange={(val) => handleFieldChange("shortAnswer", val)}
+                        placeholder="Nhập chuỗi đáp án đúng (ví dụ: 1/3, -5/2, √(2), π, ...)"
                       />
                     </div>
                   </div>
@@ -1849,12 +1993,11 @@ export default function QuestionEditorPage() {
                         {part.partType === "SHORT_ANSWER" && (
                           <div>
                             <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Đáp án chuỗi đúng:</label>
-                            <input
+                            <ShortAnswerInput
                               value={part.correctText || ""}
-                              onChange={(e) => handlePartFieldChange(pIdx, "correctText", e.target.value)}
-                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-bold outline-none"
+                              onChange={(val) => handlePartFieldChange(pIdx, "correctText", val)}
                               placeholder="Nhập đáp án text chính xác"
-                              type="text"
+                              showExample={false}
                             />
                           </div>
                         )}
@@ -1955,6 +2098,26 @@ export default function QuestionEditorPage() {
                   BÁO CÁO ĐANG CHỜ XỬ LÝ ({pendingReports.length})
                 </h3>
 
+                {hasOpenIncident && (
+                  <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-2">
+                    <div className="font-bold text-primary">Quyết định xử lý sự cố</div>
+                    <label className="block text-on-surface-variant">
+                      Phương án điểm
+                      <select
+                        value={resolutionAction}
+                        onChange={(event) => setResolutionAction(event.target.value)}
+                        className="mt-1 w-full rounded border border-outline-variant bg-pure-surface px-2 py-1.5 text-xs text-on-surface"
+                      >
+                        <option value="NoScoreChange">Không điều chỉnh điểm</option>
+                        <option value="InvalidateAndAwardFull">Vô hiệu câu hỏi và cộng đủ điểm</option>
+                      </select>
+                    </label>
+                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
+                      Chọn quyết định riêng cho từng báo cáo bên dưới. Nếu tất cả đều không chấp nhận và không điều chỉnh điểm, hệ thống không tạo phiên bản câu hỏi mới.
+                    </p>
+                  </div>
+                )}
+
                 {reportsError ? (
                   <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg text-center font-semibold">
                     <p className="mb-2">{reportsError}</p>
@@ -1970,7 +2133,7 @@ export default function QuestionEditorPage() {
                     Không còn báo cáo nào đang chờ xử lý.
                   </div>
                 ) : (
-                  <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
                     {pendingReports.map((rep) => {
                       const reportIdVal = rep.reportId || rep.id;
                       const time = rep.createdTime ? new Date(rep.createdTime).toLocaleString("vi-VN") : "Chưa rõ thời gian";
@@ -1981,6 +2144,49 @@ export default function QuestionEditorPage() {
                       const isAdmin = rep.reporterRole === "Admin";
                       const isPendingFix = rep.status === "PendingFix";
                       const isPendingReview = rep.status === "PendingReview";
+
+                      if (hasOpenIncident && (isPending || isPendingFix || isPendingReview)) {
+                        const decisionValue = reportDispositions[String(reportIdVal)] || "";
+                        return (
+                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
+                                {getRoleLabel(rep.reporterRole || rep.role)}
+                              </span>
+                              <span>{time}</span>
+                            </div>
+                            <p className="text-on-surface font-medium leading-relaxed italic">
+                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                            </p>
+                            {rep.reviewNote && (
+                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-error flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                                  <span>Lý do từ chối:</span>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
+                                  {rep.reviewNote}
+                                </div>
+                              </div>
+                            )}
+                            <label className="block text-[10px] font-bold text-on-surface-variant">
+                              Quyết định
+                              <select
+                                value={decisionValue}
+                                onChange={(event) => setReportDispositions(prev => ({
+                                  ...prev,
+                                  [String(reportIdVal)]: event.target.value
+                                }))}
+                                className="mt-1 w-full rounded border border-outline-variant bg-pure-surface px-2 py-1.5 text-xs text-on-surface"
+                              >
+                                <option value="">Chọn quyết định</option>
+                                <option value="Resolved">Chấp nhận báo cáo</option>
+                                <option value="Dismissed">Không chấp nhận báo cáo</option>
+                              </select>
+                            </label>
+                          </div>
+                        );
+                      }
 
                       if (isStudentOrExpert && isPending) {
                         return (
@@ -1994,6 +2200,17 @@ export default function QuestionEditorPage() {
                             <p className="text-on-surface font-medium leading-relaxed italic">
                               &ldquo;{rep.reportReason || rep.reason}&rdquo;
                             </p>
+                            {rep.reviewNote && (
+                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-error flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                                  <span>Lý do từ chối:</span>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
+                                  {rep.reviewNote}
+                                </div>
+                              </div>
+                            )}
                             <div className="flex justify-end gap-2 pt-1 border-t border-error/10">
                               <button
                                 type="button"
@@ -2049,9 +2266,14 @@ export default function QuestionEditorPage() {
                               &ldquo;{rep.reportReason || rep.reason}&rdquo;
                             </p>
                             {rep.reviewNote && (
-                              <div className="p-2 bg-error/10 border border-error/20 rounded text-on-surface-variant leading-relaxed text-[11px]">
-                                <span className="font-bold text-error">Phản hồi của Admin: </span>
-                                {rep.reviewNote}
+                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-error flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                                  <span>Lý do từ chối:</span>
+                                </div>
+                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
+                                  {rep.reviewNote}
+                                </div>
                               </div>
                             )}
                             <div className="flex justify-end pt-1 border-t border-error/10">

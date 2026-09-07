@@ -6,13 +6,15 @@ import { questionBankApi } from '../../services/questionBankApi';
 import { NavigationGuardProvider } from '../../contexts/NavigationGuardContext';
 
 const mockNavigate = vi.fn();
+let locationSearch = '?from=reported';
+let locationPathname = '/expert/questions/101/edit';
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
     useParams: () => ({ id: '101' }),
-    useLocation: () => ({ search: '?from=reported' }),
+    useLocation: () => ({ search: locationSearch, pathname: locationPathname }),
   };
 });
 
@@ -24,8 +26,11 @@ vi.mock('../../services/questionBankApi', () => ({
     updateQuestion: vi.fn(),
     createQuestion: vi.fn(),
     getQuestionReports: vi.fn(),
+    getMyReportedQuestions: vi.fn().mockResolvedValue({ data: { items: [] } }),
     updateQuestionReportStatus: vi.fn(),
     submitQuestionReportReview: vi.fn(),
+    submitQuestionReportIncident: vi.fn(),
+    getQuestionReportIncident: vi.fn(),
   },
 }));
 
@@ -40,6 +45,8 @@ vi.mock('../../components/layout/DashboardLayout', () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  locationSearch = '?from=reported';
+  locationPathname = '/expert/questions/101/edit';
 });
 
 describe('QuestionEditorPage reported question workflow', () => {
@@ -88,6 +95,9 @@ describe('QuestionEditorPage reported question workflow', () => {
   };
 
   beforeEach(() => {
+    locationSearch = '?from=reported';
+    locationPathname = '/expert/questions/101/edit';
+    questionBankApi.getMyReportedQuestions.mockResolvedValue({ data: { items: [] } });
     questionBankApi.getDifficulties.mockResolvedValue({ data: [{ difficultyId: 'diff-1', difficultyName: 'Nhận biết' }] });
     questionBankApi.getTopicTags.mockResolvedValue({ data: [{ tagId: 'tag-1', name: 'Đại số', depth: 1 }] });
     questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
@@ -306,5 +316,223 @@ describe('QuestionEditorPage reported question workflow', () => {
     // Should NOT trigger the "Bạn vẫn còn báo cáo chưa xử lý" warning
     expect(confirmSpy).not.toHaveBeenCalledWith('Bạn vẫn còn báo cáo chưa xử lý. Bạn có chắc chắn muốn rời khỏi trang này?');
     confirmSpy.mockRestore();
+  });
+
+  it('submits atomic incident payload and preserves submissionKey on retry when incidentId is present', async () => {
+    const adminIncidentReport = {
+      ...adminPendingFixReport,
+      incidentId: 'incident-101',
+      incidentRevision: 0,
+      questionVersionId: 'ver-101',
+    };
+    locationSearch = '?from=reported&incidentId=incident-101';
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-101',
+        revision: 0,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [adminIncidentReport],
+      },
+    });
+    questionBankApi.submitQuestionReportIncident
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({ data: { success: true } });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+
+    await screen.findByText(/Quyết định xử lý sự cố/i);
+    const reportDecisionSelect = document.querySelectorAll('select')[1];
+    fireEvent.change(reportDecisionSelect, { target: { value: 'Resolved' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[0][1];
+    expect(firstCallPayload.expectedRevision).toBe(0);
+    expect(firstCallPayload.expectedQuestionVersionId).toBe('ver-101');
+    expect(firstCallPayload.resolutionAction).toBe('NoScoreChange');
+    expect(firstCallPayload.submissionKey).toBeDefined();
+    expect(firstCallPayload.reportDecisions[0].reportId).toBe('503');
+
+    // Retry button appears
+    const retryButton = await screen.findByRole('button', { name: /Gửi lại quyết định xử lý/i });
+    fireEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(2);
+    });
+
+    const secondCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[1][1];
+    expect(secondCallPayload.submissionKey).toBe(firstCallPayload.submissionKey);
+  });
+
+  it('submits a no-edit dismissal without creating a correction payload', async () => {
+    const incidentReport = {
+      ...studentReport,
+      incidentId: 'incident-dismiss',
+      questionVersionId: 'ver-101',
+    };
+    locationSearch = '?from=reported&incidentId=incident-dismiss';
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-dismiss',
+        revision: 3,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [incidentReport],
+      },
+    });
+    questionBankApi.submitQuestionReportIncident.mockResolvedValue({ data: { success: true } });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    await screen.findByText(/Quyết định xử lý sự cố/i);
+    const reportDecisionSelect = document.querySelectorAll('select')[1];
+    fireEvent.change(reportDecisionSelect, { target: { value: 'Dismissed' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(1);
+    });
+
+    const [, payload] = questionBankApi.submitQuestionReportIncident.mock.calls[0];
+    expect(payload.correction).toBeNull();
+    expect(payload.reportDecisions).toEqual([
+      { reportId: '501', disposition: 'Dismissed', reviewNote: null },
+    ]);
+    expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+  });
+
+  it('displays reports[].reviewNote under "Lý do từ chối" with preserved line breaks and formatting when Admin rejects incident', async () => {
+    const multiLineRejection = 'Công thức phần b bị lỗi ký tự.\nCần giải thích chi tiết các bước tính tích phân.\nVui lòng cập nhật lại trước ngày mai.';
+    const adminIncidentReport = {
+      ...adminPendingFixReport,
+      incidentId: 'incident-review-note',
+      questionVersionId: 'ver-101',
+      reviewNote: multiLineRejection,
+    };
+    locationSearch = '?from=reported&incidentId=incident-review-note';
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-review-note',
+        revision: 1,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [adminIncidentReport],
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Quyết định xử lý sự cố/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lý do từ chối:/i)).toBeInTheDocument();
+
+    const noteElement = screen.getByText((content) => content.includes('Công thức phần b bị lỗi ký tự.'));
+    expect(noteElement).toBeInTheDocument();
+    expect(noteElement.textContent).toBe(multiLineRejection);
+    expect(noteElement).toHaveClass('whitespace-pre-wrap');
+  });
+
+  it('resolves incident and displays rejection reason when opened from notification route without search params', async () => {
+    const multiLineRejection = 'Đề xuất phương án vô hiệu câu hỏi không hợp lệ.\nVui lòng sửa đáp án.';
+    const adminIncidentReport = {
+      ...adminPendingFixReport,
+      incidentId: 'incident-from-notif',
+      questionVersionId: 'ver-101',
+      reviewNote: multiLineRejection,
+    };
+
+    locationPathname = '/expert/questions/101/reports';
+    locationSearch = '';
+
+    questionBankApi.getMyReportedQuestions.mockResolvedValue({
+      data: {
+        items: [
+          {
+            questionId: '101',
+            incidentId: 'incident-from-notif',
+          },
+        ],
+      },
+    });
+
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-from-notif',
+        revision: 2,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [adminIncidentReport],
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(questionBankApi.getMyReportedQuestions).toHaveBeenCalled();
+      expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledWith('incident-from-notif');
+    });
+
+    expect(await screen.findByText(/BÁO CÁO ĐANG CHỜ XỬ LÝ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lý do từ chối:/i)).toBeInTheDocument();
+
+    const noteElement = screen.getByText((content) => content.includes('Đề xuất phương án vô hiệu'));
+    expect(noteElement.textContent).toBe(multiLineRejection);
+    expect(noteElement).toHaveClass('whitespace-pre-wrap');
+  });
+
+  it('displays reviewNote under "Lý do từ chối" preserving line breaks in legacy admin report mode', async () => {
+    const legacyRejection = 'Độ khó câu hỏi chưa phù hợp lớp 12.\nĐề nghị chỉnh sửa lại.';
+    const adminReportWithNote = {
+      ...adminPendingFixReport,
+      reviewNote: legacyRejection,
+    };
+    questionBankApi.getQuestionReports.mockResolvedValue({
+      data: [adminReportWithNote],
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Admin yêu cầu chỉnh sửa/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lý do từ chối:/i)).toBeInTheDocument();
+
+    const noteElement = screen.getByText((content) => content.includes('Độ khó câu hỏi chưa phù hợp'));
+    expect(noteElement.textContent).toBe(legacyRejection);
+    expect(noteElement).toHaveClass('whitespace-pre-wrap');
   });
 });
