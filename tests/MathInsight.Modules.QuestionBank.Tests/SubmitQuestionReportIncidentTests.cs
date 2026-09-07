@@ -90,6 +90,40 @@ public sealed class SubmitQuestionReportIncidentTests
     }
 
     [Fact]
+    public async Task DismissAllWithoutCorrection_ClosesIncidentWithoutCreatingAnotherVersion()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var setup = await CreatePendingAdminIncidentAsync(database, "incident-dismiss-without-correction");
+        var request = new SubmitQuestionReportIncidentRequest
+        {
+            ExpectedRevision = setup.Incident.Revision,
+            ExpectedQuestionVersionId = setup.Version.VersionId,
+            SubmissionKey = "dismiss-without-edit",
+            ResolutionAction = "NoScoreChange",
+            ReportDecisions =
+            [
+                new QuestionReportDecisionRequest
+                {
+                    ReportId = setup.Report.ReportId,
+                    Disposition = "Dismissed",
+                    ReviewNote = "The reported behavior matches the intended question."
+                }
+            ],
+            Correction = null
+        };
+
+        var result = await new SubmitQuestionReportIncidentCommandHandler(database.Context).Handle(
+            new SubmitQuestionReportIncidentCommand(setup.Incident.IncidentId, request, setup.Question.ExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("PendingAdminReview", result.Value!.Status);
+        Assert.Null(result.Value.SubmittedCorrectionVersionId);
+        Assert.Equal(1, await database.Context.QuestionVersions.CountAsync());
+        Assert.Equal(QuestionReportWorkflow.PendingReview, (await database.Context.QuestionReports.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task SameSubmissionKeyWithDifferentPayload_ReturnsSubmissionKeyConflictBeforeMutation()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();

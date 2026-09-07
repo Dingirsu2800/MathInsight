@@ -71,7 +71,8 @@ public sealed class AdminApproveQuestionReportCommandHandler
                 .Collection(item => item.Reports)
                 .LoadAsync(cancellationToken);
 
-            var submittedVersionMatchesLatest = await _context.QuestionVersions
+            var requiresCorrection = report.Incident.Reports.Any(item => item.ProposedStatus == QuestionReportWorkflow.Resolved);
+            var submittedVersionMatchesLatest = !requiresCorrection || await _context.QuestionVersions
                 .Where(item => item.QuestionId == report.QuestionId)
                 .OrderByDescending(item => item.VersionNumber)
                 .Select(item => item.VersionId == report.Incident.SubmittedCorrectionVersionId)

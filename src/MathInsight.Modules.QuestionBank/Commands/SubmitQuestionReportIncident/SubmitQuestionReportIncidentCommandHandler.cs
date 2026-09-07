@@ -30,7 +30,7 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
     {
         if (string.IsNullOrWhiteSpace(command.ExpertAccountId))
             return Result<QuestionReportIncidentResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
-        if (command.Request.Correction is null || command.Request.ReportDecisions is null ||
+        if (command.Request.ReportDecisions is null ||
             string.IsNullOrWhiteSpace(command.Request.SubmissionKey) ||
             command.Request.SubmissionKey.Length > 64 ||
             string.IsNullOrWhiteSpace(command.Request.ExpectedQuestionVersionId))
@@ -88,14 +88,26 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
                 return Result<QuestionReportIncidentResponse>.Failure(QuestionBankErrors.ReportStatusInvalid);
             }
 
-            var mutation = await _mutationService.ApplyAsync(
-                incident.QuestionId, command.Request.Correction, command.ExpertAccountId, cancellationToken,
-                rejectPendingAdminReview: false);
-            if (mutation.IsFailure)
-                return Result<QuestionReportIncidentResponse>.Failure(mutation.Error!);
+            var decisionsByReportId = command.Request.ReportDecisions
+                .ToDictionary(item => item.ReportId, StringComparer.Ordinal);
+            var requiresCorrection = command.Request.ResolutionAction == "InvalidateAndAwardFull" ||
+                activeReports.Any(item => decisionsByReportId[item.ReportId].Disposition == "Resolved");
+            if (requiresCorrection == (command.Request.Correction is null))
+                return Result<QuestionReportIncidentResponse>.Failure(QuestionBankErrors.QuestionRequestInvalid);
+
+            string? submittedCorrectionVersionId = null;
+            if (requiresCorrection)
+            {
+                var mutation = await _mutationService.ApplyAsync(
+                    incident.QuestionId, command.Request.Correction!, command.ExpertAccountId, cancellationToken,
+                    rejectPendingAdminReview: false);
+                if (mutation.IsFailure)
+                    return Result<QuestionReportIncidentResponse>.Failure(mutation.Error!);
+                submittedCorrectionVersionId = mutation.Value!.Version.VersionId;
+            }
 
             var now = DateTime.UtcNow;
-            incident.SubmittedCorrectionVersionId = mutation.Value!.Version.VersionId;
+            incident.SubmittedCorrectionVersionId = submittedCorrectionVersionId;
             incident.ProposedResolutionAction = command.Request.ResolutionAction;
             incident.Status = incident.RequiresAdminReview
                 ? "PendingAdminReview"

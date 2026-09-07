@@ -11,6 +11,7 @@ using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetOwnedReportedQuestions;
 using MathInsight.Modules.QuestionBank.Queries.GetAdminQuestionReports;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionReportIncident;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -155,6 +156,23 @@ public sealed class ReportsController : ControllerBase
 
         var result = await _mediator.Send(
             new SubmitQuestionReportIncidentCommand(incidentId, request, expertId),
+            cancellationToken);
+        return result.IsFailure ? ToReportErrorResult(result.Error!) : Ok(result.Value);
+    }
+
+    [Authorize(Roles = "Expert,Admin")]
+    [HttpGet("~/api/question-report-incidents/{incidentId}")]
+    public async Task<IActionResult> GetQuestionReportIncident(
+        string incidentId,
+        CancellationToken cancellationToken)
+    {
+        var accountId = GetAccountId();
+        var role = GetRole();
+        if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(role))
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new GetQuestionReportIncidentQuery(incidentId, accountId, role),
             cancellationToken);
         return result.IsFailure ? ToReportErrorResult(result.Error!) : Ok(result.Value);
     }

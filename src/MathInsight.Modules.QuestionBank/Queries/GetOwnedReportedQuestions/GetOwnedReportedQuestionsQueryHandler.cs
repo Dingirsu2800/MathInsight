@@ -117,6 +117,7 @@ public sealed class GetOwnedReportedQuestionsQueryHandler
 
                 return new ReportedQuestionListItemResponse(
                     question.QuestionId,
+                    latestReport.IncidentId,
                     question.QuestionContent,
                     question.Grade,
                     question.Status,

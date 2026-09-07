@@ -62,6 +62,7 @@ public sealed class GetAdminQuestionReportsQueryHandler
         var items = orderedReports
             .Select(item => new AdminQuestionReportListItemResponse(
                 item.Report.ReportId,
+                item.Report.IncidentId,
                 item.Question.QuestionId,
                 item.Question.QuestionContent,
                 item.Question.Status,

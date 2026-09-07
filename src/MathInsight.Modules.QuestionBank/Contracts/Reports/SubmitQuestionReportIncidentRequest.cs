@@ -9,7 +9,8 @@ public sealed class SubmitQuestionReportIncidentRequest
     public string SubmissionKey { get; set; } = string.Empty;
     public string ResolutionAction { get; set; } = "NoScoreChange";
     public List<QuestionReportDecisionRequest> ReportDecisions { get; set; } = [];
-    public UpdateQuestionRequest Correction { get; set; } = new();
+    // A correction is omitted only when every active report is dismissed with no score action.
+    public UpdateQuestionRequest? Correction { get; set; }
 }
 
 public sealed class QuestionReportDecisionRequest

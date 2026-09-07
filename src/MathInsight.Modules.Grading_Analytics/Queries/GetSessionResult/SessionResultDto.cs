@@ -59,6 +59,7 @@ public sealed record GradedAnswerDetailDto
     public IReadOnlyList<AnswerPartDetailDto> AnswerParts { get; init; } = [];
     public string? ReportReason { get; init; }
     public DateTime? ScoreAdjustedTime { get; init; }
+    public ReportEligibilityDto? ReportEligibility { get; init; }
 
     /// <summary>
     /// All tag weight entries for this question (primary + secondary).
@@ -69,6 +70,14 @@ public sealed record GradedAnswerDetailDto
     /// </summary>
     public IReadOnlyList<TagWeightEntryDto> TagWeights { get; init; } = [];
 }
+
+public sealed record ReportEligibilityDto(
+    bool CanReport,
+    string? ReasonCode,
+    string? MyReportId,
+    string? MyReportStatus,
+    string? IncidentId,
+    string? IncidentStatus);
 
 /// <summary>
 /// API-layer projection of a question's tag weight assignment.

@@ -114,6 +114,45 @@ public sealed class GetSessionResultQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_StudentAlreadyReportedSnapshot_ReturnsReportEligibilityFromPersistedReport()
+    {
+        await using var db = CreateDbContext();
+        var session = TestDataBuilder.CreateSession(testFormat: "Practice", status: "Graded");
+        session.StudentId = "student-123";
+        var answer = TestDataBuilder.AddShortAnswer(session, 1m, "2", "1");
+        db.TestSessions.Add(session);
+        db.TestQuestions.Add(new TestQuestion
+        {
+            TestId = session.TestId,
+            QuestionId = answer.QuestionId,
+            QuestionVersionId = "snapshot-v1",
+            MaxPointsSnapshot = 1m
+        });
+        db.QuestionReports.Add(new QuestionReport
+        {
+            ReportId = "student-report-1",
+            QuestionId = answer.QuestionId,
+            QuestionVersionId = "snapshot-v1",
+            ReporterAccountId = session.StudentId,
+            ReporterRole = "Student",
+            Status = "Pending",
+            ReportReason = "The source data is incomplete."
+        });
+        await db.SaveChangesAsync();
+
+        var result = await new GetSessionResultQueryHandler(db).Handle(
+            new GetSessionResultQuery(session.SessionId, session.StudentId),
+            CancellationToken.None);
+
+        var resultAnswer = Assert.Single(result!.Answers);
+        Assert.Equal("snapshot-v1", resultAnswer.QuestionVersionId);
+        Assert.NotNull(resultAnswer.ReportEligibility);
+        Assert.False(resultAnswer.ReportEligibility!.CanReport);
+        Assert.Equal("ALREADY_REPORTED_VERSION", resultAnswer.ReportEligibility.ReasonCode);
+        Assert.Equal("student-report-1", resultAnswer.ReportEligibility.MyReportId);
+    }
+
+    [Fact]
     public async Task Handle_NonOwner_ThrowsUnauthorizedAccessException()
     {
         await using var db = CreateDbContext();

@@ -2,6 +2,9 @@ using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Queries.GetOwnedReportedQuestions;
 using MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionReportIncident;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionDetail;
+using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.QuestionBank.Tests;
 
@@ -17,8 +20,19 @@ public sealed class QuestionReportQueryTests
 
         await AddReportAsync(database, firstQuestion.QuestionId, "student-1", "Student", "Pending", DateTime.UtcNow.AddMinutes(-10));
         await AddReportAsync(database, secondQuestion.QuestionId, "expert-3", "Expert", "Pending", DateTime.UtcNow.AddMinutes(-1));
-        await AddReportAsync(database, secondQuestion.QuestionId, "admin-1", "Admin", "PendingFix", DateTime.UtcNow);
+        var latestReport = await AddReportAsync(database, secondQuestion.QuestionId, "admin-1", "Admin", "PendingFix", DateTime.UtcNow);
         await AddReportAsync(database, otherQuestion.QuestionId, "student-2", "Student", "Pending", DateTime.UtcNow.AddMinutes(1));
+        latestReport.IncidentId = "incident-second-question";
+        database.Context.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = latestReport.IncidentId,
+            QuestionId = secondQuestion.QuestionId,
+            QuestionVersionId = "version-second-question",
+            Status = "Open",
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
 
         var result = await new GetOwnedReportedQuestionsQueryHandler(database.Context)
             .Handle(new GetOwnedReportedQuestionsQuery("expert-1", "Pending", 1, 1), CancellationToken.None);
@@ -32,6 +46,7 @@ public sealed class QuestionReportQueryTests
         Assert.Contains("Expert", item.ReporterRoles);
         Assert.Contains("Admin", item.ReporterRoles);
         Assert.Equal(["Pending", "PendingFix"], item.ActiveReportStatuses);
+        Assert.Equal("incident-second-question", item.IncidentId);
     }
 
     [Fact]
@@ -100,6 +115,111 @@ public sealed class QuestionReportQueryTests
         Assert.Equal("Student One", ownerResult.Value[1].ReporterName);
         Assert.True(nonOwnerResult.IsFailure);
         Assert.Equal(QuestionBankErrors.ReportAccessForbidden, nonOwnerResult.Error);
+    }
+
+    [Fact]
+    public async Task IncidentDetail_ReturnsOriginalVersionAndAllProposedReportDecisionsToOwnerAndAssignedAdmin()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "incident-detail-question", "expert-1");
+        var version = new QuestionVersion
+        {
+            VersionId = "incident-detail-version",
+            QuestionId = question.QuestionId,
+            QuestionContent = question.QuestionContent,
+            QuestionAnswer = "A",
+            AnswersSnapshot = "[]",
+            VersionNumber = 1,
+            CreatedTime = DateTime.UtcNow,
+            ExpertId = question.ExpertId
+        };
+        var incident = new QuestionReportIncident
+        {
+            IncidentId = "incident-detail-id",
+            QuestionId = question.QuestionId,
+            QuestionVersionId = version.VersionId,
+            Status = "PendingAdminReview",
+            RequiresAdminReview = true,
+            AssignedAdminId = "admin-1",
+            SubmittedCorrectionVersionId = "incident-detail-correction",
+            ProposedResolutionAction = "InvalidateAndAwardFull",
+            Revision = 4,
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
+        };
+        database.Context.QuestionVersions.Add(version);
+        database.Context.QuestionReportIncidents.Add(incident);
+        var studentReport = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending", DateTime.UtcNow.AddMinutes(-1));
+        studentReport.IncidentId = incident.IncidentId;
+        studentReport.QuestionVersionId = version.VersionId;
+        studentReport.ProposedStatus = "Resolved";
+        var adminReport = await AddReportAsync(database, question.QuestionId, "admin-1", "Admin", "PendingReview", DateTime.UtcNow);
+        adminReport.IncidentId = incident.IncidentId;
+        adminReport.QuestionVersionId = version.VersionId;
+        adminReport.ProposedStatus = "Dismissed";
+        await database.Context.SaveChangesAsync();
+
+        var handler = new GetQuestionReportIncidentQueryHandler(database.Context);
+        var ownerResult = await handler.Handle(
+            new GetQuestionReportIncidentQuery(incident.IncidentId, "expert-1", "Expert"),
+            CancellationToken.None);
+        var adminResult = await handler.Handle(
+            new GetQuestionReportIncidentQuery(incident.IncidentId, "admin-1", "Admin"),
+            CancellationToken.None);
+        var otherAdmin = await handler.Handle(
+            new GetQuestionReportIncidentQuery(incident.IncidentId, "admin-2", "Admin"),
+            CancellationToken.None);
+
+        Assert.True(ownerResult.IsSuccess);
+        Assert.Equal(incident.Revision, ownerResult.Value!.Revision);
+        Assert.Equal(version.VersionId, ownerResult.Value.OriginalVersion.VersionId);
+        Assert.Equal(2, ownerResult.Value.Reports.Count);
+        Assert.Contains(ownerResult.Value.Reports, item => item.ReportId == studentReport.ReportId && item.ProposedStatus == "Resolved");
+        Assert.True(adminResult.IsSuccess);
+        Assert.Equal("InvalidateAndAwardFull", adminResult.Value!.ProposedResolutionAction);
+        Assert.True(otherAdmin.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportAccessForbidden, otherAdmin.Error);
+    }
+
+    [Fact]
+    public async Task QuestionDetail_ReturnsEligibilityForCurrentExpertAndAdminReporter()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "detail-eligibility-question", "expert-1");
+        var version = new QuestionVersion
+        {
+            VersionId = "detail-eligibility-v1",
+            QuestionId = question.QuestionId,
+            QuestionContent = question.QuestionContent,
+            QuestionAnswer = "A",
+            AnswersSnapshot = "[]",
+            VersionNumber = 1,
+            CreatedTime = DateTime.UtcNow,
+            ExpertId = question.ExpertId
+        };
+        database.Context.QuestionVersions.Add(version);
+        await database.Context.SaveChangesAsync();
+        await AddReportAsync(database, question.QuestionId, "expert-2", "Expert", "Pending", DateTime.UtcNow);
+        var report = await database.Context.QuestionReports.SingleAsync();
+        report.QuestionVersionId = version.VersionId;
+        await database.Context.SaveChangesAsync();
+
+        var handler = new GetQuestionDetailQueryHandler(database.Context);
+        var alreadyReported = await handler.Handle(
+            new GetQuestionDetailQuery(question.QuestionId, "expert-2", "Expert"),
+            CancellationToken.None);
+        var eligibleAdmin = await handler.Handle(
+            new GetQuestionDetailQuery(question.QuestionId, "admin-1", "Admin"),
+            CancellationToken.None);
+        var selfReporter = await handler.Handle(
+            new GetQuestionDetailQuery(question.QuestionId, "expert-1", "Expert"),
+            CancellationToken.None);
+
+        Assert.False(alreadyReported.Value!.ReportEligibility.CanReport);
+        Assert.Equal("ALREADY_REPORTED_VERSION", alreadyReported.Value.ReportEligibility.ReasonCode);
+        Assert.True(eligibleAdmin.Value!.ReportEligibility.CanReport);
+        Assert.False(selfReporter.Value!.ReportEligibility.CanReport);
+        Assert.Equal("SELF_REPORT_FORBIDDEN", selfReporter.Value.ReportEligibility.ReasonCode);
     }
 
     private static async Task<Question> AddQuestionAsync(

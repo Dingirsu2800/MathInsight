@@ -4,6 +4,7 @@ public sealed class QuestionReport
 {
     public string ReportId { get; set; } = string.Empty;
     public string QuestionId { get; set; } = string.Empty;
+    public string ReporterAccountId { get; set; } = string.Empty;
     public string ReporterRole { get; set; } = string.Empty;
     public string ReportReason { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
