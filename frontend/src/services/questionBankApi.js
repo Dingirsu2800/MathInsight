@@ -108,6 +108,10 @@ export const questionBankApi = {
     return client.post(`/api/question-report-incidents/${incidentId}/submit`, payload);
   },
 
+  getQuestionReportIncident(incidentId) {
+    return client.get(`/api/question-report-incidents/${incidentId}`);
+  },
+
   extractQuestionOcrDraft(file) {
     const formData = new FormData();
     formData.append("file", file);

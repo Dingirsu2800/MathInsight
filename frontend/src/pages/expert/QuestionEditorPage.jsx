@@ -104,6 +104,9 @@ export default function QuestionEditorPage() {
 
   const [hasSavedInSession, setHasSavedInSession] = React.useState(false);
   const [pendingReports, setPendingReports] = React.useState([]);
+  const [incidentDetail, setIncidentDetail] = React.useState(null);
+  const [reportDispositions, setReportDispositions] = React.useState({});
+  const [resolutionAction, setResolutionAction] = React.useState("NoScoreChange");
   const [reportsLoading, setReportsLoading] = React.useState(false);
   const [updatingReportId, setUpdatingReportId] = React.useState(null);
   const [reportsError, setReportsError] = React.useState("");
@@ -360,6 +363,18 @@ export default function QuestionEditorPage() {
     setReportsLoading(true);
     setReportsError("");
     try {
+      if (paramIncidentId) {
+        const res = await questionBankApi.getQuestionReportIncident(paramIncidentId);
+        const incident = res.data;
+        const reports = incident?.reports || [];
+        setIncidentDetail(incident || null);
+        setPendingReports(reports);
+        setResolutionAction(incident?.proposedResolutionAction || "NoScoreChange");
+        setReportDispositions(Object.fromEntries(reports
+          .filter(r => r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview")
+          .map(r => [String(r.reportId || r.id), r.proposedStatus || ""])));
+        return { ok: true, reports, incident };
+      }
       const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
       const reports = res.data || [];
       setPendingReports(reports);
@@ -1069,48 +1084,47 @@ export default function QuestionEditorPage() {
   };
 
   const handleSaveAndSubmitReview = async (reportId) => {
-    if (!validateForm()) return;
-
     const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
     const incidentId = paramIncidentId || currentRep?.incidentId || form.incidentId;
 
     if (incidentId) {
+      const activeReports = pendingReports.filter(r =>
+        r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
+      );
+      const reportDecisions = activeReports.map(r => ({
+        reportId: String(r.reportId || r.id),
+        disposition: reportDispositions[String(r.reportId || r.id)] || "",
+        reviewNote: null
+      }));
+      if (reportDecisions.some(item => !item.disposition)) {
+        showError("Chọn quyết định cho từng báo cáo trước khi gửi xử lý.");
+        return;
+      }
+      const isNoEditDismissal = resolutionAction === "NoScoreChange" &&
+        reportDecisions.every(item => item.disposition === "Dismissed");
+      if (!isNoEditDismissal && !validateForm()) return;
       setAdminReviewSubmitState("submitting");
       setLoading(true);
       try {
-        const correctionPayload = mapEditorStateToCreateUpdateRequest(form);
-        const formHash = JSON.stringify(correctionPayload);
-        const key = getSubmissionKey(formHash);
-
-        const activeReports = pendingReports.filter(r =>
-          r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
-        );
-        const reportDecisions = activeReports.map(r => ({
-          reportId: String(r.reportId || r.id),
-          disposition: "Resolved",
-          reviewNote: "Đã cập nhật câu hỏi theo phản hồi của Admin."
-        }));
+        const correctionPayload = isNoEditDismissal ? null : mapEditorStateToCreateUpdateRequest(form);
 
         const submitPayload = {
-          expectedRevision: currentRep?.incidentRevision ?? form.revision ?? 0,
-          expectedQuestionVersionId: String(form.questionVersionId || currentRep?.questionVersionId || ""),
-          submissionKey: key,
-          resolutionAction: activeReports.some(r => r.reporterRole === "Student")
-            ? "InvalidateAndAwardFull"
-            : "NoScoreChange",
-          reportDecisions: reportDecisions.length > 0 ? reportDecisions : [{
-            reportId: String(reportId),
-            disposition: "Resolved",
-            reviewNote: "Đã cập nhật câu hỏi theo phản hồi của Admin."
-          }],
+          expectedRevision: incidentDetail?.revision ?? currentRep?.incidentRevision ?? form.revision ?? 0,
+          expectedQuestionVersionId: String(incidentDetail?.originalVersion?.versionId || form.questionVersionId || currentRep?.questionVersionId || ""),
+          resolutionAction,
+          reportDecisions,
           correction: correctionPayload
         };
+        const key = getSubmissionKey(JSON.stringify(submitPayload));
+        submitPayload.submissionKey = key;
 
         await questionBankApi.submitQuestionReportIncident(incidentId, submitPayload);
         initialFormSnapshotRef.current = JSON.stringify(form);
         setHasSavedInSession(true);
         setAdminReviewSubmitState("complete");
-        setInfoMessage("Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
+          setInfoMessage(isNoEditDismissal
+            ? "Đã gửi quyết định không chỉnh sửa câu hỏi để Admin xét duyệt."
+            : "Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
         const refreshResult = await fetchPendingReports();
         if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
           navigate("/expert/questions/reported");
@@ -1120,7 +1134,8 @@ export default function QuestionEditorPage() {
         const code = err.response?.data?.code;
         if (code === "REPORT_SUBMISSION_KEY_CONFLICT") {
           submissionKeyRef.current = null;
-          showError("Xung đột khóa gửi dữ liệu. Khóa mới đã được tạo, vui lòng thử lại.");
+          showError("Dữ liệu gửi không còn khớp với trạng thái máy chủ. Đang làm mới sự cố...");
+          await fetchPendingReports();
         } else if (code === "REPORT_INCIDENT_CONFLICT") {
           showError("Sự cố hoặc báo cáo đã bị thay đổi trên máy chủ. Đang làm mới dữ liệu...");
           await fetchPendingReports();
@@ -1220,6 +1235,7 @@ export default function QuestionEditorPage() {
   );
   const adminReportId = adminPendingFixReport?.reportId || adminPendingFixReport?.id;
   const hasAdminPendingFix = Boolean(adminPendingFixReport);
+  const hasOpenIncident = Boolean(paramIncidentId && incidentDetail?.status === "Open");
 
   return (
     <ExpertLayout>
@@ -1279,7 +1295,19 @@ export default function QuestionEditorPage() {
             <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => {
               if (confirmNavigation()) navigate("/expert/questions");
             }}>Hủy</Button>
-            {hasAdminPendingFix ? (
+            {hasOpenIncident ? (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={() => handleSaveAndSubmitReview(null)}
+                disabled={loading || adminReviewSubmitState === "submitting"}
+              >
+                {adminReviewSubmitState === "submitting"
+                  ? "Đang gửi xử lý..."
+                  : adminReviewSubmitState === "retryable"
+                  ? "Gửi lại quyết định xử lý"
+                  : "Gửi quyết định xử lý"}
+              </Button>
+            ) : hasAdminPendingFix ? (
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={() => {
@@ -2056,6 +2084,26 @@ export default function QuestionEditorPage() {
                   BÁO CÁO ĐANG CHỜ XỬ LÝ ({pendingReports.length})
                 </h3>
 
+                {hasOpenIncident && (
+                  <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-2">
+                    <div className="font-bold text-primary">Quyết định xử lý sự cố</div>
+                    <label className="block text-on-surface-variant">
+                      Phương án điểm
+                      <select
+                        value={resolutionAction}
+                        onChange={(event) => setResolutionAction(event.target.value)}
+                        className="mt-1 w-full rounded border border-outline-variant bg-pure-surface px-2 py-1.5 text-xs text-on-surface"
+                      >
+                        <option value="NoScoreChange">Không điều chỉnh điểm</option>
+                        <option value="InvalidateAndAwardFull">Vô hiệu câu hỏi và cộng đủ điểm</option>
+                      </select>
+                    </label>
+                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
+                      Chọn quyết định riêng cho từng báo cáo bên dưới. Nếu tất cả đều không chấp nhận và không điều chỉnh điểm, hệ thống không tạo phiên bản câu hỏi mới.
+                    </p>
+                  </div>
+                )}
+
                 {reportsError ? (
                   <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg text-center font-semibold">
                     <p className="mb-2">{reportsError}</p>
@@ -2082,6 +2130,38 @@ export default function QuestionEditorPage() {
                       const isAdmin = rep.reporterRole === "Admin";
                       const isPendingFix = rep.status === "PendingFix";
                       const isPendingReview = rep.status === "PendingReview";
+
+                      if (hasOpenIncident && (isPending || isPendingFix || isPendingReview)) {
+                        const decisionValue = reportDispositions[String(reportIdVal)] || "";
+                        return (
+                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
+                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
+                                {getRoleLabel(rep.reporterRole || rep.role)}
+                              </span>
+                              <span>{time}</span>
+                            </div>
+                            <p className="text-on-surface font-medium leading-relaxed italic">
+                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
+                            </p>
+                            <label className="block text-[10px] font-bold text-on-surface-variant">
+                              Quyết định
+                              <select
+                                value={decisionValue}
+                                onChange={(event) => setReportDispositions(prev => ({
+                                  ...prev,
+                                  [String(reportIdVal)]: event.target.value
+                                }))}
+                                className="mt-1 w-full rounded border border-outline-variant bg-pure-surface px-2 py-1.5 text-xs text-on-surface"
+                              >
+                                <option value="">Chọn quyết định</option>
+                                <option value="Resolved">Chấp nhận báo cáo</option>
+                                <option value="Dismissed">Không chấp nhận báo cáo</option>
+                              </select>
+                            </label>
+                          </div>
+                        );
+                      }
 
                       if (isStudentOrExpert && isPending) {
                         return (

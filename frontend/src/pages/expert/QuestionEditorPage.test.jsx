@@ -6,13 +6,14 @@ import { questionBankApi } from '../../services/questionBankApi';
 import { NavigationGuardProvider } from '../../contexts/NavigationGuardContext';
 
 const mockNavigate = vi.fn();
+let locationSearch = '?from=reported';
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
     useParams: () => ({ id: '101' }),
-    useLocation: () => ({ search: '?from=reported' }),
+    useLocation: () => ({ search: locationSearch }),
   };
 });
 
@@ -27,6 +28,7 @@ vi.mock('../../services/questionBankApi', () => ({
     updateQuestionReportStatus: vi.fn(),
     submitQuestionReportReview: vi.fn(),
     submitQuestionReportIncident: vi.fn(),
+    getQuestionReportIncident: vi.fn(),
   },
 }));
 
@@ -41,6 +43,7 @@ vi.mock('../../components/layout/DashboardLayout', () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  locationSearch = '?from=reported';
 });
 
 describe('QuestionEditorPage reported question workflow', () => {
@@ -89,6 +92,7 @@ describe('QuestionEditorPage reported question workflow', () => {
   };
 
   beforeEach(() => {
+    locationSearch = '?from=reported';
     questionBankApi.getDifficulties.mockResolvedValue({ data: [{ difficultyId: 'diff-1', difficultyName: 'Nhận biết' }] });
     questionBankApi.getTopicTags.mockResolvedValue({ data: [{ tagId: 'tag-1', name: 'Đại số', depth: 1 }] });
     questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
@@ -316,8 +320,15 @@ describe('QuestionEditorPage reported question workflow', () => {
       incidentRevision: 0,
       questionVersionId: 'ver-101',
     };
-    questionBankApi.getQuestionReports.mockResolvedValue({
-      data: [adminIncidentReport],
+    locationSearch = '?from=reported&incidentId=incident-101';
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-101',
+        revision: 0,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [adminIncidentReport],
+      },
     });
     questionBankApi.submitQuestionReportIncident
       .mockRejectedValueOnce(new Error('Network error'))
@@ -333,8 +344,10 @@ describe('QuestionEditorPage reported question workflow', () => {
 
     expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
 
-    const actionBtns = await screen.findAllByRole('button', { name: /Cập nhật và gửi Admin xét duyệt/i });
-    fireEvent.click(actionBtns[0]);
+    await screen.findByText(/Quyết định xử lý sự cố/i);
+    const reportDecisionSelect = document.querySelectorAll('select')[1];
+    fireEvent.change(reportDecisionSelect, { target: { value: 'Resolved' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
 
     await waitFor(() => {
       expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(1);
@@ -342,12 +355,14 @@ describe('QuestionEditorPage reported question workflow', () => {
 
     const firstCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[0][1];
     expect(firstCallPayload.expectedRevision).toBe(0);
+    expect(firstCallPayload.expectedQuestionVersionId).toBe('ver-101');
+    expect(firstCallPayload.resolutionAction).toBe('NoScoreChange');
     expect(firstCallPayload.submissionKey).toBeDefined();
     expect(firstCallPayload.reportDecisions[0].reportId).toBe('503');
 
     // Retry button appears
-    const retryBtns = await screen.findAllByRole('button', { name: /Gửi lại Admin xét duyệt/i });
-    fireEvent.click(retryBtns[0]);
+    const retryButton = await screen.findByRole('button', { name: /Gửi lại quyết định xử lý/i });
+    fireEvent.click(retryButton);
 
     await waitFor(() => {
       expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(2);
@@ -355,5 +370,48 @@ describe('QuestionEditorPage reported question workflow', () => {
 
     const secondCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[1][1];
     expect(secondCallPayload.submissionKey).toBe(firstCallPayload.submissionKey);
+  });
+
+  it('submits a no-edit dismissal without creating a correction payload', async () => {
+    const incidentReport = {
+      ...studentReport,
+      incidentId: 'incident-dismiss',
+      questionVersionId: 'ver-101',
+    };
+    locationSearch = '?from=reported&incidentId=incident-dismiss';
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-dismiss',
+        revision: 3,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [incidentReport],
+      },
+    });
+    questionBankApi.submitQuestionReportIncident.mockResolvedValue({ data: { success: true } });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    await screen.findByText(/Quyết định xử lý sự cố/i);
+    const reportDecisionSelect = document.querySelectorAll('select')[1];
+    fireEvent.change(reportDecisionSelect, { target: { value: 'Dismissed' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(1);
+    });
+
+    const [, payload] = questionBankApi.submitQuestionReportIncident.mock.calls[0];
+    expect(payload.correction).toBeNull();
+    expect(payload.reportDecisions).toEqual([
+      { reportId: '501', disposition: 'Dismissed', reviewNote: null },
+    ]);
+    expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
   });
 });
