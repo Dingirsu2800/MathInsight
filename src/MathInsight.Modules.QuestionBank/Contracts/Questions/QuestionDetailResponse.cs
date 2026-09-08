@@ -23,4 +23,6 @@ public sealed record QuestionDetailResponse(
 {
     public Contracts.Reports.ReportEligibilityResponse ReportEligibility { get; init; } = new(
         false, "AUTH_REQUIRED", null, null, null, null, null);
+
+    public Contracts.Reports.BlockingReportIncidentResponse? BlockingReportIncident { get; init; }
 }

@@ -380,6 +380,14 @@ public static class QuestionBankErrors
         "REPORT_INCIDENT_CLOSED",
         "This question version already has a closed report outcome.");
 
+    public static readonly Error ReportIncidentSubmissionRequired = new(
+        "REPORT_INCIDENT_SUBMISSION_REQUIRED",
+        "Reports assigned to an incident must be resolved through incident submission.");
+
+    public static readonly Error ReportIncidentRequiresResolution = new(
+        "REPORT_INCIDENT_REQUIRES_RESOLUTION",
+        "Question editing is blocked until active report incidents are resolved.");
+
     public static readonly Error ReviewNoteRequired = new(
         "REVIEW_NOTE_REQUIRED",
         "Review note is required.");

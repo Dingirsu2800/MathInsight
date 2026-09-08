@@ -11,6 +11,7 @@ using MathInsight.Modules.QuestionBank.Commands.ExtractQuestionOcrDraft;
 using MathInsight.Modules.QuestionBank.Commands.PreviewQuestionImport;
 using MathInsight.Modules.QuestionBank.Commands.ConfirmQuestionImport;
 using MathInsight.Modules.QuestionBank.Commands.UpdateTagTopic;
+using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 using MathInsight.Modules.QuestionBank.Contracts.Imports;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
@@ -47,6 +48,42 @@ public sealed class ControllerErrorMappingTests
             Assert.NotNull(authorizeAttribute);
             Assert.Equal("Expert", authorizeAttribute.Roles);
         }
+    }
+
+    [Fact]
+    public void DirectQuestionReportEndpoint_RequiresExpertOrAdminRole()
+    {
+        var endpoint = typeof(ReportsController).GetMethod(nameof(ReportsController.ReportQuestion));
+        var authorizeAttribute = endpoint?.GetCustomAttribute<AuthorizeAttribute>();
+
+        Assert.NotNull(authorizeAttribute);
+        Assert.Equal("Expert,Admin", authorizeAttribute.Roles);
+    }
+
+    [Fact]
+    public async Task UpdateQuestion_WhenHandlerReturnsBlockingIncident_Returns409WithStableCode()
+    {
+        var controller = new QuestionsController(CreateMediator(request =>
+        {
+            Assert.IsType<UpdateQuestionCommand>(request);
+            return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.ReportIncidentRequiresResolution);
+        }))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = CreateAuthenticatedHttpContext()
+            }
+        };
+
+        var result = await controller.UpdateQuestion(
+            "question-1",
+            new UpdateQuestionRequest(),
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var error = Assert.IsType<ApiErrorResponse>(conflict.Value);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Equal(QuestionBankErrors.ReportIncidentRequiresResolution.Code, error.Code);
     }
 
     [Fact]

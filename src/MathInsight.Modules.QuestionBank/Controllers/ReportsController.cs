@@ -32,6 +32,7 @@ public sealed class ReportsController : ControllerBase
         _mediator = mediator;
     }
 
+    [Authorize(Roles = "Expert,Admin")]
     [HttpPost("questions/{questionId}/reports")]
     public async Task<IActionResult> ReportQuestion(
         string questionId,
@@ -292,6 +293,7 @@ public sealed class ReportsController : ControllerBase
             error == QuestionBankErrors.ReportSubmissionKeyConflict ||
             error == QuestionBankErrors.ReportVersionStale ||
             error == QuestionBankErrors.ReportIncidentClosed ||
+            error == QuestionBankErrors.ReportIncidentSubmissionRequired ||
             error == QuestionBankErrors.QuestionNotReportable ||
             error == QuestionBankErrors.AdminReportWorkflowAlreadyExists ||
             error == QuestionBankErrors.AdminReportRequiresReview ||

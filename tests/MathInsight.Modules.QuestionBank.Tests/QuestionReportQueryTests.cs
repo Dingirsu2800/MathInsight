@@ -11,6 +11,71 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 public sealed class QuestionReportQueryTests
 {
     [Fact]
+    public async Task QuestionDetail_ReturnsOldestBlockingIncidentOnlyToOwningExpert()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "detail-blocking-incident-question", "expert-1");
+        var firstVersion = new QuestionVersion
+        {
+            VersionId = "detail-blocking-v1",
+            QuestionId = question.QuestionId,
+            QuestionContent = question.QuestionContent,
+            QuestionAnswer = "A",
+            AnswersSnapshot = "[]",
+            VersionNumber = 1,
+            CreatedTime = DateTime.UtcNow.AddMinutes(-2),
+            ExpertId = question.ExpertId
+        };
+        var secondVersion = new QuestionVersion
+        {
+            VersionId = "detail-blocking-v2",
+            QuestionId = question.QuestionId,
+            QuestionContent = question.QuestionContent,
+            QuestionAnswer = "A",
+            AnswersSnapshot = "[]",
+            VersionNumber = 2,
+            CreatedTime = DateTime.UtcNow.AddMinutes(-1),
+            ExpertId = question.ExpertId
+        };
+        database.Context.QuestionVersions.AddRange(firstVersion, secondVersion);
+        database.Context.QuestionReportIncidents.AddRange(
+            new QuestionReportIncident
+            {
+                IncidentId = "incident-oldest",
+                QuestionId = question.QuestionId,
+                QuestionVersionId = firstVersion.VersionId,
+                Status = "Open",
+                RequiresAdminReview = false,
+                CreatedTime = DateTime.UtcNow.AddMinutes(-2)
+            },
+            new QuestionReportIncident
+            {
+                IncidentId = "incident-newer",
+                QuestionId = question.QuestionId,
+                QuestionVersionId = secondVersion.VersionId,
+                Status = "PendingAdminReview",
+                RequiresAdminReview = true,
+                CreatedTime = DateTime.UtcNow.AddMinutes(-1)
+            });
+        await database.Context.SaveChangesAsync();
+
+        var handler = new GetQuestionDetailQueryHandler(database.Context);
+        var owner = await handler.Handle(
+            new GetQuestionDetailQuery(question.QuestionId, question.ExpertId, "Expert"),
+            CancellationToken.None);
+        var otherExpert = await handler.Handle(
+            new GetQuestionDetailQuery(question.QuestionId, "expert-2", "Expert"),
+            CancellationToken.None);
+        var admin = await handler.Handle(
+            new GetQuestionDetailQuery(question.QuestionId, "admin-1", "Admin"),
+            CancellationToken.None);
+
+        Assert.Equal("incident-oldest", owner.Value!.BlockingReportIncident!.IncidentId);
+        Assert.Equal(firstVersion.VersionId, owner.Value.BlockingReportIncident.QuestionVersionId);
+        Assert.Null(otherExpert.Value!.BlockingReportIncident);
+        Assert.Null(admin.Value!.BlockingReportIncident);
+    }
+    [Fact]
     public async Task OwnedReportedQuestions_ReturnsOnlyOwnerQuestions_GroupedAndPaged()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();

@@ -23,12 +23,8 @@ public sealed class QuestionMutationService
         UpdateQuestionRequest request,
         string expertId,
         CancellationToken cancellationToken,
-        bool rejectPendingAdminReview = true)
+        bool allowBlockingIncidentMutation = false)
     {
-        var validationError = QuestionRequestValidator.Validate(ToCreateRequest(request), out var questionType);
-        if (validationError is not null)
-            return Result<QuestionMutationResult>.Failure(validationError);
-
         var question = await _context.Questions
             .Include(item => item.Answers.Where(answer => !answer.IsArchived))
             .Include(item => item.Parts.Where(part => !part.IsArchived))
@@ -39,13 +35,17 @@ public sealed class QuestionMutationService
         if (!string.Equals(question.ExpertId, expertId, StringComparison.OrdinalIgnoreCase))
             return Result<QuestionMutationResult>.Failure(QuestionBankErrors.QuestionUpdateForbidden);
 
-        if (rejectPendingAdminReview && await _context.QuestionReportIncidents.AnyAsync(
-                item => item.QuestionId == questionId && item.RequiresAdminReview &&
+        if (!allowBlockingIncidentMutation && await _context.QuestionReportIncidents.AnyAsync(
+                item => item.QuestionId == questionId &&
                         (item.Status == "Open" || item.Status == "PendingAdminReview"),
                 cancellationToken))
         {
-            return Result<QuestionMutationResult>.Failure(QuestionBankErrors.AdminReportRequiresReview);
+            return Result<QuestionMutationResult>.Failure(QuestionBankErrors.ReportIncidentRequiresResolution);
         }
+
+        var validationError = QuestionRequestValidator.Validate(ToCreateRequest(request), out var questionType);
+        if (validationError is not null)
+            return Result<QuestionMutationResult>.Failure(validationError);
 
         var referenceError = await QuestionReferenceValidator.ValidateAsync(_context, ToCreateRequest(request), cancellationToken);
         if (referenceError is not null)

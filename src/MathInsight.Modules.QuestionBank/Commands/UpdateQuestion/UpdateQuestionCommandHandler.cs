@@ -1,4 +1,5 @@
 using System.Data;
+using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
@@ -31,6 +32,9 @@ public sealed class UpdateQuestionCommandHandler : IRequestHandler<UpdateQuestio
             await using IDbContextTransaction? transaction = _context.Database.IsRelational()
                 ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
                 : null;
+
+            if (transaction is not null && QuestionReportSqlServerLock.IsSupported(_context))
+                await QuestionReportSqlServerLock.LockQuestionAsync(_context, command.QuestionId, cancellationToken);
 
             var mutation = await _mutationService.ApplyAsync(command.QuestionId, command.Request, command.ExpertId, cancellationToken);
             if (mutation.IsFailure)

@@ -40,6 +40,12 @@ public sealed class ReportQuestionCommandHandler
         if (reporterRole is null || string.IsNullOrWhiteSpace(command.ReporterAccountId))
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
+        if (reporterRole == "Student" &&
+            (string.IsNullOrWhiteSpace(command.SessionId) || string.IsNullOrWhiteSpace(command.QuestionVersionId)))
+        {
+            return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
+        }
+
         if (command.SessionId is not null && command.QuestionVersionId is null)
             return Result<ReportQuestionResponse>.Failure(QuestionBankErrors.ReportSessionContextInvalid);
 

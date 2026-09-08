@@ -53,11 +53,11 @@ public sealed class SubmitQuestionReportReviewCommandHandler
         if (report is null)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportNotFound);
 
-        if (report.Incident is not null)
-            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
-
         if (!string.Equals(report.Question.ExpertId, command.ExpertAccountId, StringComparison.OrdinalIgnoreCase))
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
+
+        if (!string.IsNullOrWhiteSpace(report.IncidentId))
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportIncidentSubmissionRequired);
 
         if (report.ReporterRole != "Admin")
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
