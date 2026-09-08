@@ -323,4 +323,3 @@ describe("IncidentReportPanel component", () => {
     expect(onResolveLegacyReport).toHaveBeenCalledWith("rep-student-1", "Dismissed", "Student");
   });
 });
-
