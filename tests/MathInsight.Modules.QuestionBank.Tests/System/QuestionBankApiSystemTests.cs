@@ -370,9 +370,9 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     }
 
     [QuestionBankSqlServerFact]
-    public async Task ReportWorkflow_WithDifferentExpert_PersistsAndResolvesReportThroughHostedApi()
+    public async Task LegacyHandleRoute_RejectsIncidentReportThroughHostedApi()
     {
-        var questionId = await _factory.SeedReportableQuestionAsync();
+        var (questionId, _, _) = await _factory.SeedIncidentReportableQuestionAsync();
 
         using var reportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
         {
@@ -395,8 +395,8 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
 
         var handleResponse = await _client.SendAsync(handleRequest);
 
-        Assert.Equal(HttpStatusCode.OK, handleResponse.StatusCode);
-        await _factory.AssertReportWasResolvedAsync(reportId!, questionId);
+        Assert.Equal(HttpStatusCode.Conflict, handleResponse.StatusCode);
+        await _factory.AssertIncidentReportRemainsPendingAsync(reportId!, questionId);
     }
 
     [QuestionBankSqlServerFact]
@@ -428,9 +428,9 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     }
 
     [QuestionBankSqlServerFact]
-    public async Task AdminReport_CanBeSubmittedByOwnerAndApprovedByReportingAdmin()
+    public async Task LegacySubmitReviewRoute_RejectsIncidentReportThroughHostedApi()
     {
-        var questionId = await _factory.SeedReportableQuestionAsync();
+        var (questionId, _, _) = await _factory.SeedIncidentReportableQuestionAsync();
 
         using var reportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
         {
@@ -447,21 +447,14 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
         using var submitRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/reports/{reportId}/submit-review");
         submitRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
         var submitResponse = await _client.SendAsync(submitRequest);
-        Assert.Equal(HttpStatusCode.OK, submitResponse.StatusCode);
-
-        using var approveRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/admin/reports/{reportId}/approve");
-        approveRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "admin_l3");
-        approveRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Admin");
-        var approveResponse = await _client.SendAsync(approveRequest);
-
-        Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
-        await _factory.AssertAdminReportWasApprovedAsync(reportId!, questionId);
+        Assert.Equal(HttpStatusCode.Conflict, submitResponse.StatusCode);
+        await _factory.AssertIncidentReportRemainsPendingAsync(reportId!, questionId);
     }
 
     [QuestionBankSqlServerFact]
     public async Task Expert_SubmitsAdminIncidentCorrection_ThroughIncidentRoute()
     {
-        var (questionId, versionId) = await _factory.SeedIncidentReportableQuestionAsync();
+        var (questionId, versionId, topicId) = await _factory.SeedIncidentReportableQuestionAsync();
         var studentSessionId = await _factory.SeedStudentSessionForQuestionAsync(questionId, versionId);
 
         using var reportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
@@ -476,17 +469,38 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
         var adminReportId = adminReportJson.RootElement.GetProperty("reportId").GetString();
         Assert.False(string.IsNullOrWhiteSpace(adminReportId));
 
-        using var studentReportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
+        using var directStudentReportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
         {
             Content = new StringContent("{ \"reportReason\": \"The question is incorrect in my session.\" }", Encoding.UTF8, "application/json")
+        };
+        directStudentReportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "student_l3");
+        directStudentReportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Student");
+        var directStudentReportResponse = await _client.SendAsync(directStudentReportRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, directStudentReportResponse.StatusCode);
+        Assert.Equal(1, await _factory.CountReportsAsync(questionId));
+
+        using var studentReportRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/tests/sessions/{studentSessionId}/questions/{questionId}/report")
+        {
+            Content = new StringContent("{ \"reason\": \"The question is incorrect in my session.\" }", Encoding.UTF8, "application/json")
         };
         studentReportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "student_l3");
         studentReportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Student");
         var studentReportResponse = await _client.SendAsync(studentReportRequest);
-        Assert.Equal(HttpStatusCode.Created, studentReportResponse.StatusCode);
-        using var studentReportJson = JsonDocument.Parse(await studentReportResponse.Content.ReadAsStringAsync());
-        var studentReportId = studentReportJson.RootElement.GetProperty("reportId").GetString();
-        Assert.False(string.IsNullOrWhiteSpace(studentReportId));
+        Assert.Equal(HttpStatusCode.OK, studentReportResponse.StatusCode);
+        var studentReportId = await _factory.GetReportIdAsync(questionId, "student_l3");
+
+        using var foreignStudentReportRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/tests/sessions/{studentSessionId}/questions/{questionId}/report")
+        {
+            Content = new StringContent("{ \"reason\": \"Foreign student report.\" }", Encoding.UTF8, "application/json")
+        };
+        foreignStudentReportRequest.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "student-other-l3");
+        foreignStudentReportRequest.Headers.Add(QuestionBankTestAuthHandler.RoleHeader, "Student");
+        var foreignStudentReportResponse = await _client.SendAsync(foreignStudentReportRequest);
+        Assert.Equal(HttpStatusCode.NotFound, foreignStudentReportResponse.StatusCode);
 
         using var secondReportRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/question-bank/questions/{questionId}/reports")
         {
@@ -547,7 +561,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
                     "grade": 10,
                     "questionType": "SINGLE_CHOICE",
                     "defaultWeight": 1.0,
-                    "topics": [{ "tagId": "l3-incident-topic", "isPrimary": true }],
+                    "topics": [{ "tagId": "{{topicId}}", "isPrimary": true }],
                     "answers": [{ "answerContent": "Correct", "isCorrect": true }, { "answerContent": "Wrong", "isCorrect": false }],
                     "parts": []
                   }
@@ -610,6 +624,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
             studentReportId!,
             studentSessionId,
             versionId,
+            topicId,
             maxPoints: 2.50m);
 
         await _factory.RunScoreAdjustmentRecoveryAsync();
@@ -619,6 +634,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
             studentReportId!,
             studentSessionId,
             versionId,
+            topicId,
             maxPoints: 2.50m);
 
         using var studentResultRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/grading/sessions/{studentSessionId}");
@@ -864,16 +880,18 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         return questionId;
     }
 
-    public async Task<(string QuestionId, string VersionId)> SeedIncidentReportableQuestionAsync()
+    public async Task<(string QuestionId, string VersionId, string TopicId)> SeedIncidentReportableQuestionAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..16];
         var questionId = $"l3-incident-{suffix}";
         var versionId = $"l3-version-{suffix}";
+        var rootTopicId = $"l3-incident-root-{suffix}";
+        var topicId = $"l3-incident-topic-{suffix}";
         await SeedAsync(db =>
         {
             db.TagTopics.AddRange(
-                new TagTopic { TagId = "l3-incident-root", TagName = "L3 incident root", Grade = 10, DisplayOrder = 30, IsActive = true },
-                new TagTopic { TagId = "l3-incident-topic", ParentTagId = "l3-incident-root", TagName = "L3 incident topic", Grade = 10, DisplayOrder = 31, IsActive = true });
+                new TagTopic { TagId = rootTopicId, TagName = $"L3 incident root {suffix}", Grade = 10, DisplayOrder = 30, IsActive = true },
+                new TagTopic { TagId = topicId, ParentTagId = rootTopicId, TagName = $"L3 incident topic {suffix}", Grade = 10, DisplayOrder = 31, IsActive = true });
             var question = new Question
             {
                 QuestionId = questionId,
@@ -895,7 +913,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
                 ],
                 QuestionTopics =
                 [
-                    new QuestionTopic { QuestionTopicId = $"l3-topic-link-{suffix}", TagId = "l3-incident-topic", IsPrimary = true }
+                    new QuestionTopic { QuestionTopicId = $"l3-topic-link-{suffix}", TagId = topicId, IsPrimary = true }
                 ]
             };
             var version = QuestionVersionSnapshotFactory.Create(
@@ -907,7 +925,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
             question.Versions.Add(version);
             db.Questions.Add(question);
         });
-        return (questionId, versionId);
+        return (questionId, versionId, topicId);
     }
 
     public async Task<string> GetIncidentIdAsync(string questionId, string versionId)
@@ -947,6 +965,23 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
             .Where(item => item.QuestionId == questionId)
             .Select(item => item.ReportId)
             .SingleAsync();
+    }
+
+    public async Task<string> GetReportIdAsync(string questionId, string reporterAccountId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        return await db.QuestionReports
+            .Where(item => item.QuestionId == questionId && item.ReporterAccountId == reporterAccountId)
+            .Select(item => item.ReportId)
+            .SingleAsync();
+    }
+
+    public async Task<int> CountReportsAsync(string questionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        return await db.QuestionReports.CountAsync(item => item.QuestionId == questionId);
     }
 
     public async Task AssertIncidentSubmissionPendingAdminReviewAsync(string incidentId, string questionId)
@@ -1001,6 +1036,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         string studentReportId,
         string sessionId,
         string questionVersionId,
+        string topicId,
         decimal maxPoints)
     {
         using var scope = Services.CreateScope();
@@ -1038,7 +1074,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         Assert.True(adjustedAnswer.GetProperty("IsScoreInvalidated").GetBoolean());
 
         var topicResult = await recommender.StudentTopicSessionResults
-            .SingleAsync(item => item.SessionId == sessionId && item.TagId == "l3-incident-topic");
+            .SingleAsync(item => item.SessionId == sessionId && item.TagId == topicId);
         Assert.Equal(0m, topicResult.TotalItems);
         Assert.Equal(0m, topicResult.EarnedPoints);
         Assert.Equal(0m, topicResult.MaxPoints);
@@ -1069,6 +1105,18 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
 
         Assert.Equal("Resolved", report.Status);
         Assert.Equal("Approved", question.Status);
+    }
+
+    public async Task AssertIncidentReportRemainsPendingAsync(string reportId, string questionId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var report = await db.QuestionReports.SingleAsync(item => item.ReportId == reportId);
+        var question = await db.Questions.SingleAsync(item => item.QuestionId == questionId);
+
+        Assert.False(string.IsNullOrWhiteSpace(report.IncidentId));
+        Assert.True(report.Status is QuestionReportWorkflow.Pending or QuestionReportWorkflow.PendingFix);
+        Assert.Equal("Reported", question.Status);
     }
 
     public async Task<string> SeedQuestionWithReferencedDifficultyAsync()

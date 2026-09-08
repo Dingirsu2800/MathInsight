@@ -36,6 +36,20 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
             string.IsNullOrWhiteSpace(command.Request.ExpectedQuestionVersionId))
             return Result<QuestionReportIncidentResponse>.Failure(QuestionBankErrors.QuestionRequestInvalid);
 
+        foreach (var decision in command.Request.ReportDecisions)
+        {
+            var reviewNote = decision.ReviewNote?.Trim();
+            if (reviewNote?.Length > 2000)
+                return Result<QuestionReportIncidentResponse>.Failure(QuestionBankErrors.ReviewNoteTooLong);
+            if (string.Equals(decision.Disposition, "Dismissed", StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(reviewNote))
+            {
+                return Result<QuestionReportIncidentResponse>.Failure(QuestionBankErrors.ReviewNoteRequired);
+            }
+
+            decision.ReviewNote = reviewNote;
+        }
+
         var reference = await _context.QuestionReportIncidents.AsNoTracking()
             .Where(item => item.IncidentId == command.IncidentId)
             .Select(item => new { item.QuestionId })
@@ -100,7 +114,7 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
             {
                 var mutation = await _mutationService.ApplyAsync(
                     incident.QuestionId, command.Request.Correction!, command.ExpertAccountId, cancellationToken,
-                    rejectPendingAdminReview: false);
+                    allowBlockingIncidentMutation: true);
                 if (mutation.IsFailure)
                     return Result<QuestionReportIncidentResponse>.Failure(mutation.Error!);
                 submittedCorrectionVersionId = mutation.Value!.Version.VersionId;
@@ -148,12 +162,20 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
                 incident.AdjustmentStatus = command.Request.ResolutionAction == "InvalidateAndAwardFull"
                     ? "Pending"
                     : "NotRequired";
-                incident.Question.Status = "Approved";
-                incident.Question.UpdatedTime = now;
             }
             incident.Question.Status = incident.RequiresAdminReview ? "Reported" : incident.Question.Status;
 
             await _context.SaveChangesAsync(cancellationToken);
+
+            if (!incident.RequiresAdminReview &&
+                !await QuestionReportBlockerState.HasBlockingReviewAsync(_context, incident.QuestionId, cancellationToken) &&
+                incident.Question.Status == "Reported")
+            {
+                incident.Question.Status = "Approved";
+                incident.Question.UpdatedTime = now;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
             if (transaction is not null)
                 await transaction.CommitAsync(cancellationToken);
 

@@ -248,6 +248,9 @@ public class QuestionsController : ControllerBase
             if (result.Error == QuestionBankErrors.QuestionUpdateForbidden)
                 return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(result.Error!));
 
+            if (result.Error == QuestionBankErrors.ReportIncidentRequiresResolution)
+                return Conflict(new ApiErrorResponse(result.Error!));
+
             return BadRequest(new ApiErrorResponse(result.Error!));
         }
 

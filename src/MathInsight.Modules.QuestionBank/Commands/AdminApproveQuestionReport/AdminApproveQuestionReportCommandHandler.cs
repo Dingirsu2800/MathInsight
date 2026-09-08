@@ -1,5 +1,6 @@
 using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
+using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Shared.Results;
@@ -65,20 +66,24 @@ public sealed class AdminApproveQuestionReportCommandHandler
         if (report.Status != QuestionReportWorkflow.PendingReview)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
 
+        List<QuestionReport> activeIncidentReports = [];
         if (report.Incident is not null)
         {
             await _context.Entry(report.Incident)
                 .Collection(item => item.Reports)
                 .LoadAsync(cancellationToken);
 
-            var requiresCorrection = report.Incident.Reports.Any(item => item.ProposedStatus == QuestionReportWorkflow.Resolved);
+            activeIncidentReports = report.Incident.Reports
+                .Where(IsActiveReport)
+                .ToList();
+            var requiresCorrection = activeIncidentReports.Any(item => item.ProposedStatus == QuestionReportWorkflow.Resolved);
             var submittedVersionMatchesLatest = !requiresCorrection || await _context.QuestionVersions
                 .Where(item => item.QuestionId == report.QuestionId)
                 .OrderByDescending(item => item.VersionNumber)
                 .Select(item => item.VersionId == report.Incident.SubmittedCorrectionVersionId)
                 .FirstOrDefaultAsync(cancellationToken);
             if (!submittedVersionMatchesLatest || string.IsNullOrWhiteSpace(report.Incident.ProposedResolutionAction) ||
-                report.Incident.Reports.Any(item => string.IsNullOrWhiteSpace(item.ProposedStatus)))
+                activeIncidentReports.Any(item => string.IsNullOrWhiteSpace(item.ProposedStatus)))
             {
                 return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
             }
@@ -107,7 +112,7 @@ public sealed class AdminApproveQuestionReportCommandHandler
             report.Incident.Revision++;
             report.Incident.UpdatedTime = now;
 
-            foreach (var relatedReport in report.Incident.Reports)
+            foreach (var relatedReport in activeIncidentReports)
             {
                 relatedReport.Status = relatedReport.ProposedStatus!;
                 relatedReport.ReviewNote = relatedReport.ProposedReviewNote;
@@ -117,21 +122,15 @@ public sealed class AdminApproveQuestionReportCommandHandler
             }
         }
 
-        var hasActiveReport = await _context.QuestionReports.AnyAsync(
-            item => item.QuestionId == report.QuestionId &&
-                    item.ReportId != report.ReportId &&
-                    (item.Status == QuestionReportWorkflow.Pending ||
-                     item.Status == QuestionReportWorkflow.PendingFix ||
-                     item.Status == QuestionReportWorkflow.PendingReview),
-            cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
-        if (!hasActiveReport)
+        if (!await QuestionReportBlockerState.HasBlockingReviewAsync(_context, report.QuestionId, cancellationToken) &&
+            report.Question.Status == "Reported")
         {
             report.Question.Status = "Approved";
             report.Question.UpdatedTime = now;
+            await _context.SaveChangesAsync(cancellationToken);
         }
-
-        await _context.SaveChangesAsync(cancellationToken);
 
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
@@ -162,4 +161,9 @@ public sealed class AdminApproveQuestionReportCommandHandler
             await QuestionReportResponseMapper.CreateAsync(_context, report, cancellationToken));
         });
     }
+
+    private static bool IsActiveReport(QuestionReport report) =>
+        report.Status is QuestionReportWorkflow.Pending or
+            QuestionReportWorkflow.PendingFix or
+            QuestionReportWorkflow.PendingReview;
 }

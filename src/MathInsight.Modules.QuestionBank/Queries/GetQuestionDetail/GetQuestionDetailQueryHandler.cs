@@ -86,7 +86,37 @@ public sealed class GetQuestionDetailQueryHandler
             return Result<QuestionDetailResponse>.Failure(QuestionBankErrors.QuestionNotFound);
 
         var eligibility = await GetReportEligibilityAsync(question, request, cancellationToken);
-        return Result<QuestionDetailResponse>.Success(question with { ReportEligibility = eligibility });
+        var blockingIncident = await GetBlockingReportIncidentAsync(question, request, cancellationToken);
+        return Result<QuestionDetailResponse>.Success(question with
+        {
+            ReportEligibility = eligibility,
+            BlockingReportIncident = blockingIncident
+        });
+    }
+
+    private async Task<BlockingReportIncidentResponse?> GetBlockingReportIncidentAsync(
+        QuestionDetailResponse question,
+        GetQuestionDetailQuery request,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(request.RequestingRole?.Trim(), "Expert", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(question.ExpertId, request.RequestingAccountId?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return await _context.QuestionReportIncidents
+            .AsNoTracking()
+            .Where(item => item.QuestionId == question.QuestionId &&
+                           (item.Status == "Open" || item.Status == "PendingAdminReview"))
+            .OrderBy(item => item.CreatedTime)
+            .ThenBy(item => item.IncidentId)
+            .Select(item => new BlockingReportIncidentResponse(
+                item.IncidentId,
+                item.QuestionVersionId,
+                item.Status,
+                item.RequiresAdminReview))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private async Task<ReportEligibilityResponse> GetReportEligibilityAsync(
