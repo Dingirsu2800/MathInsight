@@ -155,6 +155,221 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     }
 
     [QuestionBankSqlServerFact]
+    public async Task Expert_UpdatesCompositeQuestion_WhenArchivedPartsReuseOrderAndLabel()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var questionId = $"l3-cmp-{suffix}";
+        var rootTopicId = $"l3-cmp-root-{suffix}";
+        var topicId = $"l3-cmp-topic-{suffix}";
+        var versionId = $"l3-cmp-version-{suffix}";
+        var testId = $"l3-cmp-test-{suffix}";
+        var sessionId = $"l3-cmp-session-{suffix}";
+        var answerId = $"l3-cmp-answer-{suffix}";
+
+        await _factory.SeedAsync(db =>
+        {
+            var rootTopic = new TagTopic
+            {
+                TagId = rootTopicId,
+                TagName = "Composite root",
+                Grade = 10,
+                DisplayOrder = 100,
+                IsActive = true
+            };
+            var topic = new TagTopic
+            {
+                TagId = topicId,
+                ParentTagId = rootTopicId,
+                TagName = "Composite topic",
+                Grade = 10,
+                DisplayOrder = 101,
+                IsActive = true
+            };
+            db.TagTopics.AddRange(rootTopic, topic);
+            var question = new Question
+            {
+                QuestionId = questionId,
+                QuestionContent = "Original composite question",
+                SolutionContent = "Original composite solution",
+                DifficultyId = "l3-report-difficulty",
+                Grade = 10,
+                Status = "Approved",
+                QuestionType = "Composite",
+                ExpertId = "expert_l3",
+                DefaultWeight = 1m,
+                IsActive = true,
+                CreatedTime = DateTime.UtcNow,
+                UpdatedTime = DateTime.UtcNow,
+                QuestionTopics =
+                [
+                    new QuestionTopic
+                    {
+                        QuestionTopicId = $"l3-cmp-link-{suffix}",
+                        TagId = topicId,
+                        IsPrimary = true
+                    }
+                ],
+                Parts =
+                [
+                    new QuestionPart
+                    {
+                        PartId = $"l3-cmp-old-a-{suffix}",
+                        PartOrder = 1,
+                        PartLabel = "a",
+                        PartContent = "Original part a",
+                        PartType = "TrueFalse",
+                        CorrectBoolean = true,
+                        Explanation = "Original explanation a",
+                        DefaultWeight = 1m
+                    },
+                    new QuestionPart
+                    {
+                        PartId = $"l3-cmp-old-b-{suffix}",
+                        PartOrder = 2,
+                        PartLabel = "b",
+                        PartContent = "Original part b",
+                        PartType = "TrueFalse",
+                        CorrectBoolean = false,
+                        Explanation = "Original explanation b",
+                        DefaultWeight = 1m
+                    }
+                ]
+            };
+            var originalVersion = QuestionVersionSnapshotFactory.Create(
+                question,
+                "expert_l3",
+                1,
+                question.CreatedTime);
+            originalVersion.VersionId = versionId;
+            question.Versions.Add(originalVersion);
+            db.Questions.Add(question);
+        });
+
+        using (var gradingScope = _factory.Services.CreateScope())
+        {
+            var grading = gradingScope.ServiceProvider.GetRequiredService<GradingDbContext>();
+            await grading.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO dbo.Test
+                    (TestID, TestStatus, TestMode, GeneratedForStudentID, GeneratedBy, TestName,
+                     DurationMinutes, TotalQuestions, MaxScore, ScoringPolicy)
+                VALUES
+                    ({testId}, 'Active', 'AdaptivePractice', 'student_l3', 'System', N'L3 composite snapshot test',
+                     30, 1, 2.00, 'NormalizedWeight');
+                INSERT INTO dbo.TestSession
+                    (SessionID, TestID, StudentID, TestFormat, Status, SubmissionType, Duration,
+                     StartTime, EndTime, TotalQuestion, NumCorrect, NumIncorrect, NumAbandoned,
+                     Score, GradeRevision)
+                VALUES
+                    ({sessionId}, {testId}, 'student_l3', 'Practice', 'Graded', 'StudentSubmit', 30,
+                     SYSUTCDATETIME(), SYSUTCDATETIME(), 1, 0, 1, 0, 0.00, 1);
+                INSERT INTO dbo.TestQuestion
+                    (TestID, QuestionID, QuestionOrder, SelectionReason, IsAdaptiveSelected,
+                     QuestionVersionID, WeightSnapshot, MaxPointsSnapshot, ScoringRuleSnapshot,
+                     GradingPolicyVersion, IsScoreInvalidated)
+                VALUES
+                    ({testId}, {questionId}, 1, 'TopicPractice', 0, {versionId},
+                     1.00, 2.00, 'TieredTrueFalse', 1, 0);
+                INSERT INTO dbo.TestAnswer
+                    (TestAnswerID, SessionID, QuestionID, QuestionNo, TimeSpent, IsCorrect, PointsEarned)
+                VALUES
+                    ({answerId}, {sessionId}, {questionId}, 1, 5, 0, 0.00);
+                """);
+        }
+
+        using var beforeScope = _factory.Services.CreateScope();
+        var beforeQuestionBank = beforeScope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var beforeGrading = beforeScope.ServiceProvider.GetRequiredService<GradingDbContext>();
+        var beforeVersion = await beforeQuestionBank.QuestionVersions
+            .AsNoTracking()
+            .SingleAsync(item => item.VersionId == versionId);
+        var beforeSession = await beforeGrading.TestSessions
+            .AsNoTracking()
+            .SingleAsync(item => item.SessionId == sessionId);
+        var beforeTestQuestion = await beforeGrading.TestQuestions
+            .AsNoTracking()
+            .SingleAsync(item => item.TestId == testId && item.QuestionId == questionId);
+
+        async Task<HttpResponseMessage> SendUpdateAsync(string questionContent, string solutionContent, bool flipAnswers)
+        {
+            var firstPartBoolean = flipAnswers ? "true" : "false";
+            var secondPartBoolean = flipAnswers ? "false" : "true";
+            using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/question-bank/questions/{questionId}")
+            {
+                Content = new StringContent(
+                    $$"""
+                    {
+                      "questionContent": "{{questionContent}}",
+                      "solutionContent": "{{solutionContent}}",
+                      "difficultyId": "l3-report-difficulty",
+                      "grade": 10,
+                      "questionType": "COMPOSITE",
+                      "defaultWeight": 1.0,
+                      "topics": [{ "tagId": "{{topicId}}", "isPrimary": true }],
+                      "answers": [],
+                      "parts": [
+                        { "partOrder": 1, "partLabel": "a", "partContent": "Updated part a", "partType": "TRUE_FALSE", "correctBoolean": {{firstPartBoolean}}, "explanation": "Updated explanation a", "defaultWeight": 1.0 },
+                        { "partOrder": 2, "partLabel": "b", "partContent": "Updated part b", "partType": "TRUE_FALSE", "correctBoolean": {{secondPartBoolean}}, "explanation": "Updated explanation b", "defaultWeight": 1.0 }
+                      ]
+                    }
+                    """,
+                    Encoding.UTF8,
+                    "application/json")
+            };
+            request.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+            return await _client.SendAsync(request);
+        }
+
+        var firstResponse = await SendUpdateAsync("Updated composite question v1", "Updated composite solution v1", false);
+        Assert.True(
+            firstResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected first update OK but received {(int)firstResponse.StatusCode}: {await firstResponse.Content.ReadAsStringAsync()}");
+        firstResponse.Dispose();
+
+        var secondResponse = await SendUpdateAsync("Updated composite question v2", "Updated composite solution v2", true);
+        Assert.True(
+            secondResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected second update OK but received {(int)secondResponse.StatusCode}: {await secondResponse.Content.ReadAsStringAsync()}");
+        secondResponse.Dispose();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var question = await db.Questions
+            .Include(item => item.Parts)
+            .Include(item => item.Versions)
+            .SingleAsync(item => item.QuestionId == questionId);
+
+        Assert.Equal(4, question.Parts.Count(item => item.IsArchived));
+        Assert.Equal(2, question.Parts.Count(item => !item.IsArchived));
+        Assert.Equal(3, question.Versions.Count);
+        Assert.Equal("Updated composite question v2", question.QuestionContent);
+        Assert.Equal("Updated composite solution v2", question.SolutionContent);
+        Assert.Contains(question.Versions, item => item.QuestionContent == "Updated composite question v1");
+        Assert.Contains(question.Versions, item => item.QuestionContent == "Updated composite question v2");
+        Assert.Contains(question.Parts, item => !item.IsArchived && item.PartOrder == 1 && item.PartLabel == "a");
+        Assert.Contains(question.Parts, item => !item.IsArchived && item.PartOrder == 2 && item.PartLabel == "b");
+
+        var afterVersion = question.Versions.Single(item => item.VersionId == versionId);
+        Assert.Equal(beforeVersion.QuestionContent, afterVersion.QuestionContent);
+        Assert.Equal(beforeVersion.QuestionAnswer, afterVersion.QuestionAnswer);
+        Assert.Equal(beforeVersion.AnswersSnapshot, afterVersion.AnswersSnapshot);
+        Assert.Equal(beforeVersion.CreatedTime, afterVersion.CreatedTime);
+
+        var afterGrading = scope.ServiceProvider.GetRequiredService<GradingDbContext>();
+        var afterSession = await afterGrading.TestSessions
+            .AsNoTracking()
+            .SingleAsync(item => item.SessionId == sessionId);
+        var afterTestQuestion = await afterGrading.TestQuestions
+            .AsNoTracking()
+            .SingleAsync(item => item.TestId == testId && item.QuestionId == questionId);
+        Assert.Equal(beforeSession.Score, afterSession.Score);
+        Assert.Equal(beforeSession.GradeRevision, afterSession.GradeRevision);
+        Assert.Equal(beforeSession.Status, afterSession.Status);
+        Assert.Equal(beforeTestQuestion.QuestionVersionId, afterTestQuestion.QuestionVersionId);
+        Assert.Equal(beforeTestQuestion.MaxPointsSnapshot, afterTestQuestion.MaxPointsSnapshot);
+        Assert.Equal(beforeTestQuestion.ScoringRuleSnapshot, afterTestQuestion.ScoringRuleSnapshot);
+    }
+
+    [QuestionBankSqlServerFact]
     public async Task ReportWorkflow_WithDifferentExpert_PersistsAndResolvesReportThroughHostedApi()
     {
         var questionId = await _factory.SeedReportableQuestionAsync();
@@ -531,6 +746,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         var mentorFollowUpMigration = FindRepositoryFile("database", "006_MentorFollowUp_CompositePolicy.sql");
         ExecuteSqlScriptAsync(_sqlConnectionString, mentorFollowUpMigration).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, mentorFollowUpMigration).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "007_Fix_QuestionPart_Archived_Uniqueness.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
                 ('role-expert-l3', N'Expert', N'L3 test role'),

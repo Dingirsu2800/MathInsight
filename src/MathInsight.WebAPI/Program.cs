@@ -24,7 +24,9 @@ using MathInsight.Modules.TestGen.RateLimiting;
 using MathInsight.Modules.Testing;
 using MathInsight.Shared.Results;
 using MathInsight.Shared.Storage;
+using MathInsight.WebAPI.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.RateLimiting;
@@ -39,6 +41,9 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 const string CorsPolicyName = "MathInsightCors";
+var configuredCorsOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>() ?? ["http://localhost:5173"];
 
 // 1. Add MediatR (In-process Event Bus)
 builder.Services.AddMediatR(cfg =>
@@ -88,12 +93,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(CorsPolicyName, policy =>
     {
-        var allowedOrigins = builder.Configuration
-            .GetSection("Cors:AllowedOrigins")
-            .Get<string[]>() ?? new[] { "http://localhost:5173" };
-
         policy
-            .WithOrigins(allowedOrigins)
+            .WithOrigins(configuredCorsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             // Required for SignalR's negotiate handshake against /hubs/notification.
@@ -393,6 +394,51 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+// Keep infrastructure failures observable and client-readable. This must wrap
+// CORS so error responses still receive the configured origin header.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        var logger = context.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("UnhandledRequestException");
+        logger.LogError(
+            exception,
+            "Unhandled request failure. TraceId={TraceId}; Method={Method}; Path={Path}",
+            context.TraceIdentifier,
+            context.Request.Method,
+            context.Request.Path);
+
+        if (context.Response.HasStarted)
+            return;
+
+        var origin = context.Request.Headers.Origin.ToString();
+        if (configuredCorsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+        {
+            context.Response.Headers.AccessControlAllowOrigin = origin;
+            context.Response.Headers.AccessControlAllowCredentials = "true";
+            context.Response.Headers.Vary = "Origin";
+        }
+
+        var isSchemaMismatch = exception is not null &&
+            DatabaseSchemaExceptionClassifier.IsSchemaMismatch(exception);
+        context.Response.StatusCode = isSchemaMismatch
+            ? StatusCodes.Status503ServiceUnavailable
+            : StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var error = isSchemaMismatch
+            ? new ApiErrorResponse(
+                DatabaseSchemaExceptionClassifier.ErrorCode,
+                DatabaseSchemaExceptionClassifier.ErrorMessage)
+            : new ApiErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected server error occurred.");
+
+        await context.Response.WriteAsJsonAsync(error);
+    });
+});
 
 if (app.Environment.IsDevelopment())
 {

@@ -131,6 +131,113 @@ public sealed class MentorFollowUpMigrationSqlServerTests
     }
 
     [QuestionBankSqlServerFact]
+    public async Task ArchivedQuestionPartMigration_ReplacesLegacyUniquenessAndIsRerunnable()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+
+        // Recreate the database shape produced by the old 001/005 combination
+        // so this regression tests the upgrade path, not only a clean schema.
+        await database.ExecuteAsync("""
+            DROP INDEX IF EXISTS UX_QuestionPart_Current_Order ON dbo.QuestionPart;
+            DROP INDEX IF EXISTS UX_QuestionPart_Current_Label_NotNull ON dbo.QuestionPart;
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.key_constraints
+                WHERE name = N'UQ_QuestionPart_Question_Order'
+                  AND parent_object_id = OBJECT_ID(N'dbo.QuestionPart'))
+                ALTER TABLE dbo.QuestionPart
+                    ADD CONSTRAINT UQ_QuestionPart_Question_Order UNIQUE (QuestionID, PartOrder);
+            CREATE UNIQUE INDEX UX_QuestionPart_Label_NotNull
+                ON dbo.QuestionPart (QuestionID, PartLabel)
+                WHERE PartLabel IS NOT NULL;
+
+            INSERT INTO dbo.Question
+                (QuestionID, QuestionContent, SolutionContent, DifficultyID, Grade, Status,
+                 QuestionType, ExpertID, DefaultPoint, IsActive, DefaultWeight, CreatedTime, UpdatedTime)
+            VALUES
+                ('migration-question-composite', N'Composite question', N'Composite solution',
+                 'migration-difficulty', 10, 'Approved', 'Composite', 'migration-expert',
+                 1.00, 1, 1.00, SYSUTCDATETIME(), SYSUTCDATETIME());
+
+            INSERT INTO dbo.QuestionPart
+                (PartID, QuestionID, PartOrder, PartLabel, PartContent, PartType,
+                 CorrectBoolean, Explanation, DefaultPoint, DefaultWeight, IsArchived)
+            VALUES
+                ('migration-part-old-a', 'migration-question-composite', 1, N'a', N'Part a', 'TrueFalse',
+                 1, N'Explanation a', 0.50, 1.00, 0),
+                ('migration-part-old-b', 'migration-question-composite', 2, N'b', N'Part b', 'TrueFalse',
+                 0, N'Explanation b', 0.50, 1.00, 0);
+            """);
+
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.key_constraints WHERE name = 'UQ_QuestionPart_Question_Order';"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.indexes WHERE name = 'UX_QuestionPart_Label_NotNull' AND object_id = OBJECT_ID('dbo.QuestionPart');"));
+
+        await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
+
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM sys.key_constraints WHERE name = 'UQ_QuestionPart_Question_Order';"));
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM sys.indexes WHERE name = 'UX_QuestionPart_Label_NotNull' AND object_id = OBJECT_ID('dbo.QuestionPart');"));
+        Assert.Equal(1, await database.ScalarAsync("""
+            SELECT COUNT(*)
+            FROM sys.indexes
+            WHERE name = 'UX_QuestionPart_Current_Order'
+              AND object_id = OBJECT_ID('dbo.QuestionPart')
+              AND is_unique = 1
+              AND has_filter = 1
+              AND filter_definition LIKE '%IsArchived%0%';
+            """));
+        Assert.Equal(1, await database.ScalarAsync("""
+            SELECT COUNT(*)
+            FROM sys.indexes
+            WHERE name = 'UX_QuestionPart_Current_Label_NotNull'
+              AND object_id = OBJECT_ID('dbo.QuestionPart')
+              AND is_unique = 1
+              AND has_filter = 1
+              AND filter_definition LIKE '%IsArchived%0%';
+            """));
+
+        await database.ExecuteAsync("""
+            UPDATE dbo.QuestionPart
+            SET IsArchived = 1
+            WHERE PartID = 'migration-part-old-a';
+
+            INSERT INTO dbo.QuestionPart
+                (PartID, QuestionID, PartOrder, PartLabel, PartContent, PartType,
+                 CorrectBoolean, Explanation, DefaultPoint, DefaultWeight, IsArchived)
+            VALUES
+                ('migration-part-new-a', 'migration-question-composite', 1, N'a', N'Updated part a', 'TrueFalse',
+                 0, N'Updated explanation a', 0.50, 1.00, 0);
+            """);
+
+        var duplicateOrder = await Assert.ThrowsAsync<SqlException>(() => database.ExecuteAsync("""
+            INSERT INTO dbo.QuestionPart
+                (PartID, QuestionID, PartOrder, PartLabel, PartContent, PartType,
+                 CorrectBoolean, Explanation, DefaultPoint, DefaultWeight, IsArchived)
+            VALUES
+                ('migration-part-duplicate-order', 'migration-question-composite', 1, N'c', N'Duplicate order', 'TrueFalse',
+                 1, N'Duplicate order explanation', 0.50, 1.00, 0);
+            """));
+        Assert.Contains("UX_QuestionPart_Current_Order", duplicateOrder.Message, StringComparison.OrdinalIgnoreCase);
+
+        var duplicateLabel = await Assert.ThrowsAsync<SqlException>(() => database.ExecuteAsync("""
+            INSERT INTO dbo.QuestionPart
+                (PartID, QuestionID, PartOrder, PartLabel, PartContent, PartType,
+                 CorrectBoolean, Explanation, DefaultPoint, DefaultWeight, IsArchived)
+            VALUES
+                ('migration-part-duplicate-label', 'migration-question-composite', 3, N'a', N'Duplicate label', 'TrueFalse',
+                 1, N'Duplicate label explanation', 0.50, 1.00, 0);
+            """));
+        Assert.Contains("UX_QuestionPart_Current_Label_NotNull", duplicateLabel.Message, StringComparison.OrdinalIgnoreCase);
+
+        await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
+
+        Assert.Equal(3, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionPart WHERE QuestionID = 'migration-question-composite';"));
+        Assert.Equal(2, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionPart WHERE QuestionID = 'migration-question-composite' AND IsArchived = 0;"));
+    }
+
+    [QuestionBankSqlServerFact]
     public async Task InvalidCompositePolicy_RollsBackBeforeClearingLegacyPartCounts()
     {
         await using var database = await DisposableDatabase.CreateAsync();
