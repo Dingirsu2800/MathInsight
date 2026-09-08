@@ -211,6 +211,26 @@ public sealed class MentorFollowUpMigrationSqlServerTests
                  0, N'Updated explanation a', 0.50, 1.00, 0);
             """);
 
+        var duplicateOrder = await Assert.ThrowsAsync<SqlException>(() => database.ExecuteAsync("""
+            INSERT INTO dbo.QuestionPart
+                (PartID, QuestionID, PartOrder, PartLabel, PartContent, PartType,
+                 CorrectBoolean, Explanation, DefaultPoint, DefaultWeight, IsArchived)
+            VALUES
+                ('migration-part-duplicate-order', 'migration-question-composite', 1, N'c', N'Duplicate order', 'TrueFalse',
+                 1, N'Duplicate order explanation', 0.50, 1.00, 0);
+            """));
+        Assert.Contains("UX_QuestionPart_Current_Order", duplicateOrder.Message, StringComparison.OrdinalIgnoreCase);
+
+        var duplicateLabel = await Assert.ThrowsAsync<SqlException>(() => database.ExecuteAsync("""
+            INSERT INTO dbo.QuestionPart
+                (PartID, QuestionID, PartOrder, PartLabel, PartContent, PartType,
+                 CorrectBoolean, Explanation, DefaultPoint, DefaultWeight, IsArchived)
+            VALUES
+                ('migration-part-duplicate-label', 'migration-question-composite', 3, N'a', N'Duplicate label', 'TrueFalse',
+                 1, N'Duplicate label explanation', 0.50, 1.00, 0);
+            """));
+        Assert.Contains("UX_QuestionPart_Current_Label_NotNull", duplicateLabel.Message, StringComparison.OrdinalIgnoreCase);
+
         await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
 
         Assert.Equal(3, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionPart WHERE QuestionID = 'migration-question-composite';"));
