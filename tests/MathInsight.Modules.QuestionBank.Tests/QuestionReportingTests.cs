@@ -1,6 +1,9 @@
 using MathInsight.Modules.QuestionBank.Commands.HandleQuestionReport;
 using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Commands.ReportQuestion;
+using MathInsight.Modules.QuestionBank.Commands.SubmitQuestionReportReview;
+using MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
+using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
@@ -11,6 +14,151 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 
 public sealed class QuestionReportingTests
 {
+    [Fact]
+    public async Task StudentReport_WithoutSessionAndVersion_IsRejectedWithoutCreatingReport()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "student-context-required", "Approved", true);
+        AddVersion(database, question, 1);
+        await database.Context.SaveChangesAsync();
+
+        var result = await new ReportQuestionCommandHandler(database.Context).Handle(
+            new ReportQuestionCommand(
+                question.QuestionId,
+                new ReportQuestionRequest { ReportReason = "The answer needs review." },
+                "student-1",
+                "Student"),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportSessionContextInvalid, result.Error);
+        Assert.Empty(await database.Context.QuestionReports.ToListAsync());
+        Assert.Empty(await database.Context.QuestionReportIncidents.ToListAsync());
+    }
+
+    [Fact]
+    public async Task LegacyHandleRoute_WithIncidentReport_IsRejectedWithoutMutatingReport()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "incident-route-required", "Reported", true);
+        var version = AddVersion(database, question, 1);
+        var incident = new QuestionReportIncident
+        {
+            IncidentId = "incident-route-required-v1",
+            QuestionId = question.QuestionId,
+            QuestionVersionId = version.VersionId,
+            Status = "Open",
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
+        };
+        database.Context.QuestionReportIncidents.Add(incident);
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+        report.QuestionVersionId = version.VersionId;
+        report.IncidentId = incident.IncidentId;
+        await database.Context.SaveChangesAsync();
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context).Handle(
+            new HandleQuestionReportCommand(
+                report.ReportId,
+                new HandleQuestionReportRequest { Status = "Resolved" },
+                question.ExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportIncidentSubmissionRequired, result.Error);
+        Assert.Equal("Pending", report.Status);
+        Assert.Equal("Open", incident.Status);
+        Assert.Single(await database.Context.QuestionVersions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task OrdinaryEdit_WithOpenStudentIncident_IsBlockedWithoutCreatingVersion()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "edit-blocked-by-student", "Reported", true);
+        await AddDirectChildTopicAsync(database, "topic-1", question.Grade);
+        var version = AddVersion(database, question, 1);
+        database.Context.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = "edit-blocked-by-student-v1",
+            QuestionId = question.QuestionId,
+            QuestionVersionId = version.VersionId,
+            Status = "Open",
+            RequiresAdminReview = false,
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+
+        var result = await new UpdateQuestionCommandHandler(database.Context).Handle(
+            new UpdateQuestionCommand(question.QuestionId, CreateUpdateRequest(question), question.ExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportIncidentRequiresResolution, result.Error);
+        Assert.Single(await database.Context.QuestionVersions.ToListAsync());
+        Assert.Equal("Question content", question.QuestionContent);
+    }
+
+    [Fact]
+    public async Task OrdinaryEdit_WithOpenIncident_ReturnsConflictBeforePayloadValidation()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "edit-invalid-payload-blocked", "Reported", true);
+        var version = AddVersion(database, question, 1);
+        database.Context.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = "edit-invalid-payload-blocked-v1",
+            QuestionId = question.QuestionId,
+            QuestionVersionId = version.VersionId,
+            Status = "Open",
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
+        });
+        await database.Context.SaveChangesAsync();
+
+        var result = await new UpdateQuestionCommandHandler(database.Context).Handle(
+            new UpdateQuestionCommand(question.QuestionId, new UpdateQuestionRequest(), question.ExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportIncidentRequiresResolution, result.Error);
+        Assert.Single(await database.Context.QuestionVersions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task LegacySubmitReviewRoute_WithIncidentReport_IsRejectedWithoutMutatingReport()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "incident-submit-required", "Reported", true);
+        var version = AddVersion(database, question, 1);
+        var incident = new QuestionReportIncident
+        {
+            IncidentId = "incident-submit-required-v1",
+            QuestionId = question.QuestionId,
+            QuestionVersionId = version.VersionId,
+            Status = "Open",
+            RequiresAdminReview = true,
+            AssignedAdminId = "admin-1",
+            CreatedTime = DateTime.UtcNow,
+            UpdatedTime = DateTime.UtcNow
+        };
+        database.Context.QuestionReportIncidents.Add(incident);
+        var report = await AddReportAsync(database, question.QuestionId, "admin-1", "Admin", "PendingFix");
+        report.QuestionVersionId = version.VersionId;
+        report.IncidentId = incident.IncidentId;
+        await database.Context.SaveChangesAsync();
+
+        var result = await new SubmitQuestionReportReviewCommandHandler(database.Context).Handle(
+            new SubmitQuestionReportReviewCommand(report.ReportId, question.ExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportIncidentSubmissionRequired, result.Error);
+        Assert.Equal("PendingFix", report.Status);
+        Assert.Equal("Open", incident.Status);
+    }
+
     [Fact]
     public async Task StudentReport_CreatesReportWithoutChangingQuestionStatus()
     {
@@ -402,20 +550,40 @@ public sealed class QuestionReportingTests
         Assert.Equal("Pending", report.Status);
     }
 
-    private static Task<MathInsight.Shared.Results.Result<ReportQuestionResponse>> CreateReportAsync(
+    private static async Task<MathInsight.Shared.Results.Result<ReportQuestionResponse>> CreateReportAsync(
         QuestionBankInMemoryContext database,
         Question question,
         string reporterAccountId,
         string reporterRole,
         string? reason = "The answer needs review.")
     {
-        return new ReportQuestionCommandHandler(database.Context)
+        string? sessionId = null;
+        string? questionVersionId = null;
+        if (string.Equals(reporterRole, "Student", StringComparison.OrdinalIgnoreCase))
+        {
+            questionVersionId = await database.Context.QuestionVersions
+                .Where(version => version.QuestionId == question.QuestionId)
+                .OrderByDescending(version => version.VersionNumber)
+                .Select(version => version.VersionId)
+                .FirstOrDefaultAsync();
+            if (questionVersionId is null)
+            {
+                questionVersionId = AddVersion(database, question, 1).VersionId;
+                await database.Context.SaveChangesAsync();
+            }
+
+            sessionId = $"session-{reporterAccountId}";
+        }
+
+        return await new ReportQuestionCommandHandler(database.Context)
             .Handle(
                 new ReportQuestionCommand(
                     question.QuestionId,
                     new ReportQuestionRequest { ReportReason = reason },
                     reporterAccountId,
-                    reporterRole),
+                    reporterRole,
+                    sessionId,
+                    questionVersionId),
                 CancellationToken.None);
     }
 
@@ -497,6 +665,51 @@ public sealed class QuestionReportingTests
         database.Context.QuestionVersions.Add(version);
         return version;
     }
+
+    private static async Task AddDirectChildTopicAsync(
+        QuestionBankInMemoryContext database,
+        string topicId,
+        int grade)
+    {
+        var root = new TagTopic
+        {
+            TagId = $"{topicId}-root",
+            TagName = "Root topic",
+            Grade = grade,
+            DisplayOrder = 1,
+            IsActive = true
+        };
+        database.Context.TagTopics.Add(root);
+        database.Context.TagTopics.Add(new TagTopic
+        {
+            TagId = topicId,
+            ParentTagId = root.TagId,
+            TagName = "Direct child topic",
+            Grade = grade,
+            DisplayOrder = 1,
+            IsActive = true
+        });
+        await database.Context.SaveChangesAsync();
+    }
+
+    private static UpdateQuestionRequest CreateUpdateRequest(Question question) => new()
+    {
+        QuestionContent = "Updated question content",
+        SolutionContent = "Updated solution content",
+        DifficultyId = question.DifficultyId,
+        Grade = question.Grade,
+        QuestionType = "SINGLE_CHOICE",
+        DefaultWeight = 1m,
+        Topics =
+        [
+            new CreateQuestionTopicRequest("topic-1", true)
+        ],
+        Answers =
+        [
+            new CreateAnswerRequest { AnswerContent = "A", IsCorrect = true },
+            new CreateAnswerRequest { AnswerContent = "B", IsCorrect = false }
+        ]
+    };
 
     private sealed class RecordingScoreAdjustmentService : IScoreAdjustmentService
     {

@@ -14,6 +14,121 @@ namespace MathInsight.Modules.QuestionBank.Tests;
 
 public sealed class SubmitQuestionReportIncidentTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task DismissedDecision_RequiresNonBlankReviewNote(string reviewNote)
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var setup = await CreatePendingAdminIncidentAsync(database, "incident-dismiss-note-required");
+        var request = new SubmitQuestionReportIncidentRequest
+        {
+            ExpectedRevision = setup.Incident.Revision,
+            ExpectedQuestionVersionId = setup.Version.VersionId,
+            SubmissionKey = "dismiss-note-required",
+            ResolutionAction = "NoScoreChange",
+            ReportDecisions =
+            [
+                new QuestionReportDecisionRequest
+                {
+                    ReportId = setup.Report.ReportId,
+                    Disposition = "Dismissed",
+                    ReviewNote = reviewNote
+                }
+            ]
+        };
+
+        var result = await new SubmitQuestionReportIncidentCommandHandler(database.Context).Handle(
+            new SubmitQuestionReportIncidentCommand(setup.Incident.IncidentId, request, setup.Question.ExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReviewNoteRequired, result.Error);
+        Assert.Equal("Open", (await database.Context.QuestionReportIncidents.SingleAsync()).Status);
+        Assert.Equal(QuestionReportWorkflow.PendingFix, (await database.Context.QuestionReports.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task AdminApproval_FinalizesAllIncidentReportsBeforeCheckingRemainingBlockers()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var setup = await CreatePendingAdminIncidentAsync(database, "incident-finalization-question");
+        var studentReport = await new ReportQuestionCommandHandler(database.Context).Handle(
+            new ReportQuestionCommand(
+                setup.Question.QuestionId,
+                new ReportQuestionRequest { ReportReason = "Student also found the issue." },
+                "student-1",
+                "Student",
+                "session-1",
+                setup.Version.VersionId),
+            CancellationToken.None);
+        Assert.True(studentReport.IsSuccess);
+
+        var request = CreateRequest(setup.Question, setup.Version, setup.Report, setup.Incident, "finalization-submit");
+        request.ReportDecisions.Add(new QuestionReportDecisionRequest
+        {
+            ReportId = studentReport.Value!.ReportId,
+            Disposition = "Resolved",
+            ReviewNote = "Confirmed by the corrected version."
+        });
+
+        Assert.True((await new SubmitQuestionReportIncidentCommandHandler(database.Context).Handle(
+            new SubmitQuestionReportIncidentCommand(setup.Incident.IncidentId, request, setup.Question.ExpertId),
+            CancellationToken.None)).IsSuccess);
+
+        var approval = await new AdminApproveQuestionReportCommandHandler(database.Context).Handle(
+            new AdminApproveQuestionReportCommand(setup.Report.ReportId, "admin-1"),
+            CancellationToken.None);
+
+        Assert.True(approval.IsSuccess);
+        Assert.Equal("Approved", (await database.Context.Questions.SingleAsync()).Status);
+        Assert.All(await database.Context.QuestionReports.ToListAsync(), report =>
+            Assert.Equal(QuestionReportWorkflow.Resolved, report.Status));
+    }
+
+    [Fact]
+    public async Task AdminApproval_DoesNotRewriteFinalizedHistoricalReportInTheSameIncident()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var setup = await CreatePendingAdminIncidentAsync(database, "incident-preserve-finalized-report");
+        database.Context.QuestionReports.Add(new QuestionReport
+        {
+            ReportId = "historical-resolved-report",
+            QuestionId = setup.Question.QuestionId,
+            QuestionVersionId = setup.Version.VersionId,
+            IncidentId = setup.Incident.IncidentId,
+            ReporterAccountId = "student-historical",
+            ReporterRole = "Student",
+            ReportReason = "Previously resolved report.",
+            Status = QuestionReportWorkflow.Resolved,
+            ReviewNote = "Historical resolution.",
+            ResolutionAction = "NoScoreChange",
+            ResolvedBy = "admin-historical",
+            ResolvedTime = DateTime.UtcNow.AddDays(-1),
+            CreatedTime = DateTime.UtcNow.AddDays(-2)
+        });
+        await database.Context.SaveChangesAsync();
+
+        var submission = await new SubmitQuestionReportIncidentCommandHandler(database.Context).Handle(
+            new SubmitQuestionReportIncidentCommand(
+                setup.Incident.IncidentId,
+                CreateRequest(setup.Question, setup.Version, setup.Report, setup.Incident, "preserve-finalized-submit"),
+                setup.Question.ExpertId),
+            CancellationToken.None);
+        Assert.True(submission.IsSuccess);
+
+        var approval = await new AdminApproveQuestionReportCommandHandler(database.Context).Handle(
+            new AdminApproveQuestionReportCommand(setup.Report.ReportId, "admin-1"),
+            CancellationToken.None);
+
+        Assert.True(approval.IsSuccess);
+        var historical = await database.Context.QuestionReports.SingleAsync(item => item.ReportId == "historical-resolved-report");
+        Assert.Equal(QuestionReportWorkflow.Resolved, historical.Status);
+        Assert.Equal("Historical resolution.", historical.ReviewNote);
+        Assert.Equal("NoScoreChange", historical.ResolutionAction);
+        Assert.Equal("admin-historical", historical.ResolvedBy);
+    }
+
     [Fact]
     public async Task SubmitByIncidentId_CreatesCorrectionAndMovesIncidentToPendingAdminReview()
     {
@@ -182,7 +297,7 @@ public sealed class SubmitQuestionReportIncidentTests
                 new ReportQuestionRequest { ReportReason = "A separate issue was found." },
                 "student-2",
                 "Student",
-                null,
+                "session-2",
                 setup.Version.VersionId),
             CancellationToken.None);
 

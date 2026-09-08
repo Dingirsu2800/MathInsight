@@ -69,6 +69,9 @@ public sealed class HandleQuestionReportCommandHandler
         if (!string.Equals(report.Question.ExpertId, command.ExpertAccountId, StringComparison.OrdinalIgnoreCase))
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
+        if (!string.IsNullOrWhiteSpace(report.IncidentId))
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportIncidentSubmissionRequired);
+
         if (report.ReporterRole == "Admin")
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
 
