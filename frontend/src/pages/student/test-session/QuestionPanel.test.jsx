@@ -108,4 +108,63 @@ describe('QuestionPanel short answer controls', () => {
       parts: [{ partId: 'part-number', numericAnswer: '-1,5' }],
     });
   });
+
+  it('does not display formula preview for Student standalone SHORT_ANSWER even when math tokens exist', () => {
+    const onAnswer = vi.fn();
+    render(
+      <QuestionPanel
+        question={{ ...baseQuestion, questionType: 'SHORT_ANSWER' }}
+        answer={{ shortAnswerText: '2π + √(3)' }}
+        onAnswer={onAnswer}
+        totalQuestions={1}
+      />
+    );
+
+    // Formula preview title and container must NOT be rendered in Student test session
+    expect(screen.queryByText(/Xem trước công thức:/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('short-answer-math-preview')).not.toBeInTheDocument();
+
+    // Toolbar, input, and counter must still be present and functional
+    expect(screen.getByRole('button', { name: 'Chèn ký hiệu pi (π)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chèn căn bậc hai (√)' })).toBeInTheDocument();
+    expect(screen.getByText('9/100')).toBeInTheDocument();
+
+    const input = screen.getByDisplayValue('2π + √(3)');
+    fireEvent.change(input, { target: { value: '2π + √(3) + π' } });
+    expect(onAnswer).toHaveBeenCalledWith('question-1', {
+      shortAnswerText: '2π + √(3) + π',
+    });
+  });
+
+  it('does not display formula preview for Student composite short answer part even when math tokens exist', () => {
+    const onAnswer = vi.fn();
+    render(
+      <QuestionPanel
+        question={{
+          ...baseQuestion,
+          questionType: 'COMPOSITE',
+          parts: [{ partId: 'part-short', content: 'Tìm nghiệm.', answerType: 'TEXT' }],
+        }}
+        answer={{
+          parts: [{ partId: 'part-short', textAnswer: '√(5) / 2' }],
+        }}
+        onAnswer={onAnswer}
+        totalQuestions={1}
+      />
+    );
+
+    // Formula preview title and container must NOT be rendered in Student test session
+    expect(screen.queryByText(/Xem trước công thức:/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('short-answer-math-preview')).not.toBeInTheDocument();
+
+    // Input and toolbar must still function
+    expect(screen.getByRole('button', { name: 'Chèn ký hiệu pi (π)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chèn căn bậc hai (√)' })).toBeInTheDocument();
+
+    const input = screen.getByDisplayValue('√(5) / 2');
+    fireEvent.change(input, { target: { value: '√(5)' } });
+    expect(onAnswer).toHaveBeenCalledWith('question-1', {
+      parts: [{ partId: 'part-short', textAnswer: '√(5)' }],
+    });
+  });
 });

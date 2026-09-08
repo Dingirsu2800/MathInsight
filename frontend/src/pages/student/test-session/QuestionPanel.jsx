@@ -141,6 +141,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
               value={answer?.shortAnswerText || ''}
               onChange={handleShortAnswer}
               placeholder="Nhập đáp án ngắn..."
+              showPreview={false}
             />
           </div>
         )}
@@ -187,6 +188,7 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       onChange={(val) => handlePartAnswer(part.partId, 'textAnswer', val)}
                       placeholder="Nhập đáp án ngắn..."
                       showExample={false}
+                      showPreview={false}
                     />
                   )}
                 </div>

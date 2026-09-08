@@ -43,11 +43,32 @@ describe('ShortAnswerInput component', () => {
     expect(onChange).toHaveBeenCalledWith('√()');
   });
 
-  it('shows math preview when math symbols are present', () => {
+  it('shows math preview when math symbols are present by default (Expert/shared default)', () => {
     render(<ShortAnswerInput value="2π + √(2)" onChange={vi.fn()} />);
 
     expect(screen.getByText(/Xem trước công thức:/i)).toBeInTheDocument();
     expect(screen.getByTestId('short-answer-math-preview')).toBeInTheDocument();
+  });
+
+  it('hides math preview when showPreview={false} even if math tokens are present, while preserving toolbar, counter, and callbacks', () => {
+    const onChange = vi.fn();
+    render(
+      <ShortAnswerInput
+        value="2π + √(2)"
+        onChange={onChange}
+        showPreview={false}
+      />
+    );
+
+    expect(screen.queryByText(/Xem trước công thức:/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('short-answer-math-preview')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chèn ký hiệu pi (π)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chèn căn bậc hai (√)' })).toBeInTheDocument();
+    expect(screen.getByText('9/100')).toBeInTheDocument();
+
+    const input = screen.getByDisplayValue('2π + √(2)');
+    fireEvent.change(input, { target: { value: '3π' } });
+    expect(onChange).toHaveBeenCalledWith('3π');
   });
 
   it('does not show math preview for plain text', () => {
