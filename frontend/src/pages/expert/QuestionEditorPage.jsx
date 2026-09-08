@@ -115,6 +115,9 @@ export default function QuestionEditorPage() {
   const [updatingReportId, setUpdatingReportId] = React.useState(null);
   const [reportsError, setReportsError] = React.useState("");
   const [adminReviewSubmitState, setAdminReviewSubmitState] = React.useState("idle"); // idle | saving | submitting | retryable | complete
+  const [blockingReportIncident, setBlockingReportIncident] = React.useState(null);
+  const blockingReportIncidentRef = React.useRef(null);
+  blockingReportIncidentRef.current = blockingReportIncident;
 
 
 
@@ -367,16 +370,18 @@ export default function QuestionEditorPage() {
     setReportsLoading(true);
     setReportsError("");
     try {
-      let activeIncidentId = paramIncidentId;
+      let activeIncidentId = paramIncidentId || blockingReportIncidentRef.current?.incidentId;
       if (!activeIncidentId) {
         try {
-          const listRes = await questionBankApi.getMyReportedQuestions({ pageIndex: 1, pageSize: 50 });
-          const found = (listRes.data?.items || []).find(item => String(item.questionId) === String(id));
-          if (found?.incidentId) {
-            activeIncidentId = found.incidentId;
+          const detailRes = await questionBankApi.getQuestionDetail(id);
+          const blocker = detailRes.data?.blockingReportIncident;
+          if (blocker?.incidentId) {
+            activeIncidentId = blocker.incidentId;
+            setBlockingReportIncident(blocker);
+            blockingReportIncidentRef.current = blocker;
           }
         } catch (e) {
-          console.warn("Could not query incident ID from reported questions list:", e);
+          console.warn("Could not query blocking incident from question detail:", e);
         }
       }
 
@@ -477,7 +482,10 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error(err);
       const errorCode = err.response?.data?.code;
-      if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
+      if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+        showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+        await fetchPendingReports();
+      } else if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
         showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
         await fetchPendingReports();
       } else if (errorCode === "QUESTION_FIX_REQUIRED_BEFORE_SCORE_ADJUSTMENT") {
@@ -504,7 +512,10 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error(err);
       const errorCode = err.response?.data?.code;
-      if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
+      if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+        showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+        await fetchPendingReports();
+      } else if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
         showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
         await fetchPendingReports();
       } else if (errorCode === "REPORT_ACCESS_FORBIDDEN") {
@@ -560,6 +571,9 @@ export default function QuestionEditorPage() {
           const detail = res.data;
           const mapped = mapQuestionDetailToEditorState(detail);
           setForm(mapped);
+          const blocker = detail?.blockingReportIncident || null;
+          setBlockingReportIncident(blocker);
+          blockingReportIncidentRef.current = blocker;
           setLoading(false);
         })
         .catch(err => {
@@ -1109,6 +1123,10 @@ export default function QuestionEditorPage() {
   };
 
   const handleSaveQuestion = () => {
+    if (hasBlockingIncident) {
+      showError("Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa.");
+      return;
+    }
     if (!validateForm()) return;
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
@@ -1130,9 +1148,22 @@ export default function QuestionEditorPage() {
           navigate("/expert/questions");
         }
       })
-      .catch(err => {
+      .catch(async (err) => {
         console.error("Failed to save question:", err);
-        showError("Lưu câu hỏi thất bại: " + (err.response?.data?.message || err.message));
+        const errorCode = err.response?.data?.code;
+        if (errorCode === "REPORT_INCIDENT_REQUIRES_RESOLUTION") {
+          try {
+            const detailRes = await questionBankApi.getQuestionDetail(id);
+            const blocker = detailRes.data?.blockingReportIncident || null;
+            setBlockingReportIncident(blocker);
+            blockingReportIncidentRef.current = blocker;
+          } catch (fetchErr) {
+            console.warn("Failed to refresh question blocker metadata:", fetchErr);
+          }
+          showError("Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa.");
+        } else {
+          showError("Lưu câu hỏi thất bại: " + (err.response?.data?.message || err.message));
+        }
         setLoading(false);
       });
   };
@@ -1270,7 +1301,11 @@ export default function QuestionEditorPage() {
       } catch (submitErr) {
         console.error("Failed to submit review:", submitErr);
         const code = submitErr.response?.data?.code;
-        if (code === "ADMIN_REPORT_REQUIRES_REVIEW") {
+        if (code === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+          showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+          await fetchPendingReports();
+          return;
+        } else if (code === "ADMIN_REPORT_REQUIRES_REVIEW") {
           showError("Báo cáo thuộc sự cố cần xử lý qua quy trình xét duyệt của sự cố.");
         } else {
           showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
@@ -1305,6 +1340,12 @@ export default function QuestionEditorPage() {
       }
     } catch (submitErr) {
       console.error("Failed to retry submit review:", submitErr);
+      const code = submitErr.response?.data?.code;
+      if (code === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+        showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+        await fetchPendingReports();
+        return;
+      }
       setAdminReviewSubmitState("retryable");
       showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
     } finally {
@@ -1329,6 +1370,18 @@ export default function QuestionEditorPage() {
   const adminReportId = adminPendingFixReport?.reportId || adminPendingFixReport?.id;
   const hasAdminPendingFix = Boolean(adminPendingFixReport);
   const hasOpenIncident = Boolean(incidentDetail && incidentDetail.status === "Open");
+  const hasBlockingIncident = Boolean(
+    blockingReportIncident &&
+    (blockingReportIncident.status === "Open" || blockingReportIncident.status === "PendingAdminReview")
+  );
+
+  const handleNavigateToBlockingIncident = () => {
+    const incidentId = blockingReportIncident?.incidentId;
+    if (!incidentId) return;
+    if (confirmNavigation()) {
+      navigate(`/expert/questions/${id}/reports?incidentId=${encodeURIComponent(incidentId)}`);
+    }
+  };
 
   return (
     <ExpertLayout>
@@ -1357,6 +1410,32 @@ export default function QuestionEditorPage() {
           >
             <span className="material-symbols-outlined">info</span>
             <span>{infoMessage}</span>
+          </div>
+        )}
+
+        {/* Blocking Incident Warning Banner in Ordinary Editor */}
+        {hasBlockingIncident && !fromReported && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="p-4 mb-6 bg-amber-500/10 border border-amber-500/30 text-amber-800 rounded-xl text-sm font-semibold flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-600">warning</span>
+              <span>
+                {blockingReportIncident?.status === "PendingAdminReview"
+                  ? "Câu hỏi đang có sự cố báo cáo chờ Admin xét duyệt. Bạn không thể chỉnh sửa câu hỏi vào lúc này."
+                  : "Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa."}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 border-amber-600 text-amber-800 hover:bg-amber-500/10 normal-case"
+              onClick={handleNavigateToBlockingIncident}
+            >
+              Xử lý báo cáo
+            </Button>
           </div>
         )}
 
@@ -1417,6 +1496,20 @@ export default function QuestionEditorPage() {
                   : adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"
                   ? "Đang xử lý..."
                   : "Cập nhật và gửi Admin xét duyệt"}
+              </Button>
+            ) : !fromReported && hasBlockingIncident ? (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={handleNavigateToBlockingIncident}
+              >
+                Xử lý báo cáo
+              </Button>
+            ) : fromReported && incidentDetail?.status === "PendingAdminReview" ? (
+              <Button
+                className="normal-case h-9 text-xs"
+                disabled
+              >
+                Chờ Admin xét duyệt
               </Button>
             ) : (
               <Button

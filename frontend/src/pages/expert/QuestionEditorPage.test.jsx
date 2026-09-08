@@ -514,7 +514,7 @@ describe('QuestionEditorPage reported question workflow', () => {
     expect(noteElement).toHaveClass('whitespace-pre-wrap');
   });
 
-  it('resolves incident and displays rejection reason when opened from notification route without search params', async () => {
+  it('resolves incident and displays rejection reason when opened from notification route without search params using blockingReportIncident contract', async () => {
     const multiLineRejection = 'Đề xuất phương án vô hiệu câu hỏi không hợp lệ.\nVui lòng sửa đáp án.';
     const adminIncidentReport = {
       ...adminPendingFixReport,
@@ -526,14 +526,15 @@ describe('QuestionEditorPage reported question workflow', () => {
     locationPathname = '/expert/questions/101/reports';
     locationSearch = '';
 
-    questionBankApi.getMyReportedQuestions.mockResolvedValue({
+    questionBankApi.getQuestionDetail.mockResolvedValue({
       data: {
-        items: [
-          {
-            questionId: '101',
-            incidentId: 'incident-from-notif',
-          },
-        ],
+        ...sampleDetail,
+        blockingReportIncident: {
+          incidentId: 'incident-from-notif',
+          questionVersionId: 'ver-101',
+          status: 'Open',
+          requiresAdminReview: false,
+        },
       },
     });
 
@@ -556,7 +557,7 @@ describe('QuestionEditorPage reported question workflow', () => {
     );
 
     await waitFor(() => {
-      expect(questionBankApi.getMyReportedQuestions).toHaveBeenCalled();
+      expect(questionBankApi.getMyReportedQuestions).not.toHaveBeenCalled();
       expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledWith('incident-from-notif');
     });
 
@@ -675,5 +676,370 @@ describe('QuestionEditorPage reported question workflow', () => {
     // Check second submit payload has resolutionAction === "InvalidateAndAwardFull"
     const secondCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[1][1];
     expect(secondCallPayload.resolutionAction).toBe('InvalidateAndAwardFull');
+  });
+});
+
+describe('FE-1B: Ordinary edit guard and blocker routing', () => {
+  const sampleDetail = {
+    id: 101,
+    questionContent: '1 + 1 = 2',
+    solutionContent: 'Lời giải',
+    pictureUrl: '',
+    grade: 12,
+    questionType: 'SINGLE_CHOICE',
+    difficultyId: 'diff-1',
+    defaultWeight: 1,
+    topics: [{ tagId: 'tag-1', isPrimary: true, name: 'Đại số' }],
+    answers: [
+      { answerContent: '2', isCorrect: true },
+      { answerContent: '3', isCorrect: false },
+    ],
+  };
+
+  beforeEach(() => {
+    locationSearch = '';
+    locationPathname = '/expert/questions/101/edit';
+    questionBankApi.getMyReportedQuestions.mockResolvedValue({ data: { items: [] } });
+    questionBankApi.getDifficulties.mockResolvedValue({ data: [{ difficultyId: 'diff-1', difficultyName: 'Nhận biết' }] });
+    questionBankApi.getTopicTags.mockResolvedValue({ data: [{ tagId: 'tag-1', name: 'Đại số', depth: 1 }] });
+    questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
+    questionBankApi.updateQuestion.mockResolvedValue({ data: { success: true } });
+  });
+
+  it('blocks ordinary Save and offers "Xử lý báo cáo" when detail has Open blockingReportIncident', async () => {
+    questionBankApi.getQuestionDetail.mockResolvedValue({
+      data: {
+        ...sampleDetail,
+        blockingReportIncident: {
+          incidentId: 'incident-open-1',
+          questionVersionId: 'ver-101',
+          status: 'Open',
+          requiresAdminReview: false,
+        },
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    // Blocker banner should appear
+    expect(await screen.findByText(/Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa/i)).toBeInTheDocument();
+
+    // Ordinary Save button should NOT be present in the document
+    expect(screen.queryByRole('button', { name: /^Cập nhật câu hỏi$/i })).not.toBeInTheDocument();
+
+    // "Xử lý báo cáo" button is available
+    const navButtons = screen.getAllByRole('button', { name: /Xử lý báo cáo/i });
+    expect(navButtons.length).toBeGreaterThanOrEqual(1);
+
+    // Click "Xử lý báo cáo"
+    fireEvent.click(navButtons[0]);
+
+    // Navigates without sending any mutation API
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/questions/101/reports?incidentId=incident-open-1');
+    expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+  });
+
+  it('blocks ordinary Save and offers "Xử lý báo cáo" when detail has PendingAdminReview blockingReportIncident', async () => {
+    questionBankApi.getQuestionDetail.mockResolvedValue({
+      data: {
+        ...sampleDetail,
+        blockingReportIncident: {
+          incidentId: 'incident-admin-review-1',
+          questionVersionId: 'ver-101',
+          status: 'PendingAdminReview',
+          requiresAdminReview: true,
+        },
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    // Blocker banner for PendingAdminReview should appear
+    expect(await screen.findByText(/Câu hỏi đang có sự cố báo cáo chờ Admin xét duyệt/i)).toBeInTheDocument();
+
+    // Ordinary Save button should NOT be present
+    expect(screen.queryByRole('button', { name: /^Cập nhật câu hỏi$/i })).not.toBeInTheDocument();
+
+    // "Xử lý báo cáo" button is available
+    const navButtons = screen.getAllByRole('button', { name: /Xử lý báo cáo/i });
+    expect(navButtons.length).toBeGreaterThanOrEqual(1);
+
+    fireEvent.click(navButtons[0]);
+
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/questions/101/reports?incidentId=incident-admin-review-1');
+    expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+  });
+
+  it('protects unsaved changes when navigating to blocker and respects user confirmation', async () => {
+    questionBankApi.getQuestionDetail.mockResolvedValue({
+      data: {
+        ...sampleDetail,
+        blockingReportIncident: {
+          incidentId: 'incident-guard-1',
+          questionVersionId: 'ver-101',
+          status: 'Open',
+          requiresAdminReview: false,
+        },
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Câu hỏi đang có báo cáo sự cố cần xử lý/i)).toBeInTheDocument();
+
+    // Edit form content to make form dirty
+    const textarea = screen.getByDisplayValue('1 + 1 = 2');
+    fireEvent.change(textarea, { target: { value: '1 + 1 = 2 (chỉnh sửa bản nháp)' } });
+
+    // Mock confirm dialog - User cancels first
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    const navBtn = screen.getAllByRole('button', { name: /Xử lý báo cáo/i })[0];
+    fireEvent.click(navBtn);
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Bạn có thay đổi chưa lưu'));
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    // Now user confirms
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(navBtn);
+
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/questions/101/reports?incidentId=incident-guard-1');
+    confirmSpy.mockRestore();
+  });
+
+  it('PUT returns REPORT_INCIDENT_REQUIRES_RESOLUTION: preserves form edits, refreshes blocker, shows "Xử lý báo cáo"', async () => {
+    // Initially no blocker
+    questionBankApi.getQuestionDetail
+      .mockResolvedValueOnce({
+        data: {
+          ...sampleDetail,
+          blockingReportIncident: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          ...sampleDetail,
+          blockingReportIncident: {
+            incidentId: 'incident-concurrent-1',
+            questionVersionId: 'ver-101',
+            status: 'Open',
+            requiresAdminReview: false,
+          },
+        },
+      });
+
+    const conflictErr = new Error('Conflict');
+    conflictErr.response = {
+      status: 409,
+      data: {
+        code: 'REPORT_INCIDENT_REQUIRES_RESOLUTION',
+        message: 'Question editing is blocked until active report incidents are resolved.',
+      },
+    };
+    questionBankApi.updateQuestion.mockRejectedValueOnce(conflictErr);
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    // Normal save button is visible initially
+    const saveBtn = await screen.findByRole('button', { name: /^Cập nhật câu hỏi$/i });
+    expect(saveBtn).toBeInTheDocument();
+
+    // Edit content
+    const textarea = screen.getByDisplayValue('1 + 1 = 2');
+    fireEvent.change(textarea, { target: { value: '1 + 1 = 2 (nội dung mới không được ghi đè)' } });
+
+    // Click Save
+    fireEvent.click(saveBtn);
+
+    // Blocker error banner is displayed
+    const blockerAlerts = await screen.findAllByText(/Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa/i);
+    expect(blockerAlerts.length).toBeGreaterThanOrEqual(1);
+
+    // Crucial: Form input must NOT be overwritten!
+    expect(textarea.value).toBe('1 + 1 = 2 (nội dung mới không được ghi đè)');
+
+    // Crucial: getQuestionDetail was called to refresh blocker metadata
+    expect(questionBankApi.getQuestionDetail).toHaveBeenCalledTimes(2);
+
+    // Save button was replaced with "Xử lý báo cáo"
+    expect(screen.queryByRole('button', { name: /^Cập nhật câu hỏi$/i })).not.toBeInTheDocument();
+    const navBtn = screen.getAllByRole('button', { name: /Xử lý báo cáo/i })[0];
+    expect(navBtn).toBeInTheDocument();
+
+    // Navigating still triggers the unsaved-change guard
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(navBtn);
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Bạn có thay đổi chưa lưu'));
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/questions/101/reports?incidentId=incident-concurrent-1');
+    confirmSpy.mockRestore();
+  });
+
+  it('handles REPORT_INCIDENT_SUBMISSION_REQUIRED on legacy admin submit-review by switching to incident flow without fallback mutation', async () => {
+    locationSearch = '?from=reported';
+    locationPathname = '/expert/questions/101/edit';
+
+    const adminPendingFix = {
+      id: 503,
+      reportId: 503,
+      reporterRole: 'Admin',
+      status: 'PendingFix',
+      reportReason: 'Cần sửa LaTeX',
+      createdTime: '2026-08-25T00:00:00Z',
+    };
+
+    questionBankApi.getQuestionReports.mockResolvedValue({
+      data: [adminPendingFix],
+    });
+
+    const incidentData = {
+      incidentId: 'inc-admin-sub-req-1',
+      revision: 1,
+      status: 'Open',
+      originalVersion: { versionId: 'ver-101' },
+      reports: [
+        {
+          ...adminPendingFix,
+          incidentId: 'inc-admin-sub-req-1',
+        },
+      ],
+    };
+
+    questionBankApi.getQuestionDetail
+      .mockResolvedValueOnce({
+        data: {
+          ...sampleDetail,
+          blockingReportIncident: null,
+        },
+      })
+      .mockResolvedValue({
+        data: {
+          ...sampleDetail,
+          blockingReportIncident: {
+            incidentId: 'inc-admin-sub-req-1',
+            questionVersionId: 'ver-101',
+            status: 'Open',
+            requiresAdminReview: false,
+          },
+        },
+      });
+
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: incidentData,
+    });
+
+    const subReqErr = new Error('Incident submission required');
+    subReqErr.response = {
+      status: 409,
+      data: {
+        code: 'REPORT_INCIDENT_SUBMISSION_REQUIRED',
+        message: 'Reports assigned to an incident must be resolved through incident submission.',
+      },
+    };
+    questionBankApi.submitQuestionReportReview.mockRejectedValueOnce(subReqErr);
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    const updateSubmitBtns = await screen.findAllByRole('button', { name: /Cập nhật và gửi Admin xét duyệt/i });
+    expect(updateSubmitBtns.length).toBeGreaterThan(0);
+    fireEvent.click(updateSubmitBtns[0]);
+
+    // Error banner should notify user that report belongs to an incident
+    expect(await screen.findByText(/Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố/i)).toBeInTheDocument();
+
+    // Critical: It does NOT retry or fallback to any single report mutation API
+    expect(questionBankApi.submitQuestionReportReview).toHaveBeenCalledTimes(1);
+
+    // It transitioned to the incident workflow
+    await waitFor(() => {
+      expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledWith('inc-admin-sub-req-1');
+    });
+  });
+
+  it('allows normal edit and save when only Closed or AdjustmentPending incidents exist (blockingReportIncident is null)', async () => {
+    questionBankApi.getQuestionDetail.mockResolvedValue({
+      data: {
+        ...sampleDetail,
+        blockingReportIncident: null,
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    // Ordinary Save button is active and enabled
+    const saveBtn = await screen.findByRole('button', { name: /^Cập nhật câu hỏi$/i });
+    expect(saveBtn).toBeInTheDocument();
+    expect(saveBtn).toBeEnabled();
+
+    // No blocker banner
+    expect(screen.queryByText(/Câu hỏi đang có báo cáo sự cố cần xử lý/i)).not.toBeInTheDocument();
+
+    // Click Save
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(questionBankApi.updateQuestion).toHaveBeenCalledWith('101', expect.any(Object));
+      expect(mockNavigate).toHaveBeenCalledWith('/expert/questions');
+    });
+  });
+
+  it('gracefully handles missing metadata in blockingReportIncident without throwing errors', async () => {
+    questionBankApi.getQuestionDetail.mockResolvedValue({
+      data: {
+        ...sampleDetail,
+        blockingReportIncident: {
+          incidentId: 'inc-sparse-1',
+          status: 'Open',
+        },
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa/i)).toBeInTheDocument();
+    const navBtn = screen.getAllByRole('button', { name: /Xử lý báo cáo/i })[0];
+    expect(navBtn).toBeInTheDocument();
   });
 });
