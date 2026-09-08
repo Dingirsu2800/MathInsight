@@ -47,6 +47,10 @@ export default function IncidentReportPanel({
   onRetry,
   // Legacy single report handling handlers (when report has no incident)
   onResolveLegacyReport,
+  onSubmitAdminReview,
+  onRetryAdminReview,
+  adminReviewSubmitState = "idle",
+  loading = false,
   updatingReportId = null,
   hasSavedInSession = false,
   className = ""
@@ -215,6 +219,10 @@ export default function IncidentReportPanel({
                     reviewNote={reportReviewNotes[String(rep.reportId || rep.id)] ?? ""}
                     onReviewNoteChange={(val) => onReviewNoteChange?.(String(rep.reportId || rep.id), val)}
                     onResolveLegacyReport={onResolveLegacyReport}
+                    onSubmitAdminReview={onSubmitAdminReview}
+                    onRetryAdminReview={onRetryAdminReview}
+                    adminReviewSubmitState={adminReviewSubmitState}
+                    loading={loading}
                     updatingReportId={updatingReportId}
                     hasSavedInSession={hasSavedInSession}
                   />
@@ -266,6 +274,13 @@ export default function IncidentReportPanel({
               </div>
             </div>
           )}
+
+          {/* Helper note for legacy student/expert reports needing save first */}
+          {!hasOpenIncident && !hasSavedInSession && !reportsError && expertActionableReports.some(rep => (rep.reporterRole === "Student" || rep.reporterRole === "Expert") && rep.status === "Pending") && (
+            <p className="text-[10px] text-on-surface-variant/75 mt-3 italic leading-relaxed text-center">
+              * Các nút xử lý báo cáo sẽ hoạt động sau khi bạn ấn &ldquo;Lưu câu hỏi&rdquo; thành công ít nhất một lần.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -283,6 +298,10 @@ function ReportItemCard({
   reviewNote = "",
   onReviewNoteChange,
   onResolveLegacyReport,
+  onSubmitAdminReview,
+  onRetryAdminReview,
+  adminReviewSubmitState = "idle",
+  loading = false,
   updatingReportId,
   hasSavedInSession
 }) {
@@ -293,7 +312,7 @@ function ReportItemCard({
   const time = report.createdTime
     ? new Date(report.createdTime).toLocaleString("vi-VN")
     : "Chưa rõ thời gian";
-  const isUpdating = updatingReportId === reportId;
+  const isUpdating = String(updatingReportId) === reportId;
 
   return (
     <div
@@ -422,6 +441,11 @@ function ReportItemCard({
               </div>
             </div>
           )}
+          {report.submittedTime && (
+            <div className="text-[10px] text-on-surface-variant/80 font-mono font-medium">
+              Gửi duyệt lúc: {new Date(report.submittedTime).toLocaleString("vi-VN")}
+            </div>
+          )}
           <div className="text-[10px] italic text-on-surface-variant/80">
             Đang chờ Admin phê duyệt đề xuất này.
           </div>
@@ -436,46 +460,84 @@ function ReportItemCard({
         </div>
       )}
 
-      {/* Legacy standalone report action (no incident) */}
-      {!hasOpenIncident && isActionable && onResolveLegacyReport && (
-        <div className="flex justify-end gap-2 pt-2 border-t border-error/10">
-          <button
-            type="button"
-            disabled={!hasSavedInSession || isUpdating}
-            onClick={() => onResolveLegacyReport(report.reportId || report.id, "Resolved", report.reporterRole)}
-            className={cn(
-              "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-              hasSavedInSession && !isUpdating
-                ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
-                : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-            )}
-            title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
-          >
-            {isUpdating ? (
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              "Đã khắc phục"
-            )}
-          </button>
-          <button
-            type="button"
-            disabled={!hasSavedInSession || isUpdating}
-            onClick={() => onResolveLegacyReport(report.reportId || report.id, "Dismissed", report.reporterRole)}
-            className={cn(
-              "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-              hasSavedInSession && !isUpdating
-                ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
-                : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-            )}
-            title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
-          >
-            {isUpdating ? (
-              <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              "Không chấp nhận"
-            )}
-          </button>
-        </div>
+      {/* Legacy standalone report actions (no incident) */}
+      {!hasOpenIncident && isActionable && (
+        <>
+          {/* Case 1: Student/Expert legacy reports can use individual action buttons */}
+          {(report.reporterRole === "Student" || report.reporterRole === "Expert") && onResolveLegacyReport && (
+            <div className="flex justify-end gap-2 pt-2 border-t border-error/10">
+              <button
+                type="button"
+                data-testid={`legacy-resolve-btn-${reportId}`}
+                disabled={!hasSavedInSession || isUpdating}
+                onClick={() => onResolveLegacyReport(report.reportId || report.id, "Resolved", report.reporterRole)}
+                className={cn(
+                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                  hasSavedInSession && !isUpdating
+                    ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
+                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                )}
+                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
+              >
+                {isUpdating ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  "Đã khắc phục"
+                )}
+              </button>
+              <button
+                type="button"
+                data-testid={`legacy-dismiss-btn-${reportId}`}
+                disabled={!hasSavedInSession || isUpdating}
+                onClick={() => onResolveLegacyReport(report.reportId || report.id, "Dismissed", report.reporterRole)}
+                className={cn(
+                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                  hasSavedInSession && !isUpdating
+                    ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
+                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                )}
+                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
+              >
+                {isUpdating ? (
+                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  "Không chấp nhận"
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Case 2: Admin legacy reports (PendingFix) must submit for Admin review, NEVER use individual buttons */}
+          {report.reporterRole === "Admin" && (
+            <div className="flex justify-end pt-2 border-t border-error/10">
+              <button
+                type="button"
+                data-testid={`legacy-admin-submit-btn-${reportId}`}
+                disabled={loading || isUpdating || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+                onClick={() => {
+                  if (adminReviewSubmitState === "retryable") {
+                    onRetryAdminReview?.(report.reportId || report.id);
+                  } else {
+                    onSubmitAdminReview?.(report.reportId || report.id);
+                  }
+                }}
+                className={cn(
+                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95",
+                  (loading || isUpdating || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting") && "opacity-50 cursor-not-allowed"
+                )}
+                title="Gửi yêu cầu kiểm tra tới Admin"
+              >
+                {isUpdating || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting" ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : adminReviewSubmitState === "retryable" ? (
+                  "Gửi lại Admin xét duyệt"
+                ) : (
+                  "Cập nhật và gửi Admin xét duyệt"
+                )}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

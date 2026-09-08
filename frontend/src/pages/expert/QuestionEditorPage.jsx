@@ -386,7 +386,6 @@ export default function QuestionEditorPage() {
         const reports = incident?.reports || [];
         setIncidentDetail(incident || null);
         setPendingReports(reports);
-        setResolutionAction(incident?.proposedResolutionAction || "NoScoreChange");
 
         const activeReports = reports.filter(r =>
           r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
@@ -394,8 +393,10 @@ export default function QuestionEditorPage() {
 
         const isSameIncident = currentIncidentIdRef.current === incident?.incidentId;
         currentIncidentIdRef.current = incident?.incidentId || null;
+        const isOpenIncident = incident?.status === "Open";
 
-        if (isSameIncident) {
+        if (isSameIncident && isOpenIncident) {
+          setResolutionAction(prev => prev || incident?.proposedResolutionAction || "NoScoreChange");
           setReportDispositions(prev => Object.fromEntries(
             activeReports.map(r => [
               String(r.reportId || r.id),
@@ -409,6 +410,7 @@ export default function QuestionEditorPage() {
             ])
           ));
         } else {
+          setResolutionAction(incident?.proposedResolutionAction || "NoScoreChange");
           setReportDispositions(Object.fromEntries(
             activeReports.map(r => [
               String(r.reportId || r.id),
@@ -429,6 +431,7 @@ export default function QuestionEditorPage() {
       setIncidentDetail(null);
       currentIncidentIdRef.current = null;
       setPendingReports(reports);
+      setResolutionAction("NoScoreChange");
       setReportDispositions(prev => Object.fromEntries(
         reports.map(r => [
           String(r.reportId || r.id),
@@ -2185,6 +2188,10 @@ export default function QuestionEditorPage() {
                 reportsError={reportsError}
                 onRetry={fetchPendingReports}
                 onResolveLegacyReport={handleResolveReport}
+                onSubmitAdminReview={handleSaveAndSubmitReview}
+                onRetryAdminReview={handleRetrySubmitReview}
+                adminReviewSubmitState={adminReviewSubmitState}
+                loading={loading}
                 updatingReportId={updatingReportId}
                 hasSavedInSession={hasSavedInSession}
               />

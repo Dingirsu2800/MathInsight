@@ -208,4 +208,119 @@ describe("IncidentReportPanel component", () => {
 
     expect(screen.getByText(/Bắt buộc nhập lý do không chấp nhận cho báo cáo này/i)).toBeInTheDocument();
   });
+
+  it("legacy Admin PendingFix renders 'Cập nhật và gửi Admin xét duyệt' and does NOT render individual resolution buttons", () => {
+    const legacyAdminReport = {
+      reportId: "rep-admin-1",
+      reporterName: "Admin User",
+      reporterRole: "Admin",
+      status: "PendingFix",
+      reportReason: "Yêu cầu sửa định dạng câu",
+      reviewNote: "Lý do từ chối trước đó",
+      createdTime: "2026-09-05T10:00:00Z"
+    };
+
+    const onSubmitAdminReview = vi.fn();
+    const onResolveLegacyReport = vi.fn();
+
+    render(
+      <IncidentReportPanel
+        reports={[legacyAdminReport]}
+        incident={null}
+        hasSavedInSession={true}
+        onSubmitAdminReview={onSubmitAdminReview}
+        onResolveLegacyReport={onResolveLegacyReport}
+      />
+    );
+
+    // Individual action buttons must NOT be rendered for Admin
+    expect(screen.queryByTestId("legacy-resolve-btn-rep-admin-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("legacy-dismiss-btn-rep-admin-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Đã khắc phục/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Không chấp nhận/i })).not.toBeInTheDocument();
+
+    // Admin submit button must be present
+    const submitBtn = screen.getByTestId("legacy-admin-submit-btn-rep-admin-1");
+    expect(submitBtn).toBeInTheDocument();
+    expect(submitBtn).toHaveTextContent("Cập nhật và gửi Admin xét duyệt");
+
+    fireEvent.click(submitBtn);
+    expect(onSubmitAdminReview).toHaveBeenCalledWith("rep-admin-1");
+    expect(onResolveLegacyReport).not.toHaveBeenCalled();
+  });
+
+  it("legacy Admin PendingFix in retryable state renders 'Gửi lại Admin xét duyệt' and calls onRetryAdminReview", () => {
+    const legacyAdminReport = {
+      reportId: "rep-admin-2",
+      reporterName: "Admin User",
+      reporterRole: "Admin",
+      status: "PendingFix",
+      reportReason: "Yêu cầu sửa định dạng",
+      createdTime: "2026-09-05T10:00:00Z"
+    };
+
+    const onRetryAdminReview = vi.fn();
+    const onSubmitAdminReview = vi.fn();
+
+    render(
+      <IncidentReportPanel
+        reports={[legacyAdminReport]}
+        incident={null}
+        hasSavedInSession={true}
+        adminReviewSubmitState="retryable"
+        onSubmitAdminReview={onSubmitAdminReview}
+        onRetryAdminReview={onRetryAdminReview}
+      />
+    );
+
+    const retryBtn = screen.getByTestId("legacy-admin-submit-btn-rep-admin-2");
+    expect(retryBtn).toHaveTextContent("Gửi lại Admin xét duyệt");
+
+    fireEvent.click(retryBtn);
+    expect(onRetryAdminReview).toHaveBeenCalledWith("rep-admin-2");
+    expect(onSubmitAdminReview).not.toHaveBeenCalled();
+  });
+
+  it("legacy Student/Expert renders individual buttons calling onResolveLegacyReport and NOT admin submit button", () => {
+    const legacyStudentReport = {
+      reportId: "rep-student-1",
+      reporterName: "Học sinh Nam",
+      reporterRole: "Student",
+      status: "Pending",
+      reportReason: "Sai đáp án A",
+      createdTime: "2026-09-05T10:00:00Z"
+    };
+
+    const onResolveLegacyReport = vi.fn();
+    const onSubmitAdminReview = vi.fn();
+
+    render(
+      <IncidentReportPanel
+        reports={[legacyStudentReport]}
+        incident={null}
+        hasSavedInSession={true}
+        onResolveLegacyReport={onResolveLegacyReport}
+        onSubmitAdminReview={onSubmitAdminReview}
+      />
+    );
+
+    // Individual action buttons must exist
+    const resolveBtn = screen.getByTestId("legacy-resolve-btn-rep-student-1");
+    const dismissBtn = screen.getByTestId("legacy-dismiss-btn-rep-student-1");
+    expect(resolveBtn).toBeInTheDocument();
+    expect(dismissBtn).toBeInTheDocument();
+
+    // Admin submit button must NOT exist
+    expect(screen.queryByTestId("legacy-admin-submit-btn-rep-student-1")).not.toBeInTheDocument();
+
+    // Click "Đã khắc phục"
+    fireEvent.click(resolveBtn);
+    expect(onResolveLegacyReport).toHaveBeenCalledWith("rep-student-1", "Resolved", "Student");
+    expect(onSubmitAdminReview).not.toHaveBeenCalled();
+
+    // Click "Không chấp nhận"
+    fireEvent.click(dismissBtn);
+    expect(onResolveLegacyReport).toHaveBeenCalledWith("rep-student-1", "Dismissed", "Student");
+  });
 });
+

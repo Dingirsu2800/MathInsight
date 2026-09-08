@@ -593,4 +593,87 @@ describe('QuestionEditorPage reported question workflow', () => {
     expect(noteElement.textContent).toBe(legacyRejection);
     expect(noteElement).toHaveClass('whitespace-pre-wrap');
   });
+
+  it('preserves resolutionAction InvalidateAndAwardFull across incident refresh/conflict and does not silently revert to NoScoreChange', async () => {
+    locationSearch = '?from=reported&incidentId=inc-score-preserve';
+
+    const incidentDataInitial = {
+      incidentId: 'inc-score-preserve',
+      revision: 1,
+      status: 'Open',
+      proposedResolutionAction: 'NoScoreChange',
+      originalVersion: { versionId: 'ver-101' },
+      reports: [
+        {
+          id: 601,
+          reportId: 601,
+          reporterName: 'Học sinh 1',
+          reporterRole: 'Student',
+          status: 'Pending',
+          reportReason: 'Đề sai nghiêm trọng',
+          createdTime: '2026-09-01T00:00:00Z',
+        },
+      ],
+    };
+
+    const incidentDataAfterConflict = {
+      ...incidentDataInitial,
+      revision: 2,
+    };
+
+    questionBankApi.getQuestionReportIncident
+      .mockResolvedValueOnce({ data: incidentDataInitial })
+      .mockResolvedValue({ data: incidentDataAfterConflict });
+
+    // First submit fails with REPORT_SUBMISSION_KEY_CONFLICT
+    const conflictError = new Error('Conflict');
+    conflictError.response = { data: { code: 'REPORT_SUBMISSION_KEY_CONFLICT' } };
+    questionBankApi.submitQuestionReportIncident
+      .mockRejectedValueOnce(conflictError)
+      .mockResolvedValueOnce({ data: { success: true } });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Quyết định xử lý sự cố/i)).toBeInTheDocument();
+
+    // The score action select initially defaults to NoScoreChange
+    const scoreSelect = screen.getByLabelText(/Phương án điểm/i);
+    expect(scoreSelect).toHaveValue('NoScoreChange');
+
+    // Expert changes it to InvalidateAndAwardFull
+    fireEvent.change(scoreSelect, { target: { value: 'InvalidateAndAwardFull' } });
+    expect(scoreSelect).toHaveValue('InvalidateAndAwardFull');
+
+    // Click submit button in header
+    const submitBtn = screen.getByRole('button', { name: /Gửi quyết định xử lý/i });
+    fireEvent.click(submitBtn);
+
+    // Conflict error banner should appear and fetchPendingReports runs
+    expect(await screen.findByText(/Dữ liệu gửi không còn khớp với trạng thái máy chủ/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledTimes(2);
+    });
+
+    // CRITICAL: Ensure select has NOT silently reverted to NoScoreChange
+    expect(scoreSelect).toHaveValue('InvalidateAndAwardFull');
+
+    // Click retry submit button
+    const retryBtn = await screen.findByRole('button', { name: /Gửi lại quyết định xử lý/i });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(2);
+    });
+
+    // Check second submit payload has resolutionAction === "InvalidateAndAwardFull"
+    const secondCallPayload = questionBankApi.submitQuestionReportIncident.mock.calls[1][1];
+    expect(secondCallPayload.resolutionAction).toBe('InvalidateAndAwardFull');
+  });
 });
