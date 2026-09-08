@@ -155,6 +155,129 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
     }
 
     [QuestionBankSqlServerFact]
+    public async Task Expert_UpdatesCompositeQuestion_WhenArchivedPartsReuseOrderAndLabel()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var questionId = $"l3-cmp-{suffix}";
+        var rootTopicId = $"l3-cmp-root-{suffix}";
+        var topicId = $"l3-cmp-topic-{suffix}";
+
+        await _factory.SeedAsync(db =>
+        {
+            var rootTopic = new TagTopic
+            {
+                TagId = rootTopicId,
+                TagName = "Composite root",
+                Grade = 10,
+                DisplayOrder = 100,
+                IsActive = true
+            };
+            var topic = new TagTopic
+            {
+                TagId = topicId,
+                ParentTagId = rootTopicId,
+                TagName = "Composite topic",
+                Grade = 10,
+                DisplayOrder = 101,
+                IsActive = true
+            };
+            db.TagTopics.AddRange(rootTopic, topic);
+            db.Questions.Add(new Question
+            {
+                QuestionId = questionId,
+                QuestionContent = "Original composite question",
+                SolutionContent = "Original composite solution",
+                DifficultyId = "l3-report-difficulty",
+                Grade = 10,
+                Status = "Approved",
+                QuestionType = "Composite",
+                ExpertId = "expert_l3",
+                DefaultWeight = 1m,
+                IsActive = true,
+                CreatedTime = DateTime.UtcNow,
+                UpdatedTime = DateTime.UtcNow,
+                QuestionTopics =
+                [
+                    new QuestionTopic
+                    {
+                        QuestionTopicId = $"l3-cmp-link-{suffix}",
+                        TagId = topicId,
+                        IsPrimary = true
+                    }
+                ],
+                Parts =
+                [
+                    new QuestionPart
+                    {
+                        PartId = $"l3-cmp-old-a-{suffix}",
+                        PartOrder = 1,
+                        PartLabel = "a",
+                        PartContent = "Original part a",
+                        PartType = "TrueFalse",
+                        CorrectBoolean = true,
+                        Explanation = "Original explanation a",
+                        DefaultWeight = 1m
+                    },
+                    new QuestionPart
+                    {
+                        PartId = $"l3-cmp-old-b-{suffix}",
+                        PartOrder = 2,
+                        PartLabel = "b",
+                        PartContent = "Original part b",
+                        PartType = "TrueFalse",
+                        CorrectBoolean = false,
+                        Explanation = "Original explanation b",
+                        DefaultWeight = 1m
+                    }
+                ]
+            });
+        });
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/question-bank/questions/{questionId}")
+        {
+            Content = new StringContent(
+                $$"""
+                {
+                  "questionContent": "Updated composite question",
+                  "solutionContent": "Updated composite solution",
+                  "difficultyId": "l3-report-difficulty",
+                  "grade": 10,
+                  "questionType": "COMPOSITE",
+                  "defaultWeight": 1.0,
+                  "topics": [{ "tagId": "{{topicId}}", "isPrimary": true }],
+                  "answers": [],
+                  "parts": [
+                    { "partOrder": 1, "partLabel": "a", "partContent": "Updated part a", "partType": "TRUE_FALSE", "correctBoolean": false, "explanation": "Updated explanation a", "defaultWeight": 1.0 },
+                    { "partOrder": 2, "partLabel": "b", "partContent": "Updated part b", "partType": "TRUE_FALSE", "correctBoolean": true, "explanation": "Updated explanation b", "defaultWeight": 1.0 }
+                  ]
+                }
+                """,
+                Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.Add(QuestionBankTestAuthHandler.AccountHeader, "expert_l3");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            $"Expected OK but received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<QuestionBankDbContext>();
+        var question = await db.Questions
+            .Include(item => item.Parts)
+            .Include(item => item.Versions)
+            .SingleAsync(item => item.QuestionId == questionId);
+
+        Assert.Equal(2, question.Parts.Count(item => item.IsArchived));
+        Assert.Equal(2, question.Parts.Count(item => !item.IsArchived));
+        Assert.Single(question.Versions);
+        Assert.Contains(question.Parts, item => !item.IsArchived && item.PartOrder == 1 && item.PartLabel == "a");
+        Assert.Contains(question.Parts, item => !item.IsArchived && item.PartOrder == 2 && item.PartLabel == "b");
+    }
+
+    [QuestionBankSqlServerFact]
     public async Task ReportWorkflow_WithDifferentExpert_PersistsAndResolvesReportThroughHostedApi()
     {
         var questionId = await _factory.SeedReportableQuestionAsync();
@@ -531,6 +654,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         var mentorFollowUpMigration = FindRepositoryFile("database", "006_MentorFollowUp_CompositePolicy.sql");
         ExecuteSqlScriptAsync(_sqlConnectionString, mentorFollowUpMigration).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, mentorFollowUpMigration).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "007_Fix_QuestionPart_Archived_Uniqueness.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
                 ('role-expert-l3', N'Expert', N'L3 test role'),
