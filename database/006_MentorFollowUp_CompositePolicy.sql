@@ -379,9 +379,25 @@ IF NOT EXISTS (
         ON dbo.QuestionReport (ReporterAccountID, QuestionVersionID)
         WHERE QuestionVersionID IS NOT NULL;
 
+-- Validate the policy before changing any legacy Blueprint rows. A valid
+-- composite section may still carry the old fixed part count and will be
+-- normalized below; an invalid type/rule combination is a data error.
+IF EXISTS (
+    SELECT 1
+    FROM dbo.BlueprintSection
+    WHERE QuestionType IS NULL
+       OR ScoringRule IS NULL
+       OR (QuestionType = 'Composite'
+           AND ScoringRule NOT IN ('TieredTrueFalse', 'WeightedParts'))
+       OR (QuestionType <> 'Composite' AND ScoringRule <> 'AllOrNothing')
+       OR (QuestionType <> 'Composite' AND PartCountPerQuestion IS NOT NULL)
+       OR (PartCountPerQuestion IS NOT NULL AND PartCountPerQuestion <= 0))
+    THROW 50007, '006 cannot continue: BlueprintSection contains an invalid QuestionType/ScoringRule policy.', 1;
+
 -- Avoid a schema-modification lock on every successful rerun. The semantic
 -- markers below identify the target policy; an old 001 constraint lacks the
--- ScoringRule predicates and is replaced once.
+-- ScoringRule predicates and is replaced once. Valid legacy composite rows
+-- are converted before the new WITH CHECK constraint is added.
 IF NOT EXISTS (
     SELECT 1
     FROM sys.check_constraints
@@ -398,6 +414,12 @@ BEGIN
         WHERE name = N'CK_BlueprintSection_CompositePartMetadata'
           AND parent_object_id = OBJECT_ID(N'dbo.BlueprintSection'))
         ALTER TABLE dbo.BlueprintSection DROP CONSTRAINT CK_BlueprintSection_CompositePartMetadata;
+
+    UPDATE dbo.BlueprintSection
+    SET PartCountPerQuestion = NULL
+    WHERE QuestionType = 'Composite'
+      AND ScoringRule IN ('TieredTrueFalse', 'WeightedParts')
+      AND PartCountPerQuestion IS NOT NULL;
 
     ALTER TABLE dbo.BlueprintSection WITH CHECK
         ADD CONSTRAINT CK_BlueprintSection_CompositePartMetadata CHECK (

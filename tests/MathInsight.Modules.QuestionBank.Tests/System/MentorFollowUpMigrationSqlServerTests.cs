@@ -97,6 +97,59 @@ public sealed class MentorFollowUpMigrationSqlServerTests
         Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport WHERE QuestionVersionID IS NOT NULL;"));
     }
 
+    [QuestionBankSqlServerFact]
+    public async Task LegacyCompositePartCounts_AreClearedWithoutChangingPolicyOrOtherData()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync();
+
+        var before = await database.ReadLegacyCompositeStateAsync();
+
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        var after = await database.ReadLegacyCompositeStateAsync();
+
+        Assert.Equal(54, before.LegacyPartCountRows);
+        Assert.Equal(53, before.TieredRows);
+        Assert.Equal(1, before.WeightedRows);
+        Assert.Equal("AllOrNothing", before.TestQuestionScoringRuleSnapshot);
+        Assert.Equal(1.00m, before.TestQuestionWeightSnapshot);
+        Assert.Equal(1.00m, before.TestQuestionMaxPointsSnapshot);
+        Assert.Equal("Safe question", before.QuestionVersionContent);
+        Assert.Equal("[]", before.QuestionVersionAnswersSnapshot);
+        Assert.Equal(0.00m, before.SessionScore);
+        Assert.Equal(0, after.LegacyPartCountRows);
+        Assert.Equal(53, after.TieredRows);
+        Assert.Equal(1, after.WeightedRows);
+        Assert.Equal(before.TotalQuestions, after.TotalQuestions);
+        Assert.Equal(before.ScoreBudget, after.ScoreBudget);
+
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        Assert.Equal(after, await database.ReadLegacyCompositeStateAsync());
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task InvalidCompositePolicy_RollsBackBeforeClearingLegacyPartCounts()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync(includeInvalidPolicy: true);
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() => database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql"));
+
+        Assert.Contains("BlueprintSection", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var state = await database.ReadLegacyCompositeStateAsync();
+        Assert.Equal(55, state.LegacyPartCountRows);
+        Assert.Equal(53, state.TieredRows);
+        Assert.Equal(1, state.WeightedRows);
+        Assert.Equal(1, state.InvalidPolicyRows);
+        Assert.Equal(0, state.LegacyAuditTableCount);
+    }
+
     private sealed class DisposableDatabase : IAsyncDisposable
     {
         private readonly string _databaseName;
@@ -254,6 +307,62 @@ public sealed class MentorFollowUpMigrationSqlServerTests
             await ExecuteAsync(_connectionString, sql);
         }
 
+        public async Task SeedLegacyCompositeSectionsAsync(bool includeInvalidPolicy = false)
+        {
+            var rows = new List<string>();
+            for (var index = 1; index <= 53; index++)
+            {
+                rows.Add($"('migration-section-tiered-{index:00}', 'migration-blueprint', {index}, N'T{index:00}', N'Tiered {index:00}', 'Composite', 1, 1.00, 0.25, 4, 1.00, 'TieredTrueFalse')");
+            }
+
+            rows.Add("('migration-section-weighted', 'migration-blueprint', 54, N'W54', N'Weighted 54', 'Composite', 1, 1.00, 0.25, 4, 1.00, 'WeightedParts')");
+            if (includeInvalidPolicy)
+                rows.Add("('migration-section-invalid', 'migration-blueprint', 55, N'X55', N'Invalid 55', 'Composite', 1, 1.00, 0.25, 4, 1.00, 'AllOrNothing')");
+
+            var sql = $"""
+                INSERT INTO dbo.Blueprint (BlueprintID, BlueprintName, Grade, TotalQuestions, DurationMinutes, ExpertID, Status)
+                VALUES ('migration-blueprint', N'Migration blueprint', 10, 54, 60, 'migration-expert', 'Draft');
+                INSERT INTO dbo.BlueprintSection
+                    (BlueprintSectionID, BlueprintID, SectionOrder, SectionCode, SectionName, QuestionType,
+                     TotalQuestions, DefaultPointPerQuestion, DefaultPointPerPart, PartCountPerQuestion,
+                     ScoreBudget, ScoringRule)
+                VALUES {string.Join(",\n", rows)};
+                """;
+            await ExecuteAsync(_connectionString, sql);
+        }
+
+        public async Task<LegacyCompositeState> ReadLegacyCompositeStateAsync()
+        {
+            const string sql = """
+                SELECT
+                    COUNT(CASE WHEN PartCountPerQuestion IS NOT NULL THEN 1 END),
+                    COUNT(CASE WHEN ScoringRule = 'TieredTrueFalse' THEN 1 END),
+                    COUNT(CASE WHEN ScoringRule = 'WeightedParts' THEN 1 END),
+                    COUNT(CASE WHEN ScoringRule NOT IN ('TieredTrueFalse', 'WeightedParts') THEN 1 END),
+                    SUM(TotalQuestions),
+                    SUM(ScoreBudget),
+                    (SELECT COUNT(*) FROM sys.tables WHERE object_id = OBJECT_ID('dbo.QuestionReportLegacyAudit')),
+                    (SELECT ScoringRuleSnapshot FROM dbo.TestQuestion WHERE TestID = 'migration-test-safe'),
+                    (SELECT WeightSnapshot FROM dbo.TestQuestion WHERE TestID = 'migration-test-safe'),
+                    (SELECT MaxPointsSnapshot FROM dbo.TestQuestion WHERE TestID = 'migration-test-safe'),
+                    (SELECT QuestionContent FROM dbo.QuestionVersion WHERE VersionID = 'v-migration-safe'),
+                    (SELECT AnswersSnapshot FROM dbo.QuestionVersion WHERE VersionID = 'v-migration-safe'),
+                    (SELECT Score FROM dbo.TestSession WHERE SessionID = 'migration-session-safe')
+                FROM dbo.BlueprintSection
+                WHERE BlueprintID = 'migration-blueprint';
+                """;
+            await using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
+            await using var command = new SqlCommand(sql, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            return new LegacyCompositeState(
+                reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3),
+                reader.GetInt32(4), reader.GetDecimal(5), reader.GetInt32(6), reader.GetString(7),
+                reader.GetDecimal(8), reader.GetDecimal(9), reader.GetString(10), reader.GetString(11),
+                reader.GetDecimal(12));
+        }
+
         public async ValueTask DisposeAsync()
         {
             try
@@ -303,4 +412,19 @@ public sealed class MentorFollowUpMigrationSqlServerTests
         int PartialIncidentTableCount,
         int TestQuestionGradingPolicyColumnCount,
         int LegacyAuditTableCountAfterFailure);
+
+    private sealed record LegacyCompositeState(
+        int LegacyPartCountRows,
+        int TieredRows,
+        int WeightedRows,
+        int InvalidPolicyRows,
+        int TotalQuestions,
+        decimal ScoreBudget,
+        int LegacyAuditTableCount,
+        string TestQuestionScoringRuleSnapshot,
+        decimal TestQuestionWeightSnapshot,
+        decimal TestQuestionMaxPointsSnapshot,
+        string QuestionVersionContent,
+        string QuestionVersionAnswersSnapshot,
+        decimal SessionScore);
 }
