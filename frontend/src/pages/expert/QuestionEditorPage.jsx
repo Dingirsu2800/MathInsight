@@ -12,6 +12,7 @@ import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDra
 import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
 import ShortAnswerInput from "../../components/questions/ShortAnswerInput";
+import IncidentReportPanel from "../../components/question-reports/IncidentReportPanel";
 import { validateShortAnswer, isNumericAnswerPrecisionValid } from "../../utils/shortAnswer";
 import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
 
@@ -107,6 +108,8 @@ export default function QuestionEditorPage() {
   const [pendingReports, setPendingReports] = React.useState([]);
   const [incidentDetail, setIncidentDetail] = React.useState(null);
   const [reportDispositions, setReportDispositions] = React.useState({});
+  const [reportReviewNotes, setReportReviewNotes] = React.useState({});
+  const currentIncidentIdRef = React.useRef(null);
   const [resolutionAction, setResolutionAction] = React.useState("NoScoreChange");
   const [reportsLoading, setReportsLoading] = React.useState(false);
   const [updatingReportId, setUpdatingReportId] = React.useState(null);
@@ -384,14 +387,60 @@ export default function QuestionEditorPage() {
         setIncidentDetail(incident || null);
         setPendingReports(reports);
         setResolutionAction(incident?.proposedResolutionAction || "NoScoreChange");
-        setReportDispositions(Object.fromEntries(reports
-          .filter(r => r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview")
-          .map(r => [String(r.reportId || r.id), r.proposedStatus || ""])));
+
+        const activeReports = reports.filter(r =>
+          r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
+        );
+
+        const isSameIncident = currentIncidentIdRef.current === incident?.incidentId;
+        currentIncidentIdRef.current = incident?.incidentId || null;
+
+        if (isSameIncident) {
+          setReportDispositions(prev => Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              prev[String(r.reportId || r.id)] ?? r.proposedStatus ?? "Resolved"
+            ])
+          ));
+          setReportReviewNotes(prev => Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              prev[String(r.reportId || r.id)] ?? r.proposedReviewNote ?? ""
+            ])
+          ));
+        } else {
+          setReportDispositions(Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              r.proposedStatus ?? "Resolved"
+            ])
+          ));
+          setReportReviewNotes(Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              r.proposedReviewNote ?? ""
+            ])
+          ));
+        }
         return { ok: true, reports, incident };
       }
       const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
       const reports = res.data || [];
+      setIncidentDetail(null);
+      currentIncidentIdRef.current = null;
       setPendingReports(reports);
+      setReportDispositions(prev => Object.fromEntries(
+        reports.map(r => [
+          String(r.reportId || r.id),
+          prev[String(r.reportId || r.id)] ?? "Resolved"
+        ])
+      ));
+      setReportReviewNotes(prev => Object.fromEntries(
+        reports.map(r => [
+          String(r.reportId || r.id),
+          prev[String(r.reportId || r.id)] ?? ""
+        ])
+      ));
       return { ok: true, reports };
     } catch (err) {
       console.error("Failed to load pending reports:", err);
@@ -1105,15 +1154,38 @@ export default function QuestionEditorPage() {
       const activeReports = pendingReports.filter(r =>
         r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
       );
-      const reportDecisions = activeReports.map(r => ({
-        reportId: String(r.reportId || r.id),
-        disposition: reportDispositions[String(r.reportId || r.id)] || "",
-        reviewNote: null
-      }));
+      const reportDecisions = activeReports.map(r => {
+        const repId = String(r.reportId || r.id);
+        const disposition = reportDispositions[repId] || "Resolved";
+        const reviewNote = disposition === "Dismissed" ? (reportReviewNotes[repId] || "").trim() : null;
+        return {
+          reportId: repId,
+          disposition,
+          reviewNote
+        };
+      });
+
       if (reportDecisions.some(item => !item.disposition)) {
         showError("Chọn quyết định cho từng báo cáo trước khi gửi xử lý.");
         return;
       }
+
+      const emptyDismissal = reportDecisions.find(
+        item => item.disposition === "Dismissed" && (!item.reviewNote || item.reviewNote.length === 0)
+      );
+      if (emptyDismissal) {
+        showError("Vui lòng nhập lý do không chấp nhận cho tất cả báo cáo bị từ chối.");
+        return;
+      }
+
+      const overlongDismissal = reportDecisions.find(
+        item => item.disposition === "Dismissed" && item.reviewNote && item.reviewNote.length > 2000
+      );
+      if (overlongDismissal) {
+        showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+        return;
+      }
+
       const isNoEditDismissal = resolutionAction === "NoScoreChange" &&
         reportDecisions.every(item => item.disposition === "Dismissed");
       if (!isNoEditDismissal && !validateForm()) return;
@@ -1136,9 +1208,9 @@ export default function QuestionEditorPage() {
         initialFormSnapshotRef.current = JSON.stringify(form);
         setHasSavedInSession(true);
         setAdminReviewSubmitState("complete");
-          setInfoMessage(isNoEditDismissal
-            ? "Đã gửi quyết định không chỉnh sửa câu hỏi để Admin xét duyệt."
-            : "Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
+        setInfoMessage(isNoEditDismissal
+          ? "Đã gửi quyết định không chỉnh sửa câu hỏi để Admin xét duyệt."
+          : "Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
         const refreshResult = await fetchPendingReports();
         if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
           navigate("/expert/questions/reported");
@@ -1146,7 +1218,11 @@ export default function QuestionEditorPage() {
       } catch (err) {
         console.error("Failed to submit incident review:", err);
         const code = err.response?.data?.code;
-        if (code === "REPORT_SUBMISSION_KEY_CONFLICT") {
+        if (code === "REVIEW_NOTE_REQUIRED") {
+          showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+        } else if (code === "REVIEW_NOTE_TOO_LONG") {
+          showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+        } else if (code === "REPORT_SUBMISSION_KEY_CONFLICT") {
           submissionKeyRef.current = null;
           showError("Dữ liệu gửi không còn khớp với trạng thái máy chủ. Đang làm mới sự cố...");
           await fetchPendingReports();
@@ -2092,264 +2168,26 @@ export default function QuestionEditorPage() {
 
             {/* Pending Reports Panel */}
             {fromReported && (
-              <div className="bg-pure-surface rounded-xl border border-error/20 p-5 lg:p-6 diffused-shadow shadow-sm">
-                <h3 className="text-xs font-bold text-error mb-4 tracking-wider flex items-center gap-1.5 border-b border-error/10 pb-2.5 uppercase">
-                  <span className="material-symbols-outlined text-[16px]">report</span>
-                  BÁO CÁO ĐANG CHỜ XỬ LÝ ({pendingReports.length})
-                </h3>
-
-                {hasOpenIncident && (
-                  <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-2">
-                    <div className="font-bold text-primary">Quyết định xử lý sự cố</div>
-                    <label className="block text-on-surface-variant">
-                      Phương án điểm
-                      <select
-                        value={resolutionAction}
-                        onChange={(event) => setResolutionAction(event.target.value)}
-                        className="mt-1 w-full rounded border border-outline-variant bg-pure-surface px-2 py-1.5 text-xs text-on-surface"
-                      >
-                        <option value="NoScoreChange">Không điều chỉnh điểm</option>
-                        <option value="InvalidateAndAwardFull">Vô hiệu câu hỏi và cộng đủ điểm</option>
-                      </select>
-                    </label>
-                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                      Chọn quyết định riêng cho từng báo cáo bên dưới. Nếu tất cả đều không chấp nhận và không điều chỉnh điểm, hệ thống không tạo phiên bản câu hỏi mới.
-                    </p>
-                  </div>
-                )}
-
-                {reportsError ? (
-                  <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg text-center font-semibold">
-                    <p className="mb-2">{reportsError}</p>
-                    <Button variant="outline" size="sm" onClick={fetchPendingReports} className="text-[10px] h-7">Thử lại</Button>
-                  </div>
-                ) : reportsLoading && pendingReports.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-on-surface-variant flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <span>Đang tải các báo cáo...</span>
-                  </div>
-                ) : pendingReports.length === 0 ? (
-                  <div className="p-3 text-xs text-emerald-success bg-emerald-success/5 border border-emerald-success/15 rounded-lg text-center font-bold">
-                    Không còn báo cáo nào đang chờ xử lý.
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
-                    {pendingReports.map((rep) => {
-                      const reportIdVal = rep.reportId || rep.id;
-                      const time = rep.createdTime ? new Date(rep.createdTime).toLocaleString("vi-VN") : "Chưa rõ thời gian";
-                      const isUpdatingThisReport = updatingReportId === reportIdVal;
-
-                      const isStudentOrExpert = rep.reporterRole === "Student" || rep.reporterRole === "Expert";
-                      const isPending = rep.status === "Pending";
-                      const isAdmin = rep.reporterRole === "Admin";
-                      const isPendingFix = rep.status === "PendingFix";
-                      const isPendingReview = rep.status === "PendingReview";
-
-                      if (hasOpenIncident && (isPending || isPendingFix || isPendingReview)) {
-                        const decisionValue = reportDispositions[String(reportIdVal)] || "";
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
-                                {getRoleLabel(rep.reporterRole || rep.role)}
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            {rep.reviewNote && (
-                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
-                                <div className="font-bold text-error flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
-                                  <span>Lý do từ chối:</span>
-                                </div>
-                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
-                                  {rep.reviewNote}
-                                </div>
-                              </div>
-                            )}
-                            <label className="block text-[10px] font-bold text-on-surface-variant">
-                              Quyết định
-                              <select
-                                value={decisionValue}
-                                onChange={(event) => setReportDispositions(prev => ({
-                                  ...prev,
-                                  [String(reportIdVal)]: event.target.value
-                                }))}
-                                className="mt-1 w-full rounded border border-outline-variant bg-pure-surface px-2 py-1.5 text-xs text-on-surface"
-                              >
-                                <option value="">Chọn quyết định</option>
-                                <option value="Resolved">Chấp nhận báo cáo</option>
-                                <option value="Dismissed">Không chấp nhận báo cáo</option>
-                              </select>
-                            </label>
-                          </div>
-                        );
-                      }
-
-                      if (isStudentOrExpert && isPending) {
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
-                                {getRoleLabel(rep.reporterRole || rep.role)}
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            {rep.reviewNote && (
-                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
-                                <div className="font-bold text-error flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
-                                  <span>Lý do từ chối:</span>
-                                </div>
-                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
-                                  {rep.reviewNote}
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex justify-end gap-2 pt-1 border-t border-error/10">
-                              <button
-                                type="button"
-                                disabled={!hasSavedInSession || isUpdatingThisReport}
-                                onClick={() => handleResolveReport(reportIdVal, "Resolved", rep.reporterRole)}
-                                className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                                  hasSavedInSession && !isUpdatingThisReport
-                                    ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
-                                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-                                )}
-                                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
-                              >
-                                {isUpdatingThisReport ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                  "Đã khắc phục"
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!hasSavedInSession || isUpdatingThisReport}
-                                onClick={() => handleResolveReport(reportIdVal, "Dismissed", rep.reporterRole)}
-                                className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                                  hasSavedInSession && !isUpdatingThisReport
-                                    ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
-                                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-                                )}
-                                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
-                              >
-                                {isUpdatingThisReport ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                  "Không chấp nhận"
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (isAdmin && isPendingFix) {
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded">
-                                Admin yêu cầu chỉnh sửa
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            {rep.reviewNote && (
-                              <div className="p-2.5 bg-error/10 border border-error/20 rounded-lg text-xs space-y-1">
-                                <div className="font-bold text-error flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">cancel</span>
-                                  <span>Lý do từ chối:</span>
-                                </div>
-                                <div className="whitespace-pre-wrap break-words text-on-surface leading-relaxed text-[11px]">
-                                  {rep.reviewNote}
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex justify-end pt-1 border-t border-error/10">
-                              <button
-                                type="button"
-                                disabled={loading || isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
-                                onClick={() => {
-                                  if (adminReviewSubmitState === "retryable") {
-                                    handleRetrySubmitReview(reportIdVal);
-                                  } else {
-                                    handleSaveAndSubmitReview(reportIdVal);
-                                  }
-                                }}
-                                className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95",
-                                  (loading || isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting") && "opacity-50 cursor-not-allowed"
-                                )}
-                                title="Gửi yêu cầu kiểm tra tới Admin"
-                              >
-                                {isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting" ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : adminReviewSubmitState === "retryable" ? (
-                                  "Gửi lại Admin xét duyệt"
-                                ) : (
-                                  "Cập nhật và gửi Admin xét duyệt"
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (isAdmin && isPendingReview) {
-                        const submittedTimeStr = rep.submittedTime ? new Date(rep.submittedTime).toLocaleString("vi-VN") : "";
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-surface-container-low border border-whisper-border rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                                Đang chờ Admin xét duyệt
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface-variant font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            {submittedTimeStr && (
-                              <div className="text-[10px] text-on-surface-variant/80 font-mono font-medium">
-                                Gửi duyệt lúc: {submittedTimeStr}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={reportIdVal} className="p-3 bg-surface-container-low border border-whisper-border rounded-lg text-xs space-y-2">
-                          <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                            <span className="font-bold text-on-surface-variant bg-surface px-1.5 py-0.5 rounded uppercase">
-                              {getRoleLabel(rep.reporterRole || rep.role)} ({rep.status})
-                            </span>
-                            <span>{time}</span>
-                          </div>
-                          <p className="text-on-surface-variant font-medium leading-relaxed italic">
-                            &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {!hasSavedInSession && !reportsError && pendingReports.some(rep => (rep.reporterRole === "Student" || rep.reporterRole === "Expert") && rep.status === "Pending") && (
-                  <p className="text-[10px] text-on-surface-variant/75 mt-3 italic leading-relaxed text-center">
-                    * Các nút xử lý báo cáo sẽ hoạt động sau khi bạn ấn &ldquo;Lưu câu hỏi&rdquo; thành công ít nhất một lần.
-                  </p>
-                )}
-              </div>
+              <IncidentReportPanel
+                reports={pendingReports}
+                incident={incidentDetail}
+                reportDispositions={reportDispositions}
+                onDispositionChange={(reportId, val) =>
+                  setReportDispositions(prev => ({ ...prev, [reportId]: val }))
+                }
+                reportReviewNotes={reportReviewNotes}
+                onReviewNoteChange={(reportId, val) =>
+                  setReportReviewNotes(prev => ({ ...prev, [reportId]: val }))
+                }
+                resolutionAction={resolutionAction}
+                onResolutionActionChange={setResolutionAction}
+                reportsLoading={reportsLoading}
+                reportsError={reportsError}
+                onRetry={fetchPendingReports}
+                onResolveLegacyReport={handleResolveReport}
+                updatingReportId={updatingReportId}
+                hasSavedInSession={hasSavedInSession}
+              />
             )}
 
             {/* Meta Properties Summary Card */}

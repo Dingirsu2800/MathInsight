@@ -42,6 +42,22 @@ vi.mock('../../components/layout/DashboardLayout', () => ({
   default: ({ children }) => <div data-testid="dashboard-layout">{children}</div>,
 }));
 
+vi.mock('../../components/ui/custom-select', () => ({
+  CustomSelect: ({ value, onValueChange, items, id, 'aria-label': ariaLabel }) => (
+    <select
+      id={id}
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(e) => onValueChange?.(e.target.value)}
+      role="combobox"
+    >
+      {items?.map((it) => (
+        <option key={it.value} value={it.value}>{it.label}</option>
+      ))}
+    </select>
+  ),
+}));
+
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -118,7 +134,8 @@ describe('QuestionEditorPage reported question workflow', () => {
       </BrowserRouter>
     );
 
-    expect(await screen.findByText(/BÁO CÁO ĐANG CHỜ XỬ LÝ \(2\)/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổng số: 2/i)).toBeInTheDocument();
     expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
 
     // Click Save button in header
@@ -277,7 +294,8 @@ describe('QuestionEditorPage reported question workflow', () => {
       </BrowserRouter>
     );
 
-    expect(await screen.findByText(/BÁO CÁO ĐANG CHỜ XỬ LÝ \(1\)/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tổng số: 1/i)).toBeInTheDocument();
 
     const cancelBtn = screen.getByRole('button', { name: /Hủy/i });
     fireEvent.click(cancelBtn);
@@ -308,7 +326,7 @@ describe('QuestionEditorPage reported question workflow', () => {
       </BrowserRouter>
     );
 
-    expect(await screen.findByText('Đang chờ Admin xét duyệt')).toBeInTheDocument();
+    expect(await screen.findByTestId('group-header-admin')).toBeInTheDocument();
 
     const cancelBtn = screen.getByRole('button', { name: /Hủy/i });
     fireEvent.click(cancelBtn);
@@ -350,8 +368,8 @@ describe('QuestionEditorPage reported question workflow', () => {
     expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
 
     await screen.findByText(/Quyết định xử lý sự cố/i);
-    const reportDecisionSelect = document.querySelectorAll('select')[1];
-    fireEvent.change(reportDecisionSelect, { target: { value: 'Resolved' } });
+    const reportDecisionSelect = screen.getByLabelText(/Quyết định cho báo cáo/i);
+    expect(reportDecisionSelect.value).toBe('Resolved');
     fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
 
     await waitFor(() => {
@@ -404,8 +422,12 @@ describe('QuestionEditorPage reported question workflow', () => {
     );
 
     await screen.findByText(/Quyết định xử lý sự cố/i);
-    const reportDecisionSelect = document.querySelectorAll('select')[1];
+    const reportDecisionSelect = screen.getByLabelText(/Quyết định cho báo cáo/i);
     fireEvent.change(reportDecisionSelect, { target: { value: 'Dismissed' } });
+
+    const reasonTextarea = await screen.findByLabelText(/Lý do không chấp nhận/i);
+    fireEvent.change(reasonTextarea, { target: { value: 'Báo cáo không đúng thực tế' } });
+
     fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
 
     await waitFor(() => {
@@ -415,9 +437,45 @@ describe('QuestionEditorPage reported question workflow', () => {
     const [, payload] = questionBankApi.submitQuestionReportIncident.mock.calls[0];
     expect(payload.correction).toBeNull();
     expect(payload.reportDecisions).toEqual([
-      { reportId: '501', disposition: 'Dismissed', reviewNote: null },
+      { reportId: '501', disposition: 'Dismissed', reviewNote: 'Báo cáo không đúng thực tế' },
     ]);
     expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+  });
+
+  it('validates non-empty trimmed reviewNote when disposition is Dismissed', async () => {
+    const incidentReport = {
+      ...studentReport,
+      incidentId: 'incident-dismiss-validation',
+      questionVersionId: 'ver-101',
+    };
+    locationSearch = '?from=reported&incidentId=incident-dismiss-validation';
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-dismiss-validation',
+        revision: 1,
+        status: 'Open',
+        originalVersion: { versionId: 'ver-101' },
+        reports: [incidentReport],
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <NavigationGuardProvider>
+          <QuestionEditorPage />
+        </NavigationGuardProvider>
+      </BrowserRouter>
+    );
+
+    await screen.findByText(/Quyết định xử lý sự cố/i);
+    const reportDecisionSelect = screen.getByLabelText(/Quyết định cho báo cáo/i);
+    fireEvent.change(reportDecisionSelect, { target: { value: 'Dismissed' } });
+
+    // Click submit with empty reason
+    fireEvent.click(screen.getByRole('button', { name: /Gửi quyết định xử lý/i }));
+
+    expect(await screen.findByText(/Vui lòng nhập lý do không chấp nhận cho tất cả báo cáo bị từ chối/i)).toBeInTheDocument();
+    expect(questionBankApi.submitQuestionReportIncident).not.toHaveBeenCalled();
   });
 
   it('displays reports[].reviewNote under "Lý do từ chối" with preserved line breaks and formatting when Admin rejects incident', async () => {
@@ -502,7 +560,7 @@ describe('QuestionEditorPage reported question workflow', () => {
       expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledWith('incident-from-notif');
     });
 
-    expect(await screen.findByText(/BÁO CÁO ĐANG CHỜ XỬ LÝ/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
     expect(screen.getByText(/Lý do từ chối:/i)).toBeInTheDocument();
 
     const noteElement = screen.getByText((content) => content.includes('Đề xuất phương án vô hiệu'));
