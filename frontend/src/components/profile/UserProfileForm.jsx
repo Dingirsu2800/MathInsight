@@ -11,6 +11,7 @@ const PROFILE_URL = "/api/v1/accounts/profile";
 const CHANGE_PASSWORD_URL = "/api/v1/accounts/change-password";
 
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\da-zA-Z]).{8,128}$/;
+export const PROFILE_PHONE_PATTERN = /^(03|05|07|08|09)\d{8}$/;
 
 const PASSWORD_ERROR = "Đổi mật khẩu thất bại. Vui lòng thử lại.";
 const PASSWORD_SUCCESS = "Đổi mật khẩu thành công.";
@@ -65,6 +66,74 @@ function formatDate(isoDate) {
   const [year, month, day] = isoDate.split("-");
   if (!year || !month || !day) return isoDate;
   return `${day}/${month}/${year}`;
+}
+
+function parseIsoDate(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+
+  const date = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const [year, month, day] = trimmed.split("-").map(Number);
+  if (date.getFullYear() !== year || date.getMonth() + 1 !== month || date.getDate() !== day) {
+    return null;
+  }
+
+  return date;
+}
+
+function calculateAge(dateValue) {
+  const date = parseIsoDate(dateValue);
+  if (!date) return null;
+
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let age = startOfToday.getFullYear() - date.getFullYear();
+  const monthDiff = startOfToday.getMonth() - date.getMonth();
+  const dayDiff = startOfToday.getDate() - date.getDate();
+
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+
+  return age;
+}
+
+export function buildDisplayName(lastName, firstName) {
+  return [String(lastName ?? "").trim(), String(firstName ?? "").trim()].filter(Boolean).join(" ");
+}
+
+export function validateProfileUpdate(profile = {}) {
+  const errors = {};
+  const phoneNumber = String(profile.phoneNumber ?? "").trim();
+  if (phoneNumber && !PROFILE_PHONE_PATTERN.test(phoneNumber)) {
+    errors.phoneNumber = "Số điện thoại không hợp lệ.";
+  }
+
+  const dateOfBirth = String(profile.dateOfBirth ?? "").trim();
+  if (dateOfBirth) {
+    const parsedDate = parseIsoDate(dateOfBirth);
+    if (!parsedDate) {
+      errors.dateOfBirth = "Ngày sinh không hợp lệ.";
+    } else {
+      const today = new Date();
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (parsedDate > startOfToday) {
+        errors.dateOfBirth = "Ngày sinh không được lớn hơn ngày hiện tại.";
+      } else {
+        const age = calculateAge(dateOfBirth);
+        const grade = Number(profile.student?.currentGrade ?? profile.currentGrade ?? 0);
+        const isStudentRole = profile.roleName === "Student" || profile.roleName === "student" || grade > 0;
+        if (isStudentRole && grade >= 10 && grade <= 12 && (age === null || age < 14 || age > 20)) {
+          errors.dateOfBirth = "Ngày sinh không phù hợp với độ tuổi học sinh THPT.";
+        }
+      }
+    }
+  }
+
+  return errors;
 }
 
 function genderLabel(value) {
@@ -513,6 +582,18 @@ export default function UserProfileForm({ className = "" }) {
     if (!form.firstName.trim()) localErrors.firstName = "Vui lòng nhập tên.";
     if (!form.lastName.trim()) localErrors.lastName = "Vui lòng nhập họ và tên đệm.";
 
+    const profileValidationErrors = validateProfileUpdate({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      phoneNumber: form.phoneNumber,
+      dateOfBirth: form.dateOfBirth,
+      roleName: profile?.roleName,
+      currentGrade: form.currentGrade,
+      student: profile?.student,
+    });
+
+    Object.assign(localErrors, profileValidationErrors);
+
     if (Object.keys(localErrors).length > 0) {
       setFieldErrors(localErrors);
       setFormError(CHECK_FIELDS_ERROR);
@@ -587,8 +668,7 @@ export default function UserProfileForm({ className = "" }) {
                 )}
                 <div className="space-y-1.5">
                   <h1 className="text-xl font-bold text-[#1e2a4a]">
-                    {[profile.lastName, profile.firstName].filter(Boolean).join(" ") ||
-                      profile.username}
+                    {buildDisplayName(profile.lastName, profile.firstName) || profile.username}
                   </h1>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Badge>{ROLE_LABELS[role] || profile.roleName}</Badge>
