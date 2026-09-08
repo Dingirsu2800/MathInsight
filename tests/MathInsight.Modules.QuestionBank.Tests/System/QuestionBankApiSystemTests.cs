@@ -747,6 +747,7 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         ExecuteSqlScriptAsync(_sqlConnectionString, mentorFollowUpMigration).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, mentorFollowUpMigration).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "007_Fix_QuestionPart_Archived_Uniqueness.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "008_Fix_QuestionReport_SessionVersion_Pair.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES
                 ('role-expert-l3', N'Expert', N'L3 test role'),

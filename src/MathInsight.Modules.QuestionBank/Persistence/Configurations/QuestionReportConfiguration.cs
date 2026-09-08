@@ -8,7 +8,10 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
 {
     public void Configure(EntityTypeBuilder<QuestionReport> builder)
     {
-        builder.ToTable(nameof(QuestionReport));
+        builder.ToTable(nameof(QuestionReport), table =>
+            table.HasCheckConstraint(
+                "CK_QuestionReport_SessionVersionPair",
+                "[SessionID] IS NULL OR [QuestionVersionID] IS NOT NULL"));
 
         builder.HasKey(report => report.ReportId)
             .HasName("PK_QuestionReport");

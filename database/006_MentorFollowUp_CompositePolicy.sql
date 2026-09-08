@@ -379,6 +379,18 @@ IF NOT EXISTS (
         ON dbo.QuestionReport (ReporterAccountID, QuestionVersionID)
         WHERE QuestionVersionID IS NOT NULL;
 
+-- Direct reports are version-scoped but do not have a test session. Keep the
+-- session/version invariant aligned with the application contract on a fresh
+-- database after any legacy session references have been resolved above.
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_QuestionReport_SessionVersionPair'
+      AND parent_object_id = OBJECT_ID(N'dbo.QuestionReport'))
+    ALTER TABLE dbo.QuestionReport WITH CHECK
+        ADD CONSTRAINT CK_QuestionReport_SessionVersionPair CHECK (
+            [SessionID] IS NULL OR [QuestionVersionID] IS NOT NULL);
+
 -- Validate the policy before changing any legacy Blueprint rows. A valid
 -- composite section may still carry the old fixed part count and will be
 -- normalized below; an invalid type/rule combination is a data error.

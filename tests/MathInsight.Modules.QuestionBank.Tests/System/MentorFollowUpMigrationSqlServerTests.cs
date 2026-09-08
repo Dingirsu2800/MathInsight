@@ -257,6 +257,102 @@ public sealed class MentorFollowUpMigrationSqlServerTests
         Assert.Equal(0, state.LegacyAuditTableCount);
     }
 
+    [QuestionBankSqlServerFact]
+    public async Task QuestionReportSessionVersionConstraint_IsCorrectOnFreshSchemaAndRerunnable()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_QuestionReport_SessionVersionPair' AND parent_object_id = OBJECT_ID('dbo.QuestionReport');"));
+
+        await database.InsertValidQuestionReportsAsync();
+
+        var invalidSessionOnly = await Assert.ThrowsAsync<SqlException>(() => database.ExecuteAsync("""
+            INSERT INTO dbo.QuestionReport
+                (ReportID, QuestionID, ReporterAccountID, ReporterRole, ReportReason, Status, CreatedTime, SessionID)
+            VALUES
+                ('migration-invalid-session', 'migration-question-safe', 'migration-admin', 'Admin', N'Invalid session-only report', 'Pending', SYSUTCDATETIME(), 'migration-session-safe');
+            """));
+        Assert.Equal(547, invalidSessionOnly.Number);
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport WHERE ReportID = 'migration-invalid-session';"));
+
+        var reportCountBeforeRerun = await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport;");
+        await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
+        await database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql");
+        await database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql");
+
+        Assert.Equal(reportCountBeforeRerun, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport;"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_QuestionReport_SessionVersionPair' AND parent_object_id = OBJECT_ID('dbo.QuestionReport');"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task LegacySessionVersionConstraint_IsReplacedAndAllowsDirectReports()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
+
+        await database.ReplaceSessionVersionConstraintAsync(legacy: true);
+        var blockedBeforeUpgrade = await Assert.ThrowsAsync<SqlException>(() => database.InsertVersionOnlyReportAsync("migration-blocked-before"));
+        Assert.Equal(547, blockedBeforeUpgrade.Number);
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_QuestionReport_SessionVersionPair' AND parent_object_id = OBJECT_ID('dbo.QuestionReport') AND definition LIKE '%AND%';"));
+
+        await database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql");
+        await database.InsertVersionOnlyReportAsync("migration-allowed-after");
+        await database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql");
+
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport WHERE ReportID = 'migration-allowed-after';"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_QuestionReport_SessionVersionPair' AND parent_object_id = OBJECT_ID('dbo.QuestionReport') AND definition LIKE '%SessionID%OR%QuestionVersionID%';"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task ManuallyCorrectedSessionVersionConstraint_IsAcceptedAndRerunnable()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
+
+        await database.ReplaceSessionVersionConstraintAsync(legacy: false);
+        await database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql");
+        await database.InsertVersionOnlyReportAsync("migration-allowed-manual");
+        await database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql");
+
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport WHERE ReportID = 'migration-allowed-manual';"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task InvalidSessionOnlyReport_RollsBackConstraintUpgradeWithoutChangingData()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        await database.ApplyAsync("007_Fix_QuestionPart_Archived_Uniqueness.sql");
+        await database.ExecuteAsync("ALTER TABLE dbo.QuestionReport DROP CONSTRAINT CK_QuestionReport_SessionVersionPair;");
+        await database.ExecuteAsync("""
+            INSERT INTO dbo.QuestionReport
+                (ReportID, QuestionID, ReporterAccountID, ReporterRole, ReportReason, Status, CreatedTime, SessionID)
+            VALUES
+                ('migration-invalid-existing', 'migration-question-safe', 'migration-admin', 'Admin', N'Invalid existing report', 'Pending', SYSUTCDATETIME(), 'migration-session-safe');
+            """);
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() => database.ApplyAsync("008_Fix_QuestionReport_SessionVersion_Pair.sql"));
+
+        Assert.Contains("session-scoped", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.QuestionReport WHERE ReportID = 'migration-invalid-existing' AND SessionID IS NOT NULL AND QuestionVersionID IS NULL;"));
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_QuestionReport_SessionVersionPair' AND parent_object_id = OBJECT_ID('dbo.QuestionReport');"));
+    }
+
     private sealed class DisposableDatabase : IAsyncDisposable
     {
         private readonly string _databaseName;
@@ -304,6 +400,41 @@ public sealed class MentorFollowUpMigrationSqlServerTests
         }
 
         public Task ExecuteAsync(string sql) => ExecuteAsync(_connectionString, sql);
+
+        public Task InsertVersionOnlyReportAsync(string reportId) => ExecuteAsync(_connectionString, $"""
+            INSERT INTO dbo.QuestionReport
+                (ReportID, QuestionID, ReporterAccountID, ReporterRole, ReportReason, Status, CreatedTime, QuestionVersionID)
+            VALUES
+                ('{reportId}', 'migration-question-safe', 'migration-expert', 'Expert', N'Version-only report', 'Pending', SYSUTCDATETIME(), 'v-migration-safe');
+            """);
+
+        public Task InsertValidQuestionReportsAsync() => ExecuteAsync(_connectionString, """
+            INSERT INTO dbo.QuestionReport
+                (ReportID, QuestionID, ReporterAccountID, ReporterRole, ReportReason, Status, CreatedTime, QuestionVersionID)
+            VALUES
+                ('migration-report-version-only', 'migration-question-safe', 'migration-expert', 'Expert', N'Valid direct report', 'Pending', SYSUTCDATETIME(), 'v-migration-safe');
+
+            INSERT INTO dbo.QuestionReport
+                (ReportID, QuestionID, ReporterAccountID, ReporterRole, ReportReason, Status, CreatedTime, SessionID, QuestionVersionID)
+            VALUES
+                ('migration-report-session-version', 'migration-question-safe', 'migration-admin', 'Admin', N'Valid session report', 'Pending', SYSUTCDATETIME(), 'migration-session-safe', 'v-migration-safe');
+
+            INSERT INTO dbo.QuestionReport
+                (ReportID, QuestionID, ReporterAccountID, ReporterRole, ReportReason, Status, CreatedTime)
+            VALUES
+                ('migration-report-legacy-null', 'migration-question-safe', 'migration-admin', 'Admin', N'Valid legacy report', 'Pending', SYSUTCDATETIME());
+            """);
+
+        public Task ReplaceSessionVersionConstraintAsync(bool legacy)
+        {
+            var predicate = legacy
+                ? "([SessionID] IS NULL AND [QuestionVersionID] IS NULL) OR ([SessionID] IS NOT NULL AND [QuestionVersionID] IS NOT NULL)"
+                : "[SessionID] IS NULL OR [QuestionVersionID] IS NOT NULL";
+            return ExecuteAsync(_connectionString, $"""
+                ALTER TABLE dbo.QuestionReport DROP CONSTRAINT CK_QuestionReport_SessionVersionPair;
+                ALTER TABLE dbo.QuestionReport WITH CHECK ADD CONSTRAINT CK_QuestionReport_SessionVersionPair CHECK ({predicate});
+                """);
+        }
 
         public async Task<int> ScalarAsync(string sql)
         {
@@ -385,6 +516,8 @@ public sealed class MentorFollowUpMigrationSqlServerTests
                 INSERT INTO dbo.Student (StudentID, CurrentGrade) VALUES ('migration-student', 10);
                 INSERT INTO dbo.Account (AccountID, Username, PasswordHash, Email, FirstName, LastName, RoleID, isActive)
                 VALUES ('migration-expert', N'migration-expert', 'hash', 'migration-expert@example.test', N'Migration', N'Expert', 'migration-role', 1);
+                INSERT INTO dbo.Account (AccountID, Username, PasswordHash, Email, FirstName, LastName, RoleID, isActive)
+                VALUES ('migration-admin', N'migration-admin', 'hash', 'migration-admin@example.test', N'Migration', N'Admin', 'migration-role', 1);
                 INSERT INTO dbo.Expert (ExpertID, Specialty) VALUES ('migration-expert', 'Migration test');
                 INSERT INTO dbo.TagDifficulty (DifficultyID, DifficultyName, Description, LevelValue, DisplayOrder, IsActive)
                 VALUES ('migration-difficulty', N'Migration difficulty', N'Migration test', 1, 1, 1);
