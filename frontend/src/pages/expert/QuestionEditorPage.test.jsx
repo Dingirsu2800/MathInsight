@@ -1386,6 +1386,194 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
       ]);
       expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
     });
+
+    describe('FE-Task-Retry: Question detail retry and form state preservation', () => {
+      it('initial detail failure -> Retry recovers both question detail and report panel, setting baseline dirty state', async () => {
+        locationSearch = '?from=reported';
+        // Both initial detail and report checks fail
+        questionBankApi.getQuestionDetail.mockRejectedValue(new Error('Network error on detail'));
+        questionBankApi.getQuestionReports.mockResolvedValue({ data: [studentReport] });
+
+        render(
+          <BrowserRouter>
+            <NavigationGuardProvider>
+              <QuestionEditorPage />
+            </NavigationGuardProvider>
+          </BrowserRouter>
+        );
+
+        // Report panel error shows error message
+        expect(await screen.findByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).toBeInTheDocument();
+        // Form does not have detail loaded yet
+        expect(screen.queryByDisplayValue('1 + 1 = 2')).not.toBeInTheDocument();
+        // Save button is disabled
+        const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+        expect(saveBtn).toBeDisabled();
+
+        // Setup recovery on retry
+        questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
+        questionBankApi.getQuestionReports.mockResolvedValue({ data: [studentReport] });
+
+        // Click "Thử lại" in the error panel
+        const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+        fireEvent.click(retryBtn);
+
+        // Detail is recovered into the form
+        expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+        // Reports panel is recovered
+        expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+        // Baseline is set from loaded detail, so isDirty is false and save button remains disabled
+        expect(saveBtn).toBeDisabled();
+
+        // Editing content marks dirty and enables save button
+        const contentInput = screen.getByDisplayValue('1 + 1 = 2');
+        fireEvent.change(contentInput, { target: { value: '1 + 1 = 2 (edited)' } });
+        expect(saveBtn).toBeEnabled();
+      });
+
+      it('detail already loaded and form dirty -> report failure and Retry does NOT overwrite form or reset dirty baseline', async () => {
+        locationSearch = '?from=reported';
+        questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
+        questionBankApi.getQuestionReports.mockResolvedValue({ data: [studentReport] });
+
+        render(
+          <BrowserRouter>
+            <NavigationGuardProvider>
+              <QuestionEditorPage />
+            </NavigationGuardProvider>
+          </BrowserRouter>
+        );
+
+        expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+        expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+
+        // User makes an edit
+        const contentInput = screen.getByDisplayValue('1 + 1 = 2');
+        fireEvent.change(contentInput, { target: { value: '1 + 1 = 2 (user changes)' } });
+        const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+        expect(saveBtn).toBeEnabled();
+
+        // Now trigger a report reload/retry by dismissing report and causing report refresh error
+        questionBankApi.getQuestionReports.mockRejectedValueOnce(new Error('Reports refresh failed'));
+        const resolveBtn = screen.getByRole('button', { name: /Không chấp nhận/i });
+        const noteInput = screen.getByLabelText(/Lý do không chấp nhận/i);
+        fireEvent.change(noteInput, { target: { value: 'Dismiss reason' } });
+        questionBankApi.updateQuestionReportStatus.mockResolvedValueOnce({ data: { success: true } });
+
+        fireEvent.click(resolveBtn);
+
+        expect(await screen.findByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).toBeInTheDocument();
+
+        // Retry button appears in report panel
+        const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+
+        // Prepare report recovery
+        questionBankApi.getQuestionReports.mockResolvedValueOnce({ data: [] });
+        fireEvent.click(retryBtn);
+
+        // Verify form content and dirty state are preserved (NOT overwritten by sampleDetail)
+        await waitFor(() => {
+          expect(screen.getByDisplayValue('1 + 1 = 2 (user changes)')).toBeInTheDocument();
+        });
+        expect(saveBtn).toBeEnabled();
+      });
+
+      it('initial detail failure -> Retry fails again keeps error locks and preserves state', async () => {
+        locationSearch = '?from=reported';
+        questionBankApi.getQuestionDetail.mockRejectedValue(new Error('Persistent server failure'));
+
+        render(
+          <BrowserRouter>
+            <NavigationGuardProvider>
+              <QuestionEditorPage />
+            </NavigationGuardProvider>
+          </BrowserRouter>
+        );
+
+        expect(await screen.findByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).toBeInTheDocument();
+        const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+        expect(saveBtn).toBeDisabled();
+
+        // Click "Thử lại"
+        const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+        fireEvent.click(retryBtn);
+
+        // Still in error state
+        await waitFor(() => {
+          expect(screen.getByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).toBeInTheDocument();
+        });
+        expect(saveBtn).toBeDisabled();
+        expect(screen.queryByDisplayValue('1 + 1 = 2')).not.toBeInTheDocument();
+      });
+
+      it('in non-reported edit mode, detail load failure displays retry in top banner and clicking retry restores form', async () => {
+        locationSearch = '';
+        locationPathname = '/expert/questions/101/edit';
+        questionBankApi.getQuestionDetail.mockRejectedValueOnce(new Error('Detail fetch error'));
+
+        render(
+          <BrowserRouter>
+            <NavigationGuardProvider>
+              <QuestionEditorPage />
+            </NavigationGuardProvider>
+          </BrowserRouter>
+        );
+
+        // Top banner shows error and retry button
+        expect(await screen.findByText(/Detail fetch error/i)).toBeInTheDocument();
+        const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+        expect(retryBtn).toBeInTheDocument();
+
+        const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+        expect(saveBtn).toBeDisabled();
+
+        // Now mock success
+        questionBankApi.getQuestionDetail.mockResolvedValueOnce({ data: sampleDetail });
+        fireEvent.click(retryBtn);
+
+        // Form is populated
+        expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+        // Baseline is clean
+        expect(saveBtn).toBeDisabled();
+      });
+
+      it('disables update button immediately after save in place and re-enables on subsequent edit', async () => {
+        locationSearch = '?from=reported';
+        questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
+        questionBankApi.getQuestionReports.mockResolvedValue({ data: [studentReport] });
+        questionBankApi.updateQuestion.mockResolvedValue({ data: { success: true } });
+
+        render(
+          <BrowserRouter>
+            <NavigationGuardProvider>
+              <QuestionEditorPage />
+            </NavigationGuardProvider>
+          </BrowserRouter>
+        );
+
+        const contentInput = await screen.findByDisplayValue('1 + 1 = 2');
+        const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+        expect(saveBtn).toBeDisabled();
+
+        // Make dirty
+        fireEvent.change(contentInput, { target: { value: '1 + 1 = 2 (in-place save)' } });
+        expect(saveBtn).toBeEnabled();
+
+        // Save
+        fireEvent.click(saveBtn);
+
+        await waitFor(() => {
+          expect(questionBankApi.updateQuestion).toHaveBeenCalledTimes(1);
+        });
+
+        // Update button immediately becomes disabled in place
+        expect(saveBtn).toBeDisabled();
+
+        // Further edit re-enables it
+        fireEvent.change(contentInput, { target: { value: '1 + 1 = 2 (in-place save 2)' } });
+        expect(saveBtn).toBeEnabled();
+      });
+    });
   });
 });
 
