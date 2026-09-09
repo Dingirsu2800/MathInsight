@@ -7,6 +7,7 @@ using MathInsight.Modules.QuestionBank.Contracts.Questions;
 using MathInsight.Modules.QuestionBank.Contracts.Reports;
 using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
+using MathInsight.Modules.QuestionBank.Queries.GetQuestionReports;
 using MathInsight.Shared.Scoring;
 using Microsoft.EntityFrameworkCore;
 
@@ -425,7 +426,7 @@ public sealed class QuestionReportingTests
             .Handle(
                 new HandleQuestionReportCommand(
                     firstReport.ReportId,
-                    new HandleQuestionReportRequest { Status = "Dismissed" },
+                    new HandleQuestionReportRequest { Status = "Dismissed", ReviewNote = "Không chấp nhận báo cáo này" },
                     question.ExpertId),
                 CancellationToken.None);
 
@@ -585,6 +586,200 @@ public sealed class QuestionReportingTests
                     sessionId,
                     questionVersionId),
                 CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task HandleReport_Dismiss_WhenReviewNoteIsNullOrEmpty_ReturnsValidationError(string? note)
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "dismiss-null-note", "Reported", true);
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest { Status = "Dismissed", ReviewNote = note },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReviewNoteRequired, result.Error);
+
+        var unchanged = await database.Context.QuestionReports.FindAsync(report.ReportId);
+        Assert.NotNull(unchanged);
+        Assert.Equal("Pending", unchanged.Status);
+        Assert.Null(unchanged.ReviewNote);
+    }
+
+    [Fact]
+    public async Task HandleReport_Dismiss_WhenReviewNoteExceeds2000Chars_ReturnsValidationError()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "dismiss-overlong-note", "Reported", true);
+        var report = await AddReportAsync(database, question.QuestionId, "expert-2", "Expert", "Pending");
+        var overlong = new string('x', 2001);
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest { Status = "Dismissed", ReviewNote = overlong },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReviewNoteTooLong, result.Error);
+
+        var unchanged = await database.Context.QuestionReports.FindAsync(report.ReportId);
+        Assert.NotNull(unchanged);
+        Assert.Equal("Pending", unchanged.Status);
+    }
+
+    [Fact]
+    public async Task HandleReport_DismissStudentReport_WithValidNote_TrimmedAndPersistedWithoutQuestionMutation()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var adjustment = new RecordingScoreAdjustmentService();
+        var question = await AddQuestionAsync(database, "dismiss-student-success", "Reported", true);
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+        var originalContent = question.QuestionContent;
+        var initialVersionCount = await database.Context.QuestionVersions.CountAsync(v => v.QuestionId == question.QuestionId);
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context, adjustment)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest
+                    {
+                        Status = "Dismissed",
+                        ReviewNote = "  Câu hỏi hoàn toàn đúng định dạng và đáp án.  "
+                    },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Dismissed", result.Value.Status);
+        Assert.Equal("NoScoreChange", result.Value.ResolutionAction);
+        Assert.Equal("Câu hỏi hoàn toàn đúng định dạng và đáp án.", result.Value.ReviewNote);
+
+        // Verify direct DB persistence
+        var persisted = await database.Context.QuestionReports.FindAsync(report.ReportId);
+        Assert.NotNull(persisted);
+        Assert.Equal("Dismissed", persisted.Status);
+        Assert.Equal("NoScoreChange", persisted.ResolutionAction);
+        Assert.Equal("Câu hỏi hoàn toàn đúng định dạng và đáp án.", persisted.ReviewNote);
+        Assert.Equal(question.ExpertId, persisted.ResolvedBy);
+        Assert.NotNull(persisted.ResolvedTime);
+
+        // Verify question content not mutated, no new version created, no score adjustment called
+        var persistedQuestion = await database.Context.Questions.FindAsync(question.QuestionId);
+        Assert.NotNull(persistedQuestion);
+        Assert.Equal(originalContent, persistedQuestion.QuestionContent);
+        var finalVersionCount = await database.Context.QuestionVersions.CountAsync(v => v.QuestionId == question.QuestionId);
+        Assert.Equal(initialVersionCount, finalVersionCount);
+        Assert.Null(adjustment.AdjustedReportId);
+
+        // Verify read back via GetQuestionReportsQueryHandler
+        var queryResult = await new GetQuestionReportsQueryHandler(database.Context)
+            .Handle(new GetQuestionReportsQuery(question.QuestionId, question.ExpertId, "Dismissed"), CancellationToken.None);
+        Assert.True(queryResult.IsSuccess);
+        var reportedItem = Assert.Single(queryResult.Value);
+        Assert.Equal("Câu hỏi hoàn toàn đúng định dạng và đáp án.", reportedItem.ReviewNote);
+    }
+
+    [Fact]
+    public async Task HandleReport_DismissExpertReport_WithValidNote_SucceedsAndPersists()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "dismiss-expert-success", "Reported", true);
+        var report = await AddReportAsync(database, question.QuestionId, "expert-2", "Expert", "Pending");
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest
+                    {
+                        Status = "Dismissed",
+                        ReviewNote = "Nội dung kiến thức lớp 12 hoàn toàn phù hợp chương trình."
+                    },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Dismissed", result.Value.Status);
+        Assert.Equal("NoScoreChange", result.Value.ResolutionAction);
+        Assert.Equal("Nội dung kiến thức lớp 12 hoàn toàn phù hợp chương trình.", result.Value.ReviewNote);
+
+        var persisted = await database.Context.QuestionReports.FindAsync(report.ReportId);
+        Assert.NotNull(persisted);
+        Assert.Equal("Dismissed", persisted.Status);
+        Assert.Equal("Nội dung kiến thức lớp 12 hoàn toàn phù hợp chương trình.", persisted.ReviewNote);
+    }
+
+    [Fact]
+    public async Task HandleReport_Dismiss_WhenBelongsToIncident_ReturnsIncidentSubmissionRequired()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "dismiss-incident-report", "Reported", true);
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+        report.IncidentId = "inc-existing-123";
+        await database.Context.SaveChangesAsync();
+
+        var result = await new HandleQuestionReportCommandHandler(database.Context)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest
+                    {
+                        Status = "Dismissed",
+                        ReviewNote = "Dismiss attempt directly"
+                    },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(QuestionBankErrors.ReportIncidentSubmissionRequired, result.Error);
+    }
+
+    [Fact]
+    public async Task HandleReport_Resolve_DoesNotClearExistingReviewNote()
+    {
+        await using var database = await QuestionBankInMemoryContext.CreateAsync();
+        var question = await AddQuestionAsync(database, "resolve-keep-note", "Approved", true);
+        var oldVersion = AddVersion(database, question, 1);
+        AddVersion(database, question, 2);
+
+        var report = await AddReportAsync(database, question.QuestionId, "student-1", "Student", "Pending");
+        report.SessionId = "session-1";
+        report.QuestionVersionId = oldVersion.VersionId;
+        report.ReviewNote = "Existing note from previous admin feedback";
+        await database.Context.SaveChangesAsync();
+
+        var adjustment = new RecordingScoreAdjustmentService();
+        var result = await new HandleQuestionReportCommandHandler(database.Context, adjustment)
+            .Handle(
+                new HandleQuestionReportCommand(
+                    report.ReportId,
+                    new HandleQuestionReportRequest
+                    {
+                        Status = "Resolved",
+                        ResolutionAction = "InvalidateAndAwardFull",
+                        ReviewNote = null
+                    },
+                    question.ExpertId),
+                CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Resolved", result.Value.Status);
+
+        var persisted = await database.Context.QuestionReports.FindAsync(report.ReportId);
+        Assert.NotNull(persisted);
+        Assert.Equal("Existing note from previous admin feedback", persisted.ReviewNote);
     }
 
     private static async Task<Question> AddQuestionAsync(

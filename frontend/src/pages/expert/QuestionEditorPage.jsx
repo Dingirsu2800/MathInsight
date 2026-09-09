@@ -154,15 +154,17 @@ export default function QuestionEditorPage() {
   const closeTopicPanelTimerRef = React.useRef(null);
   const errorRef = React.useRef(null);
   const drawerErrorRef = React.useRef(null);
+  const hasLoadedDetailRef = React.useRef(!isEditMode);
+  const [hasLoadedDetail, setHasLoadedDetail] = React.useState(!isEditMode);
 
   const formSnapshot = React.useMemo(() => JSON.stringify(form), [form]);
   const isDirty = initialFormSnapshotRef.current !== null && initialFormSnapshotRef.current !== formSnapshot;
 
   React.useEffect(() => {
-    if (!loading && initialFormSnapshotRef.current === null) {
+    if (!isEditMode && !loading && initialFormSnapshotRef.current === null) {
       initialFormSnapshotRef.current = formSnapshot;
     }
-  }, [loading, formSnapshot]);
+  }, [isEditMode, loading, formSnapshot]);
 
   const isReportActionable = (rep) => {
     const isRoleAdmin = rep.reporterRole === "Admin" || rep.role === "Admin";
@@ -372,16 +374,12 @@ export default function QuestionEditorPage() {
     try {
       let activeIncidentId = paramIncidentId || blockingReportIncidentRef.current?.incidentId;
       if (!activeIncidentId) {
-        try {
-          const detailRes = await questionBankApi.getQuestionDetail(id);
-          const blocker = detailRes.data?.blockingReportIncident;
-          if (blocker?.incidentId) {
-            activeIncidentId = blocker.incidentId;
-            setBlockingReportIncident(blocker);
-            blockingReportIncidentRef.current = blocker;
-          }
-        } catch (e) {
-          console.warn("Could not query blocking incident from question detail:", e);
+        const detailRes = await questionBankApi.getQuestionDetail(id);
+        const blocker = detailRes.data?.blockingReportIncident;
+        if (blocker?.incidentId) {
+          activeIncidentId = blocker.incidentId;
+          setBlockingReportIncident(blocker);
+          blockingReportIncidentRef.current = blocker;
         }
       }
 
@@ -453,6 +451,7 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error("Failed to load pending reports:", err);
       setReportsError("Không thể tải các báo cáo đang chờ xử lý từ máy chủ.");
+      setPendingReports([]);
       return { ok: false, reports: [] };
     } finally {
       setReportsLoading(false);
@@ -465,16 +464,38 @@ export default function QuestionEditorPage() {
     }
   }, [id, fromReported]);
 
-  const handleResolveReport = async (reportId, nextStatus, reporterRole) => {
+  const handleResolveReport = async (reportId, nextStatus, reporterRole, explicitNote) => {
     setUpdatingReportId(reportId);
     try {
-      await questionBankApi.updateQuestionReportStatus(reportId, {
+      const rawNote = explicitNote !== undefined
+        ? explicitNote
+        : (reportReviewNotes[String(reportId)] ?? "");
+      const trimmedNote = (rawNote || "").trim();
+
+      if (nextStatus === "Dismissed") {
+        if (!trimmedNote) {
+          showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+          return;
+        }
+        if (trimmedNote.length > 2000) {
+          showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+          return;
+        }
+      }
+
+      const payload = {
         status: nextStatus,
         resolutionAction:
           nextStatus === "Resolved" && reporterRole === "Student"
             ? "InvalidateAndAwardFull"
             : "NoScoreChange"
-      });
+      };
+
+      if (nextStatus === "Dismissed") {
+        payload.reviewNote = trimmedNote;
+      }
+
+      await questionBankApi.updateQuestionReportStatus(reportId, payload);
       const refreshResult = await fetchPendingReports();
       if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
         navigate("/expert/questions/reported");
@@ -482,7 +503,11 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error(err);
       const errorCode = err.response?.data?.code;
-      if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+      if (errorCode === "REVIEW_NOTE_REQUIRED") {
+        showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+      } else if (errorCode === "REVIEW_NOTE_TOO_LONG") {
+        showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+      } else if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
         showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
         await fetchPendingReports();
       } else if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
@@ -561,56 +586,83 @@ export default function QuestionEditorPage() {
       });
   }, [form.grade]);
 
+  const fetchQuestionDetail = React.useCallback(async () => {
+    if (!isEditMode || !id) return { ok: true };
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await questionBankApi.getQuestionDetail(id);
+      const detail = res.data;
+      const mapped = mapQuestionDetailToEditorState(detail);
+      setForm(mapped);
+      initialFormSnapshotRef.current = JSON.stringify(mapped);
+      const blocker = detail?.blockingReportIncident || null;
+      setBlockingReportIncident(blocker);
+      blockingReportIncidentRef.current = blocker;
+      hasLoadedDetailRef.current = true;
+      setHasLoadedDetail(true);
+      setError(null);
+      return { ok: true, detail };
+    } catch (err) {
+      console.error("Failed to fetch question details for editing:", err);
+      hasLoadedDetailRef.current = false;
+      setHasLoadedDetail(false);
+      const enableFallback = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true";
+
+      if (enableFallback) {
+        setError("Lỗi kết nối API. Hiển thị dữ liệu biên tập mẫu.");
+        // mock fallback
+        setForm({
+          questionContent: "Tính tích phân sau: I = \\int_{0}^{1} x^2 dx",
+          solutionContent: "Sử dụng công thức nguyên hàm cơ bản.",
+          pictureUrl: "",
+          grade: 12,
+          questionType: "SINGLE_CHOICE",
+          difficultyId: "diff-3",
+          defaultWeight: 1.0,
+          topics: [{ tagId: "tag-1", isPrimary: true }],
+          options: [
+            { content: "\\frac{1}{3}", isCorrect: true },
+            { content: "1", isCorrect: false },
+            { content: "0", isCorrect: false }
+          ],
+          shortAnswer: "",
+          parts: []
+        });
+      } else {
+        setError(
+          err.response?.data?.message ||
+          err.message ||
+          "Không thể tải chi tiết câu hỏi từ máy chủ backend."
+        );
+      }
+      return { ok: false, error: err };
+    } finally {
+      setLoading(false);
+    }
+  }, [id, isEditMode]);
+
   // Load question detail if in Edit Mode
   React.useEffect(() => {
     if (isEditMode) {
-      setLoading(true);
-      setError(null);
-      questionBankApi.getQuestionDetail(id)
-        .then(res => {
-          const detail = res.data;
-          const mapped = mapQuestionDetailToEditorState(detail);
-          setForm(mapped);
-          const blocker = detail?.blockingReportIncident || null;
-          setBlockingReportIncident(blocker);
-          blockingReportIncidentRef.current = blocker;
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error("Failed to fetch question details for editing:", err);
-          const enableFallback = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true";
-
-          if (enableFallback) {
-            setError("Lỗi kết nối API. Hiển thị dữ liệu biên tập mẫu.");
-            // mock fallback
-            setForm({
-              questionContent: "Tính tích phân sau: I = \\int_{0}^{1} x^2 dx",
-              solutionContent: "Sử dụng công thức nguyên hàm cơ bản.",
-              pictureUrl: "",
-              grade: 12,
-              questionType: "SINGLE_CHOICE",
-              difficultyId: "diff-3",
-              defaultWeight: 1.0,
-              topics: [{ tagId: "tag-1", isPrimary: true }],
-              options: [
-                { content: "\\frac{1}{3}", isCorrect: true },
-                { content: "1", isCorrect: false },
-                { content: "0", isCorrect: false }
-              ],
-              shortAnswer: "",
-              parts: []
-            });
-          } else {
-            setError(
-              err.response?.data?.message ||
-              err.message ||
-              "Không thể tải chi tiết câu hỏi từ máy chủ backend."
-            );
-          }
-          setLoading(false);
-        });
+      initialFormSnapshotRef.current = null;
+      hasLoadedDetailRef.current = false;
+      setHasLoadedDetail(false);
+      fetchQuestionDetail();
     }
-  }, [id, isEditMode]);
+  }, [id, isEditMode, fetchQuestionDetail]);
+
+  const handleRetry = React.useCallback(async () => {
+    if (isEditMode && !hasLoadedDetailRef.current) {
+      const detailResult = await fetchQuestionDetail();
+      if (!detailResult?.ok) {
+        return;
+      }
+    }
+    if (fromReported) {
+      await fetchPendingReports();
+    }
+  }, [isEditMode, fromReported, fetchQuestionDetail, fetchPendingReports]);
 
   // Handle core field changes
   const handleFieldChange = (field, value) => {
@@ -1139,6 +1191,8 @@ export default function QuestionEditorPage() {
     saveRequest
       .then(() => {
         initialFormSnapshotRef.current = JSON.stringify(form);
+        hasLoadedDetailRef.current = true;
+        setHasLoadedDetail(true);
         if (fromReported) {
           setHasSavedInSession(true);
           setInfoMessage("Đã lưu câu hỏi thành công. Bây giờ bạn có thể giải quyết hoặc không chấp nhận các báo cáo.");
@@ -1394,10 +1448,22 @@ export default function QuestionEditorPage() {
             tabIndex={-1}
             role="alert"
             aria-live="assertive"
-            className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
+            className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center justify-between gap-4 outline-none"
           >
-            <span className="material-symbols-outlined">error</span>
-            <span>{error}</span>
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined">error</span>
+              <span>{error}</span>
+            </div>
+            {isEditMode && !hasLoadedDetail && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                className="shrink-0 text-xs h-7 border-error text-error hover:bg-error/10 normal-case font-bold"
+              >
+                Thử lại
+              </Button>
+            )}
           </div>
         )}
 
@@ -1471,7 +1537,7 @@ export default function QuestionEditorPage() {
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={() => handleSaveAndSubmitReview(null)}
-                disabled={loading || adminReviewSubmitState === "submitting"}
+                disabled={loading || (isEditMode && !hasLoadedDetailRef.current) || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "submitting"}
               >
                 {adminReviewSubmitState === "submitting"
                   ? "Đang gửi xử lý..."
@@ -1489,7 +1555,7 @@ export default function QuestionEditorPage() {
                     handleSaveAndSubmitReview(adminReportId);
                   }
                 }}
-                disabled={loading || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+                disabled={loading || (isEditMode && !hasLoadedDetailRef.current) || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
               >
                 {adminReviewSubmitState === "retryable"
                   ? "Gửi lại Admin xét duyệt"
@@ -1515,7 +1581,7 @@ export default function QuestionEditorPage() {
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={handleSaveQuestion}
-                disabled={loading}
+                disabled={loading || (isEditMode && !hasLoadedDetailRef.current) || (fromReported && (reportsLoading || Boolean(reportsError))) || (isEditMode && !isDirty)}
               >
                 {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
               </Button>
@@ -2279,12 +2345,13 @@ export default function QuestionEditorPage() {
                 onResolutionActionChange={setResolutionAction}
                 reportsLoading={reportsLoading}
                 reportsError={reportsError}
-                onRetry={fetchPendingReports}
+                onRetry={handleRetry}
                 onResolveLegacyReport={handleResolveReport}
                 onSubmitAdminReview={handleSaveAndSubmitReview}
                 onRetryAdminReview={handleRetrySubmitReview}
                 adminReviewSubmitState={adminReviewSubmitState}
                 loading={loading}
+                isDetailReady={!isEditMode || hasLoadedDetail}
                 updatingReportId={updatingReportId}
                 hasSavedInSession={hasSavedInSession}
               />
