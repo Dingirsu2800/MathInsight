@@ -33,6 +33,11 @@ const DECISION_ITEMS = [
   { value: "Dismissed", label: "Không chấp nhận báo cáo" }
 ];
 
+const RESOLUTION_ACTION_ITEMS = [
+  { value: "NoScoreChange", label: "Không điều chỉnh điểm" },
+  { value: "InvalidateAndAwardFull", label: "Vô hiệu câu hỏi và cộng đủ điểm" }
+];
+
 export default function IncidentReportPanel({
   reports = [],
   incident = null,
@@ -162,17 +167,24 @@ export default function IncidentReportPanel({
             <span className="material-symbols-outlined text-[15px]">tune</span>
             Quyết định xử lý sự cố
           </div>
-          <label className="block text-on-surface-variant font-medium">
-            Phương án điểm
-            <select
-              value={resolutionAction}
-              onChange={(e) => onResolutionActionChange?.(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-outline-variant bg-pure-surface px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          <div className="space-y-1">
+            <label
+              htmlFor="incident-resolution-action"
+              className="block text-[11px] font-bold text-on-surface-variant"
             >
-              <option value="NoScoreChange">Không điều chỉnh điểm</option>
-              <option value="InvalidateAndAwardFull">Vô hiệu câu hỏi và cộng đủ điểm</option>
-            </select>
-          </label>
+              Phương án điểm
+            </label>
+            <CustomSelect
+              id="incident-resolution-action"
+              aria-label="Phương án điểm"
+              value={resolutionAction}
+              onValueChange={(val) => onResolutionActionChange?.(val)}
+              items={RESOLUTION_ACTION_ITEMS}
+              disabled={loading}
+              className="h-10 text-sm rounded-lg bg-pure-surface border-outline-variant"
+              itemClassName="text-sm py-2"
+            />
+          </div>
           <p className="text-[11px] text-on-surface-variant leading-relaxed m-0">
             Chọn quyết định riêng cho từng báo cáo bên dưới. Nếu tất cả đều không chấp nhận và không điều chỉnh điểm, hệ thống không tạo phiên bản câu hỏi mới.
           </p>

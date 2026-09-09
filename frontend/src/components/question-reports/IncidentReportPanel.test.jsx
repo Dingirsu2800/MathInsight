@@ -322,4 +322,49 @@ describe("IncidentReportPanel component", () => {
     fireEvent.click(dismissBtn);
     expect(onResolveLegacyReport).toHaveBeenCalledWith("rep-student-1", "Dismissed", "Student");
   });
+
+  it("renders CustomSelect for 'Phương án điểm' with correct values and disables when loading", () => {
+    const openIncident = { incidentId: "inc-100", status: "Open" };
+    const onResolutionActionChange = vi.fn();
+
+    const { rerender } = render(
+      <IncidentReportPanel
+        reports={sevenReports}
+        incident={openIncident}
+        resolutionAction="NoScoreChange"
+        onResolutionActionChange={onResolutionActionChange}
+        loading={false}
+      />
+    );
+
+    const selectTrigger = screen.getByRole("combobox", { name: /Phương án điểm/i });
+    expect(selectTrigger).toBeInTheDocument();
+    expect(selectTrigger).toHaveTextContent("Không điều chỉnh điểm");
+    expect(selectTrigger).not.toBeDisabled();
+
+    // Rerender with InvalidateAndAwardFull
+    rerender(
+      <IncidentReportPanel
+        reports={sevenReports}
+        incident={openIncident}
+        resolutionAction="InvalidateAndAwardFull"
+        onResolutionActionChange={onResolutionActionChange}
+        loading={false}
+      />
+    );
+    expect(selectTrigger).toHaveTextContent("Vô hiệu câu hỏi và cộng đủ điểm");
+
+    // Rerender with loading=true
+    rerender(
+      <IncidentReportPanel
+        reports={sevenReports}
+        incident={openIncident}
+        resolutionAction="InvalidateAndAwardFull"
+        onResolutionActionChange={onResolutionActionChange}
+        loading={true}
+      />
+    );
+    expect(selectTrigger).toBeDisabled();
+  });
 });
+

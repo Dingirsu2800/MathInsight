@@ -564,6 +564,7 @@ export default function QuestionEditorPage() {
   // Load question detail if in Edit Mode
   React.useEffect(() => {
     if (isEditMode) {
+      initialFormSnapshotRef.current = null;
       setLoading(true);
       setError(null);
       questionBankApi.getQuestionDetail(id)
@@ -571,6 +572,7 @@ export default function QuestionEditorPage() {
           const detail = res.data;
           const mapped = mapQuestionDetailToEditorState(detail);
           setForm(mapped);
+          initialFormSnapshotRef.current = JSON.stringify(mapped);
           const blocker = detail?.blockingReportIncident || null;
           setBlockingReportIncident(blocker);
           blockingReportIncidentRef.current = blocker;
@@ -1515,7 +1517,7 @@ export default function QuestionEditorPage() {
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={handleSaveQuestion}
-                disabled={loading}
+                disabled={loading || (isEditMode && !isDirty)}
               >
                 {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
               </Button>

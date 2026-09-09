@@ -8,12 +8,13 @@ import { NavigationGuardProvider } from '../../contexts/NavigationGuardContext';
 const mockNavigate = vi.fn();
 let locationSearch = '?from=reported';
 let locationPathname = '/expert/questions/101/edit';
+let mockParams = { id: '101' };
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useParams: () => ({ id: '101' }),
+    useParams: () => mockParams,
     useLocation: () => ({ search: locationSearch, pathname: locationPathname }),
   };
 });
@@ -43,12 +44,13 @@ vi.mock('../../components/layout/DashboardLayout', () => ({
 }));
 
 vi.mock('../../components/ui/custom-select', () => ({
-  CustomSelect: ({ value, onValueChange, items, id, 'aria-label': ariaLabel }) => (
+  CustomSelect: ({ value, onValueChange, items, id, 'aria-label': ariaLabel, disabled }) => (
     <select
       id={id}
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onValueChange?.(e.target.value)}
+      disabled={disabled}
       role="combobox"
     >
       {items?.map((it) => (
@@ -61,6 +63,7 @@ vi.mock('../../components/ui/custom-select', () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  mockParams = { id: '101' };
   locationSearch = '?from=reported';
   locationPathname = '/expert/questions/101/edit';
 });
@@ -136,15 +139,24 @@ describe('QuestionEditorPage reported question workflow', () => {
 
     expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
     expect(screen.getByText(/Tổng số: 2/i)).toBeInTheDocument();
-    expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+    const contentInput = await screen.findByDisplayValue('1 + 1 = 2');
+    expect(contentInput).toBeInTheDocument();
+
+    // Button is disabled when form is not dirty
+    const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+    expect(saveBtn).toBeDisabled();
+
+    // Make dirty
+    fireEvent.change(contentInput, { target: { value: '1 + 1 = 2 (fixed)' } });
+    expect(saveBtn).toBeEnabled();
 
     // Click Save button in header
-    const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
       expect(questionBankApi.updateQuestion).toHaveBeenCalled();
     });
+    expect(saveBtn).toBeDisabled();
 
     // Neither report should have been auto-resolved!
     expect(questionBankApi.updateQuestionReportStatus).not.toHaveBeenCalled();
@@ -1002,13 +1014,18 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
       </BrowserRouter>
     );
 
-    // Ordinary Save button is active and enabled
+    // Ordinary Save button is initially disabled when form has not been modified
     const saveBtn = await screen.findByRole('button', { name: /^Cập nhật câu hỏi$/i });
     expect(saveBtn).toBeInTheDocument();
-    expect(saveBtn).toBeEnabled();
+    expect(saveBtn).toBeDisabled();
 
     // No blocker banner
     expect(screen.queryByText(/Câu hỏi đang có báo cáo sự cố cần xử lý/i)).not.toBeInTheDocument();
+
+    // Edit form to make it dirty
+    const input = screen.getByDisplayValue('1 + 1 = 2');
+    fireEvent.change(input, { target: { value: '1 + 1 = 3' } });
+    expect(saveBtn).toBeEnabled();
 
     // Click Save
     fireEvent.click(saveBtn);
@@ -1042,4 +1059,95 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
     const navBtn = screen.getAllByRole('button', { name: /Xử lý báo cáo/i })[0];
     expect(navBtn).toBeInTheDocument();
   });
+
+  describe('FE-1C: Save button dirty tracking and baseline reset', () => {
+    it('disables "Cập nhật câu hỏi" button when form is clean, enables when edited, and re-disables when reverted', async () => {
+      locationSearch = '';
+      locationPathname = '/expert/questions/101/edit';
+      questionBankApi.getQuestionDetail.mockResolvedValue({
+        data: sampleDetail,
+      });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      // Baseline established after load: button is disabled
+      const saveBtn = await screen.findByRole('button', { name: /^Cập nhật câu hỏi$/i });
+      expect(saveBtn).toBeDisabled();
+
+      // Edit an input -> button becomes enabled
+      const input = screen.getByDisplayValue('1 + 1 = 2');
+      fireEvent.change(input, { target: { value: '1 + 1 = 100' } });
+      expect(saveBtn).toBeEnabled();
+
+      // Revert input back to original value -> button becomes disabled again
+      fireEvent.change(input, { target: { value: '1 + 1 = 2' } });
+      expect(saveBtn).toBeDisabled();
+    });
+
+    it('updates baseline and re-disables "Cập nhật câu hỏi" button after successful save', async () => {
+      locationSearch = '?from=reported';
+      locationPathname = '/expert/questions/101/edit';
+      questionBankApi.getQuestionDetail.mockResolvedValue({
+        data: sampleDetail,
+      });
+      questionBankApi.getQuestionReports.mockResolvedValue({
+        data: [],
+      });
+      questionBankApi.updateQuestion.mockResolvedValue({
+        data: { success: true },
+      });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      const saveBtn = await screen.findByRole('button', { name: /^Cập nhật câu hỏi$/i });
+      expect(saveBtn).toBeDisabled();
+
+      // Edit input
+      const input = screen.getByDisplayValue('1 + 1 = 2');
+      fireEvent.change(input, { target: { value: '1 + 1 = 10' } });
+      expect(saveBtn).toBeEnabled();
+
+      // Click save
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(questionBankApi.updateQuestion).toHaveBeenCalled();
+      });
+
+      // Baseline updated -> button is disabled again
+      expect(saveBtn).toBeDisabled();
+    });
+
+    it('does NOT disable "Lưu câu hỏi" button in create mode solely because !isDirty', async () => {
+      mockParams = {};
+      locationSearch = '';
+      locationPathname = '/expert/questions/create';
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      const createBtn = screen.getByRole('button', { name: /^Lưu câu hỏi$/i });
+      expect(createBtn).toBeInTheDocument();
+      // Should NOT be disabled purely because !isDirty
+      expect(createBtn).toBeEnabled();
+    });
+  });
 });
+
