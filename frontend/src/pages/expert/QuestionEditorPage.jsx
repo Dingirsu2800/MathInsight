@@ -155,6 +155,7 @@ export default function QuestionEditorPage() {
   const errorRef = React.useRef(null);
   const drawerErrorRef = React.useRef(null);
   const hasLoadedDetailRef = React.useRef(!isEditMode);
+  const [hasLoadedDetail, setHasLoadedDetail] = React.useState(!isEditMode);
 
   const formSnapshot = React.useMemo(() => JSON.stringify(form), [form]);
   const isDirty = initialFormSnapshotRef.current !== null && initialFormSnapshotRef.current !== formSnapshot;
@@ -599,11 +600,13 @@ export default function QuestionEditorPage() {
       setBlockingReportIncident(blocker);
       blockingReportIncidentRef.current = blocker;
       hasLoadedDetailRef.current = true;
+      setHasLoadedDetail(true);
       setError(null);
       return { ok: true, detail };
     } catch (err) {
       console.error("Failed to fetch question details for editing:", err);
       hasLoadedDetailRef.current = false;
+      setHasLoadedDetail(false);
       const enableFallback = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true";
 
       if (enableFallback) {
@@ -644,6 +647,7 @@ export default function QuestionEditorPage() {
     if (isEditMode) {
       initialFormSnapshotRef.current = null;
       hasLoadedDetailRef.current = false;
+      setHasLoadedDetail(false);
       fetchQuestionDetail();
     }
   }, [id, isEditMode, fetchQuestionDetail]);
@@ -652,9 +656,6 @@ export default function QuestionEditorPage() {
     if (isEditMode && !hasLoadedDetailRef.current) {
       const detailResult = await fetchQuestionDetail();
       if (!detailResult?.ok) {
-        if (fromReported) {
-          await fetchPendingReports();
-        }
         return;
       }
     }
@@ -1191,6 +1192,7 @@ export default function QuestionEditorPage() {
       .then(() => {
         initialFormSnapshotRef.current = JSON.stringify(form);
         hasLoadedDetailRef.current = true;
+        setHasLoadedDetail(true);
         if (fromReported) {
           setHasSavedInSession(true);
           setInfoMessage("Đã lưu câu hỏi thành công. Bây giờ bạn có thể giải quyết hoặc không chấp nhận các báo cáo.");
@@ -1452,7 +1454,7 @@ export default function QuestionEditorPage() {
               <span className="material-symbols-outlined">error</span>
               <span>{error}</span>
             </div>
-            {isEditMode && !hasLoadedDetailRef.current && !fromReported && (
+            {isEditMode && !hasLoadedDetail && (
               <Button
                 variant="outline"
                 size="sm"
@@ -2349,6 +2351,7 @@ export default function QuestionEditorPage() {
                 onRetryAdminReview={handleRetrySubmitReview}
                 adminReviewSubmitState={adminReviewSubmitState}
                 loading={loading}
+                isDetailReady={!isEditMode || hasLoadedDetail}
                 updatingReportId={updatingReportId}
                 hasSavedInSession={hasSavedInSession}
               />

@@ -1320,7 +1320,7 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
 
       // Error banner in reports panel should be displayed with retry option
       expect(await screen.findByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Thử lại/i })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Thử lại/i }).length).toBeGreaterThanOrEqual(1);
 
       // Critical: getQuestionReports MUST NOT have been called as fallback!
       expect(questionBankApi.getQuestionReports).not.toHaveBeenCalled();
@@ -1415,8 +1415,8 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
         questionBankApi.getQuestionReports.mockResolvedValue({ data: [studentReport] });
 
         // Click "Thử lại" in the error panel
-        const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
-        fireEvent.click(retryBtn);
+        const retryBtns = screen.getAllByRole('button', { name: /Thử lại/i });
+        fireEvent.click(retryBtns[0]);
 
         // Detail is recovered into the form
         expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
@@ -1495,8 +1495,8 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
         expect(saveBtn).toBeDisabled();
 
         // Click "Thử lại"
-        const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
-        fireEvent.click(retryBtn);
+        const retryBtns = screen.getAllByRole('button', { name: /Thử lại/i });
+        fireEvent.click(retryBtns[0]);
 
         // Still in error state
         await waitFor(() => {
@@ -1504,6 +1504,78 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
         });
         expect(saveBtn).toBeDisabled();
         expect(screen.queryByDisplayValue('1 + 1 = 2')).not.toBeInTheDocument();
+      });
+
+      it('when fromReported=true, detail failure with successful reports keeps detail error, retry button, and locks panel & header actions, then subsequent retry recovers fully', async () => {
+        // 1. fromReported=true with incidentId
+        locationSearch = '?from=reported&incidentId=incident-test-retry';
+
+        // 2. Detail fails, but incident succeeds
+        questionBankApi.getQuestionDetail.mockRejectedValue(new Error('Chi tiết câu hỏi bị lỗi kết nối'));
+        questionBankApi.getQuestionReportIncident.mockResolvedValue({
+          data: {
+            incidentId: 'incident-test-retry',
+            revision: 1,
+            status: 'Open',
+            reports: [studentReport],
+          },
+        });
+
+        render(
+          <BrowserRouter>
+            <NavigationGuardProvider>
+              <QuestionEditorPage />
+            </NavigationGuardProvider>
+          </BrowserRouter>
+        );
+
+        // Report/incident succeeded, so report panel is rendered without error
+        expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).not.toBeInTheDocument();
+
+        // 3. Detail error and Retry button still exist on the top banner
+        expect(await screen.findByText(/Chi tiết câu hỏi bị lỗi kết nối/i)).toBeInTheDocument();
+        const retryButtons = screen.getAllByRole('button', { name: /Thử lại/i });
+        expect(retryButtons.length).toBeGreaterThanOrEqual(1);
+
+        // Form is empty (detail failed)
+        expect(screen.queryByDisplayValue('1 + 1 = 2')).not.toBeInTheDocument();
+
+        // Actions are locked: Header action
+        const headerSubmitBtn = screen.getByRole('button', { name: /Gửi quyết định xử lý/i });
+        expect(headerSubmitBtn).toBeDisabled();
+
+        // Actions are locked: Panel action controls
+        const resolutionSelect = screen.getByLabelText(/Phương án điểm/i);
+        expect(resolutionSelect).toBeDisabled();
+
+        const decisionSelect = screen.getByLabelText(/Quyết định cho báo cáo của/i);
+        expect(decisionSelect).toBeDisabled();
+
+        // 4. Retry next time: detail succeeds
+        questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
+        questionBankApi.getQuestionReportIncident.mockResolvedValue({
+          data: {
+            incidentId: 'incident-test-retry',
+            revision: 1,
+            status: 'Open',
+            reports: [studentReport],
+          },
+        });
+
+        // Click Retry on the detail error banner
+        fireEvent.click(retryButtons[0]);
+
+        // Form is fully loaded
+        expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+
+        // Detail error is cleared
+        expect(screen.queryByText(/Chi tiết câu hỏi bị lỗi kết nối/i)).not.toBeInTheDocument();
+
+        // Action states recovered properly
+        expect(headerSubmitBtn).toBeEnabled();
+        expect(resolutionSelect).toBeEnabled();
+        expect(decisionSelect).toBeEnabled();
       });
 
       it('in non-reported edit mode, detail load failure displays retry in top banner and clicking retry restores form', async () => {

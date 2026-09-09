@@ -56,6 +56,7 @@ export default function IncidentReportPanel({
   onRetryAdminReview,
   adminReviewSubmitState = "idle",
   loading = false,
+  isDetailReady = true,
   updatingReportId = null,
   hasSavedInSession = false,
   className = ""
@@ -180,7 +181,7 @@ export default function IncidentReportPanel({
               value={resolutionAction}
               onValueChange={(val) => onResolutionActionChange?.(val)}
               items={RESOLUTION_ACTION_ITEMS}
-              disabled={loading}
+              disabled={loading || !isDetailReady}
               className="h-10 text-sm rounded-lg bg-pure-surface border-outline-variant"
               itemClassName="text-sm py-2"
             />
@@ -235,6 +236,7 @@ export default function IncidentReportPanel({
                     onRetryAdminReview={onRetryAdminReview}
                     adminReviewSubmitState={adminReviewSubmitState}
                     loading={loading}
+                    isDetailReady={isDetailReady}
                     reportsLoading={reportsLoading}
                     reportsError={reportsError}
                     updatingReportId={updatingReportId}
@@ -316,6 +318,7 @@ function ReportItemCard({
   onRetryAdminReview,
   adminReviewSubmitState = "idle",
   loading = false,
+  isDetailReady = true,
   reportsLoading = false,
   reportsError = "",
   updatingReportId,
@@ -385,6 +388,7 @@ function ReportItemCard({
               value={disposition}
               onValueChange={(val) => onDispositionChange?.(val)}
               items={DECISION_ITEMS}
+              disabled={loading || !isDetailReady}
               className="h-10 text-sm rounded-lg bg-pure-surface border-outline-variant"
               itemClassName="text-sm py-2"
             />
@@ -416,6 +420,7 @@ function ReportItemCard({
                 rows={2}
                 value={reviewNote}
                 maxLength={2050}
+                disabled={loading || !isDetailReady}
                 onChange={(e) => onReviewNoteChange?.(e.target.value)}
                 placeholder="Nhập lý do không chấp nhận báo cáo này (bắt buộc)..."
                 className={cn(
@@ -506,6 +511,7 @@ function ReportItemCard({
                   rows={2}
                   value={reviewNote}
                   maxLength={2050}
+                  disabled={loading || !isDetailReady}
                   onChange={(e) => onReviewNoteChange?.(e.target.value)}
                   placeholder="Nhập lý do nếu không chấp nhận báo cáo này..."
                   className={cn(
@@ -526,11 +532,11 @@ function ReportItemCard({
                 <button
                   type="button"
                   data-testid={`legacy-resolve-btn-${reportId}`}
-                  disabled={!hasSavedInSession || isUpdating || loading || reportsLoading || Boolean(reportsError)}
+                  disabled={!hasSavedInSession || isUpdating || loading || reportsLoading || Boolean(reportsError) || !isDetailReady}
                   onClick={() => onResolveLegacyReport(report.reportId || report.id, "Resolved", report.reporterRole)}
                   className={cn(
                     "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                    hasSavedInSession && !isUpdating && !loading && !reportsLoading && !reportsError
+                    hasSavedInSession && !isUpdating && !loading && !reportsLoading && !reportsError && isDetailReady
                       ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
                       : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
                   )}
@@ -545,7 +551,7 @@ function ReportItemCard({
                 <button
                   type="button"
                   data-testid={`legacy-dismiss-btn-${reportId}`}
-                  disabled={isUpdating || loading || reportsLoading || Boolean(reportsError)}
+                  disabled={isUpdating || loading || reportsLoading || Boolean(reportsError) || !isDetailReady}
                   onClick={() => {
                     if (reviewNote !== undefined && reviewNote !== "") {
                       onResolveLegacyReport(report.reportId || report.id, "Dismissed", report.reporterRole, reviewNote);
@@ -555,7 +561,7 @@ function ReportItemCard({
                   }}
                   className={cn(
                     "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                    !isUpdating && !loading && !reportsLoading && !reportsError
+                    !isUpdating && !loading && !reportsLoading && !reportsError && isDetailReady
                       ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
                       : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
                   )}
@@ -577,7 +583,7 @@ function ReportItemCard({
               <button
                 type="button"
                 data-testid={`legacy-admin-submit-btn-${reportId}`}
-                disabled={loading || isUpdating || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+                disabled={loading || isUpdating || !isDetailReady || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
                 onClick={() => {
                   if (adminReviewSubmitState === "retryable") {
                     onRetryAdminReview?.(report.reportId || report.id);
@@ -587,7 +593,7 @@ function ReportItemCard({
                 }}
                 className={cn(
                   "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95",
-                  (loading || isUpdating || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting") && "opacity-50 cursor-not-allowed"
+                  (loading || isUpdating || !isDetailReady || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting") && "opacity-50 cursor-not-allowed"
                 )}
                 title="Gửi yêu cầu kiểm tra tới Admin"
               >
