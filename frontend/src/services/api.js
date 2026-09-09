@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getAccessToken } from './authStorage';
+import { attachTokenRefreshInterceptor } from './tokenRefreshCoordinator';
 
 const RAW_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
@@ -32,4 +33,7 @@ api.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+attachTokenRefreshInterceptor(api);
+
 export default api;
+
