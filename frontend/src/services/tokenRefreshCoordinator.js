@@ -70,6 +70,8 @@ function flushQueue(error, token) {
   pendingQueue = [];
 }
 
+export const DEFAULT_REFRESH_TIMEOUT_MS = 10000;
+
 /**
  * Executes or awaits the single active token refresh call.
  * Concurrent callers receive the same Promise and wait for the single HTTP call to settle.
@@ -79,6 +81,7 @@ export function refreshAuthTokens(options = {}) {
     redirectToLogin = defaultRedirectToLogin,
     refreshUrl = getAuthRefreshUrl(),
     axiosInstance = axios,
+    timeoutMs = DEFAULT_REFRESH_TIMEOUT_MS,
   } = options;
 
   if (isRefreshing && refreshPromise) {
@@ -96,11 +99,28 @@ export function refreshAuthTokens(options = {}) {
   isRefreshing = true;
 
   refreshPromise = new Promise((resolve, reject) => {
-    axiosInstance
+    let timer = null;
+    let isSettled = false;
+
+    const timeoutPromise = new Promise((_, rejectTimeout) => {
+      timer = setTimeout(() => {
+        if (!isSettled) {
+          const timeoutErr = new Error(`Token refresh timed out after ${timeoutMs}ms`);
+          timeoutErr.code = 'ECONNABORTED';
+          timeoutErr.isTimeout = true;
+          rejectTimeout(timeoutErr);
+        }
+      }, timeoutMs);
+    });
+
+    const postPromise = axiosInstance
       .post(
         refreshUrl,
         { refreshToken },
-        { headers: { 'Content-Type': 'application/json' } },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: timeoutMs,
+        },
       )
       .then(({ data }) => {
         const newAccessToken = data.accessToken || data.AccessToken;
@@ -112,14 +132,24 @@ export function refreshAuthTokens(options = {}) {
 
         updateTokens({ accessToken: newAccessToken, refreshToken: newRefreshToken });
         flushQueue(null, newAccessToken);
-        resolve(newAccessToken);
+        return newAccessToken;
+      });
+
+    Promise.race([postPromise, timeoutPromise])
+      .then((token) => {
+        isSettled = true;
+        if (timer) clearTimeout(timer);
+        resolve(token);
       })
       .catch((refreshError) => {
+        isSettled = true;
+        if (timer) clearTimeout(timer);
         flushQueue(refreshError, null);
         redirectToLogin();
         reject(refreshError);
       })
       .finally(() => {
+        if (timer) clearTimeout(timer);
         isRefreshing = false;
         refreshPromise = null;
       });
@@ -136,6 +166,7 @@ export function attachTokenRefreshInterceptor(client, options = {}) {
     redirectToLogin = defaultRedirectToLogin,
     refreshUrl = getAuthRefreshUrl(),
     axiosInstance = axios,
+    timeoutMs = DEFAULT_REFRESH_TIMEOUT_MS,
   } = options;
 
   return client.interceptors.response.use(
@@ -167,6 +198,7 @@ export function attachTokenRefreshInterceptor(client, options = {}) {
           redirectToLogin,
           refreshUrl,
           axiosInstance,
+          timeoutMs,
         });
 
         if (client.defaults?.headers?.common) {

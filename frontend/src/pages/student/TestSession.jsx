@@ -133,6 +133,8 @@ export default function TestSession() {
   const answersRef = useRef(answers);
   const sessionRef = useRef(session);
   const dirtyRef = useRef(false);
+  const currentRevisionRef = useRef(0);
+  const lastSavedRevisionRef = useRef(0);
   const submitInFlightRef = useRef(false);
   const autoSaveTimerRef = useRef(null);
   const autoSaveQueueRef = useRef(Promise.resolve());
@@ -178,8 +180,13 @@ export default function TestSession() {
 
       if (hasUnsavedChanges) {
         dirtyRef.current = true;
+        currentRevisionRef.current = 1;
+        lastSavedRevisionRef.current = 0;
         setAutoSaveStatus('saving');
       } else {
+        dirtyRef.current = false;
+        currentRevisionRef.current = 0;
+        lastSavedRevisionRef.current = 0;
         setAutoSaveStatus('saved');
         setAutoSaveError(null);
       }
@@ -207,9 +214,9 @@ export default function TestSession() {
   }, []);
 
   const handleTimeoutSubmit = useCallback(async () => {
-    // Only timed Exam sessions can be timeout submitted (backend contract requirement)
-    const isExamTimedMode = sessionRef.current?.testFormat === 'Exam' && hasTimeLimit === true;
-    if (!sessionId || !isExamTimedMode || submitInFlightRef.current) return;
+    // Only timed sessions can be timeout submitted (backend contract requirement)
+    const isTimedSession = hasTimeLimit === true || (sessionRef.current?.durationMinutes > 0 && hasTimeLimit !== false);
+    if (!sessionId || !isTimedSession || submitInFlightRef.current) return;
 
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -257,6 +264,7 @@ export default function TestSession() {
 
   const performAutoSave = useCallback(async () => {
     if (!sessionId || sessionRef.current?.status !== 'InProgress' || !dirtyRef.current) return;
+    const targetRevision = currentRevisionRef.current;
     const payload = toAutoSavePayload(answersRef.current);
     dirtyRef.current = false;
     setAutoSaveStatus('saving');
@@ -277,22 +285,45 @@ export default function TestSession() {
           setElapsedSeconds(result.elapsedSeconds);
         }
         saveLocalDraft(sessionId, answersRef.current);
-        setAutoSaveStatus('saved');
-        setAutoSaveError(null);
+
+        lastSavedRevisionRef.current = Math.max(lastSavedRevisionRef.current, targetRevision);
+
+        // Only report 'saved' if the server has confirmed all revisions up to the latest currentRevision
+        // AND there are no newer unsaved dirty changes, pending debounce timers, or submit in flight.
+        if (
+          !submitInFlightRef.current &&
+          sessionRef.current?.status === 'InProgress' &&
+          lastSavedRevisionRef.current >= currentRevisionRef.current &&
+          !dirtyRef.current &&
+          !autoSaveTimerRef.current
+        ) {
+          setAutoSaveStatus('saved');
+          setAutoSaveError(null);
+        }
       } catch (requestError) {
         if (requestError.response?.data?.code === 'TESTING_SESSION_EXPIRED') {
           await handleTimeoutSubmit();
           return;
         }
         dirtyRef.current = true;
-        setAutoSaveStatus('error');
-        setAutoSaveError(getTestGenErrorMessage(requestError, 'Tự động lưu bài thất bại. Vui lòng kiểm tra kết nối.'));
+        if (!submitInFlightRef.current && lastSavedRevisionRef.current < targetRevision) {
+          setAutoSaveStatus('error');
+          setAutoSaveError(getTestGenErrorMessage(requestError, 'Tự động lưu bài thất bại. Vui lòng kiểm tra kết nối.'));
+        }
         throw requestError;
       }
     });
     autoSaveQueueRef.current = request;
     return request;
   }, [handleTimeoutSubmit, sessionId]);
+
+  const handleManualRetryAutoSave = useCallback(() => {
+    dirtyRef.current = true;
+    performAutoSave().catch(() => {
+      // Caught here to avoid unhandled promise rejection in browser event handler;
+      // performAutoSave handles setting autoSaveStatus='error' and autoSaveError internally.
+    });
+  }, [performAutoSave]);
 
   // If session is loaded and has unsaved draft changes, sync to server
   useEffect(() => {
@@ -371,6 +402,7 @@ export default function TestSession() {
   }, [performAutoSave, session?.status]);
 
   const handleAnswer = useCallback((questionId, update) => {
+    currentRevisionRef.current += 1;
     setAnswers((current) => {
       const next = {
         ...current,
@@ -461,6 +493,11 @@ export default function TestSession() {
       // Check if save failed or left dirty
       if (dirtyRef.current) {
         await performAutoSave();
+      }
+
+      // Ensure all student answers have been confirmed saved by server before proceeding
+      if (lastSavedRevisionRef.current < currentRevisionRef.current) {
+        throw new Error('Chưa thể lưu đầy đủ câu trả lời mới nhất lên máy chủ.');
       }
 
       // 3. Submit session
@@ -608,7 +645,7 @@ export default function TestSession() {
             </div>
             <button
               type="button"
-              onClick={() => performAutoSave()}
+              onClick={handleManualRetryAutoSave}
               className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors"
             >
               Thử lưu lại
@@ -640,7 +677,7 @@ export default function TestSession() {
                   <span>Lưu bài thất bại</span>
                   <button
                     type="button"
-                    onClick={() => performAutoSave()}
+                    onClick={handleManualRetryAutoSave}
                     className="ml-1 text-xs underline font-bold hover:text-rose-700"
                   >
                     Thử lại

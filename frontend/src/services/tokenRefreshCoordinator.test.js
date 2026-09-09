@@ -133,6 +133,42 @@ describe('tokenRefreshCoordinator', () => {
       expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
       expect(mockRedirectToLogin).toHaveBeenCalled();
     });
+
+    it('times out when refresh HTTP call exceeds timeoutMs, rejects all waiters, and resets coordinator state', async () => {
+      // Mock an axios post that hangs longer than timeoutMs
+      mockAxiosInstance.post.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({ data: { accessToken: 'late' } }), 100))
+      );
+
+      const call1 = refreshAuthTokens({
+        axiosInstance: mockAxiosInstance,
+        redirectToLogin: mockRedirectToLogin,
+        timeoutMs: 30,
+      });
+      const call2 = refreshAuthTokens({
+        axiosInstance: mockAxiosInstance,
+        redirectToLogin: mockRedirectToLogin,
+        timeoutMs: 30,
+      });
+
+      await expect(call1).rejects.toThrow(/timed out/i);
+      await expect(call2).rejects.toThrow(/timed out/i);
+
+      expect(mockRedirectToLogin).toHaveBeenCalled();
+      // Verify coordinator has reset
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
+
+      // Subsequent call can now execute without being blocked
+      mockAxiosInstance.post.mockResolvedValueOnce({
+        data: { accessToken: 'fresh-after-timeout', refreshToken: 'refresh-after-timeout' },
+      });
+      const subsequentCall = await refreshAuthTokens({
+        axiosInstance: mockAxiosInstance,
+        redirectToLogin: mockRedirectToLogin,
+        timeoutMs: 50,
+      });
+      expect(subsequentCall).toBe('fresh-after-timeout');
+    });
   });
 
   describe('attachTokenRefreshInterceptor on Axios instances', () => {

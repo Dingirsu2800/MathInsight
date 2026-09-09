@@ -75,10 +75,9 @@ describe('TestSession autosave and submit behavior', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     localStorage.clear();
-    mockNavigate.mockReset();
-    window.matchMedia = window.matchMedia || vi.fn().mockImplementation((query) => ({
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
       matches: false,
       media: query,
       onchange: null,
@@ -271,4 +270,184 @@ describe('TestSession autosave and submit behavior', () => {
     });
     expect(localStorage.getItem('mathinsight_test_draft_session-123')).toBeNull();
   });
+
+  it('does not mark "saved" when request A resolves if student has entered edit B; marks "saved" only after B resolves', async () => {
+    testingApi.getSessionContent.mockResolvedValueOnce(mockSessionData);
+
+    let resolveA;
+    let resolveB;
+    const promiseA = new Promise((res) => { resolveA = res; });
+    const promiseB = new Promise((res) => { resolveB = res; });
+
+    let callCount = 0;
+    testingApi.autoSaveAnswers.mockImplementation(() => {
+      callCount += 1;
+      if (callCount === 1) return promiseA;
+      if (callCount === 2) return promiseB;
+      return Promise.resolve({ savedAt: new Date().toISOString() });
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/student/test/session-123']}>
+        <TestSession />
+      </MemoryRouter>
+    );
+
+    const input = await screen.findByPlaceholderText('Nhập đáp án ngắn...');
+
+    // 1. Enter edit A
+    fireEvent.change(input, { target: { value: 'Answer A' } });
+
+    // Wait for A's debounce to fire and start autoSaveAnswers (callCount === 1)
+    await waitFor(() => {
+      expect(callCount).toBe(1);
+    }, { timeout: 3000 });
+
+    // 2. While request A is in-flight, enter edit B
+    fireEvent.change(input, { target: { value: 'Answer B' } });
+
+    // 3. Resolve request A
+    await act(async () => {
+      resolveA({ savedAt: new Date().toISOString() });
+    });
+
+    // Verify: even though A resolved, UI must NOT report saved because B is not yet confirmed!
+    expect(screen.getByTestId('autosave-status-saving')).toBeInTheDocument();
+    expect(screen.queryByTestId('autosave-status-saved')).toBeNull();
+
+    // 4. Wait for B's debounce to fire and start autoSaveAnswers (callCount === 2)
+    await waitFor(() => {
+      expect(callCount).toBe(2);
+    }, { timeout: 3000 });
+
+    // 5. Now resolve request B
+    await act(async () => {
+      resolveB({ savedAt: new Date().toISOString() });
+    });
+
+    // Now UI successfully transitions to saved!
+    expect(await screen.findByTestId('autosave-status-saved')).toBeInTheDocument();
+    expect(screen.getByText('Đã lưu')).toBeInTheDocument();
+  }, 15000);
+
+  it('handles timeout submit while autosave is in-flight without deadlock, and does not falsely mark saved when in-flight completes', async () => {
+    let resolveAutoSave;
+    const pendingAutoSave = new Promise((res) => { resolveAutoSave = res; });
+
+    // Seed local draft so that performAutoSave runs immediately on mount
+    localStorage.setItem(
+      'mathinsight_test_draft_session-123',
+      JSON.stringify({ 'q-1': { shortAnswerText: 'Draft in flight' } })
+    );
+
+    testingApi.getSessionContent.mockResolvedValueOnce({
+      ...mockSessionData,
+      durationMinutes: 30,
+      hasTimeLimit: true,
+      remainingSeconds: 0, // Zero triggers immediate timeout submit from SessionTimer
+    });
+    testingApi.autoSaveAnswers.mockReturnValueOnce(pendingAutoSave);
+    testingApi.timeoutSubmitSession.mockResolvedValueOnce({
+      status: 'Graded',
+      score: 10,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/student/test/session-123']}>
+        <TestSession />
+      </MemoryRouter>
+    );
+
+    // Timeout submit must be called immediately without waiting for or deadlocking on pending autosave
+    await waitFor(() => {
+      expect(testingApi.timeoutSubmitSession).toHaveBeenCalledWith('session-123');
+      expect(mockNavigate).toHaveBeenCalledWith('/student/test-result/session-123');
+    });
+
+    // Manual submit must NOT have been called
+    expect(testingApi.submitSession).not.toHaveBeenCalled();
+
+    // When the pending autosave resolves afterwards, verify it does not error or cause invalid state
+    await act(async () => {
+      resolveAutoSave({ savedAt: new Date().toISOString() });
+    });
+  });
+
+  it('distinguishes between auto-submit and manual submit when retry button is clicked', async () => {
+    testingApi.getSessionContent.mockResolvedValueOnce({
+      ...mockSessionData,
+      durationMinutes: 30,
+      hasTimeLimit: true,
+      remainingSeconds: 0,
+    });
+    // Timeout submit fails initially with network error
+    testingApi.timeoutSubmitSession.mockRejectedValueOnce(new Error('Network error on timeout submit'));
+
+    render(
+      <MemoryRouter initialEntries={['/student/test/session-123']}>
+        <TestSession />
+      </MemoryRouter>
+    );
+
+    // Wait for timeout submit failure message
+    expect(await screen.findByText('Không thể tự động nộp bài hết giờ. Vui lòng thử lại.')).toBeInTheDocument();
+
+    // On retry, server state check returns in-progress
+    testingApi.getSessionContent.mockResolvedValueOnce({
+      ...mockSessionData,
+      status: 'InProgress',
+    });
+    // Second timeoutSubmitSession call succeeds
+    testingApi.timeoutSubmitSession.mockResolvedValueOnce({ status: 'Graded' });
+
+    // Click retry
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+
+    await waitFor(() => {
+      expect(testingApi.timeoutSubmitSession).toHaveBeenCalledTimes(2);
+      expect(mockNavigate).toHaveBeenCalledWith('/student/test-result/session-123');
+    });
+
+    // submitSession (manual) must NEVER be called for timeout submit retries!
+    expect(testingApi.submitSession).not.toHaveBeenCalled();
+  });
+
+  it('catches rejected promise on autosave retry button without unhandled rejection', async () => {
+    testingApi.getSessionContent.mockResolvedValueOnce(mockSessionData);
+    // Initial autosave fails
+    testingApi.autoSaveAnswers.mockRejectedValueOnce(new Error('First failure'));
+
+    render(
+      <MemoryRouter initialEntries={['/student/test/session-123']}>
+        <TestSession />
+      </MemoryRouter>
+    );
+
+    const input = await screen.findByPlaceholderText('Nhập đáp án ngắn...');
+    fireEvent.change(input, { target: { value: 'π/√(2)' } });
+
+    // Wait for error banner
+    expect(await screen.findByTestId('autosave-error-banner', {}, { timeout: 6000 })).toBeInTheDocument();
+
+    // Setup second failure on retry click
+    testingApi.autoSaveAnswers.mockRejectedValueOnce(new Error('Second failure on retry'));
+
+    const unhandledRejections = [];
+    const handleUnhandled = (event) => {
+      unhandledRejections.push(event.reason);
+    };
+    window.addEventListener('unhandledrejection', handleUnhandled);
+
+    // Click "Thử lưu lại" in banner
+    const retryBtn = screen.getByRole('button', { name: 'Thử lưu lại' });
+    await act(async () => {
+      fireEvent.click(retryBtn);
+    });
+
+    window.removeEventListener('unhandledrejection', handleUnhandled);
+
+    // Verify no unhandled rejection escaped the button handler
+    expect(unhandledRejections).toHaveLength(0);
+    expect(screen.getByTestId('autosave-error-banner')).toBeInTheDocument();
+  }, 15000);
 });
