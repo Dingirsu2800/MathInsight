@@ -55,6 +55,27 @@ function getDraftStorageKey(id) {
   return `mathinsight_test_draft_${id}`;
 }
 
+export function answersDiffer(ans1, ans2) {
+  if (!ans1 && !ans2) return false;
+  if (!ans1 || !ans2) return true;
+  if ((ans1.answerId || null) !== (ans2.answerId || null)) return true;
+  if ((ans1.shortAnswerText || '').trim() !== (ans2.shortAnswerText || '').trim()) return true;
+
+  const opts1 = (ans1.selectedOptions || []).slice().sort();
+  const opts2 = (ans2.selectedOptions || []).slice().sort();
+  if (opts1.length !== opts2.length) return true;
+  for (let i = 0; i < opts1.length; i += 1) {
+    if (opts1[i] !== opts2[i]) return true;
+  }
+
+  const parts1 = ans1.parts || [];
+  const parts2 = ans2.parts || [];
+  if (parts1.length !== parts2.length) return true;
+  if (JSON.stringify(parts1) !== JSON.stringify(parts2)) return true;
+
+  return false;
+}
+
 function getLocalDraft(sessionId) {
   try {
     const raw = localStorage.getItem(getDraftStorageKey(sessionId));
@@ -102,6 +123,10 @@ export default function TestSession() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
 
+  // Autosave status indicator states: 'saved' | 'saving' | 'error'
+  const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
+  const [autoSaveError, setAutoSaveError] = useState(null);
+
   // Track whether failed submission was 'manual' or 'timeout' for exact retry routing
   const [failedSubmitMode, setFailedSubmitMode] = useState(null);
 
@@ -134,23 +159,30 @@ export default function TestSession() {
 
       const localDraft = getLocalDraft(sessionId);
       let finalAnswers = persistedAnswers;
+      let hasUnsavedChanges = false;
       if (localDraft && typeof localDraft === 'object') {
         finalAnswers = { ...persistedAnswers };
-        let hasUnsavedChanges = false;
         Object.entries(localDraft).forEach(([qId, localAns]) => {
           if (localAns && (localAns.answerId || localAns.shortAnswerText?.trim() || localAns.selectedOptions?.length || localAns.parts?.length)) {
-            finalAnswers[qId] = { ...(finalAnswers[qId] || {}), ...localAns };
-            hasUnsavedChanges = true;
+            if (answersDiffer(persistedAnswers[qId], localAns)) {
+              finalAnswers[qId] = { ...(finalAnswers[qId] || {}), ...localAns };
+              hasUnsavedChanges = true;
+            }
           }
         });
-        if (hasUnsavedChanges) {
-          dirtyRef.current = true;
-        }
       }
 
       setSession(view);
       setAnswers(finalAnswers);
       answersRef.current = finalAnswers;
+
+      if (hasUnsavedChanges) {
+        dirtyRef.current = true;
+        setAutoSaveStatus('saving');
+      } else {
+        setAutoSaveStatus('saved');
+        setAutoSaveError(null);
+      }
 
       // Update time policy states from backend session content
       const isLimit = data.hasTimeLimit ?? (data.durationMinutes > 0);
@@ -174,31 +206,15 @@ export default function TestSession() {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    if (!currentQuestionId) return;
-    const previousId = previousQuestionIdRef.current;
-    const now = Date.now();
-    if (previousId && previousId !== currentQuestionId) {
-      const elapsed = Math.max(0, Math.floor((now - questionStartTimeRef.current) / 1000));
-      if (elapsed > 0) {
-        setAnswers((current) => ({
-          ...current,
-          [previousId]: {
-            ...(current[previousId] || {}),
-            timeSpent: (current[previousId]?.timeSpent || 0) + elapsed,
-          },
-        }));
-        dirtyRef.current = true;
-      }
-    }
-    previousQuestionIdRef.current = currentQuestionId;
-    questionStartTimeRef.current = now;
-  }, [currentQuestionId]);
-
   const handleTimeoutSubmit = useCallback(async () => {
     // Only timed Exam sessions can be timeout submitted (backend contract requirement)
     const isExamTimedMode = sessionRef.current?.testFormat === 'Exam' && hasTimeLimit === true;
     if (!sessionId || !isExamTimedMode || submitInFlightRef.current) return;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
 
     submitInFlightRef.current = true;
     setSubmitting(true);
@@ -220,6 +236,18 @@ export default function TestSession() {
         navigate(`/student/test-result/${sessionId}`);
         return;
       }
+      if (code === 'TESTING_SESSION_NOT_IN_PROGRESS' || !requestError.response) {
+        try {
+          const serverState = await getSessionContent(sessionId);
+          if (serverState.status === 'Submitted' || serverState.status === 'Graded' || serverState.submissionType != null) {
+            clearLocalDraft(sessionId);
+            navigate(`/student/test-result/${sessionId}`);
+            return;
+          }
+        } catch {
+          // Ignore
+        }
+      }
       setFailedSubmitMode('timeout');
       setError(getTestGenErrorMessage(requestError, 'Không thể tự động nộp bài hết giờ. Vui lòng thử lại.'));
       submitInFlightRef.current = false;
@@ -231,6 +259,7 @@ export default function TestSession() {
     if (!sessionId || sessionRef.current?.status !== 'InProgress' || !dirtyRef.current) return;
     const payload = toAutoSavePayload(answersRef.current);
     dirtyRef.current = false;
+    setAutoSaveStatus('saving');
 
     const request = autoSaveQueueRef.current.catch(() => undefined).then(async () => {
       try {
@@ -248,18 +277,60 @@ export default function TestSession() {
           setElapsedSeconds(result.elapsedSeconds);
         }
         saveLocalDraft(sessionId, answersRef.current);
+        setAutoSaveStatus('saved');
+        setAutoSaveError(null);
       } catch (requestError) {
         if (requestError.response?.data?.code === 'TESTING_SESSION_EXPIRED') {
           await handleTimeoutSubmit();
           return;
         }
         dirtyRef.current = true;
+        setAutoSaveStatus('error');
+        setAutoSaveError(getTestGenErrorMessage(requestError, 'Tự động lưu bài thất bại. Vui lòng kiểm tra kết nối.'));
         throw requestError;
       }
     });
     autoSaveQueueRef.current = request;
     return request;
   }, [handleTimeoutSubmit, sessionId]);
+
+  // If session is loaded and has unsaved draft changes, sync to server
+  useEffect(() => {
+    if (session?.status === 'InProgress' && dirtyRef.current) {
+      performAutoSave().catch(() => undefined);
+    }
+  }, [performAutoSave, session?.sessionId, session?.status]);
+
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    setAutoSaveStatus('saving');
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      performAutoSave().catch(() => undefined);
+    }, AUTO_SAVE_DEBOUNCE_MS);
+  }, [performAutoSave]);
+
+  useEffect(() => {
+    if (!currentQuestionId) return;
+    const previousId = previousQuestionIdRef.current;
+    const now = Date.now();
+    if (previousId && previousId !== currentQuestionId) {
+      const elapsed = Math.max(0, Math.floor((now - questionStartTimeRef.current) / 1000));
+      if (elapsed > 0) {
+        setAnswers((current) => ({
+          ...current,
+          [previousId]: {
+            ...(current[previousId] || {}),
+            timeSpent: (current[previousId]?.timeSpent || 0) + elapsed,
+          },
+        }));
+        dirtyRef.current = true;
+        scheduleAutoSave();
+      }
+    }
+    previousQuestionIdRef.current = currentQuestionId;
+    questionStartTimeRef.current = now;
+  }, [currentQuestionId, scheduleAutoSave]);
 
   useEffect(() => {
     let timer;
@@ -291,17 +362,13 @@ export default function TestSession() {
 
   useEffect(() => {
     if (session?.status !== 'InProgress') return undefined;
-    const interval = setInterval(() => performAutoSave().catch(() => undefined), AUTO_SAVE_INTERVAL_MS);
+    const interval = setInterval(() => {
+      if (dirtyRef.current) {
+        performAutoSave().catch(() => undefined);
+      }
+    }, AUTO_SAVE_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [performAutoSave, session?.status]);
-
-  const scheduleAutoSave = useCallback(() => {
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      autoSaveTimerRef.current = null;
-      performAutoSave().catch(() => undefined);
-    }, AUTO_SAVE_DEBOUNCE_MS);
-  }, [performAutoSave]);
 
   const handleAnswer = useCallback((questionId, update) => {
     setAnswers((current) => {
@@ -375,12 +442,53 @@ export default function TestSession() {
     if (!sessionId || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
     setSubmitting(true);
+    setError(null);
+
+    // 1. Cancel pending debounce timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
     try {
-      if (dirtyRef.current) await performAutoSave();
+      // 2. Wait for any in-flight auto-save or perform auto-save if dirty
+      if (dirtyRef.current) {
+        await performAutoSave();
+      } else {
+        await autoSaveQueueRef.current;
+      }
+
+      // Check if save failed or left dirty
+      if (dirtyRef.current) {
+        await performAutoSave();
+      }
+
+      // 3. Submit session
       await submitSession(sessionId);
       clearLocalDraft(sessionId);
       navigate(`/student/test-result/${sessionId}`);
     } catch (err) {
+      const code = err.response?.data?.code;
+      if (code === 'TESTING_SESSION_ALREADY_COMPLETED') {
+        clearLocalDraft(sessionId);
+        navigate(`/student/test-result/${sessionId}`);
+        return;
+      }
+
+      // If submit failed due to conflict or network error, check server state
+      if (code === 'TESTING_SESSION_NOT_IN_PROGRESS' || !err.response) {
+        try {
+          const serverState = await getSessionContent(sessionId);
+          if (serverState.status === 'Submitted' || serverState.status === 'Graded' || serverState.submissionType != null) {
+            clearLocalDraft(sessionId);
+            navigate(`/student/test-result/${sessionId}`);
+            return;
+          }
+        } catch {
+          // Keep draft and report error
+        }
+      }
+
       setFailedSubmitMode('manual');
       setError(getTestGenErrorMessage(err, 'Nộp bài thất bại. Vui lòng thử lại.'));
       submitInFlightRef.current = false;
@@ -391,13 +499,29 @@ export default function TestSession() {
 
   const handleRetrySubmit = useCallback(async () => {
     setError(null);
+    setSubmitting(true);
     submitInFlightRef.current = false;
+
+    // Check server state before blindly retrying submit
+    try {
+      const serverState = await getSessionContent(sessionId);
+      if (serverState.status === 'Submitted' || serverState.status === 'Graded' || serverState.submissionType != null) {
+        clearLocalDraft(sessionId);
+        navigate(`/student/test-result/${sessionId}`);
+        return;
+      }
+    } catch (checkErr) {
+      setError(getTestGenErrorMessage(checkErr, 'Không thể kết nối máy chủ để kiểm tra trạng thái bài thi. Vui lòng kiểm tra mạng và thử lại.'));
+      setSubmitting(false);
+      return;
+    }
+
     if (failedSubmitMode === 'timeout') {
       await handleTimeoutSubmit();
     } else {
       await handleConfirmSubmit();
     }
-  }, [failedSubmitMode, handleTimeoutSubmit, handleConfirmSubmit]);
+  }, [failedSubmitMode, handleConfirmSubmit, handleTimeoutSubmit, navigate, sessionId]);
 
   if (loading) {
     return <ExamLayout><div className="flex items-center justify-center py-24"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div></ExamLayout>;
@@ -413,13 +537,26 @@ export default function TestSession() {
             <p className="text-sm text-on-surface-variant mb-4">{error || 'Lỗi không xác định.'}</p>
             <div className="flex items-center justify-center gap-3">
               {session && (
-                <button
-                  onClick={handleRetrySubmit}
-                  disabled={submitting}
-                  className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold disabled:opacity-50 min-h-[44px]"
-                >
-                  {submitting ? 'Đang gửi...' : 'Thử lại'}
-                </button>
+                <>
+                  <button
+                    onClick={handleRetrySubmit}
+                    disabled={submitting}
+                    className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold disabled:opacity-50 min-h-[44px]"
+                  >
+                    {submitting ? 'Đang gửi...' : 'Thử lại'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setSubmitting(false);
+                      submitInFlightRef.current = false;
+                    }}
+                    disabled={submitting}
+                    className="px-6 py-2 border border-whisper-border text-on-surface rounded-lg text-sm font-bold hover:bg-surface-container-low min-h-[44px]"
+                  >
+                    Quay lại bài làm
+                  </button>
+                </>
               )}
               <button
                 onClick={() => navigate('/student/test')}
@@ -461,10 +598,56 @@ export default function TestSession() {
           </div>
         )}
 
+        {autoSaveStatus === 'error' && !isOffline && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl shadow-sm flex items-center justify-between gap-3 text-sm font-semibold" data-testid="autosave-error-banner">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-xl text-rose-600">cloud_off</span>
+              <span>
+                {autoSaveError || 'Chưa thể tự động lưu câu trả lời lên máy chủ. Bài làm hiện được lưu an toàn trên trình duyệt của bạn.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => performAutoSave()}
+              className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors"
+            >
+              Thử lưu lại
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-on-surface">{session.testName}</h2>
-            <p className="text-sm text-on-surface-variant">{questions.length} câu hỏi · {durationText}</p>
+            <div className="flex items-center gap-3 mt-1 text-sm text-on-surface-variant">
+              <span>{questions.length} câu hỏi · {durationText}</span>
+              <span className="text-whisper-border">|</span>
+              {autoSaveStatus === 'saving' && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary" data-testid="autosave-status-saving">
+                  <span className="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                  <span>Đang lưu...</span>
+                </span>
+              )}
+              {autoSaveStatus === 'saved' && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600" data-testid="autosave-status-saved">
+                  <span className="material-symbols-outlined text-[15px]">cloud_done</span>
+                  <span>Đã lưu</span>
+                </span>
+              )}
+              {autoSaveStatus === 'error' && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600" data-testid="autosave-status-error" title={autoSaveError || 'Lưu bài thất bại'}>
+                  <span className="material-symbols-outlined text-[15px]">cloud_off</span>
+                  <span>Lưu bài thất bại</span>
+                  <button
+                    type="button"
+                    onClick={() => performAutoSave()}
+                    className="ml-1 text-xs underline font-bold hover:text-rose-700"
+                  >
+                    Thử lại
+                  </button>
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {isExamMode && incidentCount > 0 && <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-700">{incidentCount}/5 vi phạm</span>}
