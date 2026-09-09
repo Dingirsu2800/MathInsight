@@ -81,6 +81,20 @@ public sealed class HandleQuestionReportCommandHandler
         if (report.Status != QuestionReportWorkflow.Pending)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
 
+        var trimmedReviewNote = command.Request.ReviewNote?.Trim();
+        if (targetStatus == "Dismissed")
+        {
+            if (string.IsNullOrWhiteSpace(trimmedReviewNote))
+                return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteRequired);
+
+            if (trimmedReviewNote.Length > 2000)
+                return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteTooLong);
+        }
+        else if (trimmedReviewNote?.Length > 2000)
+        {
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteTooLong);
+        }
+
         if (resolutionAction == "InvalidateAndAwardFull")
         {
             if (report.ReporterRole != "Student" ||
@@ -112,6 +126,14 @@ public sealed class HandleQuestionReportCommandHandler
         report.ResolutionAction = resolutionAction;
         report.ResolvedTime = DateTime.UtcNow;
         report.ResolvedBy = command.ExpertAccountId;
+        if (targetStatus == "Dismissed")
+        {
+            report.ReviewNote = trimmedReviewNote;
+        }
+        else if (!string.IsNullOrWhiteSpace(trimmedReviewNote))
+        {
+            report.ReviewNote = trimmedReviewNote;
+        }
 
         var hasIncident = !string.IsNullOrWhiteSpace(report.IncidentId);
         var otherBlockingReportsRemain = await _context.QuestionReports.AnyAsync(
