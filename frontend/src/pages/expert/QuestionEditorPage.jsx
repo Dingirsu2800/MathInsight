@@ -372,16 +372,12 @@ export default function QuestionEditorPage() {
     try {
       let activeIncidentId = paramIncidentId || blockingReportIncidentRef.current?.incidentId;
       if (!activeIncidentId) {
-        try {
-          const detailRes = await questionBankApi.getQuestionDetail(id);
-          const blocker = detailRes.data?.blockingReportIncident;
-          if (blocker?.incidentId) {
-            activeIncidentId = blocker.incidentId;
-            setBlockingReportIncident(blocker);
-            blockingReportIncidentRef.current = blocker;
-          }
-        } catch (e) {
-          console.warn("Could not query blocking incident from question detail:", e);
+        const detailRes = await questionBankApi.getQuestionDetail(id);
+        const blocker = detailRes.data?.blockingReportIncident;
+        if (blocker?.incidentId) {
+          activeIncidentId = blocker.incidentId;
+          setBlockingReportIncident(blocker);
+          blockingReportIncidentRef.current = blocker;
         }
       }
 
@@ -453,6 +449,7 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error("Failed to load pending reports:", err);
       setReportsError("Không thể tải các báo cáo đang chờ xử lý từ máy chủ.");
+      setPendingReports([]);
       return { ok: false, reports: [] };
     } finally {
       setReportsLoading(false);
@@ -465,16 +462,38 @@ export default function QuestionEditorPage() {
     }
   }, [id, fromReported]);
 
-  const handleResolveReport = async (reportId, nextStatus, reporterRole) => {
+  const handleResolveReport = async (reportId, nextStatus, reporterRole, explicitNote) => {
     setUpdatingReportId(reportId);
     try {
-      await questionBankApi.updateQuestionReportStatus(reportId, {
+      const rawNote = explicitNote !== undefined
+        ? explicitNote
+        : (reportReviewNotes[String(reportId)] ?? "");
+      const trimmedNote = (rawNote || "").trim();
+
+      if (nextStatus === "Dismissed") {
+        if (!trimmedNote) {
+          showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+          return;
+        }
+        if (trimmedNote.length > 2000) {
+          showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+          return;
+        }
+      }
+
+      const payload = {
         status: nextStatus,
         resolutionAction:
           nextStatus === "Resolved" && reporterRole === "Student"
             ? "InvalidateAndAwardFull"
             : "NoScoreChange"
-      });
+      };
+
+      if (nextStatus === "Dismissed") {
+        payload.reviewNote = trimmedNote;
+      }
+
+      await questionBankApi.updateQuestionReportStatus(reportId, payload);
       const refreshResult = await fetchPendingReports();
       if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
         navigate("/expert/questions/reported");
@@ -482,7 +501,11 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error(err);
       const errorCode = err.response?.data?.code;
-      if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+      if (errorCode === "REVIEW_NOTE_REQUIRED") {
+        showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+      } else if (errorCode === "REVIEW_NOTE_TOO_LONG") {
+        showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+      } else if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
         showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
         await fetchPendingReports();
       } else if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
@@ -564,6 +587,7 @@ export default function QuestionEditorPage() {
   // Load question detail if in Edit Mode
   React.useEffect(() => {
     if (isEditMode) {
+      initialFormSnapshotRef.current = null;
       setLoading(true);
       setError(null);
       questionBankApi.getQuestionDetail(id)
@@ -571,6 +595,7 @@ export default function QuestionEditorPage() {
           const detail = res.data;
           const mapped = mapQuestionDetailToEditorState(detail);
           setForm(mapped);
+          initialFormSnapshotRef.current = JSON.stringify(mapped);
           const blocker = detail?.blockingReportIncident || null;
           setBlockingReportIncident(blocker);
           blockingReportIncidentRef.current = blocker;
@@ -1471,7 +1496,7 @@ export default function QuestionEditorPage() {
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={() => handleSaveAndSubmitReview(null)}
-                disabled={loading || adminReviewSubmitState === "submitting"}
+                disabled={loading || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "submitting"}
               >
                 {adminReviewSubmitState === "submitting"
                   ? "Đang gửi xử lý..."
@@ -1489,7 +1514,7 @@ export default function QuestionEditorPage() {
                     handleSaveAndSubmitReview(adminReportId);
                   }
                 }}
-                disabled={loading || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+                disabled={loading || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
               >
                 {adminReviewSubmitState === "retryable"
                   ? "Gửi lại Admin xét duyệt"
@@ -1515,7 +1540,7 @@ export default function QuestionEditorPage() {
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={handleSaveQuestion}
-                disabled={loading}
+                disabled={loading || (fromReported && (reportsLoading || Boolean(reportsError))) || (isEditMode && !isDirty)}
               >
                 {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
               </Button>

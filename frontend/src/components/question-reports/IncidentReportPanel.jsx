@@ -33,6 +33,11 @@ const DECISION_ITEMS = [
   { value: "Dismissed", label: "Không chấp nhận báo cáo" }
 ];
 
+const RESOLUTION_ACTION_ITEMS = [
+  { value: "NoScoreChange", label: "Không điều chỉnh điểm" },
+  { value: "InvalidateAndAwardFull", label: "Vô hiệu câu hỏi và cộng đủ điểm" }
+];
+
 export default function IncidentReportPanel({
   reports = [],
   incident = null,
@@ -162,17 +167,24 @@ export default function IncidentReportPanel({
             <span className="material-symbols-outlined text-[15px]">tune</span>
             Quyết định xử lý sự cố
           </div>
-          <label className="block text-on-surface-variant font-medium">
-            Phương án điểm
-            <select
-              value={resolutionAction}
-              onChange={(e) => onResolutionActionChange?.(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-outline-variant bg-pure-surface px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          <div className="space-y-1">
+            <label
+              htmlFor="incident-resolution-action"
+              className="block text-[11px] font-bold text-on-surface-variant"
             >
-              <option value="NoScoreChange">Không điều chỉnh điểm</option>
-              <option value="InvalidateAndAwardFull">Vô hiệu câu hỏi và cộng đủ điểm</option>
-            </select>
-          </label>
+              Phương án điểm
+            </label>
+            <CustomSelect
+              id="incident-resolution-action"
+              aria-label="Phương án điểm"
+              value={resolutionAction}
+              onValueChange={(val) => onResolutionActionChange?.(val)}
+              items={RESOLUTION_ACTION_ITEMS}
+              disabled={loading}
+              className="h-10 text-sm rounded-lg bg-pure-surface border-outline-variant"
+              itemClassName="text-sm py-2"
+            />
+          </div>
           <p className="text-[11px] text-on-surface-variant leading-relaxed m-0">
             Chọn quyết định riêng cho từng báo cáo bên dưới. Nếu tất cả đều không chấp nhận và không điều chỉnh điểm, hệ thống không tạo phiên bản câu hỏi mới.
           </p>
@@ -223,6 +235,8 @@ export default function IncidentReportPanel({
                     onRetryAdminReview={onRetryAdminReview}
                     adminReviewSubmitState={adminReviewSubmitState}
                     loading={loading}
+                    reportsLoading={reportsLoading}
+                    reportsError={reportsError}
                     updatingReportId={updatingReportId}
                     hasSavedInSession={hasSavedInSession}
                   />
@@ -278,7 +292,7 @@ export default function IncidentReportPanel({
           {/* Helper note for legacy student/expert reports needing save first */}
           {!hasOpenIncident && !hasSavedInSession && !reportsError && expertActionableReports.some(rep => (rep.reporterRole === "Student" || rep.reporterRole === "Expert") && rep.status === "Pending") && (
             <p className="text-[10px] text-on-surface-variant/75 mt-3 italic leading-relaxed text-center">
-              * Các nút xử lý báo cáo sẽ hoạt động sau khi bạn ấn &ldquo;Lưu câu hỏi&rdquo; thành công ít nhất một lần.
+              * Nút &ldquo;Đã khắc phục&rdquo; sẽ hoạt động sau khi bạn ấn &ldquo;Cập nhật câu hỏi&rdquo; thành công ít nhất một lần. Bạn có thể từ chối báo cáo kèm lý do mà không cần lưu câu hỏi.
             </p>
           )}
         </div>
@@ -302,6 +316,8 @@ function ReportItemCard({
   onRetryAdminReview,
   adminReviewSubmitState = "idle",
   loading = false,
+  reportsLoading = false,
+  reportsError = "",
   updatingReportId,
   hasSavedInSession
 }) {
@@ -465,45 +481,93 @@ function ReportItemCard({
         <>
           {/* Case 1: Student/Expert legacy reports can use individual action buttons */}
           {(report.reporterRole === "Student" || report.reporterRole === "Expert") && onResolveLegacyReport && (
-            <div className="flex justify-end gap-2 pt-2 border-t border-error/10">
-              <button
-                type="button"
-                data-testid={`legacy-resolve-btn-${reportId}`}
-                disabled={!hasSavedInSession || isUpdating}
-                onClick={() => onResolveLegacyReport(report.reportId || report.id, "Resolved", report.reporterRole)}
-                className={cn(
-                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                  hasSavedInSession && !isUpdating
-                    ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
-                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+            <div className="pt-2 border-t border-error/10 space-y-2">
+              <div className="space-y-1" data-testid={`legacy-dismiss-reason-container-${reportId}`}>
+                <div className="flex justify-between items-center text-[11px]">
+                  <label
+                    htmlFor={`report-reason-${reportId}`}
+                    className="font-bold text-on-surface-variant flex items-center gap-1"
+                  >
+                    <span>Lý do không chấp nhận</span>
+                    <span className="text-on-surface-variant/70 text-[10px]">(bắt buộc nếu từ chối)</span>
+                  </label>
+                  <span
+                    className={cn(
+                      "text-[10px] font-mono",
+                      reviewNote.length > 2000 ? "text-error font-bold" : "text-on-surface-variant"
+                    )}
+                  >
+                    {reviewNote.length}/2000
+                  </span>
+                </div>
+                <textarea
+                  id={`report-reason-${reportId}`}
+                  aria-label={`Lý do không chấp nhận báo cáo của ${reporterName}`}
+                  rows={2}
+                  value={reviewNote}
+                  maxLength={2050}
+                  onChange={(e) => onReviewNoteChange?.(e.target.value)}
+                  placeholder="Nhập lý do nếu không chấp nhận báo cáo này..."
+                  className={cn(
+                    "w-full rounded-lg border p-2 text-xs text-on-surface bg-pure-surface focus:outline-none focus:ring-2 transition-all resize-y",
+                    reviewNote.length > 2000
+                      ? "border-error/40 focus:ring-error/20 focus:border-error"
+                      : "border-outline-variant focus:ring-primary/20 focus:border-primary"
+                  )}
+                />
+                {reviewNote.length > 2000 && (
+                  <p className="text-[10px] text-error font-medium m-0">
+                    Lý do không được vượt quá 2000 ký tự.
+                  </p>
                 )}
-                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
-              >
-                {isUpdating ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  "Đã khắc phục"
-                )}
-              </button>
-              <button
-                type="button"
-                data-testid={`legacy-dismiss-btn-${reportId}`}
-                disabled={!hasSavedInSession || isUpdating}
-                onClick={() => onResolveLegacyReport(report.reportId || report.id, "Dismissed", report.reporterRole)}
-                className={cn(
-                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                  hasSavedInSession && !isUpdating
-                    ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
-                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-                )}
-                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
-              >
-                {isUpdating ? (
-                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  "Không chấp nhận"
-                )}
-              </button>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  data-testid={`legacy-resolve-btn-${reportId}`}
+                  disabled={!hasSavedInSession || isUpdating || loading || reportsLoading || Boolean(reportsError)}
+                  onClick={() => onResolveLegacyReport(report.reportId || report.id, "Resolved", report.reporterRole)}
+                  className={cn(
+                    "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                    hasSavedInSession && !isUpdating && !loading && !reportsLoading && !reportsError
+                      ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
+                      : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                  )}
+                  title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
+                >
+                  {isUpdating ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    "Đã khắc phục"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  data-testid={`legacy-dismiss-btn-${reportId}`}
+                  disabled={isUpdating || loading || reportsLoading || Boolean(reportsError)}
+                  onClick={() => {
+                    if (reviewNote !== undefined && reviewNote !== "") {
+                      onResolveLegacyReport(report.reportId || report.id, "Dismissed", report.reporterRole, reviewNote);
+                    } else {
+                      onResolveLegacyReport(report.reportId || report.id, "Dismissed", report.reporterRole);
+                    }
+                  }}
+                  className={cn(
+                    "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
+                    !isUpdating && !loading && !reportsLoading && !reportsError
+                      ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
+                      : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
+                  )}
+                  title="Không chấp nhận báo cáo này"
+                >
+                  {isUpdating ? (
+                    <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    "Không chấp nhận"
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
