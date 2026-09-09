@@ -366,5 +366,54 @@ describe("IncidentReportPanel component", () => {
     );
     expect(selectTrigger).toBeDisabled();
   });
+
+  it("enables legacy dismiss without hasSavedInSession while keeping resolve disabled and passes reviewNote", () => {
+    const legacyStudentReport = {
+      reportId: "rep-student-2",
+      reporterName: "Học sinh Minh",
+      reporterRole: "Student",
+      status: "Pending",
+      reportReason: "Sai kiến thức cơ bản",
+      createdTime: "2026-09-05T10:00:00Z"
+    };
+
+    const onResolveLegacyReport = vi.fn();
+    const onReviewNoteChange = vi.fn();
+
+    render(
+      <IncidentReportPanel
+        reports={[legacyStudentReport]}
+        incident={null}
+        hasSavedInSession={false}
+        reportReviewNotes={{ "rep-student-2": "Câu hỏi đúng trọng tâm sách giáo khoa" }}
+        onReviewNoteChange={onReviewNoteChange}
+        onResolveLegacyReport={onResolveLegacyReport}
+      />
+    );
+
+    const resolveBtn = screen.getByTestId("legacy-resolve-btn-rep-student-2");
+    const dismissBtn = screen.getByTestId("legacy-dismiss-btn-rep-student-2");
+
+    // Resolve MUST be disabled when not saved
+    expect(resolveBtn).toBeDisabled();
+    // Dismiss MUST be enabled even when not saved
+    expect(dismissBtn).toBeEnabled();
+
+    // Reason textarea is present
+    const reasonInput = screen.getByLabelText(/Lý do không chấp nhận báo cáo của Học sinh Minh/i);
+    expect(reasonInput).toHaveValue("Câu hỏi đúng trọng tâm sách giáo khoa");
+
+    fireEvent.click(dismissBtn);
+    expect(onResolveLegacyReport).toHaveBeenCalledWith(
+      "rep-student-2",
+      "Dismissed",
+      "Student",
+      "Câu hỏi đúng trọng tâm sách giáo khoa"
+    );
+
+    // Verify footnote clarifies only "Đã khắc phục" requires save
+    expect(screen.getByText(/Nút “Đã khắc phục” sẽ hoạt động sau khi bạn ấn “Cập nhật câu hỏi”/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bạn có thể từ chối báo cáo kèm lý do mà không cần lưu câu hỏi/i)).toBeInTheDocument();
+  });
 });
 

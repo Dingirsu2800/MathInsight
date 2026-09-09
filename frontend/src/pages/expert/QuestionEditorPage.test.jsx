@@ -1149,5 +1149,243 @@ describe('FE-1B: Ordinary edit guard and blocker routing', () => {
       expect(createBtn).toBeEnabled();
     });
   });
+
+  describe('FE-Task-2: Legacy report dismiss and error resilience', () => {
+    const studentReport = {
+      id: 501,
+      reportId: 501,
+      reporterRole: 'Student',
+      status: 'Pending',
+      reportReason: 'Đáp án sai',
+      createdTime: '2026-08-25T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      locationSearch = '?from=reported';
+      locationPathname = '/expert/questions/101/edit';
+      mockParams = { id: '101' };
+      questionBankApi.getQuestionDetail.mockResolvedValue({ data: sampleDetail });
+    });
+
+    it('legacy Student dismiss without saving question sends correct payload with reviewNote and does not call updateQuestion', async () => {
+      questionBankApi.getQuestionReports.mockResolvedValue({
+        data: [studentReport],
+      });
+      questionBankApi.updateQuestionReportStatus.mockResolvedValue({ data: { success: true } });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+      expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+
+      // Resolve button is disabled because question has not been saved in this session
+      const resolveBtn = screen.getByRole('button', { name: /Đã khắc phục/i });
+      expect(resolveBtn).toBeDisabled();
+
+      // Dismiss button is enabled
+      const dismissBtn = screen.getByRole('button', { name: /Không chấp nhận/i });
+      expect(dismissBtn).toBeEnabled();
+
+      // Type review note into textarea
+      const noteInput = screen.getByLabelText(/Lý do không chấp nhận/i);
+      fireEvent.change(noteInput, { target: { value: '   Đề bài và lời giải đã chuẩn xác theo sách giáo khoa.   ' } });
+
+      // Click dismiss
+      fireEvent.click(dismissBtn);
+
+      await waitFor(() => {
+        expect(questionBankApi.updateQuestionReportStatus).toHaveBeenCalledWith(501, {
+          status: 'Dismissed',
+          resolutionAction: 'NoScoreChange',
+          reviewNote: 'Đề bài và lời giải đã chuẩn xác theo sách giáo khoa.',
+        });
+      });
+
+      // Crucial: updateQuestion (PUT question) MUST NOT be called!
+      expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+    });
+
+    it('blocks legacy dismiss when reviewNote is empty or only whitespace', async () => {
+      questionBankApi.getQuestionReports.mockResolvedValue({
+        data: [studentReport],
+      });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+
+      const dismissBtn = screen.getByRole('button', { name: /Không chấp nhận/i });
+      const noteInput = screen.getByLabelText(/Lý do không chấp nhận/i);
+      fireEvent.change(noteInput, { target: { value: '     ' } });
+
+      fireEvent.click(dismissBtn);
+
+      expect(await screen.findByText(/Vui lòng nhập lý do không chấp nhận báo cáo/i)).toBeInTheDocument();
+      expect(questionBankApi.updateQuestionReportStatus).not.toHaveBeenCalled();
+      expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+    });
+
+    it('blocks legacy dismiss when reviewNote exceeds 2000 characters', async () => {
+      questionBankApi.getQuestionReports.mockResolvedValue({
+        data: [studentReport],
+      });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+
+      const dismissBtn = screen.getByRole('button', { name: /Không chấp nhận/i });
+      const noteInput = screen.getByLabelText(/Lý do không chấp nhận/i);
+      const overlongNote = 'a'.repeat(2001);
+      fireEvent.change(noteInput, { target: { value: overlongNote } });
+
+      fireEvent.click(dismissBtn);
+
+      expect(await screen.findByText(/Lý do không chấp nhận không được vượt quá 2000 ký tự/i)).toBeInTheDocument();
+      expect(questionBankApi.updateQuestionReportStatus).not.toHaveBeenCalled();
+      expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+    });
+
+    it('keeps "Đã khắc phục" guarded by hasSavedInSession while "Không chấp nhận" is unguarded', async () => {
+      questionBankApi.getQuestionReports.mockResolvedValue({
+        data: [studentReport],
+      });
+      questionBankApi.updateQuestion.mockResolvedValue({ data: { success: true } });
+      questionBankApi.updateQuestionReportStatus.mockResolvedValue({ data: { success: true } });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      expect(await screen.findByText(/Báo cáo của phiên bản này/i)).toBeInTheDocument();
+
+      const resolveBtn = screen.getByRole('button', { name: /Đã khắc phục/i });
+      const dismissBtn = screen.getByRole('button', { name: /Không chấp nhận/i });
+
+      // Before save: resolve is disabled, dismiss is enabled
+      expect(resolveBtn).toBeDisabled();
+      expect(dismissBtn).toBeEnabled();
+
+      // Edit question to enable Save
+      const contentInput = screen.getByDisplayValue('1 + 1 = 2');
+      fireEvent.change(contentInput, { target: { value: '1 + 1 = 2 (fixed for student)' } });
+
+      const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+      expect(saveBtn).toBeEnabled();
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(questionBankApi.updateQuestion).toHaveBeenCalled();
+      });
+
+      // After save: resolve is now enabled!
+      expect(resolveBtn).toBeEnabled();
+      expect(dismissBtn).toBeEnabled();
+    });
+
+    it('detail load failure prevents fallback to actionable legacy controls, displays error, and locks header action', async () => {
+      locationSearch = '?from=reported';
+      // getQuestionDetail fails
+      questionBankApi.getQuestionDetail.mockRejectedValue(new Error('Failed to load detail'));
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      // Error banner in reports panel should be displayed with retry option
+      expect(await screen.findByText(/Không thể tải các báo cáo đang chờ xử lý từ máy chủ/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Thử lại/i })).toBeInTheDocument();
+
+      // Critical: getQuestionReports MUST NOT have been called as fallback!
+      expect(questionBankApi.getQuestionReports).not.toHaveBeenCalled();
+
+      // Legacy buttons must NOT exist
+      expect(screen.queryByRole('button', { name: /Đã khắc phục/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Không chấp nhận/i })).not.toBeInTheDocument();
+
+      // Header button is disabled because reports status could not be verified
+      const saveBtn = screen.getByRole('button', { name: /Cập nhật câu hỏi/i });
+      expect(saveBtn).toBeDisabled();
+    });
+
+    it('incident all-dismiss submits successfully when form is clean and not dirty', async () => {
+      const incidentReport = {
+        ...studentReport,
+        incidentId: 'incident-clean-dismiss',
+        questionVersionId: 'ver-101',
+      };
+      locationSearch = '?from=reported&incidentId=incident-clean-dismiss';
+      questionBankApi.getQuestionReportIncident.mockResolvedValue({
+        data: {
+          incidentId: 'incident-clean-dismiss',
+          revision: 5,
+          status: 'Open',
+          originalVersion: { versionId: 'ver-101' },
+          reports: [incidentReport],
+        },
+      });
+      questionBankApi.submitQuestionReportIncident.mockResolvedValue({ data: { success: true } });
+
+      render(
+        <BrowserRouter>
+          <NavigationGuardProvider>
+            <QuestionEditorPage />
+          </NavigationGuardProvider>
+        </BrowserRouter>
+      );
+
+      await screen.findByText(/Quyết định xử lý sự cố/i);
+      expect(await screen.findByDisplayValue('1 + 1 = 2')).toBeInTheDocument();
+
+      // Form is clean/not dirty
+      const reportDecisionSelect = screen.getByLabelText(/Quyết định cho báo cáo/i);
+      fireEvent.change(reportDecisionSelect, { target: { value: 'Dismissed' } });
+
+      const reasonTextarea = await screen.findByLabelText(/Lý do không chấp nhận/i);
+      fireEvent.change(reasonTextarea, { target: { value: 'Câu hỏi hoàn toàn chính xác' } });
+
+      // Click "Gửi quyết định xử lý" in header
+      const submitBtn = screen.getByRole('button', { name: /Gửi quyết định xử lý/i });
+      expect(submitBtn).toBeEnabled();
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(questionBankApi.submitQuestionReportIncident).toHaveBeenCalledTimes(1);
+      });
+
+      const [, payload] = questionBankApi.submitQuestionReportIncident.mock.calls[0];
+      expect(payload.correction).toBeNull();
+      expect(payload.reportDecisions).toEqual([
+        { reportId: '501', disposition: 'Dismissed', reviewNote: 'Câu hỏi hoàn toàn chính xác' },
+      ]);
+      expect(questionBankApi.updateQuestion).not.toHaveBeenCalled();
+    });
+  });
 });
 
