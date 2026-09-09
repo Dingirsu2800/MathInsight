@@ -169,6 +169,94 @@ describe('tokenRefreshCoordinator', () => {
       });
       expect(subsequentCall).toBe('fresh-after-timeout');
     });
+
+    it('discards late response from timed-out attempt A: does not write token A and does not settle attempt B queue', async () => {
+      let resolveA;
+      const promiseA = new Promise((resolve) => { resolveA = resolve; });
+
+      let resolveB;
+      const promiseB = new Promise((resolve) => { resolveB = resolve; });
+
+      let postCallCount = 0;
+      mockAxiosInstance.post.mockImplementation(() => {
+        postCallCount += 1;
+        if (postCallCount === 1) return promiseA;
+        if (postCallCount === 2) return promiseB;
+        return Promise.resolve({ data: { accessToken: 'default' } });
+      });
+
+      // 1. Refresh A starts with short timeout (30ms)
+      const callA = refreshAuthTokens({
+        axiosInstance: mockAxiosInstance,
+        redirectToLogin: mockRedirectToLogin,
+        timeoutMs: 30,
+      });
+
+      // Attempt A times out
+      await expect(callA).rejects.toThrow(/timed out/i);
+      expect(mockRedirectToLogin).toHaveBeenCalledTimes(1);
+
+      // Auth was cleared after timeout. Set active refresh token for attempt B:
+      authStorage.getRefreshToken.mockReturnValue('new-valid-refresh-token-B');
+      authStorage.updateTokens.mockClear();
+
+      // 2. Start Attempt B (timeout 1000ms)
+      const callB = refreshAuthTokens({
+        axiosInstance: mockAxiosInstance,
+        redirectToLogin: mockRedirectToLogin,
+        timeoutMs: 1000,
+      });
+
+      // Caller 2 joins Attempt B's queue
+      const waiterB = refreshAuthTokens({
+        axiosInstance: mockAxiosInstance,
+        redirectToLogin: mockRedirectToLogin,
+        timeoutMs: 1000,
+      });
+
+      // 3. Response A arrives late!
+      resolveA({
+        data: {
+          accessToken: 'stale-token-A',
+          refreshToken: 'stale-refresh-A',
+        },
+      });
+
+      // Allow any microtasks / promises for A to run
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Assert Attempt A's late response was completely ignored:
+      // - It must NOT write token A
+      expect(authStorage.updateTokens).not.toHaveBeenCalled();
+
+      // - It must NOT settle callB or waiterB (they must still be pending)
+      let callBSettled = false;
+      let waiterBSettled = false;
+      callB.then(() => { callBSettled = true; }).catch(() => { callBSettled = true; });
+      waiterB.then(() => { waiterBSettled = true; }).catch(() => { waiterBSettled = true; });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(callBSettled).toBe(false);
+      expect(waiterBSettled).toBe(false);
+
+      // 4. Now Attempt B completes successfully
+      resolveB({
+        data: {
+          accessToken: 'fresh-token-B',
+          refreshToken: 'fresh-refresh-B',
+        },
+      });
+
+      const resultB = await callB;
+      const resultWaiterB = await waiterB;
+
+      expect(resultB).toBe('fresh-token-B');
+      expect(resultWaiterB).toBe('fresh-token-B');
+      expect(authStorage.updateTokens).toHaveBeenCalledTimes(1);
+      expect(authStorage.updateTokens).toHaveBeenCalledWith({
+        accessToken: 'fresh-token-B',
+        refreshToken: 'fresh-refresh-B',
+      });
+    });
   });
 
   describe('attachTokenRefreshInterceptor on Axios instances', () => {

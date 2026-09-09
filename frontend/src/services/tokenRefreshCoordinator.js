@@ -48,26 +48,29 @@ export function defaultRedirectToLogin() {
 let isRefreshing = false;
 let pendingQueue = [];
 let refreshPromise = null;
+let currentAttemptId = 0;
 
 export function getRefreshState() {
-  return { isRefreshing, pendingQueueLength: pendingQueue.length };
+  return { isRefreshing, pendingQueueLength: pendingQueue.length, currentAttemptId };
 }
 
 export function resetRefreshStateForTesting() {
   isRefreshing = false;
   pendingQueue = [];
   refreshPromise = null;
+  currentAttemptId += 1;
 }
 
 function flushQueue(error, token) {
-  pendingQueue.forEach(({ resolve, reject }) => {
+  const queueToFlush = pendingQueue;
+  pendingQueue = [];
+  queueToFlush.forEach(({ resolve, reject }) => {
     if (error) {
       reject(error);
     } else {
       resolve(token);
     }
   });
-  pendingQueue = [];
 }
 
 export const DEFAULT_REFRESH_TIMEOUT_MS = 10000;
@@ -97,61 +100,87 @@ export function refreshAuthTokens(options = {}) {
   }
 
   isRefreshing = true;
+  const attemptId = ++currentAttemptId;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 
   refreshPromise = new Promise((resolve, reject) => {
     let timer = null;
     let isSettled = false;
 
-    const timeoutPromise = new Promise((_, rejectTimeout) => {
+    const handleFailure = (err) => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (isSettled || attemptId !== currentAttemptId) {
+        return;
+      }
+      isSettled = true;
+      isRefreshing = false;
+      refreshPromise = null;
+      flushQueue(err, null);
+      redirectToLogin();
+      reject(err);
+    };
+
+    const handleSuccess = (data) => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (isSettled || attemptId !== currentAttemptId) {
+        return;
+      }
+      isSettled = true;
+      const newAccessToken = data?.accessToken || data?.AccessToken;
+      const newRefreshToken = data?.refreshToken || data?.RefreshToken;
+
+      if (!newAccessToken) {
+        isSettled = false;
+        handleFailure(new Error('Refresh response missing access token'));
+        return;
+      }
+
+      isRefreshing = false;
+      refreshPromise = null;
+      updateTokens({ accessToken: newAccessToken, refreshToken: newRefreshToken });
+      flushQueue(null, newAccessToken);
+      resolve(newAccessToken);
+    };
+
+    if (timeoutMs && timeoutMs > 0) {
       timer = setTimeout(() => {
-        if (!isSettled) {
+        if (attemptId === currentAttemptId && isRefreshing && !isSettled) {
           const timeoutErr = new Error(`Token refresh timed out after ${timeoutMs}ms`);
           timeoutErr.code = 'ECONNABORTED';
           timeoutErr.isTimeout = true;
-          rejectTimeout(timeoutErr);
+          if (controller && !controller.signal.aborted) {
+            try {
+              controller.abort(timeoutErr);
+            } catch {
+              controller.abort();
+            }
+          }
+          handleFailure(timeoutErr);
         }
       }, timeoutMs);
-    });
+    }
 
-    const postPromise = axiosInstance
+    axiosInstance
       .post(
         refreshUrl,
         { refreshToken },
         {
           headers: { 'Content-Type': 'application/json' },
           timeout: timeoutMs,
+          signal: controller?.signal,
         },
       )
       .then(({ data }) => {
-        const newAccessToken = data.accessToken || data.AccessToken;
-        const newRefreshToken = data.refreshToken || data.RefreshToken;
-
-        if (!newAccessToken) {
-          throw new Error('Refresh response missing access token');
-        }
-
-        updateTokens({ accessToken: newAccessToken, refreshToken: newRefreshToken });
-        flushQueue(null, newAccessToken);
-        return newAccessToken;
-      });
-
-    Promise.race([postPromise, timeoutPromise])
-      .then((token) => {
-        isSettled = true;
-        if (timer) clearTimeout(timer);
-        resolve(token);
+        handleSuccess(data);
       })
-      .catch((refreshError) => {
-        isSettled = true;
-        if (timer) clearTimeout(timer);
-        flushQueue(refreshError, null);
-        redirectToLogin();
-        reject(refreshError);
-      })
-      .finally(() => {
-        if (timer) clearTimeout(timer);
-        isRefreshing = false;
-        refreshPromise = null;
+      .catch((err) => {
+        handleFailure(err);
       });
   });
 
