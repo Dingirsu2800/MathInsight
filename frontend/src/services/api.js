@@ -36,4 +36,3 @@ api.interceptors.request.use((config) => {
 attachTokenRefreshInterceptor(api);
 
 export default api;
-
