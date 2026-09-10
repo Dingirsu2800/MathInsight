@@ -224,6 +224,10 @@ public static class QuestionBankErrors
         "QUESTION_SHORT_ANSWER_CORRECT_ANSWER_REQUIRED",
         "Short answer question requires exactly one correct answer.");
 
+    public static readonly Error QuestionShortAnswerAnswerInvalid = new(
+        "QUESTION_SHORT_ANSWER_ANSWER_INVALID",
+        "Short answer question requires a valid text answer of at most 100 characters.");
+
     public static readonly Error QuestionShortAnswerNumericRequired = new(
         "QUESTION_SHORT_ANSWER_NUMERIC_REQUIRED",
         "Short answer question requires a fixed-point numeric answer.");
@@ -336,6 +340,18 @@ public static class QuestionBankErrors
         "REPORT_ALREADY_HANDLED",
         "Question report has already been handled.");
 
+    public static readonly Error ReportIncidentConflict = new(
+        "REPORT_INCIDENT_CONFLICT",
+        "The report incident changed. Refresh it before submitting again.");
+
+    public static readonly Error ReportSubmissionKeyConflict = new(
+        "REPORT_SUBMISSION_KEY_CONFLICT",
+        "The submission key was already used with different content.");
+
+    public static readonly Error ReportVersionStale = new(
+        "REPORT_VERSION_STALE",
+        "The reported question version is no longer current for this incident.");
+
     public static readonly Error ReportSessionContextInvalid = new(
         "REPORT_SESSION_CONTEXT_INVALID",
         "The report session or question version context is invalid.");
@@ -359,6 +375,18 @@ public static class QuestionBankErrors
     public static readonly Error AdminReportRequiresReview = new(
         "ADMIN_REPORT_REQUIRES_REVIEW",
         "An Admin report must be submitted and reviewed through the Admin workflow.");
+
+    public static readonly Error ReportIncidentClosed = new(
+        "REPORT_INCIDENT_CLOSED",
+        "This question version already has a closed report outcome.");
+
+    public static readonly Error ReportIncidentSubmissionRequired = new(
+        "REPORT_INCIDENT_SUBMISSION_REQUIRED",
+        "Reports assigned to an incident must be resolved through incident submission.");
+
+    public static readonly Error ReportIncidentRequiresResolution = new(
+        "REPORT_INCIDENT_REQUIRES_RESOLUTION",
+        "Question editing is blocked until active report incidents are resolved.");
 
     public static readonly Error ReviewNoteRequired = new(
         "REVIEW_NOTE_REQUIRED",

@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
+using MathInsight.Modules.Identity_Access.Contracts.Auth;
 
 namespace MathInsight.Modules.Identity_Access.Contracts.Accounts;
 
@@ -17,7 +19,7 @@ namespace MathInsight.Modules.Identity_Access.Contracts.Accounts;
 /// Validation still applies to whatever IS provided. Lengths mirror the current DB script
 /// columns exactly (no schema change).
 /// </summary>
-public class UpdateProfileRequest
+public class UpdateProfileRequest : IValidatableObject
 {
     [MaxLength(50)]
     public string? FirstName { get; set; }
@@ -52,4 +54,32 @@ public class UpdateProfileRequest
 
     [MaxLength(100)]
     public string? Specialty { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (!string.IsNullOrWhiteSpace(PhoneNumber))
+        {
+            var normalizedPhone = PhoneNumber.Trim();
+            if (!Regex.IsMatch(normalizedPhone, AuthValidation.PhoneNumberPattern, RegexOptions.CultureInvariant))
+            {
+                yield return new ValidationResult("Số điện thoại không hợp lệ.", new[] { nameof(PhoneNumber) });
+            }
+        }
+
+        if (DateOfBirth is DateOnly dateOfBirth)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            if (dateOfBirth > today)
+            {
+                yield return new ValidationResult("Ngày sinh không được lớn hơn ngày hiện tại.", new[] { nameof(DateOfBirth) });
+                yield break;
+            }
+
+            var age = today.Year - dateOfBirth.Year - (today.DayOfYear < dateOfBirth.DayOfYear ? 1 : 0);
+            if (CurrentGrade is >= 10 and <= 12 && (age < 14 || age > 20))
+            {
+                yield return new ValidationResult("Ngày sinh không phù hợp với độ tuổi học sinh THPT.", new[] { nameof(DateOfBirth) });
+            }
+        }
+    }
 }

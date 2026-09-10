@@ -47,6 +47,7 @@ public sealed class SubmitQuestionReportReviewCommandHandler
 
         var report = await _context.QuestionReports
             .Include(item => item.Question)
+            .Include(item => item.Incident)
             .FirstOrDefaultAsync(item => item.ReportId == command.ReportId, cancellationToken);
 
         if (report is null)
@@ -54,6 +55,9 @@ public sealed class SubmitQuestionReportReviewCommandHandler
 
         if (!string.Equals(report.Question.ExpertId, command.ExpertAccountId, StringComparison.OrdinalIgnoreCase))
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
+
+        if (!string.IsNullOrWhiteSpace(report.IncidentId))
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportIncidentSubmissionRequired);
 
         if (report.ReporterRole != "Admin")
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
@@ -66,6 +70,19 @@ public sealed class SubmitQuestionReportReviewCommandHandler
         report.SubmittedTime = now;
         report.Question.Status = "Reported";
         report.Question.UpdatedTime = now;
+        if (report.Incident is not null)
+        {
+            report.Incident.RequiresAdminReview = true;
+            report.Incident.AssignedAdminId = report.ReporterAccountId;
+            report.Incident.Status = "PendingAdminReview";
+            report.Incident.SubmittedCorrectionVersionId = await _context.QuestionVersions
+                .Where(version => version.QuestionId == report.QuestionId)
+                .OrderByDescending(version => version.VersionNumber)
+                .Select(version => version.VersionId)
+                .FirstOrDefaultAsync(cancellationToken);
+            report.Incident.Revision++;
+            report.Incident.UpdatedTime = now;
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 

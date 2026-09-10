@@ -18,9 +18,9 @@ public sealed class DiscussionQuestionPostedHandler : INotificationHandler<Discu
     {
         return _notificationService.SendAsync(
             notification.TeacherId,
-            "New Question",
-            $"A student asked: \"{notification.Title}\"",
-            $"/teacher/lectures/{notification.LectureId}#discussions",
+            "Câu hỏi mới",
+            $"Một học sinh vừa đặt câu hỏi: \"{notification.Title}\"",
+            $"/teacher/lectures/{notification.LectureId}?discussionId={notification.DiscussionQuestionId}#discussions",
             cancellationToken);
     }
 }

@@ -74,9 +74,9 @@ public sealed class SubmitSessionCommandHandler
 
         if (savedAnswers.Any(answer =>
                 snapshots.TryGetValue(answer.QuestionId, out var snapshot) &&
-                !QuestionSnapshotReader.HasValidNumericShortAnswers(snapshot, answer)))
+                !QuestionSnapshotReader.HasValidShortAnswers(snapshot, answer)))
         {
-            return Result<SubmitSessionResponse>.Failure(TestingErrors.ShortAnswerNumericRequired);
+            return Result<SubmitSessionResponse>.Failure(TestingErrors.ShortAnswerInvalid);
         }
 
         // Submission timestamps and type are persisted atomically by Grading.

@@ -8,6 +8,7 @@ using MathInsight.Modules.TestGen.Queries.GetBlueprintDetail;
 using MathInsight.Modules.TestGen.Queries.GetBlueprintList;
 using MathInsight.Modules.TestGen.Queries.GetPendingBlueprints;
 using MathInsight.Modules.TestGen.Validation;
+using MathInsight.Shared.Scoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.TestGen.Tests;
@@ -75,19 +76,35 @@ public sealed class BlueprintCreateAndReadTests
     }
 
     [Fact]
-    public async Task Validator_InvalidCompositeMetadata_ReturnsStructureInvalid()
+    public async Task Validator_CompositeWithoutFixedPartCount_IsValid()
     {
         await using var testContext = TestGenInMemoryContext.Create();
         await SeedReferenceDataAsync(testContext);
         var request = ValidRequest();
         request.Sections[0].QuestionType = BlueprintQuestionTypes.Composite;
         request.Sections[0].PartCountPerQuestion = null;
-        request.Sections[0].ScoringRule = null;
+        request.Sections[0].ScoringRule = ScoringRules.TieredTrueFalse;
 
         var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(BlueprintErrors.StructureInvalid, result.Error);
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value!.Sections.Single().PartCountPerQuestion);
+    }
+
+    [Fact]
+    public async Task Validator_CompositeLegacyFixedPartCount_IsNormalizedAway()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = ValidRequest();
+        request.Sections[0].QuestionType = BlueprintQuestionTypes.Composite;
+        request.Sections[0].PartCountPerQuestion = 4;
+        request.Sections[0].ScoringRule = ScoringRules.TieredTrueFalse;
+
+        var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value!.Sections.Single().PartCountPerQuestion);
     }
 
     [Fact]

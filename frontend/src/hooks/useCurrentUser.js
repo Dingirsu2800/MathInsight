@@ -40,10 +40,14 @@ export function clearCachedProfile() {
 
 /**
  * Builds the display name with the agreed fallback chain:
- * "firstName lastName" → username → roleLabel → "Người dùng".
+ * "lastName firstName" → username → roleLabel → "Người dùng".
+ * The backend stores the canonical split as first / last, and the UI must keep the display order
+ * consistent across the dashboard greeting, profile dropdown, and any other shared auth surfaces.
  */
 export function resolveDisplayName(profile, roleLabel) {
-  const fullName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim();
+  const firstName = String(profile?.firstName ?? "").trim();
+  const lastName = String(profile?.lastName ?? "").trim();
+  const fullName = [lastName, firstName].filter(Boolean).join(" ").trim();
   return fullName || profile?.username || roleLabel || "Người dùng";
 }
 

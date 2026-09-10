@@ -157,7 +157,7 @@ public sealed class QuestionCandidateCatalog : IQuestionCandidateCatalog
             "SingleChoice" => correctCount == 1,
             "TrueFalse" => snapshotAnswers.Count == 2 && correctCount == 1,
             "MultipleChoice" => correctCount > 0,
-            "ShortAnswer" => correctCount == 1 && NumericShortAnswer.TryParse(snapshotAnswers.Single(answer => answer.IsCorrect).AnswerContent, out _),
+            "ShortAnswer" => correctCount == 1 && ShortAnswerPolicy.TryNormalize(snapshotAnswers.Single(answer => answer.IsCorrect).AnswerContent, out _),
             _ => false
         };
         if (!validShape || snapshotAnswers.Count != currentAnswers.Count)
@@ -177,7 +177,7 @@ public sealed class QuestionCandidateCatalog : IQuestionCandidateCatalog
     private static bool HasValidPartAnswer(QuestionPartSnapshot part) => NormalizeType(part.PartType) switch
     {
         "TrueFalse" => part.CorrectBoolean is not null && part.CorrectText is null && part.CorrectNumeric is null && part.NumericTolerance is null,
-        "ShortAnswer" => part.CorrectBoolean is null && NumericShortAnswer.TryParse(part.CorrectText, out _) && part.CorrectNumeric is null && part.NumericTolerance is null,
+        "ShortAnswer" => part.CorrectBoolean is null && ShortAnswerPolicy.TryNormalize(part.CorrectText, out _) && part.CorrectNumeric is null && part.NumericTolerance is null,
         "NumericAnswer" => part.CorrectBoolean is null && part.CorrectText is null && part.CorrectNumeric is not null && (part.NumericTolerance is null || part.NumericTolerance >= 0m),
         _ => false
     };

@@ -29,6 +29,17 @@ public class ReportDiscussionCommandHandler : IRequestHandler<ReportDiscussionCo
             throw new Exception("Exactly one of DiscussionQuestionId or DiscussionAnswerId must be non-null");
         }
 
+        var alreadyReported = await _dbContext.DiscussionReports
+            .AnyAsync(r => r.ReporterAccountId == request.ReporterAccountId &&
+                           ((request.DiscussionQuestionId != null && r.DiscussionQuestionId == request.DiscussionQuestionId) ||
+                            (request.DiscussionAnswerId != null && r.DiscussionAnswerId == request.DiscussionAnswerId)),
+                      cancellationToken);
+
+        if (alreadyReported)
+        {
+            throw new Exception("Bạn đã báo cáo bình luận này rồi.");
+        }
+
         var report = new DiscussionReport
         {
             ReportId = Guid.NewGuid().ToString(),

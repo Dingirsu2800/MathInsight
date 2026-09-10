@@ -23,7 +23,9 @@ public class AnswerDiscussionQuestionCommandHandler : IRequestHandler<AnswerDisc
 
     public async Task<DiscussionAnswerDto> Handle(AnswerDiscussionQuestionCommand request, CancellationToken cancellationToken)
     {
-        var question = await _dbContext.DiscussionQuestions.FirstOrDefaultAsync(x => x.DiscussionQuestionId == request.DiscussionQuestionId, cancellationToken);
+        var question = await _dbContext.DiscussionQuestions
+            .Include(x => x.Lecture)
+            .FirstOrDefaultAsync(x => x.DiscussionQuestionId == request.DiscussionQuestionId, cancellationToken);
         if (question == null) throw new Exception("Question not found");
         if (question.Status != "Active") throw new Exception("Cannot answer inactive questions");
 
@@ -51,7 +53,8 @@ public class AnswerDiscussionQuestionCommandHandler : IRequestHandler<AnswerDisc
             question.DiscussionQuestionId,
             question.LectureId,
             answer.AccountId,
-            question.StudentId
+            question.StudentId,
+            question.Lecture?.TeacherId ?? ""
         ), cancellationToken);
 
         return new DiscussionAnswerDto

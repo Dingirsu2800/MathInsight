@@ -16,11 +16,27 @@ public sealed class DiscussionAnsweredHandler : INotificationHandler<DiscussionA
 
     public Task Handle(DiscussionAnsweredEvent notification, CancellationToken cancellationToken)
     {
-        return _notificationService.SendAsync(
-            notification.StudentId,
-            "Answer Received",
-            "A teacher replied to your question.",
-            $"/student/lectures/{notification.LectureId}#discussions",
-            cancellationToken);
+        if (notification.AccountId == notification.StudentId)
+        {
+            // Học sinh tự phản hồi -> Gửi thông báo cho Giáo viên
+            if (string.IsNullOrEmpty(notification.TeacherId)) return Task.CompletedTask;
+            
+            return _notificationService.SendAsync(
+                notification.TeacherId,
+                "Có phản hồi mới",
+                "Một học sinh vừa phản hồi trong phần thảo luận bài giảng.",
+                $"/teacher/lectures/{notification.LectureId}?discussionId={notification.DiscussionAnswerId}#discussions",
+                cancellationToken);
+        }
+        else
+        {
+            // Giáo viên trả lời -> Gửi thông báo cho Học sinh
+            return _notificationService.SendAsync(
+                notification.StudentId,
+                "Đã nhận câu trả lời",
+                "Giáo viên vừa trả lời câu hỏi của bạn.",
+                $"/student/lectures/{notification.LectureId}?discussionId={notification.DiscussionAnswerId}#discussions",
+                cancellationToken);
+        }
     }
 }

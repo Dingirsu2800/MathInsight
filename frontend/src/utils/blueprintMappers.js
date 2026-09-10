@@ -65,9 +65,7 @@ export function editorStateToBlueprintRequest(editorState) {
         totalQuestions: parseInteger(section.totalQuestions, `${sectionLabel} - Số câu`),
         scoreBudget: parseDecimal(section.scoreBudget, `${sectionLabel} - Quỹ điểm`),
         scoringRule: isComposite ? section.scoringRule : "AllOrNothing",
-        partCountPerQuestion: isComposite
-          ? parseInteger(section.partCountPerQuestion, `${sectionLabel} - Số phần mỗi câu`)
-          : null,
+        partCountPerQuestion: null,
         details: (section.details || []).map((detailSlot, detailIndex) => {
           const detailLabel = `${sectionLabel} - Phân bổ dòng ${detailIndex + 1}`;
           if (!detailSlot.tagId) throw new Error(`Chưa chọn chủ đề tại ${detailLabel}.`);

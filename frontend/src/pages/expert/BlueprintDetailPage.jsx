@@ -556,9 +556,11 @@ export default function BlueprintDetailPage() {
                       </div>
                       {isComposite && (
                         <>
-                          <div className="border-l border-whisper-border pl-6">
-                            Số phần: <span className="font-bold text-primary font-mono">{sec.partCountPerQuestion} phần/câu</span>
-                          </div>
+                          {sec.partCountPerQuestion ? (
+                            <div className="border-l border-whisper-border pl-6">
+                              Số phần: <span className="font-bold text-primary font-mono">{sec.partCountPerQuestion} phần/câu</span>
+                            </div>
+                          ) : null}
                           <div className="border-l border-whisper-border pl-6">
                             Quy tắc: <span className="font-bold text-primary">{sec.scoringRule}</span>
                           </div>

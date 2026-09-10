@@ -118,6 +118,21 @@ public class NotificationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SendAsync_WithDeduplicationKey_ReusesThePersistedNotification()
+    {
+        var first = await _service.SendAsync(
+            "account-1", "Score adjusted", "Updated result", "/result/1", deduplicationKey: "adjustment:1");
+        var retry = await _service.SendAsync(
+            "account-1", "Score adjusted", "Updated result", "/result/1", deduplicationKey: "adjustment:1");
+
+        Assert.Equal(first, retry);
+        Assert.Single(await _db.Notifications.ToListAsync());
+        _clientProxy.Verify(
+            proxy => proxy.SendCoreAsync("ReceiveNotification", It.IsAny<object[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task MarkReadAsync_AlreadyRead_IsIdempotent()
     {
         var id = await _service.SendAsync("account-1", "Title", "Content");

@@ -28,12 +28,10 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
         string reportId,
         CancellationToken cancellationToken = default)
     {
-        var events = new List<GradeCalculatedEvent>();
         var strategy = _db.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async ct =>
         {
-            events.Clear();
             await using IDbContextTransaction? transaction = _db.Database.IsRelational()
                 ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
                 : null;
@@ -42,10 +40,35 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                 .FirstOrDefaultAsync(item => item.ReportId == reportId, ct)
                 ?? throw new InvalidOperationException($"Question report '{reportId}' was not found.");
 
+            QuestionReportIncident? incident = null;
+            if (!string.IsNullOrWhiteSpace(report.IncidentId))
+            {
+                incident = await _db.QuestionReportIncidents
+                    .FirstOrDefaultAsync(item => item.IncidentId == report.IncidentId, ct)
+                    ?? throw new InvalidOperationException($"Question report incident '{report.IncidentId}' was not found.");
+
+                if (string.Equals(incident.AdjustmentStatus, "Completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (report.ScoreAdjustedTime is null)
+                    {
+                        report.ScoreAdjustedTime = DateTime.UtcNow;
+                        await _db.SaveChangesAsync(ct);
+                    }
+
+                    if (transaction is not null)
+                        await transaction.CommitAsync(ct);
+                    return;
+                }
+            }
+
             if (report.Status != "Resolved" ||
-                report.ReporterRole != "Student" ||
                 report.ResolutionAction != "InvalidateAndAwardFull" ||
-                string.IsNullOrWhiteSpace(report.QuestionVersionId))
+                string.IsNullOrWhiteSpace(report.QuestionVersionId) ||
+                (incident is null && report.ReporterRole != "Student") ||
+                (incident is not null &&
+                 (incident.RequiresAdminReview ||
+                  !string.Equals(incident.Status, "AdjustmentPending", StringComparison.OrdinalIgnoreCase) ||
+                  !string.Equals(incident.ApprovedResolutionAction, "InvalidateAndAwardFull", StringComparison.OrdinalIgnoreCase))))
             {
                 throw new InvalidOperationException(
                     $"Question report '{reportId}' is not eligible for score adjustment.");
@@ -108,10 +131,35 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                         .Where(item => item.TestId == session.TestId)
                         .ToDictionary(item => item.QuestionId, StringComparer.OrdinalIgnoreCase);
 
-                    RecalculateSession(session, byQuestion);
                     if (testsNeedingRevision.Contains(session.TestId))
+                    {
+                        RecalculateSession(session, byQuestion);
                         session.GradeRevision = Math.Max(1, session.GradeRevision + 1);
-                    events.Add(BuildGradeEvent(session, byQuestion, difficultyLevels));
+                    }
+
+                    var eventPayload = BuildGradeEvent(
+                        session, byQuestion, difficultyLevels, report.ReportId, report.IncidentId);
+                    var workExists = await _db.ScoreAdjustmentWorks.AnyAsync(item =>
+                        item.SessionId == session.SessionId &&
+                        item.GradeRevision == session.GradeRevision &&
+                        (!string.IsNullOrWhiteSpace(report.IncidentId)
+                            ? item.IncidentId == report.IncidentId
+                            : item.IncidentId == null && item.ReportId == report.ReportId), ct);
+                    if (!workExists)
+                    {
+                        _db.ScoreAdjustmentWorks.Add(new ScoreAdjustmentWork
+                        {
+                            WorkId = Guid.NewGuid().ToString(),
+                            ReportId = report.ReportId,
+                            IncidentId = report.IncidentId,
+                            SessionId = session.SessionId,
+                            GradeRevision = session.GradeRevision,
+                            EventPayload = JsonSerializer.Serialize(eventPayload),
+                            Status = "Pending",
+                            AttemptCount = 0,
+                            CreatedTime = DateTime.UtcNow
+                        });
+                    }
                 }
             }
 
@@ -120,16 +168,121 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
                 await transaction.CommitAsync(ct);
         }, cancellationToken);
 
-        foreach (var gradeEvent in events)
-            await _publisher.Publish(gradeEvent, cancellationToken);
+        await DispatchPendingAdjustmentsAsync(reportId, cancellationToken);
+    }
+
+    public async Task DispatchPendingAdjustmentsAsync(
+        string? reportId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var deliveredReportIds = new HashSet<string>(StringComparer.Ordinal);
+        while (true)
+        {
+            var work = await _db.ScoreAdjustmentWorks
+                .Where(item => item.Status == "Pending" &&
+                    (reportId == null || item.ReportId == reportId))
+                .OrderBy(item => item.CreatedTime)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (work is null)
+                break;
+
+            GradeCalculatedEvent? gradeEvent;
+            try
+            {
+                gradeEvent = JsonSerializer.Deserialize<GradeCalculatedEvent>(work.EventPayload);
+                if (gradeEvent is null)
+                    throw new InvalidOperationException($"Score adjustment work '{work.WorkId}' has no valid event payload.");
+
+                await _publisher.Publish(gradeEvent, cancellationToken);
+
+                work.Status = "Completed";
+                work.CompletedTime = DateTime.UtcNow;
+                await _db.SaveChangesAsync(cancellationToken);
+                deliveredReportIds.Add(work.ReportId);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                work.AttemptCount++;
+                work.LastError = exception.Message.Length <= 2000
+                    ? exception.Message
+                    : exception.Message[..2000];
+                await _db.SaveChangesAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(work.IncidentId))
+                {
+                    var incident = await _db.QuestionReportIncidents
+                        .FirstOrDefaultAsync(item => item.IncidentId == work.IncidentId, cancellationToken);
+                    if (incident is not null && incident.AdjustmentStatus != "Completed")
+                    {
+                        incident.AdjustmentStatus = "Failed";
+                        await _db.SaveChangesAsync(cancellationToken);
+                    }
+                }
+                throw;
+            }
+        }
+
+        if (reportId is not null)
+            deliveredReportIds.Add(reportId);
+
+        foreach (var deliveredReportId in deliveredReportIds)
+            await CompleteReportIfDeliveredAsync(deliveredReportId, cancellationToken);
+    }
+
+    public async Task RecoverPendingAdjustmentsAsync(CancellationToken cancellationToken = default)
+    {
+        // An approval can commit immediately before a process stops. Rebuild durable work from
+        // the persisted incident state rather than depending on a one-time in-memory publish.
+        var reportIds = await (
+                from report in _db.QuestionReports
+                join incident in _db.QuestionReportIncidents on report.IncidentId equals incident.IncidentId
+                where report.Status == "Resolved" &&
+                      report.ResolutionAction == "InvalidateAndAwardFull" &&
+                      report.ScoreAdjustedTime == null &&
+                      incident.Status == "AdjustmentPending" &&
+                      !incident.RequiresAdminReview &&
+                      incident.ApprovedResolutionAction == "InvalidateAndAwardFull" &&
+                      incident.AdjustmentStatus != "Completed"
+                orderby report.ReportId
+                select new { report.ReportId, report.IncidentId })
+            .ToListAsync(cancellationToken);
+
+        foreach (var reportId in reportIds
+                     .GroupBy(item => item.IncidentId, StringComparer.Ordinal)
+                     .Select(group => group.First().ReportId))
+        {
+            await AdjustInvalidQuestionVersionAsync(reportId, cancellationToken);
+        }
+    }
+
+    private async Task CompleteReportIfDeliveredAsync(string reportId, CancellationToken cancellationToken)
+    {
+        var hasPendingWork = await _db.ScoreAdjustmentWorks.AnyAsync(
+            item => item.ReportId == reportId && item.Status == "Pending",
+            cancellationToken);
+        if (hasPendingWork)
+            return;
 
         var adjustedReport = await _db.QuestionReports
             .FirstAsync(item => item.ReportId == reportId, cancellationToken);
-        if (adjustedReport.ScoreAdjustedTime is null)
+        if (adjustedReport.ScoreAdjustedTime is not null)
+            return;
+
+        var now = DateTime.UtcNow;
+        adjustedReport.ScoreAdjustedTime = now;
+        if (!string.IsNullOrWhiteSpace(adjustedReport.IncidentId))
         {
-            adjustedReport.ScoreAdjustedTime = DateTime.UtcNow;
-            await _db.SaveChangesAsync(cancellationToken);
+            var incident = await _db.QuestionReportIncidents
+                .FirstAsync(item => item.IncidentId == adjustedReport.IncidentId, cancellationToken);
+            incident.AdjustmentStatus = "Completed";
+            incident.Status = "Closed";
+
+            var relatedReports = await _db.QuestionReports
+                .Where(item => item.IncidentId == incident.IncidentId && item.ScoreAdjustedTime == null)
+                .ToListAsync(cancellationToken);
+            foreach (var relatedReport in relatedReports)
+                relatedReport.ScoreAdjustedTime = now;
         }
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     private static void RecalculateSession(
@@ -177,7 +330,9 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
     private static GradeCalculatedEvent BuildGradeEvent(
         TestSession session,
         IReadOnlyDictionary<string, TestQuestion> testQuestions,
-        IReadOnlyDictionary<string, int> difficultyLevels)
+        IReadOnlyDictionary<string, int> difficultyLevels,
+        string reportId,
+        string? incidentId)
     {
         var answers = new List<GradedAnswerDto>();
         var tagStats = new Dictionary<string, (decimal Correct, decimal Total, decimal Earned, decimal Max)>(
@@ -242,6 +397,9 @@ public sealed class ScoreAdjustmentService : IScoreAdjustmentService
             StudentId = session.StudentId,
             TestId = session.TestId,
             GradeRevision = session.GradeRevision,
+            Cause = GradeCalculatedEvent.ScoreAdjustmentCause,
+            ReportId = reportId,
+            IncidentId = incidentId,
             TestFormat = session.TestFormat,
             Score = session.Score,
             NumCorrect = session.NumCorrect,

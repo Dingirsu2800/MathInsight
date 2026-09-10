@@ -4,6 +4,7 @@ using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Shared.Results;
+using MathInsight.Shared.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -16,10 +17,12 @@ public sealed class ReviewBlueprintCommandHandler
     private const int MaxReviewNoteLength = 2000;
 
     private readonly TestGenDbContext _context;
+    private readonly IPublisher? _publisher;
 
-    public ReviewBlueprintCommandHandler(TestGenDbContext context)
+    public ReviewBlueprintCommandHandler(TestGenDbContext context, IPublisher? publisher = null)
     {
         _context = context;
+        _publisher = publisher;
     }
 
     public async Task<Result<ReviewBlueprintResponse>> Handle(
@@ -123,6 +126,15 @@ public sealed class ReviewBlueprintCommandHandler
 
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
+
+        if (_publisher is not null)
+        {
+            await _publisher.Publish(new BlueprintReviewedEvent(
+                blueprint.BlueprintId,
+                blueprint.ExpertId,
+                blueprint.Status,
+                blueprint.ReviewNote), cancellationToken);
+        }
 
         return Result<ReviewBlueprintResponse>.Success(
             new ReviewBlueprintResponse(

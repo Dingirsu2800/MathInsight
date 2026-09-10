@@ -1,5 +1,5 @@
 import MathMarkdown from '../../../components/ui/MathMarkdown';
-import { isNumericShortAnswerEditingValue } from '../../../utils/numericShortAnswer';
+import ShortAnswerInput from '../../../components/questions/ShortAnswerInput';
 
 /**
  * Renders a single question with its answer options.
@@ -137,18 +137,11 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
         {/* SHORT_ANSWER */}
         {(type === 'SHORT_ANSWER' || type === 'SHORTANSWER') && (
           <div>
-            <input
-              type="text"
-              inputMode="decimal"
-              maxLength={100}
-              className="w-full border border-whisper-border rounded-xl px-4 py-3 text-sm text-on-surface bg-pure-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors"
-              placeholder="Nhập đáp án ngắn..."
+            <ShortAnswerInput
               value={answer?.shortAnswerText || ''}
-              onChange={(e) => {
-                if (isNumericShortAnswerEditingValue(e.target.value)) {
-                  handleShortAnswer(e.target.value);
-                }
-              }}
+              onChange={handleShortAnswer}
+              placeholder="Nhập đáp án ngắn..."
+              showPreview={false}
             />
           </div>
         )}
@@ -190,18 +183,12 @@ export default function QuestionPanel({ question, answer, onAnswer, totalQuestio
                       onChange={(e) => handlePartAnswer(part.partId, 'numericAnswer', e.target.value)}
                     />
                   ) : (
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      maxLength={100}
-                      className="w-full border border-whisper-border rounded-lg px-3 py-2 text-sm text-on-surface bg-pure-surface focus:border-primary outline-none transition-colors"
-                      placeholder="Nhập đáp án ngắn..."
+                    <ShortAnswerInput
                       value={partAnswer?.textAnswer || ''}
-                      onChange={(e) => {
-                        if (isNumericShortAnswerEditingValue(e.target.value)) {
-                          handlePartAnswer(part.partId, 'textAnswer', e.target.value);
-                        }
-                      }}
+                      onChange={(val) => handlePartAnswer(part.partId, 'textAnswer', val)}
+                      placeholder="Nhập đáp án ngắn..."
+                      showExample={false}
+                      showPreview={false}
                     />
                   )}
                 </div>

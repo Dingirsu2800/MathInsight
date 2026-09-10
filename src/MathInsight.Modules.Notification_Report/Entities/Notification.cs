@@ -7,6 +7,7 @@ public class Notification
     public string Title { get; set; } = default!;
     public string Content { get; set; } = default!;
     public string? Link { get; set; }
+    public string? DeduplicationKey { get; set; }
     public bool IsRead { get; set; }
     public DateTime CreatedTime { get; set; }
 }

@@ -44,6 +44,11 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
             .HasMaxLength(255)
             .IsUnicode(false);
 
+        builder.Property(notification => notification.DeduplicationKey)
+            .HasColumnName("DeduplicationKey")
+            .HasMaxLength(160)
+            .IsUnicode(false);
+
         builder.Property(notification => notification.IsRead)
             .HasColumnName("isRead")
             .HasDefaultValue(false);
@@ -58,5 +63,10 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         // BR-21 prune pattern: delete rows older than 90 days.
         builder.HasIndex(notification => notification.CreatedTime)
             .HasDatabaseName("IX_Notification_CreatedTime");
+
+        builder.HasIndex(notification => new { notification.UserId, notification.DeduplicationKey })
+            .IsUnique()
+            .HasFilter("[DeduplicationKey] IS NOT NULL")
+            .HasDatabaseName("UQ_Notification_User_DeduplicationKey");
     }
 }

@@ -57,7 +57,7 @@ export default function BlueprintEditorPage() {
     totalQuestions: "",
     scoreBudget: 10,
     scoringRule: "AllOrNothing",
-    partCountPerQuestion: "",
+    partCountPerQuestion: null,
     details: [
       { tagId: "", difficultyId: "", quantity: 1 }
     ]
@@ -208,7 +208,6 @@ export default function BlueprintEditorPage() {
         const updated = { ...sec, [field]: value };
         if (field === "questionType") {
           updated.scoringRule = value === "Composite" ? "WeightedParts" : "AllOrNothing";
-          if (value !== "Composite") updated.partCountPerQuestion = "";
         }
         return updated;
       })
@@ -623,21 +622,8 @@ export default function BlueprintEditorPage() {
 
                     {/* Composite Fields (Rendered only if questionType is Composite) */}
                     {isComposite && (
-                      <div className="grid grid-cols-12 gap-4 bg-surface-container-low p-4 rounded-xl border border-whisper-border select-text">
-                        <div className="col-span-6">
-                          <label className="block text-xs font-bold text-primary mb-1">
-                            Số mệnh đề trong mỗi câu <span className="text-error">*</span>
-                          </label>
-                          <input
-                            type="number"
-                            value={sec.partCountPerQuestion}
-                            onChange={(e) => updateSectionField(secIdx, "partCountPerQuestion", e.target.value)}
-                            placeholder="Ví dụ: 4"
-                            min="1"
-                            className="w-full rounded-lg border border-outline-variant p-2 text-xs bg-pure-surface text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                          />
-                        </div>
-                        <div className="col-span-6">
+                      <div className="bg-surface-container-low p-4 rounded-xl border border-whisper-border select-text space-y-3">
+                        <div className="w-full md:w-1/2">
                           <label className="block text-xs font-bold text-primary mb-1">
                             Quy tắc chấm <span className="text-error">*</span>
                           </label>
@@ -646,12 +632,14 @@ export default function BlueprintEditorPage() {
                             onValueChange={(value) => updateSectionField(secIdx, "scoringRule", value)}
                             items={[
                               { value: "WeightedParts", label: "Theo trọng số từng phần" },
-                              { value: "TieredTrueFalse", label: "Đúng/Sai phân bậc (sai 1 mệnh đề chia đôi điểm)" }
+                              { value: "TieredTrueFalse", label: "Đúng/Sai phân bậc (giảm một nửa điểm còn lại)" }
                             ]}
                           />
                         </div>
-                        <p className="col-span-12 text-[13px] text-on-surface-variant leading-relaxed">
-                          Hệ thống sẽ chỉ chọn các câu hỏi có chính xác số lượng mệnh đề đã cấu hình.
+                        <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                          {sec.scoringRule === "TieredTrueFalse"
+                            ? "Mỗi mệnh đề sai hoặc bỏ trống làm giảm một nửa điểm còn lại. Không đúng mệnh đề nào: 0 điểm."
+                            : "Điểm từng phần được tính theo tỷ trọng mặc định được cấu hình trong ngân hàng câu hỏi."}
                         </p>
                       </div>
                     )}

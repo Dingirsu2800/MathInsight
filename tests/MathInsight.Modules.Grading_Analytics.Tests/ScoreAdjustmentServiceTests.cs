@@ -45,6 +45,7 @@ public sealed class ScoreAdjustmentServiceTests
         Assert.NotNull(report.ScoreAdjustedTime);
         Assert.NotNull(published);
         Assert.Equal(2, published!.GradeRevision);
+        Assert.Null(published.IncidentId);
         var topicEvidence = Assert.Single(published.PerTagResults);
         Assert.Equal(seed.TagId, topicEvidence.TagId);
         Assert.Equal(0m, topicEvidence.TotalItems);
@@ -53,6 +54,32 @@ public sealed class ScoreAdjustmentServiceTests
         var answerEvidence = Assert.Single(published.Answers);
         Assert.True(answerEvidence.IsScoreInvalidated);
         Assert.False(answerEvidence.MachineIsCorrect);
+    }
+
+    [Fact]
+    public async Task Adjust_WithMalformedSnapshot_FailsWithoutPersistingScoreAdjustment()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db);
+        var version = await db.QuestionVersions.SingleAsync();
+        version.AnswersSnapshot = "[]";
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IPublisher>();
+        var service = new ScoreAdjustmentService(db, publisher.Object);
+
+        await Assert.ThrowsAsync<JsonException>(() =>
+            service.AdjustInvalidQuestionVersionAsync(seed.ReportId));
+
+        db.ChangeTracker.Clear();
+        Assert.False((await db.TestQuestions.SingleAsync()).IsScoreInvalidated);
+        Assert.Equal(1, (await db.TestSessions.SingleAsync()).GradeRevision);
+        Assert.Equal(0m, (await db.TestSessions.SingleAsync()).Score);
+        Assert.Null((await db.QuestionReports.SingleAsync()).ScoreAdjustedTime);
+        Assert.Empty(await db.ScoreAdjustmentWorks.ToListAsync());
+        publisher.Verify(
+            item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -86,6 +113,140 @@ public sealed class ScoreAdjustmentServiceTests
     }
 
     [Fact]
+    public async Task DispatchPendingAdjustments_AfterInterruptedPublish_ReplaysPersistedEventWithoutChangingRevision()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db);
+        var publisher = new Mock<IPublisher>();
+        publisher
+            .SetupSequence(item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Transient publish failure"))
+            .Returns(Task.CompletedTask);
+
+        var service = new ScoreAdjustmentService(db, publisher.Object);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AdjustInvalidQuestionVersionAsync(seed.ReportId));
+
+        db.ChangeTracker.Clear();
+        Assert.Equal(2, (await db.TestSessions.SingleAsync()).GradeRevision);
+        Assert.Single(await db.ScoreAdjustmentWorks.ToListAsync());
+
+        await service.DispatchPendingAdjustmentsAsync();
+
+        db.ChangeTracker.Clear();
+        Assert.Equal(2, (await db.TestSessions.SingleAsync()).GradeRevision);
+        Assert.Equal("Completed", (await db.ScoreAdjustmentWorks.SingleAsync()).Status);
+        Assert.NotNull((await db.QuestionReports.SingleAsync()).ScoreAdjustedTime);
+
+        await service.DispatchPendingAdjustmentsAsync();
+
+        publisher.Verify(
+            item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task RecoverPendingAdjustments_ProcessesApprovedIncidentThatHasNoWorkYet()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db);
+        var report = await db.QuestionReports.SingleAsync();
+        report.IncidentId = "incident_01";
+        db.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = report.IncidentId,
+            Status = "AdjustmentPending",
+            RequiresAdminReview = false,
+            ApprovedResolutionAction = "InvalidateAndAwardFull",
+            AdjustmentStatus = "Pending"
+        });
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IPublisher>();
+        publisher
+            .Setup(item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var service = new ScoreAdjustmentService(db, publisher.Object);
+
+        await service.RecoverPendingAdjustmentsAsync();
+
+        db.ChangeTracker.Clear();
+        Assert.Equal(2, (await db.TestSessions.SingleAsync()).GradeRevision);
+        Assert.Equal("Completed", (await db.ScoreAdjustmentWorks.SingleAsync()).Status);
+        Assert.NotNull((await db.QuestionReports.SingleAsync()).ScoreAdjustedTime);
+        Assert.Equal("Completed", (await db.QuestionReportIncidents.SingleAsync()).AdjustmentStatus);
+
+        await service.RecoverPendingAdjustmentsAsync();
+        db.ChangeTracker.Clear();
+        Assert.Equal(2, (await db.TestSessions.SingleAsync()).GradeRevision);
+        Assert.Single(await db.ScoreAdjustmentWorks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task DispatchFailure_MarksApprovedIncidentFailedUntilTheDurableRetrySucceeds()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db);
+        var report = await db.QuestionReports.SingleAsync();
+        report.IncidentId = "incident_01";
+        db.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = report.IncidentId,
+            Status = "AdjustmentPending",
+            RequiresAdminReview = false,
+            ApprovedResolutionAction = "InvalidateAndAwardFull",
+            AdjustmentStatus = "Pending"
+        });
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IPublisher>();
+        publisher
+            .SetupSequence(item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Transient publish failure"))
+            .Returns(Task.CompletedTask);
+        var service = new ScoreAdjustmentService(db, publisher.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AdjustInvalidQuestionVersionAsync(seed.ReportId));
+        db.ChangeTracker.Clear();
+        Assert.Equal("Failed", (await db.QuestionReportIncidents.SingleAsync()).AdjustmentStatus);
+
+        await service.DispatchPendingAdjustmentsAsync(seed.ReportId);
+        db.ChangeTracker.Clear();
+        Assert.Equal("Completed", (await db.QuestionReportIncidents.SingleAsync()).AdjustmentStatus);
+    }
+
+    [Fact]
+    public async Task Adjust_AfterSuccessfulDelivery_ClosesIncident()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db);
+        var report = await db.QuestionReports.SingleAsync();
+        report.IncidentId = "incident_close_01";
+        db.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = report.IncidentId,
+            Status = "AdjustmentPending",
+            RequiresAdminReview = false,
+            ApprovedResolutionAction = "InvalidateAndAwardFull",
+            AdjustmentStatus = "Pending"
+        });
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IPublisher>();
+        publisher
+            .Setup(item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        await new ScoreAdjustmentService(db, publisher.Object)
+            .AdjustInvalidQuestionVersionAsync(seed.ReportId);
+
+        var incident = await db.QuestionReportIncidents.SingleAsync();
+        Assert.Equal("Completed", incident.AdjustmentStatus);
+        Assert.Equal("Closed", incident.Status);
+    }
+
+    [Fact]
     public async Task Adjust_PublishesRevisionForPrimaryAndSecondaryTags()
     {
         await using var db = CreateDbContext();
@@ -110,6 +271,35 @@ public sealed class ScoreAdjustmentServiceTests
             Assert.Equal(0m, result.TotalItems);
             Assert.Equal(0m, result.MaxPoints);
         });
+    }
+
+    [Fact]
+    public async Task Adjust_WithIncidentBeforeApproval_IsRejected()
+    {
+        await using var db = CreateDbContext();
+        var seed = await SeedInvalidReportAsync(db);
+        var report = await db.QuestionReports.SingleAsync();
+        report.IncidentId = "incident_01";
+        db.QuestionReportIncidents.Add(new QuestionReportIncident
+        {
+            IncidentId = report.IncidentId,
+            Status = "PendingAdminReview",
+            RequiresAdminReview = true,
+            ApprovedResolutionAction = null,
+            AdjustmentStatus = null
+        });
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IPublisher>();
+        var service = new ScoreAdjustmentService(db, publisher.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AdjustInvalidQuestionVersionAsync(seed.ReportId));
+
+        Assert.False((await db.TestQuestions.SingleAsync()).IsScoreInvalidated);
+        publisher.Verify(
+            item => item.Publish(It.IsAny<GradeCalculatedEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     private static GradingDbContext CreateDbContext()

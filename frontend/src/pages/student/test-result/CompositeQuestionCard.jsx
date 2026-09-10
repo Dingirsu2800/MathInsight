@@ -31,6 +31,7 @@ export default function CompositeQuestionCard({
   isScoreInvalidated = false,
   reportReason,
   scoreAdjustedTime,
+  reportEligibility,
   onReport,
   onAskChatbot,
 }) {
@@ -264,7 +265,18 @@ export default function CompositeQuestionCard({
               </button>
             </div>
           )}
-          {!isScoreInvalidated && onReport && (
+          {reportEligibility?.canReport === false ? (
+            <div className="mt-4 flex items-center gap-2 text-xs font-bold text-on-surface-variant">
+              <MaterialIcon name="info" size={16} />
+              <span>
+                {reportEligibility.reasonCode === 'ALREADY_REPORTED_VERSION' || reportEligibility.myReportId
+                  ? `Đã báo cáo (${reportEligibility.myReportStatus || 'Đang xử lý'})`
+                  : reportEligibility.incidentStatus === 'Closed'
+                    ? 'Đã xử lý'
+                    : 'Không thể báo cáo'}
+              </span>
+            </div>
+          ) : !isScoreInvalidated && onReport ? (
             <button
               type="button"
               className="mt-4 flex items-center gap-2 text-sm font-bold text-error hover:underline"
@@ -273,7 +285,7 @@ export default function CompositeQuestionCard({
               <MaterialIcon name="flag" size={18} />
               Báo cáo câu hỏi
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

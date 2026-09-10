@@ -84,6 +84,10 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
             .HasMaxLength(30)
             .IsUnicode(false);
 
+        builder.Property(x => x.GradingPolicyVersion)
+            .HasColumnName("GradingPolicyVersion")
+            .HasDefaultValue(1);
+
         builder.Property(x => x.IsScoreInvalidated)
             .HasColumnName("IsScoreInvalidated");
 

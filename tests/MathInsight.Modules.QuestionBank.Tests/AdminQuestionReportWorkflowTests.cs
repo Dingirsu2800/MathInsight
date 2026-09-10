@@ -182,7 +182,7 @@ public sealed class AdminQuestionReportWorkflowTests
     }
 
     [Fact]
-    public async Task AdminApprove_WithOnlyStudentReport_RestoresQuestionToApproved()
+    public async Task AdminApprove_WithOnlyStudentLegacyReport_ApprovesQuestion()
     {
         await using var database = await QuestionBankInMemoryContext.CreateAsync();
         var question = await AddQuestionAsync(database, "approve-happy-path", "Reported");

@@ -173,4 +173,32 @@ describe('TestResultPage score invalidation and reporting', () => {
       screen.getByText(/Điểm máy chấm:\s*0\.25\s*·\s*Điểm hiệu lực:\s*1\.00\s*\/\s*1\.00/i)
     ).toBeInTheDocument();
   });
+
+  it('displays report status badge when reportEligibility.canReport is false', async () => {
+    const dataWithEligibility = {
+      ...mockResultData,
+      answers: [
+        {
+          ...mockResultData.answers[1],
+          reportEligibility: {
+            canReport: false,
+            reasonCode: 'ALREADY_REPORTED_VERSION',
+            myReportId: 'rep-99',
+            myReportStatus: 'Đang xử lý',
+          },
+        },
+      ],
+    };
+    getSessionResult.mockResolvedValue(dataWithEligibility);
+
+    render(
+      <BrowserRouter>
+        <TestResultPage />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText(/Đã báo cáo \(Đang xử lý\)/i)).toBeInTheDocument();
+    // Report button should not appear
+    expect(screen.queryByRole('button', { name: /Báo cáo câu hỏi/i })).not.toBeInTheDocument();
+  });
 });

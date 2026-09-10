@@ -19,4 +19,10 @@ public sealed record QuestionDetailResponse(
     DateTime UpdatedTime,
     IReadOnlyList<QuestionTopicResponse> Topics,
     IReadOnlyList<QuestionAnswerResponse> Answers,
-    IReadOnlyList<QuestionPartResponse> Parts);
+    IReadOnlyList<QuestionPartResponse> Parts)
+{
+    public Contracts.Reports.ReportEligibilityResponse ReportEligibility { get; init; } = new(
+        false, "AUTH_REQUIRED", null, null, null, null, null);
+
+    public Contracts.Reports.BlockingReportIncidentResponse? BlockingReportIncident { get; init; }
+}

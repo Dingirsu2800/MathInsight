@@ -51,6 +51,42 @@ IF COL_LENGTH(N'dbo.QuestionPart', N'IsArchived') IS NULL
     ALTER TABLE dbo.QuestionPart
         ADD IsArchived BIT NOT NULL
             CONSTRAINT DF_QuestionPart_IsArchived DEFAULT (0) WITH VALUES;
+GO
+
+-- QuestionPart history is retained by soft-archiving old rows.  The original
+-- 001 bootstrap constraint/indexes were not archive-aware, so replacing a
+-- part with the same order or label failed on SQL Server.
+IF EXISTS (
+    SELECT 1
+    FROM sys.key_constraints
+    WHERE name = N'UQ_QuestionPart_Question_Order'
+      AND parent_object_id = OBJECT_ID(N'dbo.QuestionPart'))
+    ALTER TABLE dbo.QuestionPart DROP CONSTRAINT UQ_QuestionPart_Question_Order;
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UX_QuestionPart_Label_NotNull'
+      AND object_id = OBJECT_ID(N'dbo.QuestionPart'))
+    DROP INDEX UX_QuestionPart_Label_NotNull ON dbo.QuestionPart;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UX_QuestionPart_Current_Order'
+      AND object_id = OBJECT_ID(N'dbo.QuestionPart'))
+    CREATE UNIQUE INDEX UX_QuestionPart_Current_Order
+        ON dbo.QuestionPart (QuestionID, PartOrder)
+        WHERE IsArchived = 0;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UX_QuestionPart_Current_Label_NotNull'
+      AND object_id = OBJECT_ID(N'dbo.QuestionPart'))
+    CREATE UNIQUE INDEX UX_QuestionPart_Current_Label_NotNull
+        ON dbo.QuestionPart (QuestionID, PartLabel)
+        WHERE PartLabel IS NOT NULL AND IsArchived = 0;
 
 IF COL_LENGTH(N'dbo.QuestionVersion', N'VersionNumber') IS NULL
     ALTER TABLE dbo.QuestionVersion

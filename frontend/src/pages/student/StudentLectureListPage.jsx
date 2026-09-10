@@ -44,6 +44,23 @@ export default function StudentLectureListPage() {
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const PAGE_SIZE = 12;
+
+  const [inputPage, setInputPage] = useState(page);
+  
+  useEffect(() => {
+    setInputPage(page);
+  }, [page]);
+
+  const handlePageJump = () => {
+    const p = parseInt(inputPage, 10);
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    if (!isNaN(p) && p >= 1 && p <= totalPages) {
+      setPage(p);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setInputPage(page);
+    }
+  };
   useEffect(() => {
     getTopics(gradeFilter)
       .then(res => {
@@ -229,8 +246,19 @@ export default function StudentLectureListPage() {
               <span className="material-symbols-outlined text-[18px]">chevron_left</span>
               Trang trước
             </button>
-            <span className="text-on-surface-variant text-[14px] font-medium">
-              Trang {page} / {Math.ceil(totalCount / PAGE_SIZE)}
+            <span className="flex items-center gap-2 text-on-surface-variant text-[14px] font-medium">
+              Trang 
+              <input 
+                type="number" 
+                min={1} 
+                max={Math.ceil(totalCount / PAGE_SIZE)}
+                value={inputPage}
+                onChange={(e) => setInputPage(e.target.value)}
+                onBlur={handlePageJump}
+                onKeyDown={(e) => { if (e.key === 'Enter') handlePageJump(); }}
+                className="w-12 text-center border border-outline-variant rounded bg-pure-surface py-1 text-[14px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              / {Math.ceil(totalCount / PAGE_SIZE)}
             </span>
             <button
               disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}

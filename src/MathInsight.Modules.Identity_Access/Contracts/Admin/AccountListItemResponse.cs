@@ -9,4 +9,7 @@ public sealed record AccountListItemResponse(
     string RoleId,
     string RoleName,
     bool IsActive,
-    DateTime CreatedTime);
+    DateTime CreatedTime,
+    string? PhoneNumber,
+    DateOnly? DateOfBirth,
+    int? CurrentGrade);

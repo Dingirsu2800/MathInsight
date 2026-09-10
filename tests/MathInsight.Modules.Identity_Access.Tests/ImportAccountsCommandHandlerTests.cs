@@ -105,7 +105,7 @@ public class ImportAccountsCommandHandlerTests : IDisposable
 
         Assert.True(result.IsSuccess);
         Assert.Equal(1, result.Value!.SkippedCount);
-        Assert.Equal("Missing required field(s).", result.Value.SkippedRows[0].Reason);
+        Assert.Equal("Thiếu trường bắt buộc.", result.Value.SkippedRows[0].Reason);
         Assert.Equal(0, await _db.Accounts.CountAsync());
     }
 
@@ -119,7 +119,7 @@ public class ImportAccountsCommandHandlerTests : IDisposable
         var result = await _handler.Handle(command, CancellationToken.None);
 
         Assert.Equal(1, result.Value!.SkippedCount);
-        Assert.Equal("Password must be at least 8 characters.", result.Value.SkippedRows[0].Reason);
+        Assert.Equal("Mật khẩu phải có ít nhất 8 ký tự.", result.Value.SkippedRows[0].Reason);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class ImportAccountsCommandHandlerTests : IDisposable
         var result = await _handler.Handle(command, CancellationToken.None);
 
         Assert.Equal(1, result.Value!.SkippedCount);
-        Assert.Equal("Role must be one of: Student, Teacher, Expert.", result.Value.SkippedRows[0].Reason);
+        Assert.Equal("Vai trò phải là Học sinh, Giáo viên hoặc Chuyên gia.", result.Value.SkippedRows[0].Reason);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class ImportAccountsCommandHandlerTests : IDisposable
         var result = await _handler.Handle(new ImportAccountsCommand(bytes), CancellationToken.None);
 
         Assert.Equal(1, result.Value!.SkippedCount);
-        Assert.Equal("Username already exists.", result.Value.SkippedRows[0].Reason);
+        Assert.Equal("Tên đăng nhập đã tồn tại.", result.Value.SkippedRows[0].Reason);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class ImportAccountsCommandHandlerTests : IDisposable
         Assert.Equal(1, result.Value!.SuccessCount);
         Assert.Equal(1, result.Value.SkippedCount);
         Assert.Equal(3, result.Value.SkippedRows[0].RowNumber);
-        Assert.Equal("Username already exists.", result.Value.SkippedRows[0].Reason);
+        Assert.Equal("Tên đăng nhập đã tồn tại.", result.Value.SkippedRows[0].Reason);
     }
 
     [Fact]
@@ -184,7 +184,37 @@ public class ImportAccountsCommandHandlerTests : IDisposable
         var result = await _handler.Handle(new ImportAccountsCommand(bytes), CancellationToken.None);
 
         Assert.Equal(1, result.Value!.SkippedCount);
-        Assert.Equal("Email already exists.", result.Value.SkippedRows[0].Reason);
+        Assert.Equal("Email đã tồn tại.", result.Value.SkippedRows[0].Reason);
+    }
+
+    [Fact]
+    public async Task Handle_RowPhoneDuplicatesExistingAccount_IsSkipped()
+    {
+        var roles = await SeedRolesAndReturnAsync();
+        _db.Accounts.Add(new Account
+        {
+            AccountId = Guid.NewGuid().ToString(), Username = "existing", Email = "phone@example.com",
+            PasswordHash = "h", FirstName = "J", LastName = "D", PhoneNumber = "0901234567",
+            RoleId = roles["Student"], IsActive = true, CreatedTime = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        var bytes = BuildWorkbook(new[] { "newuser", "new@example.com", "Password1!", "A", "B", "0901234567", null, "Student" });
+        var result = await _handler.Handle(new ImportAccountsCommand(bytes), CancellationToken.None);
+
+        Assert.Equal(1, result.Value!.SkippedCount);
+        Assert.Equal("Số điện thoại đã tồn tại.", result.Value.SkippedRows[0].Reason);
+    }
+
+    [Fact]
+    public async Task Handle_RowInvalidDate_IsSkippedWithVietnameseReason()
+    {
+        await SeedRolesAsync();
+        var bytes = BuildWorkbook(new[] { "bad-date", "date@example.com", "Password1!", "A", "B", null, "2099-01-01", "Student" });
+        var result = await _handler.Handle(new ImportAccountsCommand(bytes), CancellationToken.None);
+
+        Assert.Equal(1, result.Value!.SkippedCount);
+        Assert.Equal("Ngày sinh không hợp lệ hoặc lớn hơn ngày hiện tại.", result.Value.SkippedRows[0].Reason);
     }
 
     [Fact]

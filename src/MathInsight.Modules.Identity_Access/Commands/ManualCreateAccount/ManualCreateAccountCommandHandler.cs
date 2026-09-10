@@ -51,6 +51,9 @@ public class ManualCreateAccountCommandHandler
         if (emailTaken)
             return Result<AccountListItemResponse>.Failure(IdentityErrors.EmailAlreadyExists);
 
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber) && await _dbContext.Accounts.AnyAsync(account => account.PhoneNumber == request.PhoneNumber, cancellationToken))
+            return Result<AccountListItemResponse>.Failure(IdentityErrors.PhoneAlreadyExists);
+
         var accountId = Guid.NewGuid().ToString();
 
         var account = new Account
@@ -73,7 +76,7 @@ public class ManualCreateAccountCommandHandler
         switch (role.RoleName.ToUpperInvariant())
         {
             case "STUDENT":
-                _dbContext.Students.Add(new Student { StudentId = accountId });
+                _dbContext.Students.Add(new Student { StudentId = accountId, CurrentGrade = request.CurrentGrade });
                 break;
             case "TEACHER":
                 _dbContext.Teachers.Add(new Teacher { TeacherId = accountId, IsVerified = true });
@@ -106,6 +109,9 @@ public class ManualCreateAccountCommandHandler
             role.RoleId,
             role.RoleName,
             account.IsActive,
-            account.CreatedTime));
+            account.CreatedTime,
+            account.PhoneNumber,
+            account.DateOfBirth,
+            request.CurrentGrade));
     }
 }

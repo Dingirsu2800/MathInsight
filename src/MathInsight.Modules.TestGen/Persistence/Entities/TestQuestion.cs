@@ -22,6 +22,7 @@ public class TestQuestion
     public decimal WeightSnapshot { get; set; }
     public decimal MaxPointsSnapshot { get; set; }
     public string ScoringRuleSnapshot { get; set; } = "AllOrNothing";
+    public int GradingPolicyVersion { get; set; } = 1;
     public bool IsScoreInvalidated { get; set; }
     public string? InvalidatedByReportId { get; set; }
 

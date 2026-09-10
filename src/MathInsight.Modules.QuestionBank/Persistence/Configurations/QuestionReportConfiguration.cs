@@ -8,7 +8,10 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
 {
     public void Configure(EntityTypeBuilder<QuestionReport> builder)
     {
-        builder.ToTable(nameof(QuestionReport));
+        builder.ToTable(nameof(QuestionReport), table =>
+            table.HasCheckConstraint(
+                "CK_QuestionReport_SessionVersionPair",
+                "[SessionID] IS NULL OR [QuestionVersionID] IS NOT NULL"));
 
         builder.HasKey(report => report.ReportId)
             .HasName("PK_QuestionReport");
@@ -90,10 +93,23 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
             .HasMaxLength(36)
             .IsUnicode(false);
 
+        builder.Property(report => report.IncidentId)
+            .HasColumnName("IncidentID")
+            .HasMaxLength(36)
+            .IsUnicode(false);
+
         builder.Property(report => report.ResolutionAction)
             .HasColumnName("ResolutionAction")
             .HasMaxLength(30)
             .IsUnicode(false);
+
+        builder.Property(report => report.ProposedStatus)
+            .HasColumnName("ProposedStatus")
+            .HasMaxLength(20)
+            .IsUnicode(false);
+
+        builder.Property(report => report.ProposedReviewNote)
+            .HasColumnName("ProposedReviewNote");
 
         builder.Property(report => report.ScoreAdjustedTime)
             .HasColumnName("ScoreAdjustedTime")
@@ -109,6 +125,15 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
             .HasFilter("[QuestionVersionID] IS NOT NULL")
             .HasDatabaseName("IX_QuestionReport_Version_ResolutionAction");
 
+        builder.HasIndex(report => new { report.ReporterAccountId, report.QuestionVersionId })
+            .IsUnique()
+            .HasFilter("[QuestionVersionID] IS NOT NULL")
+            .HasDatabaseName("UQ_QuestionReport_Reporter_Version");
+
+        builder.HasIndex(report => new { report.IncidentId, report.Status })
+            .HasFilter("[IncidentID] IS NOT NULL")
+            .HasDatabaseName("IX_QuestionReport_Incident_Status");
+
         builder.HasOne(report => report.Question)
             .WithMany(question => question.Reports)
             .HasForeignKey(report => report.QuestionId)
@@ -120,5 +145,11 @@ public class QuestionReportConfiguration : IEntityTypeConfiguration<QuestionRepo
             .HasForeignKey(report => report.QuestionVersionId)
             .OnDelete(DeleteBehavior.NoAction)
             .HasConstraintName("FK_QuestionReport_QuestionVersion_QuestionVersionID");
+
+        builder.HasOne(report => report.Incident)
+            .WithMany(incident => incident.Reports)
+            .HasForeignKey(report => report.IncidentId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_QuestionReport_Incident_IncidentID");
     }
 }

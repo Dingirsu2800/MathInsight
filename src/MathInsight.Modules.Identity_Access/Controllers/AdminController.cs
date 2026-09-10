@@ -66,7 +66,8 @@ public class AdminController : ControllerBase
                 request.LastName,
                 request.PhoneNumber,
                 request.DateOfBirth,
-                request.RoleName),
+                request.RoleName,
+                request.CurrentGrade),
             cancellationToken);
 
         return ToActionResult(result);
@@ -96,7 +97,7 @@ public class AdminController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(
-            new UpdateAccountCommand(id, request.FirstName, request.LastName, request.Email, request.RoleId),
+            new UpdateAccountCommand(id, request.FirstName, request.LastName, request.Email, request.RoleId, request.PhoneNumber, request.DateOfBirth, request.CurrentGrade),
             cancellationToken);
 
         return ToActionResult(result);

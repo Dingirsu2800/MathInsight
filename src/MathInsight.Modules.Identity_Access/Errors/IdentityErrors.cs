@@ -12,6 +12,10 @@ public static class IdentityErrors
         "EMAIL_ALREADY_EXISTS",
         "Email is already in use.");
 
+    public static readonly Error PhoneAlreadyExists = new(
+        "PHONE_ALREADY_EXISTS",
+        "Số điện thoại đã được sử dụng.");
+
     public static readonly Error UsernameAlreadyExists = new(
         "USERNAME_ALREADY_EXISTS",
         "Username is already in use.");

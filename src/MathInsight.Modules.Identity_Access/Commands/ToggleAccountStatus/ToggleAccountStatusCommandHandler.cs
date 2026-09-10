@@ -46,6 +46,9 @@ public class ToggleAccountStatusCommandHandler
             account.RoleId,
             account.Role.RoleName,
             account.IsActive,
-            account.CreatedTime));
+            account.CreatedTime,
+            account.PhoneNumber,
+            account.DateOfBirth,
+            account.Student?.CurrentGrade));
     }
 }

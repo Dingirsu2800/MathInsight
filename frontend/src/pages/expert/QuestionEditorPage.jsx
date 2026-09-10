@@ -11,6 +11,9 @@ import { getQuestionTypeLabel, getQuestionPartTypeLabel } from "../../utils/ques
 import QuestionOcrDraftReviewDialog from "../../components/expert/QuestionOcrDraftReviewDialog";
 import QuestionOcrUploadDrawer from "../../components/expert/QuestionOcrUploadDrawer";
 import LatexPreview from "../../components/expert/LatexPreview";
+import ShortAnswerInput from "../../components/questions/ShortAnswerInput";
+import IncidentReportPanel from "../../components/question-reports/IncidentReportPanel";
+import { validateShortAnswer, isNumericAnswerPrecisionValid } from "../../utils/shortAnswer";
 import { useNavigationGuard } from "../../contexts/NavigationGuardContext";
 
 function getRoleLabel(role) {
@@ -95,14 +98,26 @@ export default function QuestionEditorPage() {
   const initialFormSnapshotRef = React.useRef(null);
 
   const searchParams = new URLSearchParams(location.search);
-  const fromReported = searchParams.get("from") === "reported";
+  const isReportRoute = location.pathname?.endsWith("/reports") || location.pathname?.includes("/reports");
+  const paramIncidentId = searchParams.get("incidentId") || searchParams.get("incident");
+  const fromReported = searchParams.get("from") === "reported" || isReportRoute || Boolean(paramIncidentId);
+  const submissionKeyRef = React.useRef(null);
+  const formHashAtKeyCreationRef = React.useRef("");
 
   const [hasSavedInSession, setHasSavedInSession] = React.useState(false);
   const [pendingReports, setPendingReports] = React.useState([]);
+  const [incidentDetail, setIncidentDetail] = React.useState(null);
+  const [reportDispositions, setReportDispositions] = React.useState({});
+  const [reportReviewNotes, setReportReviewNotes] = React.useState({});
+  const currentIncidentIdRef = React.useRef(null);
+  const [resolutionAction, setResolutionAction] = React.useState("NoScoreChange");
   const [reportsLoading, setReportsLoading] = React.useState(false);
   const [updatingReportId, setUpdatingReportId] = React.useState(null);
   const [reportsError, setReportsError] = React.useState("");
   const [adminReviewSubmitState, setAdminReviewSubmitState] = React.useState("idle"); // idle | saving | submitting | retryable | complete
+  const [blockingReportIncident, setBlockingReportIncident] = React.useState(null);
+  const blockingReportIncidentRef = React.useRef(null);
+  blockingReportIncidentRef.current = blockingReportIncident;
 
 
 
@@ -139,15 +154,17 @@ export default function QuestionEditorPage() {
   const closeTopicPanelTimerRef = React.useRef(null);
   const errorRef = React.useRef(null);
   const drawerErrorRef = React.useRef(null);
+  const hasLoadedDetailRef = React.useRef(!isEditMode);
+  const [hasLoadedDetail, setHasLoadedDetail] = React.useState(!isEditMode);
 
   const formSnapshot = React.useMemo(() => JSON.stringify(form), [form]);
   const isDirty = initialFormSnapshotRef.current !== null && initialFormSnapshotRef.current !== formSnapshot;
 
   React.useEffect(() => {
-    if (!loading && initialFormSnapshotRef.current === null) {
+    if (!isEditMode && !loading && initialFormSnapshotRef.current === null) {
       initialFormSnapshotRef.current = formSnapshot;
     }
-  }, [loading, formSnapshot]);
+  }, [isEditMode, loading, formSnapshot]);
 
   const isReportActionable = (rep) => {
     const isRoleAdmin = rep.reporterRole === "Admin" || rep.role === "Admin";
@@ -355,13 +372,86 @@ export default function QuestionEditorPage() {
     setReportsLoading(true);
     setReportsError("");
     try {
+      let activeIncidentId = paramIncidentId || blockingReportIncidentRef.current?.incidentId;
+      if (!activeIncidentId) {
+        const detailRes = await questionBankApi.getQuestionDetail(id);
+        const blocker = detailRes.data?.blockingReportIncident;
+        if (blocker?.incidentId) {
+          activeIncidentId = blocker.incidentId;
+          setBlockingReportIncident(blocker);
+          blockingReportIncidentRef.current = blocker;
+        }
+      }
+
+      if (activeIncidentId) {
+        const res = await questionBankApi.getQuestionReportIncident(activeIncidentId);
+        const incident = res.data;
+        const reports = incident?.reports || [];
+        setIncidentDetail(incident || null);
+        setPendingReports(reports);
+
+        const activeReports = reports.filter(r =>
+          r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
+        );
+
+        const isSameIncident = currentIncidentIdRef.current === incident?.incidentId;
+        currentIncidentIdRef.current = incident?.incidentId || null;
+        const isOpenIncident = incident?.status === "Open";
+
+        if (isSameIncident && isOpenIncident) {
+          setResolutionAction(prev => prev || incident?.proposedResolutionAction || "NoScoreChange");
+          setReportDispositions(prev => Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              prev[String(r.reportId || r.id)] ?? r.proposedStatus ?? "Resolved"
+            ])
+          ));
+          setReportReviewNotes(prev => Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              prev[String(r.reportId || r.id)] ?? r.proposedReviewNote ?? ""
+            ])
+          ));
+        } else {
+          setResolutionAction(incident?.proposedResolutionAction || "NoScoreChange");
+          setReportDispositions(Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              r.proposedStatus ?? "Resolved"
+            ])
+          ));
+          setReportReviewNotes(Object.fromEntries(
+            activeReports.map(r => [
+              String(r.reportId || r.id),
+              r.proposedReviewNote ?? ""
+            ])
+          ));
+        }
+        return { ok: true, reports, incident };
+      }
       const res = await questionBankApi.getQuestionReports(id, { status: "Pending" });
       const reports = res.data || [];
+      setIncidentDetail(null);
+      currentIncidentIdRef.current = null;
       setPendingReports(reports);
+      setResolutionAction("NoScoreChange");
+      setReportDispositions(prev => Object.fromEntries(
+        reports.map(r => [
+          String(r.reportId || r.id),
+          prev[String(r.reportId || r.id)] ?? "Resolved"
+        ])
+      ));
+      setReportReviewNotes(prev => Object.fromEntries(
+        reports.map(r => [
+          String(r.reportId || r.id),
+          prev[String(r.reportId || r.id)] ?? ""
+        ])
+      ));
       return { ok: true, reports };
     } catch (err) {
       console.error("Failed to load pending reports:", err);
       setReportsError("Không thể tải các báo cáo đang chờ xử lý từ máy chủ.");
+      setPendingReports([]);
       return { ok: false, reports: [] };
     } finally {
       setReportsLoading(false);
@@ -374,16 +464,38 @@ export default function QuestionEditorPage() {
     }
   }, [id, fromReported]);
 
-  const handleResolveReport = async (reportId, nextStatus, reporterRole) => {
+  const handleResolveReport = async (reportId, nextStatus, reporterRole, explicitNote) => {
     setUpdatingReportId(reportId);
     try {
-      await questionBankApi.updateQuestionReportStatus(reportId, {
+      const rawNote = explicitNote !== undefined
+        ? explicitNote
+        : (reportReviewNotes[String(reportId)] ?? "");
+      const trimmedNote = (rawNote || "").trim();
+
+      if (nextStatus === "Dismissed") {
+        if (!trimmedNote) {
+          showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+          return;
+        }
+        if (trimmedNote.length > 2000) {
+          showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+          return;
+        }
+      }
+
+      const payload = {
         status: nextStatus,
         resolutionAction:
           nextStatus === "Resolved" && reporterRole === "Student"
             ? "InvalidateAndAwardFull"
             : "NoScoreChange"
-      });
+      };
+
+      if (nextStatus === "Dismissed") {
+        payload.reviewNote = trimmedNote;
+      }
+
+      await questionBankApi.updateQuestionReportStatus(reportId, payload);
       const refreshResult = await fetchPendingReports();
       if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
         navigate("/expert/questions/reported");
@@ -391,7 +503,14 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error(err);
       const errorCode = err.response?.data?.code;
-      if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
+      if (errorCode === "REVIEW_NOTE_REQUIRED") {
+        showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+      } else if (errorCode === "REVIEW_NOTE_TOO_LONG") {
+        showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+      } else if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+        showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+        await fetchPendingReports();
+      } else if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
         showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
         await fetchPendingReports();
       } else if (errorCode === "QUESTION_FIX_REQUIRED_BEFORE_SCORE_ADJUSTMENT") {
@@ -418,7 +537,10 @@ export default function QuestionEditorPage() {
     } catch (err) {
       console.error(err);
       const errorCode = err.response?.data?.code;
-      if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
+      if (errorCode === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+        showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+        await fetchPendingReports();
+      } else if (errorCode === "REPORT_ALREADY_HANDLED" || errorCode === "ADMIN_REPORT_REQUIRES_REVIEW") {
         showError("Báo cáo đã được cập nhật bởi người khác. Danh sách đã được làm mới.");
         await fetchPendingReports();
       } else if (errorCode === "REPORT_ACCESS_FORBIDDEN") {
@@ -464,53 +586,83 @@ export default function QuestionEditorPage() {
       });
   }, [form.grade]);
 
+  const fetchQuestionDetail = React.useCallback(async () => {
+    if (!isEditMode || !id) return { ok: true };
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await questionBankApi.getQuestionDetail(id);
+      const detail = res.data;
+      const mapped = mapQuestionDetailToEditorState(detail);
+      setForm(mapped);
+      initialFormSnapshotRef.current = JSON.stringify(mapped);
+      const blocker = detail?.blockingReportIncident || null;
+      setBlockingReportIncident(blocker);
+      blockingReportIncidentRef.current = blocker;
+      hasLoadedDetailRef.current = true;
+      setHasLoadedDetail(true);
+      setError(null);
+      return { ok: true, detail };
+    } catch (err) {
+      console.error("Failed to fetch question details for editing:", err);
+      hasLoadedDetailRef.current = false;
+      setHasLoadedDetail(false);
+      const enableFallback = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true";
+
+      if (enableFallback) {
+        setError("Lỗi kết nối API. Hiển thị dữ liệu biên tập mẫu.");
+        // mock fallback
+        setForm({
+          questionContent: "Tính tích phân sau: I = \\int_{0}^{1} x^2 dx",
+          solutionContent: "Sử dụng công thức nguyên hàm cơ bản.",
+          pictureUrl: "",
+          grade: 12,
+          questionType: "SINGLE_CHOICE",
+          difficultyId: "diff-3",
+          defaultWeight: 1.0,
+          topics: [{ tagId: "tag-1", isPrimary: true }],
+          options: [
+            { content: "\\frac{1}{3}", isCorrect: true },
+            { content: "1", isCorrect: false },
+            { content: "0", isCorrect: false }
+          ],
+          shortAnswer: "",
+          parts: []
+        });
+      } else {
+        setError(
+          err.response?.data?.message ||
+          err.message ||
+          "Không thể tải chi tiết câu hỏi từ máy chủ backend."
+        );
+      }
+      return { ok: false, error: err };
+    } finally {
+      setLoading(false);
+    }
+  }, [id, isEditMode]);
+
   // Load question detail if in Edit Mode
   React.useEffect(() => {
     if (isEditMode) {
-      setLoading(true);
-      setError(null);
-      questionBankApi.getQuestionDetail(id)
-        .then(res => {
-          const detail = res.data;
-          const mapped = mapQuestionDetailToEditorState(detail);
-          setForm(mapped);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error("Failed to fetch question details for editing:", err);
-          const enableFallback = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true";
-
-          if (enableFallback) {
-            setError("Lỗi kết nối API. Hiển thị dữ liệu biên tập mẫu.");
-            // mock fallback
-            setForm({
-              questionContent: "Tính tích phân sau: I = \\int_{0}^{1} x^2 dx",
-              solutionContent: "Sử dụng công thức nguyên hàm cơ bản.",
-              pictureUrl: "",
-              grade: 12,
-              questionType: "SINGLE_CHOICE",
-              difficultyId: "diff-3",
-              defaultWeight: 1.0,
-              topics: [{ tagId: "tag-1", isPrimary: true }],
-              options: [
-                { content: "\\frac{1}{3}", isCorrect: true },
-                { content: "1", isCorrect: false },
-                { content: "0", isCorrect: false }
-              ],
-              shortAnswer: "",
-              parts: []
-            });
-          } else {
-            setError(
-              err.response?.data?.message ||
-              err.message ||
-              "Không thể tải chi tiết câu hỏi từ máy chủ backend."
-            );
-          }
-          setLoading(false);
-        });
+      initialFormSnapshotRef.current = null;
+      hasLoadedDetailRef.current = false;
+      setHasLoadedDetail(false);
+      fetchQuestionDetail();
     }
-  }, [id, isEditMode]);
+  }, [id, isEditMode, fetchQuestionDetail]);
+
+  const handleRetry = React.useCallback(async () => {
+    if (isEditMode && !hasLoadedDetailRef.current) {
+      const detailResult = await fetchQuestionDetail();
+      if (!detailResult?.ok) {
+        return;
+      }
+    }
+    if (fromReported) {
+      await fetchPendingReports();
+    }
+  }, [isEditMode, fromReported, fetchQuestionDetail, fetchPendingReports]);
 
   // Handle core field changes
   const handleFieldChange = (field, value) => {
@@ -979,8 +1131,9 @@ export default function QuestionEditorPage() {
         return false;
       }
     } else if (form.questionType === "SHORT_ANSWER") {
-      if (!form.shortAnswer.trim()) {
-        showError("Vui lòng nhập chuỗi đáp án ngắn chính xác!");
+      const saVal = validateShortAnswer(form.shortAnswer, { required: true });
+      if (!saVal.isValid) {
+        showError(saVal.error || "Vui lòng nhập chuỗi đáp án ngắn chính xác!");
         return false;
       }
     } else if (form.questionType === "COMPOSITE") {
@@ -998,13 +1151,22 @@ export default function QuestionEditorPage() {
           showError(`Vui lòng chọn đáp án Đúng hoặc Sai cho câu hỏi phụ phần (${part.partLabel})!`);
           return false;
         }
-        if (part.partType === "SHORT_ANSWER" && (!part.correctText || !part.correctText.trim())) {
-          showError(`Vui lòng nhập đáp án cho câu hỏi phụ phần (${part.partLabel})!`);
-          return false;
+        if (part.partType === "SHORT_ANSWER") {
+          const partVal = validateShortAnswer(part.correctText, { required: true });
+          if (!partVal.isValid) {
+            showError(`Phần (${part.partLabel}): ${partVal.error || "Đáp án không hợp lệ!"}`);
+            return false;
+          }
         }
-        if (part.partType === "NUMERIC_ANSWER" && (part.correctNumeric === null || part.correctNumeric === "")) {
-          showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
-          return false;
+        if (part.partType === "NUMERIC_ANSWER") {
+          if (part.correctNumeric === null || part.correctNumeric === "") {
+            showError(`Vui lòng nhập đáp án số cho câu hỏi phụ phần (${part.partLabel})!`);
+            return false;
+          }
+          if (!isNumericAnswerPrecisionValid(part.correctNumeric)) {
+            showError(`Phần (${part.partLabel}): Đáp án số không hợp lệ hoặc vượt quá độ chính xác cho phép (tối đa 12 chữ số nguyên và 6 chữ số thập phân).`);
+            return false;
+          }
         }
       }
     }
@@ -1013,6 +1175,10 @@ export default function QuestionEditorPage() {
   };
 
   const handleSaveQuestion = () => {
+    if (hasBlockingIncident) {
+      showError("Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa.");
+      return;
+    }
     if (!validateForm()) return;
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
@@ -1025,6 +1191,8 @@ export default function QuestionEditorPage() {
     saveRequest
       .then(() => {
         initialFormSnapshotRef.current = JSON.stringify(form);
+        hasLoadedDetailRef.current = true;
+        setHasLoadedDetail(true);
         if (fromReported) {
           setHasSavedInSession(true);
           setInfoMessage("Đã lưu câu hỏi thành công. Bây giờ bạn có thể giải quyết hoặc không chấp nhận các báo cáo.");
@@ -1034,15 +1202,133 @@ export default function QuestionEditorPage() {
           navigate("/expert/questions");
         }
       })
-      .catch(err => {
+      .catch(async (err) => {
         console.error("Failed to save question:", err);
-        showError("Lưu câu hỏi thất bại: " + (err.response?.data?.message || err.message));
+        const errorCode = err.response?.data?.code;
+        if (errorCode === "REPORT_INCIDENT_REQUIRES_RESOLUTION") {
+          try {
+            const detailRes = await questionBankApi.getQuestionDetail(id);
+            const blocker = detailRes.data?.blockingReportIncident || null;
+            setBlockingReportIncident(blocker);
+            blockingReportIncidentRef.current = blocker;
+          } catch (fetchErr) {
+            console.warn("Failed to refresh question blocker metadata:", fetchErr);
+          }
+          showError("Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa.");
+        } else {
+          showError("Lưu câu hỏi thất bại: " + (err.response?.data?.message || err.message));
+        }
         setLoading(false);
       });
   };
 
+  const getSubmissionKey = (formContentHash) => {
+    if (submissionKeyRef.current && formHashAtKeyCreationRef.current === formContentHash) {
+      return submissionKeyRef.current;
+    }
+    const newKey = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    submissionKeyRef.current = newKey;
+    formHashAtKeyCreationRef.current = formContentHash;
+    return newKey;
+  };
+
   const handleSaveAndSubmitReview = async (reportId) => {
-    if (!validateForm()) return;
+    const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
+    const incidentId = paramIncidentId || incidentDetail?.incidentId || currentRep?.incidentId || form.incidentId;
+
+    if (incidentId) {
+      const activeReports = pendingReports.filter(r =>
+        r.status === "Pending" || r.status === "PendingFix" || r.status === "PendingReview"
+      );
+      const reportDecisions = activeReports.map(r => {
+        const repId = String(r.reportId || r.id);
+        const disposition = reportDispositions[repId] || "Resolved";
+        const reviewNote = disposition === "Dismissed" ? (reportReviewNotes[repId] || "").trim() : null;
+        return {
+          reportId: repId,
+          disposition,
+          reviewNote
+        };
+      });
+
+      if (reportDecisions.some(item => !item.disposition)) {
+        showError("Chọn quyết định cho từng báo cáo trước khi gửi xử lý.");
+        return;
+      }
+
+      const emptyDismissal = reportDecisions.find(
+        item => item.disposition === "Dismissed" && (!item.reviewNote || item.reviewNote.length === 0)
+      );
+      if (emptyDismissal) {
+        showError("Vui lòng nhập lý do không chấp nhận cho tất cả báo cáo bị từ chối.");
+        return;
+      }
+
+      const overlongDismissal = reportDecisions.find(
+        item => item.disposition === "Dismissed" && item.reviewNote && item.reviewNote.length > 2000
+      );
+      if (overlongDismissal) {
+        showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+        return;
+      }
+
+      const isNoEditDismissal = resolutionAction === "NoScoreChange" &&
+        reportDecisions.every(item => item.disposition === "Dismissed");
+      if (!isNoEditDismissal && !validateForm()) return;
+      setAdminReviewSubmitState("submitting");
+      setLoading(true);
+      try {
+        const correctionPayload = isNoEditDismissal ? null : mapEditorStateToCreateUpdateRequest(form);
+
+        const submitPayload = {
+          expectedRevision: incidentDetail?.revision ?? currentRep?.incidentRevision ?? form.revision ?? 0,
+          expectedQuestionVersionId: String(incidentDetail?.originalVersion?.versionId || form.questionVersionId || currentRep?.questionVersionId || ""),
+          resolutionAction,
+          reportDecisions,
+          correction: correctionPayload
+        };
+        const key = getSubmissionKey(JSON.stringify(submitPayload));
+        submitPayload.submissionKey = key;
+
+        await questionBankApi.submitQuestionReportIncident(incidentId, submitPayload);
+        initialFormSnapshotRef.current = JSON.stringify(form);
+        setHasSavedInSession(true);
+        setAdminReviewSubmitState("complete");
+        setInfoMessage(isNoEditDismissal
+          ? "Đã gửi quyết định không chỉnh sửa câu hỏi để Admin xét duyệt."
+          : "Đã cập nhật câu hỏi và gửi Admin xét duyệt thành công.");
+        const refreshResult = await fetchPendingReports();
+        if (refreshResult.ok && refreshResult.reports.filter(isReportActionable).length === 0) {
+          navigate("/expert/questions/reported");
+        }
+      } catch (err) {
+        console.error("Failed to submit incident review:", err);
+        const code = err.response?.data?.code;
+        if (code === "REVIEW_NOTE_REQUIRED") {
+          showError("Vui lòng nhập lý do không chấp nhận báo cáo.");
+        } else if (code === "REVIEW_NOTE_TOO_LONG") {
+          showError("Lý do không chấp nhận không được vượt quá 2000 ký tự.");
+        } else if (code === "REPORT_SUBMISSION_KEY_CONFLICT") {
+          submissionKeyRef.current = null;
+          showError("Dữ liệu gửi không còn khớp với trạng thái máy chủ. Đang làm mới sự cố...");
+          await fetchPendingReports();
+        } else if (code === "REPORT_INCIDENT_CONFLICT") {
+          showError("Sự cố hoặc báo cáo đã bị thay đổi trên máy chủ. Đang làm mới dữ liệu...");
+          await fetchPendingReports();
+        } else if (code === "REPORT_VERSION_STALE") {
+          showError("Phiên bản câu hỏi đã cũ so với sự cố trên máy chủ. Đang làm mới...");
+          await fetchPendingReports();
+        } else {
+          showError("Nội dung chưa gửi được Admin xét duyệt: " + (err.response?.data?.message || err.message));
+        }
+        setAdminReviewSubmitState("retryable");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const payload = mapEditorStateToCreateUpdateRequest(form);
     setAdminReviewSubmitState("saving");
@@ -1068,8 +1354,17 @@ export default function QuestionEditorPage() {
         }
       } catch (submitErr) {
         console.error("Failed to submit review:", submitErr);
+        const code = submitErr.response?.data?.code;
+        if (code === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+          showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+          await fetchPendingReports();
+          return;
+        } else if (code === "ADMIN_REPORT_REQUIRES_REVIEW") {
+          showError("Báo cáo thuộc sự cố cần xử lý qua quy trình xét duyệt của sự cố.");
+        } else {
+          showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
+        }
         setAdminReviewSubmitState("retryable");
-        showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
       }
     } catch (saveErr) {
       console.error("Failed to save question:", saveErr);
@@ -1081,6 +1376,12 @@ export default function QuestionEditorPage() {
   };
 
   const handleRetrySubmitReview = async (reportId) => {
+    const currentRep = pendingReports.find(r => (r.reportId || r.id) === reportId);
+    const incidentId = paramIncidentId || currentRep?.incidentId || form.incidentId;
+    if (incidentId) {
+      await handleSaveAndSubmitReview(reportId);
+      return;
+    }
     setAdminReviewSubmitState("submitting");
     setLoading(true);
     try {
@@ -1093,6 +1394,12 @@ export default function QuestionEditorPage() {
       }
     } catch (submitErr) {
       console.error("Failed to retry submit review:", submitErr);
+      const code = submitErr.response?.data?.code;
+      if (code === "REPORT_INCIDENT_SUBMISSION_REQUIRED") {
+        showError("Báo cáo này thuộc một sự cố và cần xử lý qua quy trình sự cố. Đang làm mới dữ liệu sự cố...");
+        await fetchPendingReports();
+        return;
+      }
       setAdminReviewSubmitState("retryable");
       showError("Nội dung đã được lưu nhưng chưa gửi Admin xét duyệt. Vui lòng thử lại.");
     } finally {
@@ -1116,6 +1423,19 @@ export default function QuestionEditorPage() {
   );
   const adminReportId = adminPendingFixReport?.reportId || adminPendingFixReport?.id;
   const hasAdminPendingFix = Boolean(adminPendingFixReport);
+  const hasOpenIncident = Boolean(incidentDetail && incidentDetail.status === "Open");
+  const hasBlockingIncident = Boolean(
+    blockingReportIncident &&
+    (blockingReportIncident.status === "Open" || blockingReportIncident.status === "PendingAdminReview")
+  );
+
+  const handleNavigateToBlockingIncident = () => {
+    const incidentId = blockingReportIncident?.incidentId;
+    if (!incidentId) return;
+    if (confirmNavigation()) {
+      navigate(`/expert/questions/${id}/reports?incidentId=${encodeURIComponent(incidentId)}`);
+    }
+  };
 
   return (
     <ExpertLayout>
@@ -1128,10 +1448,22 @@ export default function QuestionEditorPage() {
             tabIndex={-1}
             role="alert"
             aria-live="assertive"
-            className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center gap-2 outline-none"
+            className="p-4 mb-6 bg-error/10 border border-error/20 text-error rounded-xl text-sm font-semibold flex items-center justify-between gap-4 outline-none"
           >
-            <span className="material-symbols-outlined">error</span>
-            <span>{error}</span>
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined">error</span>
+              <span>{error}</span>
+            </div>
+            {isEditMode && !hasLoadedDetail && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                className="shrink-0 text-xs h-7 border-error text-error hover:bg-error/10 normal-case font-bold"
+              >
+                Thử lại
+              </Button>
+            )}
           </div>
         )}
 
@@ -1144,6 +1476,32 @@ export default function QuestionEditorPage() {
           >
             <span className="material-symbols-outlined">info</span>
             <span>{infoMessage}</span>
+          </div>
+        )}
+
+        {/* Blocking Incident Warning Banner in Ordinary Editor */}
+        {hasBlockingIncident && !fromReported && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="p-4 mb-6 bg-amber-500/10 border border-amber-500/30 text-amber-800 rounded-xl text-sm font-semibold flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-600">warning</span>
+              <span>
+                {blockingReportIncident?.status === "PendingAdminReview"
+                  ? "Câu hỏi đang có sự cố báo cáo chờ Admin xét duyệt. Bạn không thể chỉnh sửa câu hỏi vào lúc này."
+                  : "Câu hỏi đang có báo cáo sự cố cần xử lý trước khi có thể chỉnh sửa."}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 border-amber-600 text-amber-800 hover:bg-amber-500/10 normal-case"
+              onClick={handleNavigateToBlockingIncident}
+            >
+              Xử lý báo cáo
+            </Button>
           </div>
         )}
 
@@ -1175,7 +1533,19 @@ export default function QuestionEditorPage() {
             <Button variant="outline" className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150" onClick={() => {
               if (confirmNavigation()) navigate("/expert/questions");
             }}>Hủy</Button>
-            {hasAdminPendingFix ? (
+            {hasOpenIncident ? (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={() => handleSaveAndSubmitReview(null)}
+                disabled={loading || (isEditMode && !hasLoadedDetailRef.current) || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "submitting"}
+              >
+                {adminReviewSubmitState === "submitting"
+                  ? "Đang gửi xử lý..."
+                  : adminReviewSubmitState === "retryable"
+                  ? "Gửi lại quyết định xử lý"
+                  : "Gửi quyết định xử lý"}
+              </Button>
+            ) : hasAdminPendingFix ? (
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={() => {
@@ -1185,7 +1555,7 @@ export default function QuestionEditorPage() {
                     handleSaveAndSubmitReview(adminReportId);
                   }
                 }}
-                disabled={loading || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
+                disabled={loading || (isEditMode && !hasLoadedDetailRef.current) || reportsLoading || Boolean(reportsError) || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
               >
                 {adminReviewSubmitState === "retryable"
                   ? "Gửi lại Admin xét duyệt"
@@ -1193,11 +1563,25 @@ export default function QuestionEditorPage() {
                   ? "Đang xử lý..."
                   : "Cập nhật và gửi Admin xét duyệt"}
               </Button>
+            ) : !fromReported && hasBlockingIncident ? (
+              <Button
+                className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
+                onClick={handleNavigateToBlockingIncident}
+              >
+                Xử lý báo cáo
+              </Button>
+            ) : fromReported && incidentDetail?.status === "PendingAdminReview" ? (
+              <Button
+                className="normal-case h-9 text-xs"
+                disabled
+              >
+                Chờ Admin xét duyệt
+              </Button>
             ) : (
               <Button
                 className="normal-case h-9 text-xs active:scale-[0.98] transition-all duration-150"
                 onClick={handleSaveQuestion}
-                disabled={loading}
+                disabled={loading || (isEditMode && !hasLoadedDetailRef.current) || (fromReported && (reportsLoading || Boolean(reportsError))) || (isEditMode && !isDirty)}
               >
                 {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
               </Button>
@@ -1764,12 +2148,10 @@ export default function QuestionEditorPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Đáp án đúng chính xác:</label>
-                      <input
+                      <ShortAnswerInput
                         value={form.shortAnswer}
-                        onChange={(e) => handleFieldChange("shortAnswer", e.target.value)}
-                        className="w-full p-3 text-[14px] bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all font-mono font-bold"
-                        placeholder="Nhập chuỗi đáp án đúng (ví dụ: 1/3 hoặc x=5)"
-                        type="text"
+                        onChange={(val) => handleFieldChange("shortAnswer", val)}
+                        placeholder="Nhập chuỗi đáp án đúng (ví dụ: 1/3, -5/2, √(2), π, ...)"
                       />
                     </div>
                   </div>
@@ -1849,12 +2231,11 @@ export default function QuestionEditorPage() {
                         {part.partType === "SHORT_ANSWER" && (
                           <div>
                             <label className="block text-[11px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Đáp án chuỗi đúng:</label>
-                            <input
+                            <ShortAnswerInput
                               value={part.correctText || ""}
-                              onChange={(e) => handlePartFieldChange(pIdx, "correctText", e.target.value)}
-                              className="w-full p-2 text-[13px] bg-pure-surface border border-outline-variant rounded-lg hover:border-outline-variant/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-mono font-bold outline-none"
+                              onChange={(val) => handlePartFieldChange(pIdx, "correctText", val)}
                               placeholder="Nhập đáp án text chính xác"
-                              type="text"
+                              showExample={false}
                             />
                           </div>
                         )}
@@ -1949,185 +2330,31 @@ export default function QuestionEditorPage() {
 
             {/* Pending Reports Panel */}
             {fromReported && (
-              <div className="bg-pure-surface rounded-xl border border-error/20 p-5 lg:p-6 diffused-shadow shadow-sm">
-                <h3 className="text-xs font-bold text-error mb-4 tracking-wider flex items-center gap-1.5 border-b border-error/10 pb-2.5 uppercase">
-                  <span className="material-symbols-outlined text-[16px]">report</span>
-                  BÁO CÁO ĐANG CHỜ XỬ LÝ ({pendingReports.length})
-                </h3>
-
-                {reportsError ? (
-                  <div className="p-3 text-xs text-error bg-error/5 border border-error/10 rounded-lg text-center font-semibold">
-                    <p className="mb-2">{reportsError}</p>
-                    <Button variant="outline" size="sm" onClick={fetchPendingReports} className="text-[10px] h-7">Thử lại</Button>
-                  </div>
-                ) : reportsLoading && pendingReports.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-on-surface-variant flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <span>Đang tải các báo cáo...</span>
-                  </div>
-                ) : pendingReports.length === 0 ? (
-                  <div className="p-3 text-xs text-emerald-success bg-emerald-success/5 border border-emerald-success/15 rounded-lg text-center font-bold">
-                    Không còn báo cáo nào đang chờ xử lý.
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
-                    {pendingReports.map((rep) => {
-                      const reportIdVal = rep.reportId || rep.id;
-                      const time = rep.createdTime ? new Date(rep.createdTime).toLocaleString("vi-VN") : "Chưa rõ thời gian";
-                      const isUpdatingThisReport = updatingReportId === reportIdVal;
-
-                      const isStudentOrExpert = rep.reporterRole === "Student" || rep.reporterRole === "Expert";
-                      const isPending = rep.status === "Pending";
-                      const isAdmin = rep.reporterRole === "Admin";
-                      const isPendingFix = rep.status === "PendingFix";
-                      const isPendingReview = rep.status === "PendingReview";
-
-                      if (isStudentOrExpert && isPending) {
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded uppercase">
-                                {getRoleLabel(rep.reporterRole || rep.role)}
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            <div className="flex justify-end gap-2 pt-1 border-t border-error/10">
-                              <button
-                                type="button"
-                                disabled={!hasSavedInSession || isUpdatingThisReport}
-                                onClick={() => handleResolveReport(reportIdVal, "Resolved", rep.reporterRole)}
-                                className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                                  hasSavedInSession && !isUpdatingThisReport
-                                    ? "bg-emerald-success text-white border-transparent hover:bg-emerald-success/90 cursor-pointer active:scale-95"
-                                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-                                )}
-                                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Đánh dấu là đã khắc phục lỗi"}
-                              >
-                                {isUpdatingThisReport ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                  "Đã khắc phục"
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!hasSavedInSession || isUpdatingThisReport}
-                                onClick={() => handleResolveReport(reportIdVal, "Dismissed", rep.reporterRole)}
-                                className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[85px] h-7",
-                                  hasSavedInSession && !isUpdatingThisReport
-                                    ? "bg-pure-surface text-on-surface-variant border-outline-variant hover:bg-surface-container cursor-pointer active:scale-95"
-                                    : "bg-outline-variant/10 text-on-surface-variant/40 border-outline-variant/20 cursor-not-allowed"
-                                )}
-                                title={!hasSavedInSession ? "Hãy lưu câu hỏi trước khi xử lý báo cáo" : "Không chấp nhận báo cáo này"}
-                              >
-                                {isUpdatingThisReport ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                ) : (
-                                  "Không chấp nhận"
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (isAdmin && isPendingFix) {
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-error/5 border border-error/10 rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-error bg-error/10 px-1.5 py-0.5 rounded">
-                                Admin yêu cầu chỉnh sửa
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            {rep.reviewNote && (
-                              <div className="p-2 bg-error/10 border border-error/20 rounded text-on-surface-variant leading-relaxed text-[11px]">
-                                <span className="font-bold text-error">Phản hồi của Admin: </span>
-                                {rep.reviewNote}
-                              </div>
-                            )}
-                            <div className="flex justify-end pt-1 border-t border-error/10">
-                              <button
-                                type="button"
-                                disabled={loading || isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting"}
-                                onClick={() => {
-                                  if (adminReviewSubmitState === "retryable") {
-                                    handleRetrySubmitReview(reportIdVal);
-                                  } else {
-                                    handleSaveAndSubmitReview(reportIdVal);
-                                  }
-                                }}
-                                className={cn(
-                                  "px-2.5 py-1 rounded text-[10px] font-bold transition-all border outline-none flex items-center justify-center min-w-[120px] h-7 bg-primary text-white border-transparent hover:bg-primary/95 cursor-pointer active:scale-95",
-                                  (loading || isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting") && "opacity-50 cursor-not-allowed"
-                                )}
-                                title="Gửi yêu cầu kiểm tra tới Admin"
-                              >
-                                {isUpdatingThisReport || adminReviewSubmitState === "saving" || adminReviewSubmitState === "submitting" ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                ) : adminReviewSubmitState === "retryable" ? (
-                                  "Gửi lại Admin xét duyệt"
-                                ) : (
-                                  "Cập nhật và gửi Admin xét duyệt"
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (isAdmin && isPendingReview) {
-                        const submittedTimeStr = rep.submittedTime ? new Date(rep.submittedTime).toLocaleString("vi-VN") : "";
-                        return (
-                          <div key={reportIdVal} className="p-3 bg-surface-container-low border border-whisper-border rounded-lg text-xs space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                              <span className="font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                                Đang chờ Admin xét duyệt
-                              </span>
-                              <span>{time}</span>
-                            </div>
-                            <p className="text-on-surface-variant font-medium leading-relaxed italic">
-                              &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                            </p>
-                            {submittedTimeStr && (
-                              <div className="text-[10px] text-on-surface-variant/80 font-mono font-medium">
-                                Gửi duyệt lúc: {submittedTimeStr}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={reportIdVal} className="p-3 bg-surface-container-low border border-whisper-border rounded-lg text-xs space-y-2">
-                          <div className="flex justify-between items-center text-[10px] font-mono text-on-surface-variant/60">
-                            <span className="font-bold text-on-surface-variant bg-surface px-1.5 py-0.5 rounded uppercase">
-                              {getRoleLabel(rep.reporterRole || rep.role)} ({rep.status})
-                            </span>
-                            <span>{time}</span>
-                          </div>
-                          <p className="text-on-surface-variant font-medium leading-relaxed italic">
-                            &ldquo;{rep.reportReason || rep.reason}&rdquo;
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {!hasSavedInSession && !reportsError && pendingReports.some(rep => (rep.reporterRole === "Student" || rep.reporterRole === "Expert") && rep.status === "Pending") && (
-                  <p className="text-[10px] text-on-surface-variant/75 mt-3 italic leading-relaxed text-center">
-                    * Các nút xử lý báo cáo sẽ hoạt động sau khi bạn ấn &ldquo;Lưu câu hỏi&rdquo; thành công ít nhất một lần.
-                  </p>
-                )}
-              </div>
+              <IncidentReportPanel
+                reports={pendingReports}
+                incident={incidentDetail}
+                reportDispositions={reportDispositions}
+                onDispositionChange={(reportId, val) =>
+                  setReportDispositions(prev => ({ ...prev, [reportId]: val }))
+                }
+                reportReviewNotes={reportReviewNotes}
+                onReviewNoteChange={(reportId, val) =>
+                  setReportReviewNotes(prev => ({ ...prev, [reportId]: val }))
+                }
+                resolutionAction={resolutionAction}
+                onResolutionActionChange={setResolutionAction}
+                reportsLoading={reportsLoading}
+                reportsError={reportsError}
+                onRetry={handleRetry}
+                onResolveLegacyReport={handleResolveReport}
+                onSubmitAdminReview={handleSaveAndSubmitReview}
+                onRetryAdminReview={handleRetrySubmitReview}
+                adminReviewSubmitState={adminReviewSubmitState}
+                loading={loading}
+                isDetailReady={!isEditMode || hasLoadedDetail}
+                updatingReportId={updatingReportId}
+                hasSavedInSession={hasSavedInSession}
+              />
             )}
 
             {/* Meta Properties Summary Card */}

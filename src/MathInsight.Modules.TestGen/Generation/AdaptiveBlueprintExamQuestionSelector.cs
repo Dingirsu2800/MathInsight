@@ -131,7 +131,6 @@ public sealed class AdaptiveBlueprintExamQuestionSelector : IAdaptiveBlueprintEx
         BlueprintExamRequirement requirement)
         => string.Equals(candidate.QuestionType, requirement.QuestionType, StringComparison.OrdinalIgnoreCase) &&
            candidate.SupportedScoringRules.Contains(requirement.ScoringRule) &&
-           (requirement.PartCountPerQuestion is null || candidate.PartCount == requirement.PartCountPerQuestion) &&
            candidate.TagIds.Contains(requirement.TagId);
 
     private sealed record AssignmentEdge(

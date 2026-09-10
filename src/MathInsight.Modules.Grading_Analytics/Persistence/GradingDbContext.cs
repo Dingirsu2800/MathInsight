@@ -30,6 +30,8 @@ public class GradingDbContext : DbContext
     public DbSet<QuestionTopic> QuestionTopics => Set<QuestionTopic>();
     public DbSet<QuestionVersion> QuestionVersions => Set<QuestionVersion>();
     public DbSet<QuestionReport> QuestionReports => Set<QuestionReport>();
+    public DbSet<QuestionReportIncident> QuestionReportIncidents => Set<QuestionReportIncident>();
+    public DbSet<ScoreAdjustmentWork> ScoreAdjustmentWorks => Set<ScoreAdjustmentWork>();
     public DbSet<TagDifficultyReadOnly> TagDifficulties => Set<TagDifficultyReadOnly>();
     public DbSet<TagTopicReadOnly> TagTopics => Set<TagTopicReadOnly>();
 

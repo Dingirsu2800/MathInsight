@@ -125,7 +125,11 @@ public class QuestionsController : ControllerBase
         string questionId,
         CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(new GetQuestionDetailQuery(questionId), cancellationToken);
+        var accountId = User.FindFirst("account_id")?.Value
+            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value
+            ?? User.FindFirst("role")?.Value;
+        var result = await _mediator.Send(new GetQuestionDetailQuery(questionId, accountId, role), cancellationToken);
 
         if (result.IsFailure)
         {
@@ -243,6 +247,9 @@ public class QuestionsController : ControllerBase
 
             if (result.Error == QuestionBankErrors.QuestionUpdateForbidden)
                 return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(result.Error!));
+
+            if (result.Error == QuestionBankErrors.ReportIncidentRequiresResolution)
+                return Conflict(new ApiErrorResponse(result.Error!));
 
             return BadRequest(new ApiErrorResponse(result.Error!));
         }

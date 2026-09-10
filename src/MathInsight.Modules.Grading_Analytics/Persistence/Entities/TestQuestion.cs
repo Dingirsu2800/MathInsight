@@ -21,6 +21,9 @@ public class TestQuestion
     /// <summary>AllOrNothing | TieredTrueFalse | WeightedParts — scoring rule at generation time.</summary>
     public string? ScoringRuleSnapshot { get; set; }
 
+    /// <summary>Version of the grading policy captured when the test was generated.</summary>
+    public int GradingPolicyVersion { get; set; } = 1;
+
     /// <summary>True when the question has been confirmed as erroneous after a report.</summary>
     public bool IsScoreInvalidated { get; set; }
 

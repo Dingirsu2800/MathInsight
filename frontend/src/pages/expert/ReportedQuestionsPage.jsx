@@ -223,7 +223,7 @@ export default function ReportedQuestionsPage() {
                             </button>
                             {hasPendingOrPendingFix ? (
                               <button
-                                onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported`)}
+                                onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported&incidentId=${encodeURIComponent(q.incidentId || "")}`)}
                                 className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
                                 aria-label="Xử lý báo cáo"
                                 title="Xử lý báo cáo"
@@ -232,7 +232,7 @@ export default function ReportedQuestionsPage() {
                               </button>
                             ) : (
                               <button
-                                onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported`)}
+                                onClick={() => navigate(`/expert/questions/${qId}/edit?from=reported&incidentId=${encodeURIComponent(q.incidentId || "")}`)}
                                 className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
                                 aria-label="Theo dõi trạng thái"
                                 title="Theo dõi trạng thái"
@@ -442,7 +442,7 @@ export default function ReportedQuestionsPage() {
                 <Button
                   onClick={() => {
                     setIsPreviewOpen(false);
-                    navigate(`/expert/questions/${selectedQuestion.questionId}/edit?from=reported`);
+                    navigate(`/expert/questions/${selectedQuestion.questionId}/edit?from=reported&incidentId=${encodeURIComponent(selectedQuestion.incidentId || "")}`);
                   }}
                   disabled={detailsLoading}
                   className="normal-case h-9 text-xs"

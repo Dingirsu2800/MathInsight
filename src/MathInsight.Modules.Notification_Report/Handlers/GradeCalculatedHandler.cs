@@ -16,11 +16,21 @@ public sealed class GradeCalculatedHandler : INotificationHandler<GradeCalculate
 
     public Task Handle(GradeCalculatedEvent notification, CancellationToken cancellationToken)
     {
+        var isAdjustment = string.Equals(
+            notification.Cause,
+            GradeCalculatedEvent.ScoreAdjustmentCause,
+            StringComparison.Ordinal);
+
         return _notificationService.SendAsync(
             notification.StudentId,
-            "Test Graded",
-            $"Your test has been graded: {notification.Score:0.##}/10.",
+            isAdjustment ? "Score Adjusted" : "Test Graded",
+            isAdjustment
+                ? $"Your score was adjusted: {notification.Score:0.##}/10."
+                : $"Your test has been graded: {notification.Score:0.##}/10.",
             $"/student/test-result/{notification.SessionId}",
-            cancellationToken);
+            cancellationToken,
+            isAdjustment
+                ? $"score-adjustment:{notification.IncidentId ?? notification.ReportId}:{notification.SessionId}:{notification.GradeRevision}"
+                : null);
     }
 }

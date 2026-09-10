@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
@@ -6,6 +7,7 @@ import { questionBankApi } from "../../services/questionBankApi";
 import AdminLayout from "./AdminLayout";
 import DashboardPageHeader from "../../components/layout/DashboardPageHeader";
 import LatexPreview from "../../components/expert/LatexPreview";
+import { compareVersions, displayComparableValue } from "./questionIncidentDiff";
 
 const REPORT_STATUS_LABELS = {
   Pending: "Chờ xử lý",
@@ -32,7 +34,79 @@ function formatDate(value) {
   }
 }
 
+function DiffSegments({ segments }) {
+  return (
+    <span className="whitespace-pre-wrap">
+      {segments.map((segment, index) => (
+        <span
+          key={`${segment.type}-${index}`}
+          className={segment.type === "added"
+            ? "bg-emerald-success/20 text-emerald-700 px-0.5"
+            : segment.type === "removed"
+              ? "bg-error/15 text-error line-through px-0.5"
+              : ""}
+        >
+          {segment.value}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function DiffField({ field }) {
+  return (
+    <div className="rounded-lg border border-whisper-border p-3">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="font-bold text-on-surface-variant">{field.label}</div>
+        <Badge variant={field.status === "changed" ? "warning" : field.status === "missing" ? "secondary" : "success"}>
+          {field.status === "changed" ? "Đã thay đổi" : field.status === "missing" ? "Thiếu dữ liệu" : "Không thay đổi"}
+        </Badge>
+      </div>
+      {field.status === "missing" ? (
+        <span className="text-on-surface-variant">Không có dữ liệu để so sánh</span>
+      ) : (
+        <DiffSegments segments={field.segments} />
+      )}
+    </div>
+  );
+}
+
+function ItemDiffList({ title, comparison }) {
+  return (
+    <div className="rounded-lg border border-whisper-border p-3">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="font-bold text-on-surface-variant">{title}</div>
+        <Badge variant={comparison.status === "missing" ? "secondary" : comparison.status === "changed" ? "warning" : "success"}>
+          {comparison.status === "missing" ? "Thiếu dữ liệu" : comparison.status === "changed" ? "Có thay đổi" : "Không thay đổi"}
+        </Badge>
+      </div>
+      {comparison.status === "missing" ? (
+        <span className="text-on-surface-variant">Không có dữ liệu để so sánh</span>
+      ) : (
+        <div className="space-y-2">
+          {comparison.items.map((item, index) => (
+            <div key={item.id} className="rounded-md bg-surface-container-low p-2 text-xs">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-semibold">{item.edited?.answerContent || item.edited?.partLabel || item.original?.answerContent || item.original?.partLabel || `Mục ${index + 1}`}</span>
+                <span className={item.status === "added" ? "text-emerald-700" : item.status === "removed" ? "text-error line-through" : item.status === "changed" ? "text-amber-700" : "text-on-surface-variant"}>
+                  {item.status === "added" ? "Đã thêm" : item.status === "removed" ? "Đã xóa" : item.status === "changed" ? "Đã sửa" : "Không thay đổi"}
+                </span>
+              </div>
+              {item.status === "added" && <span className="text-emerald-700">+ {item.edited?.answerContent || item.edited?.partContent}</span>}
+              {item.status === "removed" && <span className="text-error line-through">- {item.original?.answerContent || item.original?.partContent}</span>}
+              {item.status === "changed" && item.content && <DiffSegments segments={item.content.segments} />}
+              {item.status === "changed" && item.secondaryChanged && <div className="mt-1 text-amber-700">Đáp án đúng hoặc thuộc tính phụ đã thay đổi.</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function QuestionReportsPage() {
+  const [searchParams] = useSearchParams();
+  const incidentIdFromLink = searchParams.get("incidentId");
   const [reports, setReports] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -41,6 +115,9 @@ export default function QuestionReportsPage() {
   const [totalCount, setTotalCount] = React.useState(0);
   const [totalPages, setTotalPages] = React.useState(1);
   const [selectedReport, setSelectedReport] = React.useState(null);
+  const [incidentDetail, setIncidentDetail] = React.useState(null);
+  const [incidentOpen, setIncidentOpen] = React.useState(false);
+  const [incidentLoading, setIncidentLoading] = React.useState(false);
   const [rejectNote, setRejectNote] = React.useState("");
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
@@ -73,17 +150,59 @@ export default function QuestionReportsPage() {
     fetchReports();
   }, [fetchReports]);
 
+  React.useEffect(() => {
+    if (!incidentIdFromLink || loading || selectedReport) return;
+    const report = reports.find((item) => item.incidentId === incidentIdFromLink);
+    if (report) openIncidentReview(report);
+    else {
+      setSelectedReport({ incidentId: incidentIdFromLink, reportId: null });
+      setIncidentDetail(null);
+      setActionError("");
+      setIncidentLoading(true);
+      setIncidentOpen(true);
+      questionBankApi.getQuestionReportIncident(incidentIdFromLink)
+        .then((response) => setIncidentDetail(response.data || null))
+        .catch((err) => setActionError(err.response?.data?.message || err.message || "Không thể tải chi tiết sự cố để xét duyệt."))
+        .finally(() => setIncidentLoading(false));
+    }
+  }, [incidentIdFromLink, loading, reports, selectedReport]);
+
   const handleApprove = async (report) => {
     setActionLoading(true);
     setActionError("");
     try {
       await questionBankApi.approveAdminQuestionReport(report.reportId);
+      setIncidentOpen(false);
+      setIncidentDetail(null);
+      setSelectedReport(null);
       await fetchReports();
     } catch (err) {
       console.error(err);
       setActionError(err.response?.data?.message || err.message || "Phê duyệt báo cáo thất bại.");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const openIncidentReview = async (report) => {
+    if (!report.incidentId) {
+      setActionError("Báo cáo này chưa có dữ liệu sự cố để xét duyệt. Hãy tải lại danh sách hoặc liên hệ quản trị hệ thống.");
+      return;
+    }
+
+    setSelectedReport(report);
+    setIncidentDetail(null);
+    setActionError("");
+    setIncidentLoading(true);
+    setIncidentOpen(true);
+    try {
+      const response = await questionBankApi.getQuestionReportIncident(report.incidentId);
+      setIncidentDetail(response.data || null);
+    } catch (err) {
+      console.error(err);
+      setActionError(err.response?.data?.message || err.message || "Không thể tải chi tiết sự cố để xét duyệt.");
+    } finally {
+      setIncidentLoading(false);
     }
   };
 
@@ -200,24 +319,21 @@ export default function QuestionReportsPage() {
                             variant="outline"
                             size="sm"
                             className="normal-case h-8 text-xs border-emerald-success text-emerald-success hover:bg-emerald-success/5"
-                            onClick={() => handleApprove(report)}
+                            onClick={() => openIncidentReview(report)}
                             disabled={actionLoading}
                           >
-                            Phê duyệt
+                            Xem và duyệt
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             className="normal-case h-8 text-xs border-error text-error hover:bg-error/5"
                             onClick={() => {
-                              setSelectedReport(report);
-                              setRejectNote("");
-                              setActionError("");
-                              setRejectOpen(true);
+                              openIncidentReview(report);
                             }}
                             disabled={actionLoading}
                           >
-                            Từ chối
+                            Xem để từ chối
                           </Button>
                         </div>
                       </td>
@@ -256,6 +372,132 @@ export default function QuestionReportsPage() {
           </div>
         </div>
       </div>
+
+      <Dialog
+        isOpen={incidentOpen}
+        onClose={() => {
+          if (!actionLoading) {
+            setIncidentOpen(false);
+            setIncidentDetail(null);
+            setActionError("");
+          }
+        }}
+        variant="modal"
+        isCloseDisabled={actionLoading}
+      >
+        <DialogHeader>
+          <DialogTitle>Xét duyệt xử lý sự cố</DialogTitle>
+          <DialogDescription>
+            Kiểm tra phiên bản sửa, phương án điểm và quyết định của từng báo cáo trước khi phê duyệt.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent className="space-y-4">
+          {actionError && (
+            <div className="p-3 text-xs font-bold text-error bg-error/5 border border-error/15 rounded-xl leading-relaxed">
+              {actionError}
+            </div>
+          )}
+          {incidentLoading ? (
+            <div className="py-8 text-center text-sm text-on-surface-variant">Đang tải chi tiết sự cố...</div>
+          ) : incidentDetail ? (
+            <>
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+                <div>
+                  <div className="font-bold text-primary">So sánh thay đổi</div>
+                  <p className="text-xs text-on-surface-variant mt-1">Màu xanh là phần được thêm, màu đỏ gạch ngang là phần bị xóa.</p>
+                </div>
+                {incidentDetail.submittedCorrectionVersion ? (
+                  (() => {
+                    const comparison = compareVersions(incidentDetail.originalVersion, incidentDetail.submittedCorrectionVersion);
+                    return (
+                      <div className="space-y-2">
+                        {comparison.textFields.map((field) => <DiffField key={field.key} field={field} />)}
+                        <ItemDiffList title="Đáp án / lựa chọn" comparison={comparison.options} />
+                        <ItemDiffList title="Các phần và lời giải chi tiết" comparison={comparison.parts} />
+                        <div className="rounded-lg border border-whisper-border p-3">
+                          <div className="font-bold text-on-surface-variant mb-2">Thông tin phân loại</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {comparison.metadataFields.map((field) => (
+                              <div key={field.key} className="rounded-md bg-surface-container-low p-2">
+                                <div className="font-semibold">{field.label}</div>
+                                <div className={field.status === "changed" ? "text-amber-700" : "text-on-surface-variant"}>
+                                  {field.status === "missing" ? "Không có dữ liệu để so sánh" : field.status === "unchanged" ? "Không thay đổi" : `${displayComparableValue(field.original)} → ${displayComparableValue(field.edited)}`}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <span className="text-on-surface-variant">Không có dữ liệu để so sánh</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-3 text-xs">
+                <div className="rounded-lg border border-whisper-border p-3">
+                  <div className="font-bold text-on-surface-variant mb-1">Phiên bản gốc</div>
+                  <LatexPreview content={incidentDetail.originalVersion?.questionContent ?? "Không có dữ liệu để so sánh"} />
+                </div>
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <div className="font-bold text-primary mb-1">Phiên bản đã sửa</div>
+                  {incidentDetail.submittedCorrectionVersion ? (
+                            <LatexPreview content={incidentDetail.submittedCorrectionVersion.questionContent ?? "Không có dữ liệu để so sánh"} />
+                  ) : (
+                    <span className="text-on-surface-variant">Không thay đổi phiên bản câu hỏi.</span>
+                  )}
+                </div>
+                <div className="rounded-lg border border-whisper-border p-3">
+                  <div className="font-bold text-on-surface-variant mb-1">Phương án điểm</div>
+                  <span>{incidentDetail.proposedResolutionAction === "InvalidateAndAwardFull"
+                    ? "Vô hiệu câu hỏi và cộng đủ điểm"
+                    : "Không điều chỉnh điểm"}</span>
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-sm text-on-surface mb-2">Quyết định theo từng báo cáo</div>
+                <div className="space-y-2">
+                  {(incidentDetail.reports || []).map((report) => (
+                    <div key={report.reportId} className="rounded-lg border border-whisper-border p-3 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold">{report.reporterRole || "Người báo cáo"}</span>
+                        <Badge variant={report.proposedStatus === "Resolved" ? "success" : "secondary"}>
+                          {report.proposedStatus === "Resolved" ? "Chấp nhận báo cáo" : "Không chấp nhận báo cáo"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-on-surface-variant">{report.reportReason || "-"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="py-8 text-center text-sm text-error">Không có dữ liệu sự cố để xét duyệt.</div>
+          )}
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIncidentOpen(false)} disabled={actionLoading}>Hủy</Button>
+          <Button
+            variant="outline"
+            className="normal-case border-error text-error hover:bg-error/5"
+            disabled={actionLoading || !incidentDetail || !selectedReport?.reportId}
+            onClick={() => {
+              setIncidentOpen(false);
+              setRejectNote("");
+              setRejectOpen(true);
+            }}
+          >
+            Từ chối
+          </Button>
+          <Button
+            className="normal-case"
+            disabled={actionLoading || !incidentDetail || !selectedReport?.reportId}
+            onClick={() => handleApprove(selectedReport)}
+          >
+            {actionLoading ? "Đang phê duyệt..." : "Phê duyệt"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       <Dialog isOpen={rejectOpen} onClose={() => setRejectOpen(false)} variant="modal">
         <DialogHeader>

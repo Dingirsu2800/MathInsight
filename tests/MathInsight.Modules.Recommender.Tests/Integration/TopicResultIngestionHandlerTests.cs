@@ -425,6 +425,53 @@ public class TopicResultIngestionHandlerTests : IDisposable
         Assert.Equal(0, mastery.SeriesAnswerCount);
     }
 
+    [Fact]
+    public async Task Handle_ReplayedScoreAdjustmentRevision_DoesNotApplyTheReplacementTwice()
+    {
+        var studentId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var original = MakePracticeEvent(studentId, sessionId, tagId, isCorrect: true, difficultyLevel: 2);
+        await _handler.Handle(original, default);
+
+        var adjusted = original with
+        {
+            GradeRevision = 2,
+            GradedAt = DateTime.UtcNow.AddMinutes(1),
+            Answers = original.Answers.Select(answer => answer with
+            {
+                IsCorrect = true,
+                MachineIsCorrect = true,
+                IsScoreInvalidated = true
+            }).ToList(),
+            PerTagResults =
+            [
+                new TopicGradeResult
+                {
+                    TagId = tagId.ToString(),
+                    TopicScore = 0m,
+                    CorrectItems = 0m,
+                    TotalItems = 0m,
+                    EarnedPoints = 0m,
+                    MaxPoints = 0m
+                }
+            ]
+        };
+        await _handler.Handle(adjusted, default);
+        var afterFirstDelivery = await _db.TagsMasteries.SingleAsync();
+        var expectedPracticePoint = afterFirstDelivery.PracticePoint;
+        var expectedNumberDone = afterFirstDelivery.NumberDone;
+        var expectedSeriesCount = afterFirstDelivery.SeriesAnswerCount;
+
+        await _handler.Handle(adjusted, default);
+        var afterReplay = await _db.TagsMasteries.SingleAsync();
+
+        Assert.Equal(expectedPracticePoint, afterReplay.PracticePoint);
+        Assert.Equal(expectedNumberDone, afterReplay.NumberDone);
+        Assert.Equal(expectedSeriesCount, afterReplay.SeriesAnswerCount);
+        Assert.Equal(2, (await _db.StudentTopicSessionResults.SingleAsync()).GradeRevision);
+    }
+
     // ── Test: Lecture/material recommendations prioritize remedial weak topics ─
 
     [Fact]

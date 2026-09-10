@@ -62,8 +62,8 @@ export function toFieldKey(pascalKey) {
 export const VALIDATION_FIELD_MESSAGES = {
   firstName: "Vui lòng nhập tên (tối đa 50 ký tự).",
   lastName: "Vui lòng nhập họ và tên đệm (tối đa 50 ký tự).",
-  phoneNumber: "Số điện thoại không hợp lệ (tối đa 20 ký tự).",
-  dateOfBirth: "Ngày sinh không hợp lệ.",
+  phoneNumber: "Số điện thoại không hợp lệ.",
+  dateOfBirth: "Ngày sinh không được lớn hơn ngày hiện tại.",
   gender: "Giới tính không hợp lệ.",
   school: "Tên trường không hợp lệ (tối đa 100 ký tự).",
   currentGrade: "Khối lớp phải từ 10 đến 12.",
@@ -74,6 +74,12 @@ export const VALIDATION_FIELD_MESSAGES = {
   currentPassword: "Vui lòng nhập mật khẩu hiện tại.",
   newPassword: PASSWORD_POLICY_HINT,
 };
+
+const PROFILE_FIELD_VALIDATION_MESSAGES = [
+  "Số điện thoại không hợp lệ.",
+  "Ngày sinh không được lớn hơn ngày hiện tại.",
+  "Ngày sinh không phù hợp với độ tuổi học sinh THPT.",
+];
 
 // Shown when the backend rejects a field we have no specific Vietnamese copy for. Never
 // falls through to the backend's English text.
@@ -92,7 +98,13 @@ export function mapValidationErrors(err) {
   const mapped = {};
   Object.keys(backendErrors).forEach((key) => {
     const field = toFieldKey(key);
-    mapped[field] = VALIDATION_FIELD_MESSAGES[field] || GENERIC_VALIDATION_ERROR;
+    const rawMessages = Array.isArray(backendErrors[key]) ? backendErrors[key] : [backendErrors[key]];
+    const preferredMessage = rawMessages
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .find((value) => PROFILE_FIELD_VALIDATION_MESSAGES.includes(value));
+
+    mapped[field] = preferredMessage || VALIDATION_FIELD_MESSAGES[field] || GENERIC_VALIDATION_ERROR;
   });
   return mapped;
 }

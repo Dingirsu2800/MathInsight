@@ -60,6 +60,7 @@ public sealed class HandleQuestionReportCommandHandler
 
         var report = await _context.QuestionReports
             .Include(item => item.Question)
+            .Include(item => item.Incident)
             .FirstOrDefaultAsync(item => item.ReportId == command.ReportId, cancellationToken);
 
         if (report is null)
@@ -68,11 +69,31 @@ public sealed class HandleQuestionReportCommandHandler
         if (!string.Equals(report.Question.ExpertId, command.ExpertAccountId, StringComparison.OrdinalIgnoreCase))
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAccessForbidden);
 
+        if (!string.IsNullOrWhiteSpace(report.IncidentId))
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportIncidentSubmissionRequired);
+
         if (report.ReporterRole == "Admin")
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
+
+        if (report.Incident?.RequiresAdminReview == true)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.AdminReportRequiresReview);
 
         if (report.Status != QuestionReportWorkflow.Pending)
             return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReportAlreadyHandled);
+
+        var trimmedReviewNote = command.Request.ReviewNote?.Trim();
+        if (targetStatus == "Dismissed")
+        {
+            if (string.IsNullOrWhiteSpace(trimmedReviewNote))
+                return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteRequired);
+
+            if (trimmedReviewNote.Length > 2000)
+                return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteTooLong);
+        }
+        else if (trimmedReviewNote?.Length > 2000)
+        {
+            return Result<QuestionReportResponse>.Failure(QuestionBankErrors.ReviewNoteTooLong);
+        }
 
         if (resolutionAction == "InvalidateAndAwardFull")
         {
@@ -105,20 +126,45 @@ public sealed class HandleQuestionReportCommandHandler
         report.ResolutionAction = resolutionAction;
         report.ResolvedTime = DateTime.UtcNow;
         report.ResolvedBy = command.ExpertAccountId;
+        if (targetStatus == "Dismissed")
+        {
+            report.ReviewNote = trimmedReviewNote;
+        }
+        else if (!string.IsNullOrWhiteSpace(trimmedReviewNote))
+        {
+            report.ReviewNote = trimmedReviewNote;
+        }
 
+        var hasIncident = !string.IsNullOrWhiteSpace(report.IncidentId);
         var otherBlockingReportsRemain = await _context.QuestionReports.AnyAsync(
-            item => item.QuestionId == report.QuestionId &&
+            item => (!hasIncident
+                        ? item.QuestionId == report.QuestionId
+                        : item.IncidentId == report.IncidentId) &&
                     item.ReportId != report.ReportId &&
-                    ((item.ReporterRole == "Expert" && item.Status == QuestionReportWorkflow.Pending) ||
-                     (item.ReporterRole == "Admin" &&
-                      (item.Status == QuestionReportWorkflow.PendingFix ||
-                       item.Status == QuestionReportWorkflow.PendingReview))),
+                    (item.Status == QuestionReportWorkflow.Pending ||
+                     item.Status == QuestionReportWorkflow.PendingFix ||
+                     item.Status == QuestionReportWorkflow.PendingReview) &&
+                    (hasIncident || item.ReporterRole == "Expert" || item.ReporterRole == "Admin"),
             cancellationToken);
 
         if (!otherBlockingReportsRemain && report.Question.Status == "Reported")
         {
             report.Question.Status = "Approved";
             report.Question.UpdatedTime = report.ResolvedTime.Value;
+        }
+
+        if (report.Incident is not null && !otherBlockingReportsRemain)
+        {
+            report.Incident.Status = resolutionAction == "InvalidateAndAwardFull"
+                ? "AdjustmentPending"
+                : "Closed";
+            report.Incident.ProposedResolutionAction = resolutionAction;
+            report.Incident.ApprovedResolutionAction = resolutionAction;
+            report.Incident.AdjustmentStatus = resolutionAction == "InvalidateAndAwardFull"
+                ? "Pending"
+                : "NotRequired";
+            report.Incident.Revision++;
+            report.Incident.UpdatedTime = report.ResolvedTime;
         }
 
         await _context.SaveChangesAsync(cancellationToken);

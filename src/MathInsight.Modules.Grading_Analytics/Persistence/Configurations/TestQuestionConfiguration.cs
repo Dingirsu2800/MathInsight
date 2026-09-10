@@ -18,6 +18,7 @@ public class TestQuestionConfiguration : IEntityTypeConfiguration<TestQuestion>
         builder.Property(x => x.WeightSnapshot).HasColumnName("WeightSnapshot").HasPrecision(4, 2);
         builder.Property(x => x.MaxPointsSnapshot).HasColumnName("MaxPointsSnapshot").HasPrecision(5, 2);
         builder.Property(x => x.ScoringRuleSnapshot).HasColumnName("ScoringRuleSnapshot").HasMaxLength(30);
+        builder.Property(x => x.GradingPolicyVersion).HasColumnName("GradingPolicyVersion");
         builder.Property(x => x.IsScoreInvalidated).HasColumnName("IsScoreInvalidated");
         builder.Property(x => x.InvalidatedByReportId).HasColumnName("InvalidatedByReportID").HasMaxLength(36).IsUnicode(false);
 

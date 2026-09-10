@@ -1,10 +1,9 @@
 using System.Data;
 using MathInsight.Modules.QuestionBank.Commands.Common;
 using MathInsight.Modules.QuestionBank.Contracts.Questions;
-using MathInsight.Modules.QuestionBank.Entities;
 using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
-using MathInsight.Modules.QuestionBank.Validation;
+using MathInsight.Modules.QuestionBank.Services;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -12,318 +11,43 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MathInsight.Modules.QuestionBank.Commands.UpdateQuestion;
 
-public sealed class UpdateQuestionCommandHandler
-    : IRequestHandler<UpdateQuestionCommand, Result<UpdateQuestionResponse>>
+public sealed class UpdateQuestionCommandHandler : IRequestHandler<UpdateQuestionCommand, Result<UpdateQuestionResponse>>
 {
     private readonly QuestionBankDbContext _context;
+    private readonly QuestionMutationService _mutationService;
 
     public UpdateQuestionCommandHandler(QuestionBankDbContext context)
     {
         _context = context;
+        _mutationService = new QuestionMutationService(context);
     }
 
-    public async Task<Result<UpdateQuestionResponse>> Handle(
-        UpdateQuestionCommand command,
-        CancellationToken cancellationToken)
+    public async Task<Result<UpdateQuestionResponse>> Handle(UpdateQuestionCommand command, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(command.QuestionId))
             return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionIdRequired);
 
-        var request = command.Request;
-        var validationError = QuestionRequestValidator.Validate(
-            ToCreateQuestionRequest(request),
-            out var dbQuestionType);
-        if (validationError is not null)
-            return Result<UpdateQuestionResponse>.Failure(validationError);
-
-        // The configured strategy executes once; no automatic retry may replay this versioned mutation.
         return await _context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-        await using IDbContextTransaction? transaction = _context.Database.IsRelational()
-            ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-            : null;
+            await using IDbContextTransaction? transaction = _context.Database.IsRelational()
+                ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                : null;
 
-        var question = await _context.Questions
-            .Include(question => question.Answers.Where(answer => !answer.IsArchived))
-            .Include(question => question.Parts.Where(part => !part.IsArchived))
-            .Include(question => question.QuestionTopics)
-                .ThenInclude(topic => topic.Tag)
-            .FirstOrDefaultAsync(
-                question => question.QuestionId == command.QuestionId,
-                cancellationToken);
+            if (transaction is not null && QuestionReportSqlServerLock.IsSupported(_context))
+                await QuestionReportSqlServerLock.LockQuestionAsync(_context, command.QuestionId, cancellationToken);
 
-        if (question is null)
-            return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionNotFound);
+            var mutation = await _mutationService.ApplyAsync(command.QuestionId, command.Request, command.ExpertId, cancellationToken);
+            if (mutation.IsFailure)
+                return Result<UpdateQuestionResponse>.Failure(mutation.Error!);
 
-        if (!string.Equals(question.ExpertId, command.ExpertId, StringComparison.OrdinalIgnoreCase))
-            return Result<UpdateQuestionResponse>.Failure(QuestionBankErrors.QuestionUpdateForbidden);
+            await _context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
 
-        var referenceValidationError = await QuestionReferenceValidator.ValidateAsync(
-            _context,
-            ToCreateQuestionRequest(request),
-            cancellationToken);
-        if (referenceValidationError is not null)
-            return Result<UpdateQuestionResponse>.Failure(referenceValidationError);
-
-        var oldTopics = question.QuestionTopics.ToList();
-        var oldAnswers = question.Answers.ToList();
-        var oldParts = question.Parts.ToList();
-
-        _context.QuestionTopics.RemoveRange(oldTopics);
-        foreach (var answer in oldAnswers)
-            answer.IsArchived = true;
-        foreach (var part in oldParts)
-            part.IsArchived = true;
-
-        question.QuestionTopics.Clear();
-
-        question.QuestionContent = request.QuestionContent;
-        question.SolutionContent = request.SolutionContent;
-        question.PictureUrl = request.PictureUrl;
-        question.DifficultyId = request.DifficultyId;
-        question.Grade = request.Grade;
-        question.QuestionType = dbQuestionType!;
-        question.DefaultWeight = request.DefaultWeight;
-        question.UpdatedTime = DateTime.UtcNow;
-
-        foreach (var topic in request.Topics)
-        {
-            question.QuestionTopics.Add(new QuestionTopic
-            {
-                QuestionTopicId = Guid.NewGuid().ToString(),
-                QuestionId = question.QuestionId,
-                TagId = topic.TagId,
-                IsPrimary = topic.IsPrimary
-            });
-        }
-
-        if (dbQuestionType == "Composite")
-        {
-            foreach (var part in request.Parts)
-            {
-                question.Parts.Add(new QuestionPart
-                {
-                    PartId = Guid.NewGuid().ToString(),
-                    QuestionId = question.QuestionId,
-                    PartOrder = part.PartOrder,
-                    PartLabel = part.PartLabel,
-                    PartContent = part.PartContent,
-                    PartType = MapPartType(part.PartType)!,
-                    CorrectBoolean = part.CorrectBoolean,
-                    CorrectText = part.CorrectText,
-                    CorrectNumeric = part.CorrectNumeric,
-                    NumericTolerance = part.NumericTolerance,
-                    Explanation = part.Explanation,
-                    DefaultWeight = part.DefaultWeight,
-                    IsArchived = false
-                });
-            }
-        }
-        else
-        {
-            foreach (var answer in request.Answers)
-            {
-                question.Answers.Add(new Answer
-                {
-                    AnswerId = Guid.NewGuid().ToString(),
-                    QuestionId = question.QuestionId,
-                    AnswerContent = answer.AnswerContent,
-                    IsCorrect = answer.IsCorrect,
-                    IsArchived = false
-                });
-            }
-        }
-
-        var nextVersionNumber = await _context.QuestionVersions
-            .Where(version => version.QuestionId == question.QuestionId)
-            .Select(version => (int?)version.VersionNumber)
-            .MaxAsync(cancellationToken) ?? 0;
-
-        _context.QuestionVersions.Add(
-            QuestionVersionSnapshotFactory.Create(
-                question,
-                command.ExpertId,
-                nextVersionNumber + 1,
-                question.UpdatedTime));
-
-        await _context.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
-
-        return Result<UpdateQuestionResponse>.Success(
-            new UpdateQuestionResponse(question.QuestionId, question.Status, true));
+            return Result<UpdateQuestionResponse>.Success(new UpdateQuestionResponse(
+                mutation.Value!.Question.QuestionId,
+                mutation.Value.Question.Status,
+                true));
         });
-    }
-
-    private static CreateQuestionRequest ToCreateQuestionRequest(UpdateQuestionRequest request) => new()
-    {
-        QuestionContent = request.QuestionContent,
-        SolutionContent = request.SolutionContent,
-        PictureUrl = request.PictureUrl,
-        DifficultyId = request.DifficultyId,
-        Grade = request.Grade,
-        QuestionType = request.QuestionType,
-        DefaultWeight = request.DefaultWeight,
-        Topics = request.Topics,
-        Answers = request.Answers,
-        Parts = request.Parts
-    };
-
-    private static Error? ValidateRequest(UpdateQuestionRequest request, string dbQuestionType)
-    {
-        if (string.IsNullOrWhiteSpace(request.QuestionContent))
-            return QuestionBankErrors.QuestionContentRequired;
-
-        if (string.IsNullOrWhiteSpace(request.DifficultyId))
-            return QuestionBankErrors.QuestionDifficultyRequired;
-
-        if (request.Grade is not (10 or 11 or 12))
-            return QuestionBankErrors.QuestionGradeInvalid;
-
-        if (request.DefaultWeight <= 0m || request.DefaultWeight > 100m)
-            return QuestionBankErrors.QuestionDefaultWeightInvalid;
-
-        if (request.Topics is null || request.Topics.Count == 0)
-            return QuestionBankErrors.QuestionTopicRequired;
-
-        if (request.Topics.Any(topic => string.IsNullOrWhiteSpace(topic.TagId)))
-            return QuestionBankErrors.QuestionTopicRequired;
-
-        if (request.Topics.Count(topic => topic.IsPrimary) != 1)
-            return QuestionBankErrors.QuestionPrimaryTopicInvalid;
-
-        if (request.Topics
-            .GroupBy(topic => topic.TagId, StringComparer.OrdinalIgnoreCase)
-            .Any(group => group.Count() > 1))
-        {
-            return QuestionBankErrors.QuestionTopicDuplicate;
-        }
-
-        if (dbQuestionType == "Composite")
-        {
-            if (request.Parts is null || request.Parts.Count == 0)
-                return QuestionBankErrors.QuestionPartRequired;
-
-            if (request.Parts.Any(part => string.IsNullOrWhiteSpace(part.PartContent)))
-                return QuestionBankErrors.QuestionPartContentRequired;
-
-            if (request.Parts.Any(part => part.PartOrder <= 0))
-                return QuestionBankErrors.QuestionPartOrderInvalid;
-
-            if (request.Parts
-                .GroupBy(part => part.PartOrder)
-                .Any(group => group.Count() > 1))
-            {
-                return QuestionBankErrors.QuestionPartOrderDuplicate;
-            }
-
-            if (request.Parts.Any(part => part.DefaultWeight <= 0m || part.DefaultWeight > 100m))
-                return QuestionBankErrors.QuestionPartDefaultWeightInvalid;
-
-            if (request.Parts.Any(part => part.NumericTolerance is < 0m))
-                return QuestionBankErrors.QuestionPartNumericToleranceInvalid;
-
-            foreach (var part in request.Parts)
-            {
-                var dbPartType = MapPartType(part.PartType);
-                if (dbPartType is null)
-                    return QuestionBankErrors.QuestionPartInvalidType;
-
-                if (dbPartType == "TrueFalse" &&
-                    (part.CorrectBoolean is null ||
-                     part.CorrectText is not null ||
-                     part.CorrectNumeric is not null ||
-                     part.NumericTolerance is not null))
-                {
-                    return QuestionBankErrors.QuestionTrueFalsePartAnswerInvalid;
-                }
-
-                if (dbPartType == "ShortAnswer" &&
-                    (part.CorrectBoolean is not null ||
-                     string.IsNullOrWhiteSpace(part.CorrectText) ||
-                     part.CorrectNumeric is not null ||
-                     part.NumericTolerance is not null))
-                {
-                    return QuestionBankErrors.QuestionShortAnswerPartAnswerInvalid;
-                }
-
-                if (dbPartType == "NumericAnswer" &&
-                    (part.CorrectBoolean is not null ||
-                     part.CorrectText is not null ||
-                     part.CorrectNumeric is null))
-                {
-                    return QuestionBankErrors.QuestionNumericAnswerPartAnswerInvalid;
-                }
-            }
-        }
-        else
-        {
-            if (request.Answers is null || request.Answers.Count == 0)
-                return QuestionBankErrors.QuestionAnswerRequired;
-
-            if (request.Answers.Any(answer => string.IsNullOrWhiteSpace(answer.AnswerContent)))
-                return QuestionBankErrors.QuestionAnswerContentRequired;
-        }
-
-        if (dbQuestionType != "Composite" && request.Parts is { Count: > 0 })
-            return QuestionBankErrors.QuestionPartNotAllowed;
-
-        if (dbQuestionType == "Composite" && request.Answers is { Count: > 0 })
-            return QuestionBankErrors.QuestionAnswerNotAllowed;
-
-        if (dbQuestionType == "SingleChoice" && request.Answers.Count(answer => answer.IsCorrect) != 1)
-            return QuestionBankErrors.QuestionSingleChoiceCorrectAnswerRequired;
-
-        if (dbQuestionType == "MultipleChoice" && !request.Answers.Any(answer => answer.IsCorrect))
-            return QuestionBankErrors.QuestionMultipleChoiceCorrectAnswerRequired;
-
-        if (dbQuestionType == "TrueFalse" && request.Answers.Count != 2)
-            return QuestionBankErrors.QuestionTrueFalseAnswerCountInvalid;
-
-        if (dbQuestionType == "TrueFalse" && request.Answers.Count(answer => answer.IsCorrect) != 1)
-            return QuestionBankErrors.QuestionTrueFalseCorrectAnswerRequired;
-
-        if (dbQuestionType == "ShortAnswer" && request.Answers.Count(answer => answer.IsCorrect) != 1)
-            return QuestionBankErrors.QuestionShortAnswerCorrectAnswerRequired;
-
-        return null;
-    }
-
-    private static string? MapQuestionType(string? questionType)
-    {
-        if (string.IsNullOrWhiteSpace(questionType))
-            return null;
-
-        return questionType.Trim().ToUpperInvariant() switch
-        {
-            "SINGLE_CHOICE" => "SingleChoice",
-            "SINGLECHOICE" => "SingleChoice",
-            "MULTIPLE_CHOICE" => "MultipleChoice",
-            "MULTIPLE_SELECT" => "MultipleChoice",
-            "MULTIPLECHOICE" => "MultipleChoice",
-            "TRUE_FALSE" => "TrueFalse",
-            "TRUEFALSE" => "TrueFalse",
-            "SHORT_ANSWER" => "ShortAnswer",
-            "SHORTANSWER" => "ShortAnswer",
-            "COMPOSITE" => "Composite",
-            _ => null
-        };
-    }
-
-    private static string? MapPartType(string? partType)
-    {
-        if (string.IsNullOrWhiteSpace(partType))
-            return null;
-
-        return partType.Trim().ToUpperInvariant() switch
-        {
-            "TRUE_FALSE" => "TrueFalse",
-            "TRUEFALSE" => "TrueFalse",
-            "SHORT_ANSWER" => "ShortAnswer",
-            "SHORTANSWER" => "ShortAnswer",
-            "NUMERIC_ANSWER" => "NumericAnswer",
-            "NUMERICANSWER" => "NumericAnswer",
-            _ => null
-        };
     }
 }

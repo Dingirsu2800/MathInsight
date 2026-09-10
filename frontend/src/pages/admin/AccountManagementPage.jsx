@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import { CustomSelect } from "../../components/ui/custom-select";
 import { adminApi } from "../../services/adminApi";
+import { validateProfileUpdate } from "../../components/profile/UserProfileForm";
 
 const CREATABLE_ROLES = [
   { value: "Student", label: "Học sinh" },
@@ -21,13 +22,23 @@ const ERROR_MESSAGES = {
   ROLE_NOT_FOUND: "Không tìm thấy vai trò đã chọn.",
   ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản.",
   CANNOT_DEACTIVATE_SELF: "Bạn không thể tự vô hiệu hóa chính tài khoản của mình.",
-  INVALID_EXCEL_FILE: "Tệp Excel không hợp lệ. Vui lòng dùng đúng file .xlsx theo mẫu."
+  INVALID_EXCEL_FILE: "Tệp Excel không hợp lệ. Vui lòng dùng đúng file .xlsx theo mẫu.",
+  PHONE_ALREADY_EXISTS: "Số điện thoại đã được sử dụng."
+};
+
+const ROLE_LABELS = {
+  Admin: "Quản trị viên",
+  Expert: "Chuyên gia",
+  Teacher: "Giáo viên",
+  Student: "Học sinh"
 };
 
 function resolveErrorMessage(err, fallback) {
   const data = err?.response?.data;
   if (data?.code && ERROR_MESSAGES[data.code]) return ERROR_MESSAGES[data.code];
-  return data?.message || err?.message || fallback;
+  if (!err?.response) return "Không thể kết nối tới máy chủ API. Vui lòng kiểm tra máy chủ và kết nối mạng.";
+  if (err.response.status >= 500) return "Máy chủ gặp lỗi khi xử lý yêu cầu. Vui lòng thử lại.";
+  return data?.message || fallback;
 }
 
 function formatDate(value) {
@@ -47,6 +58,7 @@ const emptyCreateForm = {
   lastName: "",
   phoneNumber: "",
   dateOfBirth: "",
+  currentGrade: "",
   roleName: "Student"
 };
 
@@ -77,6 +89,7 @@ export default function AccountManagementPage() {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [createForm, setCreateForm] = React.useState(emptyCreateForm);
   const [createError, setCreateError] = React.useState("");
+  const [createFieldErrors, setCreateFieldErrors] = React.useState({});
   const [createLoading, setCreateLoading] = React.useState(false);
 
   // Import modal
@@ -89,8 +102,9 @@ export default function AccountManagementPage() {
   // Edit modal
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState(null);
-  const [editForm, setEditForm] = React.useState({ firstName: "", lastName: "", email: "", roleId: "" });
+  const [editForm, setEditForm] = React.useState({ firstName: "", lastName: "", email: "", phoneNumber: "", dateOfBirth: "", currentGrade: "", roleId: "" });
   const [editError, setEditError] = React.useState("");
+  const [editFieldErrors, setEditFieldErrors] = React.useState({});
   const [editLoading, setEditLoading] = React.useState(false);
 
   // Deactivate confirm modal
@@ -154,6 +168,7 @@ export default function AccountManagementPage() {
   const openCreateModal = () => {
     setCreateForm(emptyCreateForm);
     setCreateError("");
+    setCreateFieldErrors({});
     setIsCreateOpen(true);
   };
 
@@ -168,9 +183,21 @@ export default function AccountManagementPage() {
       setCreateError(ERROR_MESSAGES.PASSWORD_TOO_SHORT);
       return;
     }
+    const profileErrors = validateProfileUpdate({
+      phoneNumber: createForm.phoneNumber,
+      dateOfBirth: createForm.dateOfBirth,
+      roleName: createForm.roleName,
+      currentGrade: createForm.currentGrade
+    });
+    if (Object.keys(profileErrors).length > 0) {
+      setCreateFieldErrors(profileErrors);
+      setCreateError("Vui lòng kiểm tra lại các thông tin được đánh dấu.");
+      return;
+    }
 
     setCreateLoading(true);
     setCreateError("");
+    setCreateFieldErrors({});
     try {
       await adminApi.createAccountManually({
         username: createForm.username.trim(),
@@ -180,6 +207,7 @@ export default function AccountManagementPage() {
         lastName: createForm.lastName.trim(),
         phoneNumber: createForm.phoneNumber.trim() || null,
         dateOfBirth: createForm.dateOfBirth || null,
+        currentGrade: createForm.currentGrade ? Number(createForm.currentGrade) : null,
         roleName: createForm.roleName
       });
       setIsCreateOpen(false);
@@ -206,6 +234,14 @@ export default function AccountManagementPage() {
       setImportError("Vui lòng chọn tệp .xlsx để nhập.");
       return;
     }
+    if (!importFile.name.toLowerCase().endsWith(".xlsx")) {
+      setImportError("Định dạng tệp không được hỗ trợ. Vui lòng chọn tệp .xlsx.");
+      return;
+    }
+    if (importFile.size > 10_000_000) {
+      setImportError("Tệp Excel vượt quá giới hạn 10 MB.");
+      return;
+    }
 
     setImportLoading(true);
     setImportError("");
@@ -228,9 +264,13 @@ export default function AccountManagementPage() {
       firstName: account.firstName,
       lastName: account.lastName,
       email: account.email,
+      phoneNumber: account.phoneNumber || "",
+      dateOfBirth: account.dateOfBirth ? String(account.dateOfBirth).slice(0, 10) : "",
+      currentGrade: account.currentGrade ? String(account.currentGrade) : "",
       roleId: account.roleId
     });
     setEditError("");
+    setEditFieldErrors({});
     setIsEditOpen(true);
   };
 
@@ -241,14 +281,29 @@ export default function AccountManagementPage() {
       setEditError("Vui lòng điền đầy đủ các trường bắt buộc.");
       return;
     }
+    const profileErrors = validateProfileUpdate({
+      phoneNumber: editForm.phoneNumber,
+      dateOfBirth: editForm.dateOfBirth,
+      roleName: editTarget.roleName,
+      currentGrade: editForm.currentGrade
+    });
+    if (Object.keys(profileErrors).length > 0) {
+      setEditFieldErrors(profileErrors);
+      setEditError("Vui lòng kiểm tra lại các thông tin được đánh dấu.");
+      return;
+    }
 
     setEditLoading(true);
     setEditError("");
+    setEditFieldErrors({});
     try {
       await adminApi.updateAccount(editTarget.accountId, {
         firstName: editForm.firstName.trim(),
         lastName: editForm.lastName.trim(),
         email: editForm.email.trim(),
+        phoneNumber: editForm.phoneNumber.trim() || null,
+        dateOfBirth: editForm.dateOfBirth || null,
+        currentGrade: editForm.currentGrade ? Number(editForm.currentGrade) : null,
         roleId: editForm.roleId
       });
       setIsEditOpen(false);
@@ -376,7 +431,7 @@ export default function AccountManagementPage() {
                 <tr className="text-on-surface-variant uppercase text-[11px] font-bold tracking-wider">
                   <th className="py-3 px-4">Tên đăng nhập</th>
                   <th className="py-3 px-4">Họ tên</th>
-                  <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4">Địa chỉ email</th>
                   <th className="py-3 px-4 w-32">Vai trò</th>
                   <th className="py-3 px-4 w-36">Trạng thái</th>
                   <th className="py-3 px-4 w-32">Ngày tạo</th>
@@ -409,7 +464,7 @@ export default function AccountManagementPage() {
                       <td className="py-3 px-4">{account.firstName} {account.lastName}</td>
                       <td className="py-3 px-4 text-on-surface-variant">{account.email}</td>
                       <td className="py-3 px-4">
-                        <Badge variant="outline">{account.roleName}</Badge>
+                        <Badge variant="outline">{ROLE_LABELS[account.roleName] || account.roleName}</Badge>
                       </td>
                       <td className="py-3 px-4">
                         <Badge variant={account.isActive ? "success" : "secondary"}>
@@ -524,6 +579,19 @@ export default function AccountManagementPage() {
               </div>
             </div>
 
+            {createForm.roleName === "Student" && (
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp</label>
+                <CustomSelect
+                  value={createForm.currentGrade || "NONE"}
+                  onValueChange={(val) => setCreateForm({ ...createForm, currentGrade: val === "NONE" ? "" : val })}
+                  items={[{ value: "NONE", label: "Chưa cập nhật" }, { value: "10", label: "Lớp 10" }, { value: "11", label: "Lớp 11" }, { value: "12", label: "Lớp 12" }]}
+                  disabled={createLoading}
+                />
+                {createFieldErrors.dateOfBirth && createForm.currentGrade && <p className="mt-1 text-xs text-error">{createFieldErrors.dateOfBirth}</p>}
+              </div>
+            )}
+
             <div>
               <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Tên đăng nhập <span className="text-error">*</span></label>
               <input
@@ -535,7 +603,7 @@ export default function AccountManagementPage() {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email <span className="text-error">*</span></label>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Địa chỉ email <span className="text-error">*</span></label>
               <input
                 type="email"
                 value={createForm.email}
@@ -565,6 +633,7 @@ export default function AccountManagementPage() {
                   className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
                   disabled={createLoading}
                 />
+                {createFieldErrors.phoneNumber && <p className="mt-1 text-xs text-error">{createFieldErrors.phoneNumber}</p>}
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Ngày sinh</label>
@@ -575,6 +644,7 @@ export default function AccountManagementPage() {
                   className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
                   disabled={createLoading}
                 />
+                {createFieldErrors.dateOfBirth && <p className="mt-1 text-xs text-error">{createFieldErrors.dateOfBirth}</p>}
               </div>
             </div>
 
@@ -604,7 +674,7 @@ export default function AccountManagementPage() {
         <DialogHeader>
           <DialogTitle>Nhập tài khoản từ Excel</DialogTitle>
           <DialogDescription>
-            Tệp .xlsx theo thứ tự cột: Username, Email, Password, FirstName, LastName, PhoneNumber, DateOfBirth (yyyy-MM-dd), Role (Student/Teacher/Expert).
+            Tệp .xlsx theo thứ tự cột: Tên đăng nhập, Email, Mật khẩu, Tên, Họ, Số điện thoại, Ngày sinh (yyyy-MM-dd), Vai trò (Học sinh/Giáo viên/Chuyên gia).
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleImportSubmit}>
@@ -652,8 +722,8 @@ export default function AccountManagementPage() {
                       <thead className="bg-surface-container-low">
                         <tr>
                           <th className="py-2 px-3">Dòng</th>
-                          <th className="py-2 px-3">Username</th>
-                          <th className="py-2 px-3">Email</th>
+                          <th className="py-2 px-3">Tên đăng nhập</th>
+                          <th className="py-2 px-3">Địa chỉ email</th>
                           <th className="py-2 px-3">Lý do</th>
                         </tr>
                       </thead>
@@ -716,6 +786,7 @@ export default function AccountManagementPage() {
                   className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
                   disabled={editLoading}
                 />
+                {editFieldErrors.phoneNumber && <p className="mt-1 text-xs text-error">{editFieldErrors.phoneNumber}</p>}
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Tên</label>
@@ -725,11 +796,49 @@ export default function AccountManagementPage() {
                   className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
                   disabled={editLoading}
                 />
+                {editFieldErrors.dateOfBirth && <p className="mt-1 text-xs text-error">{editFieldErrors.dateOfBirth}</p>}
+              </div>
+            </div>
+
+            {editTarget?.roleName === "Student" && (
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Khối lớp</label>
+                <CustomSelect
+                  value={editForm.currentGrade || "NONE"}
+                  onValueChange={(val) => setEditForm({ ...editForm, currentGrade: val === "NONE" ? "" : val })}
+                  items={[{ value: "NONE", label: "Chưa cập nhật" }, { value: "10", label: "Lớp 10" }, { value: "11", label: "Lớp 11" }, { value: "12", label: "Lớp 12" }]}
+                  disabled={editLoading}
+                />
+                {editFieldErrors.dateOfBirth && editForm.currentGrade && <p className="mt-1 text-xs text-error">{editFieldErrors.dateOfBirth}</p>}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Số điện thoại</label>
+                <input
+                  value={editForm.phoneNumber}
+                  onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })}
+                  className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
+                  disabled={editLoading}
+                />
+                {editFieldErrors.phoneNumber && <p className="mt-1 text-xs text-error">{editFieldErrors.phoneNumber}</p>}
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Ngày sinh</label>
+                <input
+                  type="date"
+                  value={editForm.dateOfBirth}
+                  onChange={(e) => setEditForm({ ...editForm, dateOfBirth: e.target.value })}
+                  className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
+                  disabled={editLoading}
+                />
+                {editFieldErrors.dateOfBirth && <p className="mt-1 text-xs text-error">{editFieldErrors.dateOfBirth}</p>}
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email</label>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Địa chỉ email</label>
               <input
                 type="email"
                 value={editForm.email}
@@ -744,7 +853,7 @@ export default function AccountManagementPage() {
               <CustomSelect
                 value={editForm.roleId}
                 onValueChange={(val) => setEditForm({ ...editForm, roleId: val })}
-                items={roles.map((r) => ({ value: r.roleId, label: r.roleName }))}
+                items={roles.map((r) => ({ value: r.roleId, label: ROLE_LABELS[r.roleName] || r.roleName }))}
                 disabled={editLoading}
               />
             </div>
