@@ -9,4 +9,7 @@ public sealed record UpdateAccountCommand(
     string FirstName,
     string LastName,
     string Email,
-    string RoleId) : IRequest<Result<AccountListItemResponse>>;
+    string RoleId,
+    string? PhoneNumber = null,
+    DateOnly? DateOfBirth = null,
+    int? CurrentGrade = null) : IRequest<Result<AccountListItemResponse>>;

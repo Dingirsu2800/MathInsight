@@ -187,7 +187,7 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
                         incident.AssignedAdminId,
                         "Cần duyệt xử lý báo cáo câu hỏi",
                         "Một bản sửa câu hỏi đã được gửi để bạn duyệt.",
-                        $"/admin/question-reports/{incident.IncidentId}",
+                        $"/admin/reports/questions?incidentId={incident.IncidentId}",
                         $"question-report:{incident.IncidentId}:submission:{incident.Revision}"), cancellationToken);
                 }
                 else

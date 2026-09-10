@@ -12,4 +12,5 @@ public sealed record ManualCreateAccountCommand(
     string LastName,
     string? PhoneNumber,
     DateOnly? DateOfBirth,
-    string RoleName) : IRequest<Result<AccountListItemResponse>>;
+    string RoleName,
+    int? CurrentGrade = null) : IRequest<Result<AccountListItemResponse>>;

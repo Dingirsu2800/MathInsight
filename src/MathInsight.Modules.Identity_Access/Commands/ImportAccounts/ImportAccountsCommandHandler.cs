@@ -1,5 +1,9 @@
 using ClosedXML.Excel;
+using System.Globalization;
+using System.Net.Mail;
+using System.Text.RegularExpressions;
 using MathInsight.Modules.Identity_Access.Contracts.Admin;
+using MathInsight.Modules.Identity_Access.Contracts.Auth;
 using MathInsight.Modules.Identity_Access.Entities;
 using MathInsight.Modules.Identity_Access.Errors;
 using MathInsight.Modules.Identity_Access.Persistence;
@@ -46,6 +50,10 @@ public class ImportAccountsCommandHandler
             if (worksheet is null)
                 return Result<ImportAccountsResponse>.Failure(IdentityErrors.InvalidExcelFile);
 
+            var expectedHeaders = new[] { "Username", "Email", "Password", "FirstName", "LastName", "PhoneNumber", "DateOfBirth", "Role" };
+            if (expectedHeaders.Select((header, index) => !string.Equals(worksheet.Cell(1, index + 1).GetString().Trim(), header, StringComparison.OrdinalIgnoreCase)).Any(isInvalid => isInvalid))
+                return Result<ImportAccountsResponse>.Failure(IdentityErrors.InvalidExcelFile);
+
             var roles = await _dbContext.Roles.ToListAsync(cancellationToken);
             var existingUsernames = new HashSet<string>(
                 await _dbContext.Accounts.Select(account => account.Username).ToListAsync(cancellationToken),
@@ -53,9 +61,13 @@ public class ImportAccountsCommandHandler
             var existingEmails = new HashSet<string>(
                 await _dbContext.Accounts.Select(account => account.Email).ToListAsync(cancellationToken),
                 StringComparer.OrdinalIgnoreCase);
+            var existingPhones = new HashSet<string>(
+                await _dbContext.Accounts.Where(account => account.PhoneNumber != null).Select(account => account.PhoneNumber!).ToListAsync(cancellationToken),
+                StringComparer.OrdinalIgnoreCase);
 
             var seenUsernames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenPhones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var skippedRows = new List<ImportRowResult>();
             var newAccounts = new List<Account>();
@@ -65,6 +77,8 @@ public class ImportAccountsCommandHandler
 
             var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
             var totalRows = Math.Max(0, lastRow - 1);
+            if (totalRows == 0)
+                return Result<ImportAccountsResponse>.Failure(IdentityErrors.InvalidExcelFile);
 
             for (var rowNumber = 2; rowNumber <= lastRow; rowNumber++)
             {
@@ -87,11 +101,15 @@ public class ImportAccountsCommandHandler
                     string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(firstName) ||
                     string.IsNullOrWhiteSpace(lastName) || string.IsNullOrWhiteSpace(roleName))
                 {
-                    reason = "Missing required field(s).";
+                    reason = "Thiếu trường bắt buộc.";
                 }
                 else if (password.Length < 8)
                 {
-                    reason = "Password must be at least 8 characters.";
+                    reason = "Mật khẩu phải có ít nhất 8 ký tự.";
+                }
+                else if (!MailAddress.TryCreate(email, out var parsedEmail) || !string.Equals(parsedEmail.Address, email, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "Email không hợp lệ.";
                 }
                 else if (!roles.Any(role =>
                              string.Equals(role.RoleName, roleName, StringComparison.OrdinalIgnoreCase) &&
@@ -99,15 +117,29 @@ public class ImportAccountsCommandHandler
                               role.RoleName.Equals("Teacher", StringComparison.OrdinalIgnoreCase) ||
                               role.RoleName.Equals("Expert", StringComparison.OrdinalIgnoreCase))))
                 {
-                    reason = "Role must be one of: Student, Teacher, Expert.";
+                    reason = "Vai trò phải là Học sinh, Giáo viên hoặc Chuyên gia.";
                 }
                 else if (existingUsernames.Contains(username) || !seenUsernames.Add(username))
                 {
-                    reason = "Username already exists.";
+                    reason = "Tên đăng nhập đã tồn tại.";
                 }
                 else if (existingEmails.Contains(email) || !seenEmails.Add(email))
                 {
-                    reason = "Email already exists.";
+                    reason = "Email đã tồn tại.";
+                }
+                else if (!string.IsNullOrWhiteSpace(phoneNumber) && !Regex.IsMatch(phoneNumber, AuthValidation.PhoneNumberPattern))
+                {
+                    reason = "Số điện thoại không hợp lệ.";
+                }
+                else if (!string.IsNullOrWhiteSpace(phoneNumber) && (existingPhones.Contains(phoneNumber) || !seenPhones.Add(phoneNumber)))
+                {
+                    reason = "Số điện thoại đã tồn tại.";
+                }
+                else if (!string.IsNullOrWhiteSpace(dateOfBirthRaw) &&
+                         (!DateOnly.TryParseExact(dateOfBirthRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateOfBirth) ||
+                          parsedDateOfBirth > DateOnly.FromDateTime(DateTime.Today)))
+                {
+                    reason = "Ngày sinh không hợp lệ hoặc lớn hơn ngày hiện tại.";
                 }
 
                 if (reason is not null)
@@ -116,9 +148,9 @@ public class ImportAccountsCommandHandler
                     continue;
                 }
 
-                DateOnly? dateOfBirth = DateOnly.TryParse(dateOfBirthRaw, out var parsedDate)
-                    ? parsedDate
-                    : null;
+                DateOnly? dateOfBirth = string.IsNullOrWhiteSpace(dateOfBirthRaw)
+                    ? null
+                    : DateOnly.ParseExact(dateOfBirthRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
                 var accountId = Guid.NewGuid().ToString();
                 var role = roles.First(role => string.Equals(role.RoleName, roleName, StringComparison.OrdinalIgnoreCase));

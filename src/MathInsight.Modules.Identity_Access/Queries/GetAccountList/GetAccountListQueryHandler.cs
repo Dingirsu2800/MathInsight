@@ -31,6 +31,7 @@ public class GetAccountListQueryHandler
         var query = _dbContext.Accounts
             .AsNoTracking()
             .Include(account => account.Role)
+            .Include(account => account.Student)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(request.RoleName))
@@ -65,7 +66,10 @@ public class GetAccountListQueryHandler
                 account.RoleId,
                 account.Role.RoleName,
                 account.IsActive,
-                account.CreatedTime))
+                account.CreatedTime,
+                account.PhoneNumber,
+                account.DateOfBirth,
+                account.Student == null ? null : account.Student.CurrentGrade))
             .ToListAsync(cancellationToken);
 
         return Result<PagedResponse<AccountListItemResponse>>.Success(
