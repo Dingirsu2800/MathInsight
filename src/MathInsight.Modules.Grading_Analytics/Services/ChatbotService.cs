@@ -55,6 +55,7 @@ public class ChatbotService : IChatbotService
         string studentAnswer,
         string studentId,
         string sessionId,
+        string? pictureUrl = null,
         CancellationToken cancellationToken = default)
     {
         // ── A2: In-memory rate limiting (Optional - disabled by default) ───
@@ -75,6 +76,36 @@ public class ChatbotService : IChatbotService
         // ── Build Gemini API request ─────────────────────────────────────────
         var userMessage = $"Question:\n{questionContent}\n\nStudent's answer:\n{studentAnswer}";
 
+        // Build parts list — always starts with the text part.
+        var userParts = new List<GeminiPart> { new GeminiPart { Text = userMessage } };
+
+        // ── Optional multimodal image part ───────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(pictureUrl))
+        {
+            try
+            {
+                var imageBytes = await _httpClient.GetByteArrayAsync(pictureUrl, cancellationToken);
+                var mimeType = ResolveMimeType(pictureUrl);
+                var base64Data = Convert.ToBase64String(imageBytes);
+
+                userParts.Add(new GeminiPart
+                {
+                    InlineData = new GeminiInlineData { MimeType = mimeType, Data = base64Data }
+                });
+
+                _logger.LogInformation(
+                    "Chatbot: attached image ({Bytes} bytes, {MimeType}) for Student={StudentId}, Session={SessionId}",
+                    imageBytes.Length, mimeType, studentId, sessionId);
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: fall back to text-only rather than failing the whole request.
+                _logger.LogWarning(ex,
+                    "Chatbot: failed to fetch question image '{PictureUrl}' — sending text-only.",
+                    pictureUrl);
+            }
+        }
+
         var requestBody = new GeminiRequest
         {
             SystemInstruction = new GeminiSystemInstruction
@@ -86,7 +117,7 @@ public class ChatbotService : IChatbotService
                 new GeminiContent
                 {
                     Role = "user",
-                    Parts = [new GeminiPart { Text = userMessage }]
+                    Parts = userParts
                 }
             ],
             GenerationConfig = new GeminiGenerationConfig
@@ -130,6 +161,19 @@ public class ChatbotService : IChatbotService
             studentId, sessionId, explanation.Length);
 
         return explanation;
+    }
+
+    /// <summary>
+    /// Resolves the MIME type from a picture URL based on its file extension.
+    /// Defaults to <c>image/jpeg</c> when the extension is not recognised.
+    /// </summary>
+    private static string ResolveMimeType(string url)
+    {
+        var lower = url.ToLowerInvariant();
+        if (lower.Contains(".webp")) return "image/webp";
+        if (lower.Contains(".png"))  return "image/png";
+        if (lower.Contains(".gif"))  return "image/gif";
+        return "image/jpeg"; // jpg / default
     }
 
     /// <summary>
@@ -229,7 +273,21 @@ internal class GeminiContent
 internal class GeminiPart
 {
     [JsonPropertyName("text")]
-    public string Text { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Text { get; set; }
+
+    [JsonPropertyName("inline_data")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GeminiInlineData? InlineData { get; set; }
+}
+
+internal class GeminiInlineData
+{
+    [JsonPropertyName("mime_type")]
+    public string MimeType { get; set; } = string.Empty;
+
+    [JsonPropertyName("data")]
+    public string Data { get; set; } = string.Empty;
 }
 
 internal class GeminiGenerationConfig

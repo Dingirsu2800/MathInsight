@@ -13,6 +13,7 @@ public interface IChatbotService
     /// <param name="studentAnswer">The student's selected/entered answer.</param>
     /// <param name="studentId">Student ID — used for rate limiting.</param>
     /// <param name="sessionId">Session ID — used for rate limiting.</param>
+    /// <param name="pictureUrl">Optional URL of the question's illustration image (e.g. Cloudinary). When provided, the image is fetched and sent to the AI as a multimodal input for richer explanations.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A step-by-step explanation string.</returns>
     Task<string> AskAsync(
@@ -20,5 +21,6 @@ public interface IChatbotService
         string studentAnswer,
         string studentId,
         string sessionId,
+        string? pictureUrl = null,
         CancellationToken cancellationToken = default);
 }

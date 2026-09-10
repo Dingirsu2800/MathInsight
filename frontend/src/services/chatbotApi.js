@@ -17,9 +17,10 @@ import api from './api';
  * @param {string} params.questionContent - Nội dung câu hỏi (markdown)
  * @param {string} params.studentAnswer   - Đáp án đúng dạng text để AI giải thích
  * @param {string} params.userMessage     - Câu hỏi thêm của học sinh
+ * @param {string|null} [params.pictureUrl] - URL ảnh minh họa câu hỏi (nếu có); backend tự fetch và gửi Gemini
  * @returns {Promise<{ explanation: string }>}
  */
-export async function askChatbot({ sessionId, questionId, questionContent, studentAnswer, userMessage }) {
+export async function askChatbot({ sessionId, questionId, questionContent, studentAnswer, userMessage, pictureUrl }) {
   // Gộp context câu hỏi + câu hỏi của học sinh vào studentAnswer để AI có đủ ngữ cảnh
   const contextualAnswer = userMessage
     ? `${studentAnswer}\n\n[Câu hỏi thêm của học sinh]: ${userMessage}`
@@ -30,6 +31,8 @@ export async function askChatbot({ sessionId, questionId, questionContent, stude
     questionId,
     questionContent,
     studentAnswer: contextualAnswer,
+    pictureUrl: pictureUrl || null,
   });
   return response.data;
 }
+

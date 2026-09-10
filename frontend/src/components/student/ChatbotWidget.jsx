@@ -18,6 +18,7 @@ import { askChatbot } from '../../services/chatbotApi';
  *     questionNo: number,
  *     questionContent: string,
  *     correctAnswer: string,
+ *     pictureUrl?: string | null,
  *   } | null
  * }} props
  */
@@ -77,6 +78,7 @@ export default function ChatbotWidget({ isOpen, onClose, context }) {
         questionContent: context.questionContent,
         studentAnswer: context.correctAnswer,
         userMessage: userText,
+        pictureUrl: context.pictureUrl ?? null,
       });
 
       setMessages((prev) => [
