@@ -22,6 +22,18 @@ function formatFullTime(isoDate) {
   });
 }
 
+function resolveNotificationLink(link) {
+  const legacyAdminReportMatch = /^\/admin\/question-reports\/([^/?#]+)$/.exec(link || "");
+  if (legacyAdminReportMatch) {
+    return `/admin/reports/questions?incidentId=${encodeURIComponent(legacyAdminReportMatch[1])}`;
+  }
+  return link;
+}
+
+function isInformationalQuestionReport(notification) {
+  return /^\/questions\/[^/?#]+$/.test(notification?.link || "");
+}
+
 /**
  * Real-time notification bell — mounted in DashboardTopbar for every authenticated role.
  * Loads the recent unread list on mount, then subscribes to the /hubs/notification SignalR
@@ -94,8 +106,9 @@ export default function NotificationBell() {
 
     setIsOpen(false);
     
-    if (notification.link) {
-      navigate(notification.link);
+    const targetLink = resolveNotificationLink(notification.link);
+    if (targetLink) {
+      navigate(targetLink);
     } else {
       setSelectedNotification(notification);
     }
@@ -126,20 +139,33 @@ export default function NotificationBell() {
           {notifications.length === 0 ? (
             <p className="px-3 py-4 text-center text-on-surface-variant">Chưa có thông báo nào.</p>
           ) : (
-            notifications.map((notification) => (
-              <button
-                key={notification.notificationId}
-                type="button"
-                onClick={() => handleSelect(notification)}
-                className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left w-full cursor-pointer border-0 outline-none transition-colors ${
-                  notification.isRead ? 'bg-transparent' : 'bg-primary/5'
-                } hover:bg-surface-container`}
-              >
-                <span className="font-semibold text-on-surface">{notification.title}</span>
-                <span className="text-on-surface-variant">{notification.content}</span>
-                <span className="text-[11px] text-outline">{formatRelativeTime(notification.createdTime)}</span>
-              </button>
-            ))
+            notifications.map((notification) => {
+              const itemClassName = `flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left w-full ${
+                notification.isRead ? 'bg-transparent' : 'bg-primary/5'
+              }`;
+              const content = (
+                <>
+                  <span className="font-semibold text-on-surface">{notification.title}</span>
+                  <span className="text-on-surface-variant">{notification.content}</span>
+                  <span className="text-[11px] text-outline">{formatRelativeTime(notification.createdTime)}</span>
+                </>
+              );
+
+              if (isInformationalQuestionReport(notification)) {
+                return <div key={notification.notificationId} className={itemClassName}>{content}</div>;
+              }
+
+              return (
+                <button
+                  key={notification.notificationId}
+                  type="button"
+                  onClick={() => handleSelect(notification)}
+                  className={`${itemClassName} cursor-pointer border-0 outline-none transition-colors hover:bg-surface-container`}
+                >
+                  {content}
+                </button>
+              );
+            })
           )}
         </div>
       )}

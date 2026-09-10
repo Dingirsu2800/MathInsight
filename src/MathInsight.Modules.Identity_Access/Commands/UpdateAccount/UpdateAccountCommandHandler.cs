@@ -38,6 +38,15 @@ public class UpdateAccountCommandHandler
                 .AnyAsync(other => other.AccountId != account.AccountId && other.Email == request.Email, cancellationToken);
             if (emailTaken)
                 return Result<AccountListItemResponse>.Failure(IdentityErrors.EmailAlreadyExists);
+
+            if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+            {
+                var phoneTaken = await _dbContext.Accounts.AnyAsync(
+                    other => other.AccountId != account.AccountId && other.PhoneNumber == request.PhoneNumber,
+                    cancellationToken);
+                if (phoneTaken)
+                    return Result<AccountListItemResponse>.Failure(IdentityErrors.PhoneAlreadyExists);
+            }
         }
 
         var newRole = await _dbContext.Roles
@@ -70,6 +79,10 @@ public class UpdateAccountCommandHandler
         account.FirstName = request.FirstName;
         account.LastName = request.LastName;
         account.Email = request.Email;
+        account.PhoneNumber = request.PhoneNumber;
+        account.DateOfBirth = request.DateOfBirth;
+        if (account.Student is not null)
+            account.Student.CurrentGrade = request.CurrentGrade;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -82,6 +95,9 @@ public class UpdateAccountCommandHandler
             newRole.RoleId,
             newRole.RoleName,
             account.IsActive,
-            account.CreatedTime));
+            account.CreatedTime,
+            account.PhoneNumber,
+            account.DateOfBirth,
+            account.Student?.CurrentGrade));
     }
 }

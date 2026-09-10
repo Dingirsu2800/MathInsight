@@ -14,6 +14,5 @@ public static class AuthValidation
     // (e.g. 0912345678). Well inside Account.PhoneNumber VARCHAR(20).
     public const string PhoneNumberPattern = @"^0\d{9}$";
 
-    public const string PhoneNumberMessage =
-        "Phone number must be exactly 10 digits and start with 0.";
+    public const string PhoneNumberMessage = "Số điện thoại không hợp lệ.";
 }

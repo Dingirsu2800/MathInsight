@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import QuestionReportsPage from './QuestionReportsPage';
 import { questionBankApi } from '../../services/questionBankApi';
 
@@ -51,7 +52,7 @@ describe('QuestionReportsPage incident approval', () => {
       },
     });
 
-    render(<QuestionReportsPage />);
+    render(<MemoryRouter><QuestionReportsPage /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole('button', { name: /Xem và duyệt/i }));
 
@@ -64,5 +65,52 @@ describe('QuestionReportsPage incident approval', () => {
     expect(screen.getByText(/Vô hiệu câu hỏi và cộng đủ điểm/i)).toBeInTheDocument();
     expect(screen.getByText('Chấp nhận báo cáo')).toBeInTheDocument();
     expect(screen.getByText('Không chấp nhận báo cáo')).toBeInTheDocument();
+  });
+
+  it('opens the incident review addressed by an Admin notification link', async () => {
+    questionBankApi.getAdminQuestionReports.mockResolvedValue({
+      data: { items: [reviewItem], totalCount: 1, totalPages: 1 },
+    });
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-101',
+        originalVersion: { questionContent: 'Nội dung gốc' },
+        submittedCorrectionVersion: { questionContent: 'Nội dung đã sửa' },
+        reports: [],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/admin/reports/questions?incidentId=incident-101']}>
+        <QuestionReportsPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledWith('incident-101');
+    });
+    expect(await screen.findByText('Nội dung gốc')).toBeInTheDocument();
+  });
+
+  it('loads a stale incident directly when it is no longer in the pending list', async () => {
+    questionBankApi.getAdminQuestionReports.mockResolvedValue({
+      data: { items: [], totalCount: 0, totalPages: 0 },
+    });
+    questionBankApi.getQuestionReportIncident.mockResolvedValue({
+      data: {
+        incidentId: 'incident-101',
+        originalVersion: { questionContent: 'Sự cố cũ' },
+        reports: [],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/admin/reports/questions?incidentId=incident-101']}>
+        <QuestionReportsPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Sự cố cũ')).toBeInTheDocument();
+    expect(questionBankApi.getQuestionReportIncident).toHaveBeenCalledWith('incident-101');
   });
 });

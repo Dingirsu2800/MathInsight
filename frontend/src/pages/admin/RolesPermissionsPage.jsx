@@ -9,6 +9,22 @@ import { cn } from "../../utils/cn";
 
 const SYSTEM_ROLE_NAMES = new Set(["Admin", "Expert", "Teacher", "Student"]);
 
+const ROLE_LABELS = { Admin: "Quản trị viên", Expert: "Chuyên gia", Teacher: "Giáo viên", Student: "Học sinh" };
+const ROLE_DESCRIPTIONS = {
+  Admin: "Quản trị viên hệ thống",
+  Expert: "Chuyên gia ngân hàng câu hỏi",
+  Teacher: "Giáo viên đã xác minh",
+  Student: "Tài khoản học sinh"
+};
+const PERMISSION_LABELS = {
+  "auth:login": ["Đăng nhập", "Đăng nhập và đăng xuất khỏi nền tảng"],
+  "account:register": ["Đăng ký tài khoản", "Đăng ký tài khoản mới"],
+  "teacher:verify": ["Xác minh giáo viên", "Xác minh thông tin giáo viên"],
+  "account:deactivate": ["Quản lý trạng thái tài khoản", "Kích hoạt hoặc vô hiệu hóa tài khoản"],
+  "account:import": ["Nhập tài khoản", "Nhập nhiều tài khoản cùng lúc"],
+  "permission:adjust": ["Điều chỉnh quyền", "Điều chỉnh quyền của vai trò"]
+};
+
 function resolveErrorMessage(err, fallback) {
   const data = err?.response?.data;
   return data?.message || err?.message || fallback;
@@ -177,10 +193,10 @@ export default function RolesPermissionsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-[16px] font-bold text-on-surface">{role.roleName}</h3>
+                        <h3 className="text-[16px] font-bold text-on-surface">{ROLE_LABELS[role.roleName] || role.roleName}</h3>
                         {isSystemRole && <Badge variant="outline">Vai trò hệ thống</Badge>}
                       </div>
-                      <p className="text-[13px] text-on-surface-variant">{role.description || "Chưa có mô tả."}</p>
+                      <p className="text-[13px] text-on-surface-variant">{ROLE_DESCRIPTIONS[role.roleName] || role.description || "Chưa có mô tả."}</p>
                     </div>
                     <button
                       onClick={() => openEditModal(role)}
@@ -204,7 +220,7 @@ export default function RolesPermissionsPage() {
                             <label
                               key={permission.permissionId}
                               className="flex items-start gap-2 p-2 rounded-lg border border-transparent hover:border-whisper-border hover:bg-surface-container-low transition-colors cursor-pointer"
-                              title={permission.description || permission.permissionKey}
+                              title={PERMISSION_LABELS[permission.permissionKey]?.[1] || permission.description || permission.permissionKey}
                             >
                               <input
                                 type="checkbox"
@@ -213,7 +229,7 @@ export default function RolesPermissionsPage() {
                                 className="mt-0.5 accent-primary cursor-pointer"
                               />
                               <span className="text-[12px] font-mono text-on-surface leading-tight">
-                                {permission.permissionKey}
+                                {PERMISSION_LABELS[permission.permissionKey]?.[0] || permission.permissionKey}
                               </span>
                             </label>
                           );
