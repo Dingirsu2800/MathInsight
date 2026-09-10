@@ -283,6 +283,7 @@ export default function TestResultPage() {
                         questionNo: answer.questionNo,
                         questionContent: answer.questionContent,
                         correctAnswer: compositeCorrectAnswer,
+                        pictureUrl: answer.pictureUrl ?? null,
                       })}
                     />
                   );
@@ -338,6 +339,7 @@ export default function TestResultPage() {
                       questionNo: answer.questionNo,
                       questionContent: answer.questionContent,
                       correctAnswer: calculatedCorrectAnswer,
+                      pictureUrl: answer.pictureUrl ?? null,
                     })}
                   />
                 );

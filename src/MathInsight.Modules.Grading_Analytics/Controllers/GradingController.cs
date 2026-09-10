@@ -50,6 +50,7 @@ public class GradingController : ControllerBase
                 request.StudentAnswer,
                 studentIdClaim,
                 request.SessionId,
+                request.PictureUrl,
                 cancellationToken);
 
             return Ok(new ChatbotAssistResponse { Explanation = explanation });
@@ -97,6 +98,12 @@ public record ChatbotAssistRequest
 
     /// <summary>The student's answer text.</summary>
     public string StudentAnswer { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional URL of the question's illustration image.
+    /// When provided, the image is fetched server-side and sent to the AI as a multimodal input.
+    /// </summary>
+    public string? PictureUrl { get; init; }
 }
 
 /// <summary>
