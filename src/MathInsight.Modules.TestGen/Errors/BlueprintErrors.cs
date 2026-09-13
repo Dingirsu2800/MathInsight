@@ -47,4 +47,16 @@ public static class BlueprintErrors
     public static readonly Error InUse = new(
         "BLUEPRINT_IN_USE",
         "Blueprint is pending review or has historical references.");
+
+    public static readonly Error AvailabilityRequestInvalid = new(
+        "BLUEPRINT_AVAILABILITY_REQUEST_INVALID",
+        "The blueprint availability request is invalid.");
+
+    public static readonly Error AvailabilityInsufficientQuestions = new(
+        "BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS",
+        "The current eligible question pool cannot fulfill the blueprint.");
+
+    public static readonly Error AvailabilityOverlapConflict = new(
+        "BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT",
+        "The rows are individually available, but the same questions cannot satisfy the whole blueprint.");
 }

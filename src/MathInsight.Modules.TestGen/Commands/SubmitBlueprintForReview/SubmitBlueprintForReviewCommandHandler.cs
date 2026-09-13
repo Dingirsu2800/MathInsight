@@ -2,6 +2,7 @@ using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Commands.Common;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Errors;
+using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Modules.TestGen.Persistence;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Validation;
@@ -17,13 +18,16 @@ public sealed class SubmitBlueprintForReviewCommandHandler
 {
     private readonly TestGenDbContext _context;
     private readonly IBlueprintAggregateValidator _validator;
+    private readonly IBlueprintAvailabilityChecker _availabilityChecker;
 
     public SubmitBlueprintForReviewCommandHandler(
         TestGenDbContext context,
-        IBlueprintAggregateValidator validator)
+        IBlueprintAggregateValidator validator,
+        IBlueprintAvailabilityChecker availabilityChecker)
     {
         _context = context;
         _validator = validator;
+        _availabilityChecker = availabilityChecker;
     }
 
     public async Task<Result<SubmitBlueprintResponse>> Handle(
@@ -99,6 +103,16 @@ public sealed class SubmitBlueprintForReviewCommandHandler
 
         if (sectionTotal != blueprint.TotalQuestions || hasDetailMismatch)
             return Result<SubmitBlueprintResponse>.Failure(BlueprintErrors.TotalMismatch);
+
+        var availability = await _availabilityChecker.CheckAsync(blueprint, cancellationToken);
+        if (!availability.Response.WholeBlueprintFeasible)
+        {
+            var error = availability.Response.AvailabilityCode == BlueprintAvailabilityCodes.OverlapConflict
+                ? BlueprintErrors.AvailabilityOverlapConflict
+                : BlueprintErrors.AvailabilityInsufficientQuestions;
+            return Result<SubmitBlueprintResponse>.Failure(
+                new MathInsight.Shared.Results.Error(error.Code, error.Message, availability.Response));
+        }
 
         blueprint.Status = BlueprintStatuses.PendingReview;
         blueprint.ApprovedBy = null;

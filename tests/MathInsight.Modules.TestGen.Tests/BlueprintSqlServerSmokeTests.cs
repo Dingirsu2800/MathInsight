@@ -213,7 +213,11 @@ public sealed class BlueprintSqlServerSmokeTests
         await using var reviewContext = CreateContext(connectionString);
         var submitHandler = new SubmitBlueprintForReviewCommandHandler(
             submitContext,
-            new BlueprintAggregateValidator(submitContext));
+            new BlueprintAggregateValidator(submitContext),
+            new BlueprintAvailabilityChecker(
+                new BlueprintExamCandidateProvider(submitContext),
+                new CapacityAwareQuestionSelector(new SystemGenerationRandomizer()),
+                new BlueprintAggregateValidator(submitContext)));
         var reviewHandler = new ReviewBlueprintCommandHandler(reviewContext);
 
         var submitTask = submitHandler.Handle(

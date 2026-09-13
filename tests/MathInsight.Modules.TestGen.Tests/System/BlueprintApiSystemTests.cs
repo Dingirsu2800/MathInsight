@@ -44,6 +44,53 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
     }
 
     [TestGenSqlServerFact]
+    public async Task AvailabilityPreview_MixedRequest_ReturnsCountsAndDoesNotPersist()
+    {
+        var tagId = await _factory.SeedAvailabilityQuestionsAsync();
+        var before = await _factory.CountBlueprintsAsync();
+        using var request = CreateJsonRequest(
+            HttpMethod.Post,
+            "/api/test-generator/blueprints/availability",
+            MixedAvailabilityRequestJson(tagId));
+        request.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.False(root.GetProperty("wholeBlueprintFeasible").GetBoolean());
+        Assert.Equal("BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS", root.GetProperty("availabilityCode").GetString());
+        var rows = root.GetProperty("sections").EnumerateArray().Single().GetProperty("rows")
+            .EnumerateArray().ToDictionary(row => row.GetProperty("clientRowId").GetString()!);
+        Assert.Equal(2, rows["client-single"].GetProperty("availableCount").GetInt32());
+        Assert.Equal(0, rows["client-short"].GetProperty("availableCount").GetInt32());
+        Assert.Equal(before, await _factory.CountBlueprintsAsync());
+    }
+
+    [TestGenSqlServerFact]
+    public async Task SubmitBlueprint_WithInsufficientInventory_ReturnsConflictAndKeepsDraft()
+    {
+        var tagId = await _factory.SeedAvailabilityQuestionsAsync();
+        using var createRequest = CreateJsonRequest(
+            HttpMethod.Post,
+            "/api/test-generator/blueprints",
+            InsufficientBlueprintRequestJson(tagId));
+        createRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var createResponse = await _client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var blueprintId = await ReadBlueprintIdAsync(createResponse);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/test-generator/blueprints/{blueprintId}/submit");
+        request.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await AssertErrorCodeAsync(response, "BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS");
+        await _factory.AssertBlueprintStatusAsync(blueprintId, "Draft");
+    }
+
+    [TestGenSqlServerFact]
     public async Task CreateBlueprint_AsOwner_PersistsDraftSectionsAndDetailsThroughHostedApi()
     {
         using var request = CreateJsonRequest(HttpMethod.Post, "/api/test-generator/blueprints", ValidBlueprintRequestJson("L3 persisted blueprint"));
@@ -308,6 +355,58 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
         }
         """;
 
+    private static string MixedAvailabilityRequestJson(string tagId) => $$"""
+        {
+          "grade": 12,
+          "sections": [{
+            "clientSectionId": "client-section",
+            "questionType": "Mixed",
+            "scoringRule": null,
+            "rows": [
+              {
+                "clientRowId": "client-single",
+                "tagId": "{{tagId}}",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 2,
+                "questionType": "SingleChoice",
+                "scoringRule": "AllOrNothing"
+              },
+              {
+                "clientRowId": "client-short",
+                "tagId": "{{tagId}}",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "ShortAnswer",
+                "scoringRule": "AllOrNothing"
+              }
+            ]
+          }]
+        }
+        """;
+
+    private static string InsufficientBlueprintRequestJson(string tagId) => $$"""
+        {
+          "blueprintName": "L3 unavailable submit",
+          "grade": 12,
+          "totalQuestions": 3,
+          "totalScore": 10.00,
+          "durationMinutes": 15,
+          "sections": [{
+            "sectionOrder": 1,
+            "sectionName": "Section I",
+            "questionType": "SingleChoice",
+            "totalQuestions": 3,
+            "scoreBudget": 10.00,
+            "scoringRule": "AllOrNothing",
+            "details": [{
+              "tagId": "{{tagId}}",
+              "difficultyId": "l3-difficulty-1",
+              "quantity": 3
+            }]
+          }]
+        }
+        """;
+
     private static async Task AssertMixedResponseAsync(HttpResponseMessage response, string expectedName)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -444,6 +543,16 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         Assert.Equal(expectedName, blueprint.BlueprintName);
     }
 
+    public async Task AssertBlueprintStatusAsync(string blueprintId, string expectedStatus)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TestGenDbContext>();
+        Assert.Equal(expectedStatus, await db.Blueprints
+            .Where(item => item.BlueprintId == blueprintId)
+            .Select(item => item.Status)
+            .SingleAsync());
+    }
+
     public async Task<int> CountBlueprintsAsync()
     {
         using var scope = Services.CreateScope();
@@ -467,6 +576,38 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
             await SeedTopicPracticeQuestionAsync(_sqlConnectionString!, questionId, answerId, $"l3tp-v-{index:00}", tagId, JsonSerializer.Serialize(snapshot));
         }
         return (studentId, tagId);
+    }
+
+    public async Task<string> SeedAvailabilityQuestionsAsync()
+    {
+        var tagId = $"b2t{Guid.NewGuid():N}"[..23];
+        await ExecuteNonQueryAsync(
+            _sqlConnectionString!,
+            $"INSERT INTO dbo.TagTopic (TagID, ParentTagID, TagName, Grade, DisplayOrder, IsActive) VALUES ('{tagId}', 'l3-parent-12', N'BE-2 availability {tagId}', 12, 50, 1);");
+        for (var index = 1; index <= 2; index++)
+        {
+            var questionId = $"b2-{Guid.NewGuid():N}"[..20];
+            var answerId = Guid.NewGuid().ToString();
+            var snapshot = new QuestionSnapshotV2(
+                questionId,
+                "SingleChoice",
+                "l3-difficulty-1",
+                12,
+                1m,
+                [new QuestionTopicSnapshot(tagId, true)],
+                [new QuestionAnswerSnapshot(answerId, "Correct", true)],
+                [],
+                $"L3 availability question {index}",
+                "Solution");
+            await SeedTopicPracticeQuestionAsync(
+                _sqlConnectionString!,
+                questionId,
+                answerId,
+                Guid.NewGuid().ToString(),
+                tagId,
+                JsonSerializer.Serialize(snapshot));
+        }
+        return tagId;
     }
 
     public async Task<(string StudentId, string TagId)> SeedInsufficientTopicPracticeScenarioAsync()
