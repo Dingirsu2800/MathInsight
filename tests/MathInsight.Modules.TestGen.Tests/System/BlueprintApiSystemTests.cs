@@ -63,6 +63,28 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
     }
 
     [TestGenSqlServerFact]
+    public async Task CreateCompositeBlueprint_WithBothScoringRules_PersistsThroughHostedApi()
+    {
+        foreach (var scoringRule in new[] { "TieredTrueFalse", "WeightedParts" })
+        {
+            using var request = CreateJsonRequest(
+                HttpMethod.Post,
+                "/api/test-generator/blueprints",
+                ValidBlueprintRequestJson(
+                    $"L3 {scoringRule} composite blueprint",
+                    questionType: "Composite",
+                    scoringRule: scoringRule));
+            request.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+            var response = await _client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var blueprintId = await ReadBlueprintIdAsync(response);
+            await _factory.AssertBlueprintSectionPolicyAsync(blueprintId, "Composite", scoringRule);
+        }
+    }
+
+    [TestGenSqlServerFact]
     public async Task UpdateBlueprint_AsDifferentExpert_ReturnsForbiddenAndPreservesOwnerBlueprint()
     {
         var blueprintId = await CreateBlueprintAsOwnerAsync("L3 protected blueprint");
@@ -177,7 +199,11 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
         Content = new StringContent(body, Encoding.UTF8, "application/json")
     };
 
-    private static string ValidBlueprintRequestJson(string name, string tagId = "l3-topic-12") => $$"""
+    private static string ValidBlueprintRequestJson(
+        string name,
+        string tagId = "l3-topic-12",
+        string questionType = "SingleChoice",
+        string scoringRule = "AllOrNothing") => $$"""
         {
           "blueprintName": "{{name}}",
           "grade": 12,
@@ -187,10 +213,10 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
           "sections": [{
             "sectionOrder": 1,
             "sectionName": "Section I",
-            "questionType": "SingleChoice",
+            "questionType": "{{questionType}}",
             "totalQuestions": 1,
             "scoreBudget": 10.00,
-            "scoringRule": "AllOrNothing",
+            "scoringRule": "{{scoringRule}}",
             "details": [{
               "tagId": "{{tagId}}",
               "difficultyId": "l3-difficulty-1",
@@ -233,6 +259,8 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         ExecuteNonQueryAsync(_masterConnectionString, $"CREATE DATABASE [{_databaseName}]").GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "001_Create_MathInsight_Azure.sql")).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "005_Align_TestGen_QuestionBank_Contract.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "006_MentorFollowUp_CompositePolicy.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "009_Fix_BlueprintSection_CompositePartCount.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-expert-l3', N'Expert', N'L3 test role');
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-student-l3', N'Student', N'L3 test role');
@@ -244,8 +272,11 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
                 ('expert_l3_owner', N'Mathematics'), ('expert_l3_other', N'Mathematics');
             INSERT INTO dbo.Student (StudentID, CurrentGrade) VALUES ('student_l3_topic', 12);
             INSERT INTO dbo.TagTopic (TagID, TagName, Grade, DisplayOrder, IsActive) VALUES
-                ('l3-topic-12', N'L3 grade 12 topic', 12, 1, 1),
-                ('l3-topic-11', N'L3 grade 11 topic', 11, 2, 1);
+                ('l3-parent-12', N'L3 grade 12 parent topic', 12, 1, 1),
+                ('l3-parent-11', N'L3 grade 11 parent topic', 11, 2, 1);
+            INSERT INTO dbo.TagTopic (TagID, ParentTagID, TagName, Grade, DisplayOrder, IsActive) VALUES
+                ('l3-topic-12', 'l3-parent-12', N'L3 grade 12 topic', 12, 3, 1),
+                ('l3-topic-11', 'l3-parent-11', N'L3 grade 11 topic', 11, 4, 1);
             INSERT INTO dbo.TagDifficulty (DifficultyID, DifficultyName, LevelValue, DisplayOrder, IsActive) VALUES
                 ('l3-difficulty-1', N'L3 Foundation', 1, 1, 1);
             """).GetAwaiter().GetResult();
@@ -281,6 +312,19 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         var detail = Assert.Single(section.Details);
         Assert.Equal("l3-topic-12", detail.TagId);
         Assert.Equal("l3-difficulty-1", detail.DifficultyId);
+    }
+
+    public async Task AssertBlueprintSectionPolicyAsync(
+        string blueprintId,
+        string expectedQuestionType,
+        string expectedScoringRule)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TestGenDbContext>();
+        var section = await db.BlueprintSections.SingleAsync(item => item.BlueprintId == blueprintId);
+        Assert.Equal(expectedQuestionType, section.QuestionType);
+        Assert.Equal(expectedScoringRule, section.ScoringRule);
+        Assert.Null(section.PartCountPerQuestion);
     }
 
     public async Task AssertBlueprintRemainsOwnedAndUnchangedAsync(string blueprintId, string expectedOwner, string expectedName)
@@ -370,8 +414,17 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
     private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
     {
         var script = await File.ReadAllTextAsync(scriptPath);
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
         foreach (var batch in global::System.Text.RegularExpressions.Regex.Split(script, @"(?im)^\s*GO\s*(?:--.*)?$"))
-            if (!string.IsNullOrWhiteSpace(batch)) await ExecuteNonQueryAsync(connectionString, batch);
+        {
+            if (string.IsNullOrWhiteSpace(batch))
+                continue;
+
+            await using var command = new SqlCommand(batch, connection);
+            command.CommandTimeout = 120;
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     private static async Task ExecuteNonQueryAsync(string connectionString, string commandText)
