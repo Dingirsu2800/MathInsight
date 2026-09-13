@@ -8,7 +8,15 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, Di
 import BlueprintTopicPicker from "../../components/expert/BlueprintTopicPicker";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { questionBankApi } from "../../services/questionBankApi";
-import { detailToEditorState, editorStateToBlueprintRequest, defaultScoringRule } from "../../utils/blueprintMappers";
+import {
+  detailToEditorState,
+  editorStateToBlueprintRequest,
+  defaultScoringRule,
+  generateClientId,
+  isDetailRowComplete,
+  hasIncompleteAllocationRows,
+  editorStateToAvailabilityRequest
+} from "../../utils/blueprintMappers";
 import { validateBlueprint, validateBlueprintForDraft, validateBlueprintForSubmit } from "../../utils/blueprintValidation";
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { getBlueprintActions } from "../../utils/blueprintAuth";
@@ -55,10 +63,21 @@ export default function BlueprintEditorPage() {
     targetType: null
   });
 
+  // Availability state
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState(null);
+  const [availabilityData, setAvailabilityData] = useState({
+    checkedAt: null,
+    wholeBlueprintFeasible: null,
+    availabilityCode: null,
+    rowMap: {}
+  });
+  const latestRequestIdRef = React.useRef(0);
+  const debounceTimerRef = React.useRef(null);
 
   // Initial state setup
-  // Initial state setup
   const createEmptySection = () => ({
+    clientSectionId: generateClientId("sec"),
     sectionCode: "",
     sectionName: "",
     questionType: "SingleChoice",
@@ -68,7 +87,14 @@ export default function BlueprintEditorPage() {
     scoringRule: "AllOrNothing",
     partCountPerQuestion: null,
     details: [
-      { tagId: "", difficultyId: "", quantity: 1, questionType: null, scoringRule: null }
+      {
+        clientRowId: generateClientId("row"),
+        tagId: "",
+        difficultyId: "",
+        quantity: 1,
+        questionType: null,
+        scoringRule: null
+      }
     ]
   });
 
@@ -326,6 +352,7 @@ export default function BlueprintEditorPage() {
           details: [
             ...sec.details,
             {
+              clientRowId: generateClientId("row"),
               tagId: "",
               difficultyId: "",
               quantity: 1,
@@ -468,6 +495,163 @@ export default function BlueprintEditorPage() {
     }
   };
 
+  // Handle Save and Submit for Review (Draft save + Submit gate with form data preserved)
+  const handleSaveAndSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setFeedback(null);
+
+    const validationResult = validateBlueprint(form, true);
+    if (!validationResult.isValid) {
+      setFeedback({
+        type: "error",
+        message: `Dữ liệu không hợp lệ. Vui lòng sửa các lỗi sau:\n` + validationResult.errors.join("\n")
+      });
+      window.scrollTo?.({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    setIsMutating(true);
+    let targetId = blueprintId;
+    try {
+      const payload = editorStateToBlueprintRequest(form);
+      if (isEditMode) {
+        await testGeneratorApi.updateBlueprint(blueprintId, payload);
+      } else {
+        const createRes = await testGeneratorApi.createBlueprint(payload);
+        targetId = createRes.data?.blueprintId || createRes.data?.id;
+      }
+
+      await testGeneratorApi.submitBlueprintForReview(targetId);
+      navigate(`/expert/blueprints/${targetId}`, {
+        state: { feedback: { type: "success", message: "Gửi phản biện cấu trúc đề thành công!" } }
+      });
+    } catch (err) {
+      // Preserve form state and draft changes on submit 409 or any error
+      const errorMsg = getBlueprintErrorMessage(err, "Không thể gửi phản biện. Vui lòng thử lại.");
+      setFeedback({
+        type: "error",
+        message: errorMsg
+      });
+      window.scrollTo?.({ top: 0, behavior: "smooth" });
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  // Live availability runner
+  const runAvailabilityCheck = (currentForm = form) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
+    const payload = editorStateToAvailabilityRequest(currentForm);
+    if (!payload) {
+      setAvailabilityLoading(false);
+      setAvailabilityError(null);
+      setAvailabilityData(prev => ({
+        ...prev,
+        checkedAt: null,
+        wholeBlueprintFeasible: null,
+        availabilityCode: null,
+        rowMap: {}
+      }));
+      return;
+    }
+
+    const reqId = ++latestRequestIdRef.current;
+    setAvailabilityLoading(true);
+    setAvailabilityError(null);
+
+    testGeneratorApi.checkBlueprintAvailability(payload)
+      .then((res) => {
+        if (reqId !== latestRequestIdRef.current) return;
+        const data = res.data || {};
+        const newRowMap = {};
+        for (const sec of (data.sections || [])) {
+          for (const r of (sec.rows || [])) {
+            newRowMap[r.clientRowId] = {
+              status: "complete",
+              availableCount: r.availableCount ?? 0,
+              requiredCount: r.requiredCount ?? 0,
+              shortage: r.shortage ?? 0
+            };
+          }
+        }
+        setAvailabilityData({
+          checkedAt: data.checkedAt,
+          wholeBlueprintFeasible: data.wholeBlueprintFeasible,
+          availabilityCode: data.availabilityCode,
+          rowMap: newRowMap
+        });
+        setAvailabilityLoading(false);
+        setAvailabilityError(null);
+      })
+      .catch((err) => {
+        if (reqId !== latestRequestIdRef.current) return;
+        const errorMsg = getBlueprintErrorMessage(err, "Không thể kiểm tra số lượng câu hỏi khả dụng.");
+        setAvailabilityError(errorMsg);
+        setAvailabilityLoading(false);
+
+        // Mark sent rows as "error" - never set availableCount to 0
+        setAvailabilityData(prev => {
+          const updatedRowMap = { ...prev.rowMap };
+          for (const sec of (payload.sections || [])) {
+            for (const r of (sec.rows || [])) {
+              updatedRowMap[r.clientRowId] = {
+                status: "error",
+                error: errorMsg
+              };
+            }
+          }
+          return {
+            ...prev,
+            wholeBlueprintFeasible: null,
+            availabilityCode: null,
+            rowMap: updatedRowMap
+          };
+        });
+      });
+  };
+
+  // Debounced availability check effect
+  useEffect(() => {
+    // Invalidate old counts immediately when inputs change
+    setAvailabilityData(prev => {
+      const updatedRowMap = {};
+      for (const sec of form.sections) {
+        for (const det of sec.details) {
+          const id = det.clientRowId;
+          const complete = isDetailRowComplete(sec, det);
+          if (!complete) {
+            updatedRowMap[id] = { status: "incomplete" };
+          } else {
+            updatedRowMap[id] = { status: "loading" };
+          }
+        }
+      }
+      return {
+        ...prev,
+        rowMap: updatedRowMap
+      };
+    });
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      runAvailabilityCheck(form);
+    }, 400);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [form.grade, form.sections]);
+
+
   if (loading) {
     return (
       <ExpertLayout>
@@ -501,13 +685,20 @@ export default function BlueprintEditorPage() {
           title={isEditMode ? "Chỉnh sửa cấu trúc đề" : "Tạo cấu trúc đề mới"}
           subtitle="Thiết lập các phần kiểm tra, số lượng câu hỏi và tỷ lệ phân bổ chi tiết."
         >
-          <div className="flex gap-3">
+          <div className="flex gap-2.5">
             <Button
               variant="outline"
               disabled={isMutating}
               onClick={() => navigate(isEditMode ? `/expert/blueprints/${blueprintId}` : "/expert/blueprints")}
             >
               Hủy
+            </Button>
+            <Button
+              variant="outline"
+              disabled={isMutating}
+              onClick={handleSaveAndSubmit}
+            >
+              {isMutating ? "Đang xử lý..." : "Lưu & gửi phản biện"}
             </Button>
             <Button
               variant="primary"
@@ -680,7 +871,7 @@ export default function BlueprintEditorPage() {
 
                     {/* Section Fields Row */}
                     <div className="grid grid-cols-12 gap-4 select-text">
-                      <div className="col-span-2">
+                      <div className="col-span-12 sm:col-span-2">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Mã (Tùy chọn)</label>
                         <input
                           type="text"
@@ -690,7 +881,7 @@ export default function BlueprintEditorPage() {
                           className="w-full rounded-lg border border-outline-variant p-2 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                         />
                       </div>
-                      <div className="col-span-6">
+                      <div className="col-span-12 sm:col-span-6">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Tên phần thi <span className="text-error">*</span></label>
                         <input
                           type="text"
@@ -700,7 +891,7 @@ export default function BlueprintEditorPage() {
                           className="w-full rounded-lg border border-outline-variant p-2 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                         />
                       </div>
-                      <div className="col-span-4">
+                      <div className="col-span-12 sm:col-span-4">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Loại câu hỏi <span className="text-error">*</span></label>
                         <CustomSelect
                           value={sec.questionType}
@@ -719,7 +910,7 @@ export default function BlueprintEditorPage() {
 
                     {/* Instruction, question count and section score budget */}
                     <div className="grid grid-cols-12 gap-4 select-text">
-                      <div className="col-span-6">
+                      <div className="col-span-12 sm:col-span-6">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Hướng dẫn làm bài</label>
                         <textarea
                           rows={2}
@@ -729,7 +920,7 @@ export default function BlueprintEditorPage() {
                           className="w-full rounded-lg border border-outline-variant p-2 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none"
                         />
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-6 sm:col-span-3">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Số câu <span className="text-error">*</span></label>
                         <input
                           type="number"
@@ -740,7 +931,7 @@ export default function BlueprintEditorPage() {
                           className="w-full rounded-lg border border-outline-variant p-2 h-10 text-xs text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                         />
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-6 sm:col-span-3">
                         <label className="block text-[11px] font-bold text-on-surface-variant mb-1">Tổng điểm của phần <span className="text-error">*</span></label>
                         <input
                           type="number"
@@ -793,17 +984,18 @@ export default function BlueprintEditorPage() {
                         </button>
                       </div>
 
-                      <table className="w-full text-left border-collapse select-text">
+                      <table className="w-full min-w-[760px] text-left border-collapse select-text">
                         <thead className="bg-surface-container-lowest border-b border-whisper-border">
                           <tr>
                             <th className="text-[11px] font-bold text-on-surface-variant p-2.5">Chủ đề <span className="text-error">*</span></th>
-                            <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-44">Độ khó <span className="text-error">*</span></th>
+                            <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-40">Độ khó <span className="text-error">*</span></th>
                             {sec.questionType === "Mixed" && (
                               <>
-                                <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-48">Loại câu hỏi <span className="text-error">*</span></th>
-                                <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-48">Quy tắc chấm <span className="text-error">*</span></th>
+                                <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-44">Loại câu hỏi <span className="text-error">*</span></th>
+                                <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-40">Quy tắc chấm <span className="text-error">*</span></th>
                               </>
                             )}
+                            <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-28 text-center">Khả dụng</th>
                             <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-24 text-center">Số lượng <span className="text-error">*</span></th>
                             <th className="p-2.5 w-12 text-center"></th>
                           </tr>
@@ -825,7 +1017,7 @@ export default function BlueprintEditorPage() {
                                   other.difficultyId === det.difficultyId);
 
                             return (
-                              <tr key={detIdx} className="hover:bg-surface-bright transition-colors">
+                              <tr key={det.clientRowId || detIdx} className="hover:bg-surface-bright transition-colors">
                                 <td className="p-2 align-top">
                                   <BlueprintTopicPicker
                                     value={det.tagId}
@@ -901,6 +1093,61 @@ export default function BlueprintEditorPage() {
                                     </td>
                                   </>
                                 )}
+
+                                <td className="p-2 text-center align-top pt-2.5">
+                                  {(() => {
+                                    const isComplete = isDetailRowComplete(sec, det);
+                                    if (!isComplete) {
+                                      return <span className="text-xs text-on-surface-variant font-semibold">—</span>;
+                                    }
+
+                                    const rowInfo = availabilityData.rowMap[det.clientRowId];
+                                    if (availabilityLoading || rowInfo?.status === "loading") {
+                                      return (
+                                        <span className="inline-flex items-center justify-center gap-1 text-[11px] text-on-surface-variant animate-pulse font-medium">
+                                          <span className="w-2.5 h-2.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                                          Đang kiểm tra...
+                                        </span>
+                                      );
+                                    }
+
+                                    if (rowInfo?.status === "error" || availabilityError) {
+                                      return (
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          <span className="text-[11px] font-bold text-error">Lỗi kiểm tra</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => runAvailabilityCheck()}
+                                            className="text-[10px] text-primary font-bold hover:underline cursor-pointer"
+                                          >
+                                            Thử lại
+                                          </button>
+                                        </div>
+                                      );
+                                    }
+
+                                    if (rowInfo && rowInfo.status === "complete") {
+                                      const hasShortage = rowInfo.shortage > 0;
+                                      return (
+                                        <div className="flex flex-col items-center">
+                                          <span className={cn(
+                                            "font-bold font-mono text-xs",
+                                            hasShortage ? "text-error" : "text-emerald-success"
+                                          )}>
+                                            {rowInfo.availableCount} câu
+                                          </span>
+                                          {hasShortage && (
+                                            <span className="text-[10px] font-bold text-error bg-error/10 border border-error/20 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
+                                              Thiếu {rowInfo.shortage}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+
+                                    return <span className="text-xs text-on-surface-variant font-semibold">—</span>;
+                                  })()}
+                                </td>
 
                                 <td className="p-2 align-top">
                                   <input
@@ -988,6 +1235,78 @@ export default function BlueprintEditorPage() {
                   </div>
                 </div>
               )}
+
+              {/* Live Availability Status Card */}
+              <div className="border border-whisper-border rounded-xl p-3.5 bg-surface-container-low flex flex-col gap-2 select-text">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px] text-primary">inventory_2</span>
+                    Độ khả dụng ngân hàng
+                  </span>
+                  {availabilityLoading && (
+                    <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
+
+                {availabilityLoading ? (
+                  <p className="text-xs text-on-surface-variant animate-pulse font-medium">
+                    Đang đối chiếu số lượng câu hỏi khả dụng...
+                  </p>
+                ) : availabilityError ? (
+                  <div className="bg-error/10 border border-error/20 p-2.5 rounded-lg text-error text-xs flex flex-col gap-1.5">
+                    <div className="flex items-start gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">warning</span>
+                      <span className="font-semibold">{availabilityError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => runAvailabilityCheck()}
+                      className="self-start text-[11px] font-bold text-primary underline cursor-pointer"
+                    >
+                      Thử lại kiểm tra khả dụng
+                    </button>
+                  </div>
+                ) : hasIncompleteAllocationRows(form) ? (
+                  <div className="text-[11px] text-on-surface-variant leading-relaxed">
+                    <span className="font-semibold text-on-surface">Chưa đủ thông tin:</span> Vui lòng hoàn tất chủ đề, độ khó và số lượng ở tất cả các dòng phân bổ để đánh giá toàn bộ cấu trúc đề.
+                  </div>
+                ) : availabilityData.wholeBlueprintFeasible === true ? (
+                  <div className="bg-emerald-success/10 border border-emerald-success/20 p-2.5 rounded-lg text-emerald-success text-xs flex items-start gap-2">
+                    <span className="material-symbols-outlined text-[18px] shrink-0">check_circle</span>
+                    <div>
+                      <span className="font-bold block">Ngân hàng câu hỏi đáp ứng đủ</span>
+                      <span className="text-[11px] opacity-90 leading-tight block mt-0.5">
+                        Tất cả các dòng phân bổ đều có đủ câu hỏi hợp lệ trong ngân hàng.
+                      </span>
+                    </div>
+                  </div>
+                ) : availabilityData.wholeBlueprintFeasible === false ? (
+                  <div className="bg-error/10 border border-error/20 p-2.5 rounded-lg text-error text-xs flex flex-col gap-1">
+                    <div className="flex items-start gap-1.5">
+                      <span className="material-symbols-outlined text-[18px] shrink-0">cancel</span>
+                      <div>
+                        <span className="font-bold block">
+                          {availabilityData.availabilityCode === "BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT"
+                            ? "Xung đột trùng lặp câu hỏi"
+                            : "Ngân hàng chưa đủ câu hỏi"}
+                        </span>
+                        <p className="text-[11px] leading-relaxed mt-0.5">
+                          {availabilityData.availabilityCode === "BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT"
+                            ? "Các dòng phân bổ đủ câu hỏi riêng lẻ nhưng bị trùng lặp tập câu hỏi, không đủ câu hỏi riêng biệt cho toàn bộ đề thi."
+                            : "Số lượng câu hỏi hợp lệ trong ngân hàng không đủ để đáp ứng toàn bộ cấu trúc đề thi này."}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant italic mt-1">
+                      * Vẫn có thể lưu bản nháp nhưng cần bổ sung câu hỏi trước khi gửi phê duyệt.
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-on-surface-variant">
+                    Chưa có thông tin kiểm tra khả dụng.
+                  </p>
+                )}
+              </div>
 
               {/* Sections detail list */}
               <div className="flex flex-col gap-3">

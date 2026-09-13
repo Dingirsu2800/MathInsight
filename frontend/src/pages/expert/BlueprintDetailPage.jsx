@@ -191,6 +191,7 @@ export default function BlueprintDetailPage() {
       setLocalFeedback({ type: "success", message: "Gửi phản biện cấu trúc đề thành công!" });
       fetchDetail();
     } catch (err) {
+      setIsSubmitOpen(false);
       handleMutationError(err, "Không thể gửi phản biện. Vui lòng thử lại.");
     } finally {
       setIsMutating(false);
@@ -207,6 +208,7 @@ export default function BlueprintDetailPage() {
       setLocalFeedback({ type: "success", message: "Phê duyệt cấu trúc đề thành công!" });
       fetchDetail();
     } catch (err) {
+      setIsApproveOpen(false);
       handleMutationError(err, "Không thể phê duyệt cấu trúc đề. Vui lòng thử lại.");
     } finally {
       setIsMutating(false);
@@ -290,10 +292,22 @@ export default function BlueprintDetailPage() {
     }
   };
 
-  // Helper for mutation errors (handles BLUEPRINT_STATUS_INVALID reload)
+  // Helper for mutation errors (handles BLUEPRINT_STATUS_INVALID reload and availability details)
   const handleMutationError = (err, defaultMsg) => {
     const errorMsg = getBlueprintErrorMessage(err, defaultMsg);
     setLocalFeedback({ type: "error", message: errorMsg });
+
+    const shortageItems = [];
+    if (err.response?.data?.details?.sections) {
+      for (const s of err.response.data.details.sections) {
+        for (const r of (s.rows || [])) {
+          if (r.shortage > 0) {
+            shortageItems.push(`Dòng yêu cầu ${r.requiredCount} câu nhưng chỉ có ${r.availableCount} câu (thiếu ${r.shortage} câu).`);
+          }
+        }
+      }
+    }
+    setSubmitErrors(shortageItems);
 
     const code = err.response?.data?.code;
     if (code === "BLUEPRINT_STATUS_INVALID") {

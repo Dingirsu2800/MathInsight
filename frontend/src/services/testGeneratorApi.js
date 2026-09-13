@@ -132,6 +132,10 @@ export const testGeneratorApi = {
     return client.post('/api/test-generator/tests/blueprint-exams', { blueprintId });
   },
 
+  checkBlueprintAvailability(payload, config = {}) {
+    return client.post('/api/test-generator/blueprints/availability', payload, config);
+  },
+
   generateFixedBlueprintExam(blueprintId, payload) {
     return client.post(`/api/test-generator/blueprints/${blueprintId}/fixed-tests`, payload);
   }
