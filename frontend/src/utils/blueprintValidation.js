@@ -41,8 +41,13 @@ export function validateBlueprint(state, isSubmit = false) {
     totalQuestions += Number.isFinite(sectionQuestions) ? sectionQuestions : 0;
     totalBudget += Number.isFinite(scoreBudget) ? scoreBudget : 0;
 
+    const isMixed = section.questionType === "Mixed";
     const isComposite = section.questionType === "Composite";
-    if (isComposite) {
+    if (isMixed) {
+      if (section.scoringRule !== null && section.scoringRule !== undefined && section.scoringRule !== "") {
+        errors.push(`${label}: Phần thi Hỗn hợp không được thiết lập quy tắc chấm ở cấp phần.`);
+      }
+    } else if (isComposite) {
       if (!["TieredTrueFalse", "WeightedParts"].includes(section.scoringRule)) {
         errors.push(`${label}: Quy tắc chấm Composite không hợp lệ.`);
       }
@@ -50,10 +55,33 @@ export function validateBlueprint(state, isSubmit = false) {
       errors.push(`${label}: Câu không phải Composite phải dùng AllOrNothing.`);
     }
 
-    const detailQuantity = (section.details || []).reduce((sum, detail) => {
+    const validActualTypes = ["SingleChoice", "MultipleChoice", "TrueFalse", "ShortAnswer", "Composite"];
+
+    const detailQuantity = (section.details || []).reduce((sum, detail, dIdx) => {
+      const rowLabel = `${label} - Dòng ${dIdx + 1}`;
       if (!detail.tagId || !detail.difficultyId || !isInteger(detail.quantity, true)) {
         errors.push(`${label}: Dòng phân bổ chủ đề, độ khó hoặc số lượng chưa hợp lệ.`);
       }
+
+      if (isMixed) {
+        if (!validActualTypes.includes(detail.questionType)) {
+          errors.push(`${rowLabel}: Loại câu hỏi không hợp lệ.`);
+        } else if (detail.questionType === "Composite") {
+          if (!["TieredTrueFalse", "WeightedParts"].includes(detail.scoringRule)) {
+            errors.push(`${rowLabel}: Quy tắc chấm Composite không hợp lệ.`);
+          }
+        } else if (detail.scoringRule !== "AllOrNothing") {
+          errors.push(`${rowLabel}: Câu không phải Composite phải dùng AllOrNothing.`);
+        }
+      } else {
+        if (detail.questionType && detail.questionType !== section.questionType) {
+          errors.push(`${rowLabel}: Loại câu hỏi phân bổ không được mâu thuẫn với phần thi.`);
+        }
+        if (detail.scoringRule && detail.scoringRule !== section.scoringRule) {
+          errors.push(`${rowLabel}: Quy tắc chấm phân bổ không được mâu thuẫn với phần thi.`);
+        }
+      }
+
       return sum + (Number(detail.quantity) || 0);
     }, 0);
 
@@ -61,11 +89,22 @@ export function validateBlueprint(state, isSubmit = false) {
     (section.details || []).forEach((detail) => {
       if (!detail.tagId || !detail.difficultyId) return;
 
-      const allocationKey = `${detail.tagId}\u001F${detail.difficultyId}`;
-      if (!allocationKeys.add(allocationKey)) {
-        errors.push(`${label}: Không được trùng cặp chủ đề và độ khó trong cùng phần.`);
+      const allocationKey = isMixed
+        ? `${detail.tagId}\u001F${detail.difficultyId}\u001F${detail.questionType || ""}\u001F${detail.scoringRule || ""}`
+        : `${detail.tagId}\u001F${detail.difficultyId}`;
+
+      if (allocationKeys.has(allocationKey)) {
+        errors.push(
+          isMixed
+            ? `${label}: Không được trùng chủ đề, độ khó, loại câu hỏi và quy tắc chấm trong cùng phần.`
+            : `${label}: Không được trùng cặp chủ đề và độ khó trong cùng phần.`
+        );
+      } else {
+        allocationKeys.add(allocationKey);
       }
     });
+
+
 
     if (detailQuantity !== sectionQuestions) {
       const message = `${label}: Tổng số lượng phân bổ (${detailQuantity}) phải bằng số câu (${sectionQuestions || 0}).`;

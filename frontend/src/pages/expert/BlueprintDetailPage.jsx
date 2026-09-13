@@ -6,8 +6,9 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogFooter } from "../../components/ui/dialog";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
-import { getQuestionTypeLabel, getStatusLabel, getStatusBadgeVariant } from "../../utils/blueprintLabels";
+import { getQuestionTypeLabel, getStatusLabel, getStatusBadgeVariant, getScoringRuleLabel } from "../../utils/blueprintLabels";
 import { getBlueprintActions } from "../../utils/blueprintAuth";
+
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { validateBlueprintForSubmit } from "../../utils/blueprintValidation";
 import { getAccountId } from "../../services/authStorage";
@@ -562,19 +563,25 @@ export default function BlueprintDetailPage() {
                             </div>
                           ) : null}
                           <div className="border-l border-whisper-border pl-6">
-                            Quy tắc: <span className="font-bold text-primary">{sec.scoringRule}</span>
+                            Quy tắc: <span className="font-bold text-primary">{getScoringRuleLabel(sec.scoringRule)}</span>
                           </div>
                         </>
                       )}
                     </div>
 
                     {/* Allocation Details Table */}
-                    <div className="border border-whisper-border rounded-xl overflow-hidden mt-2">
+                    <div className="border border-whisper-border rounded-xl overflow-x-auto mt-2">
                       <table className="w-full text-left border-collapse select-text">
                         <thead className="bg-surface-container-low border-b border-whisper-border text-[11px] font-bold text-on-surface-variant">
                           <tr>
                             <th className="p-2.5 pl-4">Chủ đề</th>
-                            <th className="p-2.5 w-48">Độ khó</th>
+                            <th className="p-2.5 w-44">Độ khó</th>
+                            {sec.questionType === "Mixed" && (
+                              <>
+                                <th className="p-2.5 w-44">Loại câu hỏi</th>
+                                <th className="p-2.5 w-44">Quy tắc chấm</th>
+                              </>
+                            )}
                             <th className="p-2.5 w-32 text-right pr-6">Số lượng câu</th>
                           </tr>
                         </thead>
@@ -597,6 +604,20 @@ export default function BlueprintDetailPage() {
                                   {det.difficultyName || "Không xác định"}
                                 </span>
                               </td>
+                              {sec.questionType === "Mixed" && (
+                                <>
+                                  <td className="p-2.5">
+                                    <span className="font-medium text-on-surface">
+                                      {getQuestionTypeLabel(det.questionType)}
+                                    </span>
+                                  </td>
+                                  <td className="p-2.5">
+                                    <span className="text-[11px] font-medium text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded border border-whisper-border">
+                                      {getScoringRuleLabel(det.scoringRule)}
+                                    </span>
+                                  </td>
+                                </>
+                              )}
                               <td className="p-2.5 text-right pr-6 font-bold text-on-surface font-mono">
                                 {det.quantity} câu
                               </td>
@@ -605,6 +626,7 @@ export default function BlueprintDetailPage() {
                         </tbody>
                       </table>
                     </div>
+
 
                   </div>
                 );

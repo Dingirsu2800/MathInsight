@@ -8,7 +8,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, Di
 import BlueprintTopicPicker from "../../components/expert/BlueprintTopicPicker";
 import { testGeneratorApi } from "../../services/testGeneratorApi";
 import { questionBankApi } from "../../services/questionBankApi";
-import { detailToEditorState, editorStateToBlueprintRequest } from "../../utils/blueprintMappers";
+import { detailToEditorState, editorStateToBlueprintRequest, defaultScoringRule } from "../../utils/blueprintMappers";
 import { validateBlueprint, validateBlueprintForDraft, validateBlueprintForSubmit } from "../../utils/blueprintValidation";
 import { getBlueprintErrorMessage } from "../../utils/blueprintErrorLocalizer";
 import { getBlueprintActions } from "../../utils/blueprintAuth";
@@ -48,6 +48,15 @@ export default function BlueprintEditorPage() {
   const [isGradeConfirmOpen, setIsGradeConfirmOpen] = useState(false);
   const [pendingGrade, setPendingGrade] = useState("");
 
+  // Section Mode Change Dialog state
+  const [modeConfirmState, setModeConfirmState] = useState({
+    isOpen: false,
+    secIndex: null,
+    targetType: null
+  });
+
+
+  // Initial state setup
   // Initial state setup
   const createEmptySection = () => ({
     sectionCode: "",
@@ -59,7 +68,7 @@ export default function BlueprintEditorPage() {
     scoringRule: "AllOrNothing",
     partCountPerQuestion: null,
     details: [
-      { tagId: "", difficultyId: "", quantity: 1 }
+      { tagId: "", difficultyId: "", quantity: 1, questionType: null, scoringRule: null }
     ]
   });
 
@@ -200,18 +209,109 @@ export default function BlueprintEditorPage() {
     });
   };
 
-  const updateSectionField = (secIndex, field, value) => {
+  const applySectionTypeChange = (secIndex, targetType) => {
     setForm(prev => ({
       ...prev,
       sections: prev.sections.map((sec, idx) => {
         if (idx !== secIndex) return sec;
-        const updated = { ...sec, [field]: value };
-        if (field === "questionType") {
-          updated.scoringRule = value === "Composite" ? "WeightedParts" : "AllOrNothing";
+        if (targetType === "Mixed") {
+          const prevType = sec.questionType || "SingleChoice";
+          const prevRule = sec.scoringRule || defaultScoringRule(prevType);
+          return {
+            ...sec,
+            questionType: "Mixed",
+            scoringRule: null,
+            details: sec.details.map(det => {
+              const rowType = det.questionType || prevType;
+              const rowRule = det.scoringRule || (rowType === "Composite" ? (prevRule || "WeightedParts") : "AllOrNothing");
+              return {
+                ...det,
+                questionType: rowType,
+                scoringRule: rowRule
+              };
+            })
+          };
+        } else {
+          return {
+            ...sec,
+            questionType: targetType,
+            scoringRule: defaultScoringRule(targetType),
+            details: sec.details.map(det => ({
+              ...det,
+              questionType: null,
+              scoringRule: null
+            }))
+          };
         }
-        return updated;
       })
     }));
+  };
+
+  const updateSectionField = (secIndex, field, value) => {
+    if (field === "questionType") {
+      const currentSec = form.sections[secIndex];
+      const currentType = currentSec?.questionType;
+
+      if (currentType === value) return;
+
+      if (currentType === "Mixed" && value !== "Mixed") {
+        // Mixed -> Homogeneous: Check if any rows are incompatible or if collapsing would create duplicate topic+difficulty pairs
+        const hasIncompatibleRow = (currentSec.details || []).some(det => {
+          if (!det.questionType) return false;
+          if (det.questionType !== value) return true;
+          if (value === "Composite") {
+            return det.scoringRule && !["TieredTrueFalse", "WeightedParts"].includes(det.scoringRule);
+          }
+          return det.scoringRule && det.scoringRule !== "AllOrNothing";
+        });
+
+        const seenPairs = new Set();
+        let hasDuplicatePairs = false;
+        for (const det of currentSec.details || []) {
+          if (!det.tagId || !det.difficultyId) continue;
+          const pairKey = `${det.tagId}\u001F${det.difficultyId}`;
+          if (seenPairs.has(pairKey)) {
+            hasDuplicatePairs = true;
+            break;
+          }
+          seenPairs.add(pairKey);
+        }
+
+        if (hasIncompatibleRow || hasDuplicatePairs) {
+          setModeConfirmState({
+            isOpen: true,
+            secIndex,
+            targetType: value
+          });
+          return;
+        }
+
+        applySectionTypeChange(secIndex, value);
+        return;
+      }
+
+      applySectionTypeChange(secIndex, value);
+      return;
+    }
+
+    setForm(prev => ({
+      ...prev,
+      sections: prev.sections.map((sec, idx) => {
+        if (idx !== secIndex) return sec;
+        return { ...sec, [field]: value };
+      })
+    }));
+  };
+
+  const confirmSectionTypeChange = () => {
+    if (modeConfirmState.secIndex !== null && modeConfirmState.targetType) {
+      applySectionTypeChange(modeConfirmState.secIndex, modeConfirmState.targetType);
+    }
+    setModeConfirmState({ isOpen: false, secIndex: null, targetType: null });
+  };
+
+  const cancelSectionTypeChange = () => {
+    setModeConfirmState({ isOpen: false, secIndex: null, targetType: null });
   };
 
   // Detail/Allocation Row Action Handlers
@@ -220,9 +320,19 @@ export default function BlueprintEditorPage() {
       ...prev,
       sections: prev.sections.map((sec, idx) => {
         if (idx !== secIndex) return sec;
+        const isMixed = sec.questionType === "Mixed";
         return {
           ...sec,
-          details: [...sec.details, { tagId: "", difficultyId: "", quantity: 1 }]
+          details: [
+            ...sec.details,
+            {
+              tagId: "",
+              difficultyId: "",
+              quantity: 1,
+              questionType: isMixed ? "SingleChoice" : null,
+              scoringRule: isMixed ? "AllOrNothing" : null
+            }
+          ]
         };
       })
     }));
@@ -247,15 +357,38 @@ export default function BlueprintEditorPage() {
       ...prev,
       sections: prev.sections.map((sec, idx) => {
         if (idx !== secIndex) return sec;
+        const isMixed = sec.questionType === "Mixed";
         return {
           ...sec,
           details: sec.details.map((det, dIdx) => {
             if (dIdx !== detIndex) return det;
             const updated = { ...det, [field]: value };
-            const duplicatesExistingAllocation = sec.details.some((other, otherIndex) =>
-              otherIndex !== detIndex &&
-              other.tagId === updated.tagId &&
-              other.difficultyId === updated.difficultyId);
+
+            if (field === "questionType") {
+              if (value === "Composite") {
+                if (!["TieredTrueFalse", "WeightedParts"].includes(updated.scoringRule)) {
+                  updated.scoringRule = "WeightedParts";
+                }
+              } else {
+                updated.scoringRule = "AllOrNothing";
+              }
+            }
+
+            const duplicatesExistingAllocation = sec.details.some((other, otherIndex) => {
+              if (otherIndex === detIndex) return false;
+              if (isMixed) {
+                return (
+                  other.tagId === updated.tagId &&
+                  other.difficultyId === updated.difficultyId &&
+                  (other.questionType || "SingleChoice") === (updated.questionType || "SingleChoice") &&
+                  (other.scoringRule || "AllOrNothing") === (updated.scoringRule || "AllOrNothing")
+                );
+              }
+              return (
+                other.tagId === updated.tagId &&
+                other.difficultyId === updated.difficultyId
+              );
+            });
 
             // A topic change must not silently create a duplicate allocation pair.
             if (field === "tagId" && updated.difficultyId && duplicatesExistingAllocation) {
@@ -268,6 +401,7 @@ export default function BlueprintEditorPage() {
       })
     }));
   };
+
 
   // Keep invalid decimal input visible in the summary instead of silently truncating it.
   const toFiniteNumberOrZero = (value) => {
@@ -576,7 +710,8 @@ export default function BlueprintEditorPage() {
                             { value: "MultipleChoice", label: "Trắc nghiệm nhiều lựa chọn" },
                             { value: "TrueFalse", label: "Đúng/Sai" },
                             { value: "ShortAnswer", label: "Tự luận ngắn" },
-                            { value: "Composite", label: "Câu hỏi gồm nhiều mệnh đề" }
+                            { value: "Composite", label: "Câu hỏi gồm nhiều mệnh đề" },
+                            { value: "Mixed", label: "Hỗn hợp" }
                           ]}
                         />
                       </div>
@@ -645,8 +780,8 @@ export default function BlueprintEditorPage() {
                     )}
 
                     {/* Allocation Table */}
-                    <div className="border border-whisper-border rounded-xl overflow-hidden mt-2">
-                      <div className="bg-surface-container-low px-4 py-2 border-b border-whisper-border flex justify-between items-center">
+                    <div className="border border-whisper-border rounded-xl overflow-x-auto mt-2">
+                      <div className="bg-surface-container-low px-4 py-2 border-b border-whisper-border flex justify-between items-center min-w-full">
                         <h3 className="text-xs font-bold text-on-surface">Phân bổ nội dung câu hỏi</h3>
                         <button
                           type="button"
@@ -663,67 +798,135 @@ export default function BlueprintEditorPage() {
                           <tr>
                             <th className="text-[11px] font-bold text-on-surface-variant p-2.5">Chủ đề <span className="text-error">*</span></th>
                             <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-44">Độ khó <span className="text-error">*</span></th>
+                            {sec.questionType === "Mixed" && (
+                              <>
+                                <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-48">Loại câu hỏi <span className="text-error">*</span></th>
+                                <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-48">Quy tắc chấm <span className="text-error">*</span></th>
+                              </>
+                            )}
                             <th className="text-[11px] font-bold text-on-surface-variant p-2.5 w-24 text-center">Số lượng <span className="text-error">*</span></th>
                             <th className="p-2.5 w-12 text-center"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-whisper-border bg-pure-surface">
-                          {sec.details.map((det, detIdx) => (
-                            <tr key={detIdx} className="hover:bg-surface-bright transition-colors">
-                              <td className="p-2 align-top">
-                                <BlueprintTopicPicker
-                                  value={det.tagId}
-                                  topics={topicList}
-                                  placeholder="Chọn chủ đề của lớp..."
-                                  onValueChange={(val) => updateDetailField(secIdx, detIdx, "tagId", val)}
-                                />
-                              </td>
-                              <td className="p-2 align-top">
-                                <CustomSelect
-                                  value={det.difficultyId}
-                                  placeholder="Chọn độ khó..."
-                                  onValueChange={(val) => updateDetailField(secIdx, detIdx, "difficultyId", val)}
-                                  items={difficultyList
-                                    .map(d => ({ value: d.difficultyId || d.id, label: d.difficultyName || d.name }))
-                                    .filter(difficulty =>
-                                      difficulty.value === det.difficultyId ||
-                                      !sec.details.some((other, otherIdx) =>
-                                        otherIdx !== detIdx &&
-                                        other.tagId === det.tagId &&
-                                        other.difficultyId === difficulty.value))}
-                                />
-                                {det.tagId && det.difficultyId && sec.details.some((other, otherIdx) =>
+                          {sec.details.map((det, detIdx) => {
+                            const isMixed = sec.questionType === "Mixed";
+                            const isRowComposite = det.questionType === "Composite";
+                            const isDuplicate = isMixed
+                              ? sec.details.some((other, otherIdx) =>
                                   otherIdx !== detIdx &&
                                   other.tagId === det.tagId &&
-                                  other.difficultyId === det.difficultyId) && (
-                                  <p className="mt-1 text-[10px] font-semibold text-error">
-                                    Trùng chủ đề và độ khó trong phần này.
-                                  </p>
+                                  other.difficultyId === det.difficultyId &&
+                                  (other.questionType || "SingleChoice") === (det.questionType || "SingleChoice") &&
+                                  (other.scoringRule || "AllOrNothing") === (det.scoringRule || "AllOrNothing"))
+                              : sec.details.some((other, otherIdx) =>
+                                  otherIdx !== detIdx &&
+                                  other.tagId === det.tagId &&
+                                  other.difficultyId === det.difficultyId);
+
+                            return (
+                              <tr key={detIdx} className="hover:bg-surface-bright transition-colors">
+                                <td className="p-2 align-top">
+                                  <BlueprintTopicPicker
+                                    value={det.tagId}
+                                    topics={topicList}
+                                    placeholder="Chọn chủ đề của lớp..."
+                                    onValueChange={(val) => updateDetailField(secIdx, detIdx, "tagId", val)}
+                                  />
+                                </td>
+                                <td className="p-2 align-top">
+                                  <CustomSelect
+                                    value={det.difficultyId}
+                                    placeholder="Chọn độ khó..."
+                                    onValueChange={(val) => updateDetailField(secIdx, detIdx, "difficultyId", val)}
+                                    items={difficultyList
+                                      .map(d => ({ value: d.difficultyId || d.id, label: d.difficultyName || d.name }))
+                                      .filter(difficulty =>
+                                        difficulty.value === det.difficultyId ||
+                                        !sec.details.some((other, otherIdx) => {
+                                          if (otherIdx === detIdx) return false;
+                                          if (isMixed) {
+                                            return (
+                                              other.tagId === det.tagId &&
+                                              other.difficultyId === difficulty.value &&
+                                              (other.questionType || "SingleChoice") === (det.questionType || "SingleChoice") &&
+                                              (other.scoringRule || "AllOrNothing") === (det.scoringRule || "AllOrNothing")
+                                            );
+                                          }
+                                          return (
+                                            other.tagId === det.tagId &&
+                                            other.difficultyId === difficulty.value
+                                          );
+                                        }))}
+                                  />
+                                  {det.tagId && det.difficultyId && isDuplicate && (
+                                    <p className="mt-1 text-[10px] font-semibold text-error">
+                                      {isMixed
+                                        ? "Trùng chủ đề, độ khó, loại câu và quy tắc chấm trong phần này."
+                                        : "Trùng chủ đề và độ khó trong phần này."}
+                                    </p>
+                                  )}
+                                </td>
+
+                                {isMixed && (
+                                  <>
+                                    <td className="p-2 align-top">
+                                      <CustomSelect
+                                        value={det.questionType || "SingleChoice"}
+                                        onValueChange={(val) => updateDetailField(secIdx, detIdx, "questionType", val)}
+                                        items={[
+                                          { value: "SingleChoice", label: "Trắc nghiệm một lựa chọn" },
+                                          { value: "MultipleChoice", label: "Trắc nghiệm nhiều lựa chọn" },
+                                          { value: "TrueFalse", label: "Đúng/Sai" },
+                                          { value: "ShortAnswer", label: "Tự luận ngắn" },
+                                          { value: "Composite", label: "Câu hỏi gồm nhiều mệnh đề" }
+                                        ]}
+                                      />
+                                    </td>
+                                    <td className="p-2 align-top">
+                                      {isRowComposite ? (
+                                        <CustomSelect
+                                          value={det.scoringRule || "WeightedParts"}
+                                          onValueChange={(val) => updateDetailField(secIdx, detIdx, "scoringRule", val)}
+                                          items={[
+                                            { value: "WeightedParts", label: "Theo trọng số phần" },
+                                            { value: "TieredTrueFalse", label: "Đúng/Sai phân bậc" }
+                                          ]}
+                                        />
+                                      ) : (
+                                        <div className="h-10 flex items-center px-3 text-xs text-on-surface-variant bg-surface-container-low rounded-lg border border-whisper-border font-medium">
+                                          <span className="truncate">Tất cả hoặc không</span>
+                                        </div>
+                                      )}
+                                    </td>
+                                  </>
                                 )}
-                              </td>
-                              <td className="p-2">
-                                <input
-                                  type="number"
-                                  value={det.quantity}
-                                  min="1"
-                                  onChange={(e) => updateDetailField(secIdx, detIdx, "quantity", e.target.value)}
-                                  className="w-full rounded-lg border border-outline-variant p-2 text-xs text-on-surface text-center focus:outline-none focus:border-primary transition-all"
-                                />
-                              </td>
-                              <td className="p-2 text-center">
-                                <button
-                                  type="button"
-                                  disabled={sec.details.length <= 1}
-                                  onClick={() => removeDetailRow(secIdx, detIdx)}
-                                  aria-label="Xóa dòng phân bổ này"
-                                  className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/5 rounded-lg disabled:opacity-30 transition-colors cursor-pointer"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+
+                                <td className="p-2 align-top">
+                                  <input
+                                    type="number"
+                                    value={det.quantity}
+                                    min="1"
+                                    onChange={(e) => updateDetailField(secIdx, detIdx, "quantity", e.target.value)}
+                                    className="w-full rounded-lg border border-outline-variant p-2 text-xs text-on-surface text-center focus:outline-none focus:border-primary transition-all"
+                                  />
+                                </td>
+                                <td className="p-2 text-center align-top pt-3">
+                                  <button
+                                    type="button"
+                                    disabled={sec.details.length <= 1}
+                                    onClick={() => removeDetailRow(secIdx, detIdx)}
+                                    aria-label="Xóa dòng phân bổ này"
+                                    className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/5 rounded-lg disabled:opacity-30 transition-colors cursor-pointer"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
+
                       </table>
                     </div>
 
@@ -858,6 +1061,42 @@ export default function BlueprintEditorPage() {
         </DialogFooter>
       </Dialog>
 
+      {/* Section Mode Change Confirmation Dialog */}
+      <Dialog isOpen={modeConfirmState.isOpen} onClose={cancelSectionTypeChange}>
+        <DialogHeader>
+          <DialogTitle>Xác nhận đổi loại phần thi</DialogTitle>
+          <DialogDescription>
+            Chuyển đổi từ phần thi Hỗn hợp sang phần thi đồng nhất.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-xs text-on-surface-variant leading-relaxed">
+            Phần thi hiện tại đang ở chế độ <span className="font-bold text-on-surface">Hỗn hợp</span> với các dòng phân bổ có cấu hình loại câu hỏi hoặc quy tắc chấm riêng biệt.
+            <br />
+            <br />
+            Nếu chuyển sang <span className="font-bold text-primary">{getQuestionTypeLabel(modeConfirmState.targetType)}</span>, tất cả các dòng phân bổ sẽ được đồng nhất theo loại câu hỏi này và cấu hình phân bổ riêng từng dòng trước đó sẽ bị thay thế.
+            <br />
+            <br />
+            Bạn có chắc chắn muốn chuyển đổi không?
+          </p>
+        </DialogContent>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={cancelSectionTypeChange}
+          >
+            Giữ lại Hỗn hợp
+          </Button>
+          <Button
+            variant="primary"
+            onClick={confirmSectionTypeChange}
+          >
+            Xác nhận chuyển đổi
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
     </ExpertLayout>
   );
 }
+

@@ -7,21 +7,28 @@ export function detailToEditorState(detail) {
     totalQuestions: detail.totalQuestions ?? "",
     totalScore: detail.totalScore ?? 10,
     durationMinutes: detail.durationMinutes ?? 90,
-    sections: (detail.sections || []).map((section) => ({
-      sectionCode: section.sectionCode || "",
-      sectionName: section.sectionName || "",
-      questionType: section.questionType || "SingleChoice",
-      instructionText: section.instructionText || "",
-      totalQuestions: section.totalQuestions ?? "",
-      scoreBudget: section.scoreBudget ?? "",
-      scoringRule: section.scoringRule || defaultScoringRule(section.questionType),
-      partCountPerQuestion: section.partCountPerQuestion ?? "",
-      details: (section.details || []).map((detailSlot) => ({
-        tagId: detailSlot.tagId || "",
-        difficultyId: detailSlot.difficultyId || "",
-        quantity: detailSlot.quantity ?? 1
-      }))
-    }))
+    sections: (detail.sections || []).map((section) => {
+      const isMixed = section.questionType === "Mixed";
+      return {
+        sectionCode: section.sectionCode || "",
+        sectionName: section.sectionName || "",
+        questionType: section.questionType || "SingleChoice",
+        instructionText: section.instructionText || "",
+        totalQuestions: section.totalQuestions ?? "",
+        scoreBudget: section.scoreBudget ?? "",
+        scoringRule: isMixed ? null : (section.scoringRule || defaultScoringRule(section.questionType)),
+        partCountPerQuestion: section.partCountPerQuestion ?? "",
+        details: (section.details || []).map((detailSlot) => ({
+          tagId: detailSlot.tagId || "",
+          difficultyId: detailSlot.difficultyId || "",
+          quantity: detailSlot.quantity ?? 1,
+          questionType: isMixed ? (detailSlot.questionType || "SingleChoice") : null,
+          scoringRule: isMixed
+            ? (detailSlot.scoringRule || defaultScoringRule(detailSlot.questionType || "SingleChoice"))
+            : null
+        }))
+      };
+    })
   };
 }
 
@@ -53,8 +60,14 @@ export function editorStateToBlueprintRequest(editorState) {
     totalScore: parseDecimal(editorState.totalScore, "Tổng điểm"),
     durationMinutes: parseInteger(editorState.durationMinutes, "Thời gian làm bài"),
     sections: (editorState.sections || []).map((section, index) => {
+      const isMixed = section.questionType === "Mixed";
       const isComposite = section.questionType === "Composite";
       const sectionLabel = `Phần ${index + 1} (${section.sectionName || "Chưa đặt tên"})`;
+
+      let sectionScoringRule = null;
+      if (!isMixed) {
+        sectionScoringRule = isComposite ? (section.scoringRule || "WeightedParts") : "AllOrNothing";
+      }
 
       return {
         sectionOrder: index + 1,
@@ -64,16 +77,35 @@ export function editorStateToBlueprintRequest(editorState) {
         instructionText: section.instructionText?.trim() || null,
         totalQuestions: parseInteger(section.totalQuestions, `${sectionLabel} - Số câu`),
         scoreBudget: parseDecimal(section.scoreBudget, `${sectionLabel} - Quỹ điểm`),
-        scoringRule: isComposite ? section.scoringRule : "AllOrNothing",
+        scoringRule: sectionScoringRule,
         partCountPerQuestion: null,
         details: (section.details || []).map((detailSlot, detailIndex) => {
           const detailLabel = `${sectionLabel} - Phân bổ dòng ${detailIndex + 1}`;
           if (!detailSlot.tagId) throw new Error(`Chưa chọn chủ đề tại ${detailLabel}.`);
           if (!detailSlot.difficultyId) throw new Error(`Chưa chọn độ khó tại ${detailLabel}.`);
-          return {
+
+          const baseDetail = {
             tagId: detailSlot.tagId,
             difficultyId: detailSlot.difficultyId,
             quantity: parseInteger(detailSlot.quantity, `${detailLabel} - Số lượng`)
+          };
+
+          if (isMixed) {
+            const rowType = detailSlot.questionType || "SingleChoice";
+            const rowRule = rowType === "Composite"
+              ? (detailSlot.scoringRule === "TieredTrueFalse" ? "TieredTrueFalse" : "WeightedParts")
+              : "AllOrNothing";
+            return {
+              ...baseDetail,
+              questionType: rowType,
+              scoringRule: rowRule
+            };
+          }
+
+          return {
+            ...baseDetail,
+            questionType: null,
+            scoringRule: null
           };
         })
       };
@@ -82,5 +114,7 @@ export function editorStateToBlueprintRequest(editorState) {
 }
 
 export function defaultScoringRule(questionType) {
+  if (questionType === "Mixed") return null;
   return questionType === "Composite" ? "WeightedParts" : "AllOrNothing";
 }
+
