@@ -173,7 +173,9 @@ public sealed class SubmitBlueprintForReviewCommandHandler
                         {
                             TagId = detail.TagId,
                             DifficultyId = detail.DifficultyId,
-                            Quantity = detail.Quantity
+                            Quantity = detail.Quantity,
+                            QuestionType = detail.QuestionType,
+                            ScoringRule = detail.ScoringRule
                         })
                         .ToList()
                 })

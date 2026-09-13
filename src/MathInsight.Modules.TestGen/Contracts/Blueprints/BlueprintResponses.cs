@@ -66,7 +66,7 @@ public sealed record BlueprintSectionResponse(
     string? InstructionText,
     int TotalQuestions,
     decimal ScoreBudget,
-    string ScoringRule,
+    string? ScoringRule,
     int? PartCountPerQuestion,
     IReadOnlyList<BlueprintDetailSlotResponse> Details);
 
@@ -77,4 +77,6 @@ public sealed record BlueprintDetailSlotResponse(
     string DifficultyId,
     string? DifficultyName,
     int? DifficultyLevel,
-    int Quantity);
+    int Quantity,
+    string? QuestionType,
+    string? ScoringRule);

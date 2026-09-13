@@ -15,7 +15,7 @@ public class BlueprintSection
     public string? InstructionText { get; set; }
     public int TotalQuestions { get; set; }
     public decimal ScoreBudget { get; set; }
-    public string ScoringRule { get; set; } = "AllOrNothing";
+    public string? ScoringRule { get; set; } = "AllOrNothing";
     public int? PartCountPerQuestion { get; set; }
 
     public Blueprint? Blueprint { get; set; }

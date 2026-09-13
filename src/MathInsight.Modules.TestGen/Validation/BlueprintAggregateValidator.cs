@@ -45,7 +45,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
             var sectionName = section.SectionName?.Trim();
             var sectionCode = NullIfWhiteSpace(section.SectionCode);
             var questionType = BlueprintQuestionTypes.Normalize(section.QuestionType);
-            var scoringRule = NormalizeScoringRule(section.ScoringRule);
+            var scoringRule = BlueprintPolicies.NormalizeScoringRule(section.ScoringRule);
 
             if (section.SectionOrder <= 0 ||
                 !sectionOrders.Add(section.SectionOrder) ||
@@ -55,8 +55,8 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
                 string.IsNullOrEmpty(questionType) ||
                 section.TotalQuestions < 0 ||
                 !IsScoreValid(section.ScoreBudget) ||
-                scoringRule is null ||
-                !IsCompositeMetadataValid(section, questionType, scoringRule) ||
+                (questionType != BlueprintQuestionTypes.Composite && section.PartCountPerQuestion is not null) ||
+                !IsSectionPolicyValid(questionType, scoringRule) ||
                 section.Details is null ||
                 section.Details.Count == 0)
             {
@@ -70,19 +70,33 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
             {
                 var tagId = detail.TagId?.Trim();
                 var difficultyId = detail.DifficultyId?.Trim();
-                var duplicateKey = $"{tagId}\u001F{difficultyId}";
+                var detailQuestionType = BlueprintQuestionTypes.Normalize(detail.QuestionType);
+                var detailScoringRule = BlueprintPolicies.NormalizeScoringRule(detail.ScoringRule);
+                var duplicateKey = $"{tagId}\u001F{difficultyId}\u001F{detailQuestionType}\u001F{detailScoringRule}";
 
                 if (string.IsNullOrWhiteSpace(tagId) ||
                     string.IsNullOrWhiteSpace(difficultyId) ||
                     detail.Quantity < 1 ||
-                    !detailKeys.Add(duplicateKey))
+                    !detailKeys.Add(duplicateKey) ||
+                    !BlueprintPolicies.TryResolveEffectivePolicy(
+                        questionType,
+                        scoringRule,
+                        detailQuestionType,
+                        detailScoringRule,
+                        out var effectiveQuestionType,
+                        out var effectiveScoringRule))
                 {
                     return Result<ValidatedBlueprintAggregate>.Failure(BlueprintErrors.StructureInvalid);
                 }
 
                 tagIds.Add(tagId);
                 difficultyIds.Add(difficultyId);
-                normalizedDetails.Add(new ValidatedBlueprintDetail(tagId, difficultyId, detail.Quantity));
+                normalizedDetails.Add(new ValidatedBlueprintDetail(
+                    tagId,
+                    difficultyId,
+                    detail.Quantity,
+                    questionType == BlueprintQuestionTypes.Mixed ? effectiveQuestionType : null,
+                    questionType == BlueprintQuestionTypes.Mixed ? effectiveScoringRule : null));
             }
 
             normalizedSections.Add(new ValidatedBlueprintSection(
@@ -93,7 +107,7 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
                 NullIfWhiteSpace(section.InstructionText),
                 section.TotalQuestions,
                 section.ScoreBudget,
-                scoringRule,
+                questionType == BlueprintQuestionTypes.Mixed ? null : scoringRule,
                 null,
                 normalizedDetails));
         }
@@ -151,30 +165,14 @@ public sealed class BlueprintAggregateValidator : IBlueprintAggregateValidator
                 normalizedSections));
     }
 
-    private static bool IsCompositeMetadataValid(
-        BlueprintSectionRequest section,
-        string questionType,
-        string scoringRule)
-    {
-        if (questionType == BlueprintQuestionTypes.Composite)
-        {
-            return scoringRule is ScoringRules.TieredTrueFalse or ScoringRules.WeightedParts;
-        }
-
-        return section.PartCountPerQuestion is null && scoringRule == ScoringRules.AllOrNothing;
-    }
+    private static bool IsSectionPolicyValid(string? questionType, string? scoringRule)
+        => questionType == BlueprintQuestionTypes.Mixed
+            ? scoringRule is null
+            : BlueprintQuestionTypes.IsActualQuestionType(questionType) &&
+              BlueprintPolicies.IsValidPair(questionType, scoringRule);
 
     private static bool IsScoreValid(decimal score)
         => score is > 0m and <= 100m && decimal.Round(score, 2) == score;
-
-    private static string? NormalizeScoringRule(string? value)
-        => value?.Trim().ToUpperInvariant() switch
-        {
-            "ALLORNOTHING" => ScoringRules.AllOrNothing,
-            "TIEREDTRUEFALSE" => ScoringRules.TieredTrueFalse,
-            "WEIGHTEDPARTS" => ScoringRules.WeightedParts,
-            _ => null
-        };
 
     private static string? NullIfWhiteSpace(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

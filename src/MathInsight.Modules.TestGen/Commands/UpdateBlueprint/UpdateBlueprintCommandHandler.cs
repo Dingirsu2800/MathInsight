@@ -165,17 +165,23 @@ public sealed class UpdateBlueprintCommandHandler
             var actualDetails = actualSection.Details
                 .OrderBy(detail => detail.TagId)
                 .ThenBy(detail => detail.DifficultyId)
+                .ThenBy(detail => detail.QuestionType)
+                .ThenBy(detail => detail.ScoringRule)
                 .ToList();
             var expectedDetails = expectedSection.Details
                 .OrderBy(detail => detail.TagId)
                 .ThenBy(detail => detail.DifficultyId)
+                .ThenBy(detail => detail.QuestionType)
+                .ThenBy(detail => detail.ScoringRule)
                 .ToList();
 
             for (var detailIndex = 0; detailIndex < expectedDetails.Count; detailIndex++)
             {
                 if (actualDetails[detailIndex].TagId != expectedDetails[detailIndex].TagId ||
                     actualDetails[detailIndex].DifficultyId != expectedDetails[detailIndex].DifficultyId ||
-                    actualDetails[detailIndex].Quantity != expectedDetails[detailIndex].Quantity)
+                    actualDetails[detailIndex].Quantity != expectedDetails[detailIndex].Quantity ||
+                    actualDetails[detailIndex].QuestionType != expectedDetails[detailIndex].QuestionType ||
+                    actualDetails[detailIndex].ScoringRule != expectedDetails[detailIndex].ScoringRule)
                 {
                     return false;
                 }

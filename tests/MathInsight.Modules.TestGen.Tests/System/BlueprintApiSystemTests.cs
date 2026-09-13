@@ -85,6 +85,47 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
     }
 
     [TestGenSqlServerFact]
+    public async Task MixedBlueprint_CreateReadUpdateAndClone_PreservesEachDetailPolicyThroughHostedApi()
+    {
+        using var createRequest = CreateJsonRequest(
+            HttpMethod.Post,
+            "/api/test-generator/blueprints",
+            MixedBlueprintRequestJson("L3 mixed blueprint"));
+        createRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+        var createResponse = await _client.SendAsync(createRequest);
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var blueprintId = await ReadBlueprintIdAsync(createResponse);
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/test-generator/blueprints/{blueprintId}");
+        getRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var getResponse = await _client.SendAsync(getRequest);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        await AssertMixedResponseAsync(getResponse, "L3 mixed blueprint");
+
+        using var updateRequest = CreateJsonRequest(
+            HttpMethod.Put,
+            $"/api/test-generator/blueprints/{blueprintId}",
+            MixedBlueprintRequestJson("L3 mixed blueprint updated"));
+        updateRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var updateResponse = await _client.SendAsync(updateRequest);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        using var cloneRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/test-generator/blueprints/{blueprintId}/clone");
+        cloneRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var cloneResponse = await _client.SendAsync(cloneRequest);
+        Assert.Equal(HttpStatusCode.Created, cloneResponse.StatusCode);
+        var cloneId = await ReadBlueprintIdAsync(cloneResponse);
+
+        using var cloneGetRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/test-generator/blueprints/{cloneId}");
+        cloneGetRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var cloneGetResponse = await _client.SendAsync(cloneGetRequest);
+        Assert.Equal(HttpStatusCode.OK, cloneGetResponse.StatusCode);
+        await AssertMixedResponseAsync(cloneGetResponse, "L3 mixed blueprint updated (Copy)");
+    }
+
+    [TestGenSqlServerFact]
     public async Task UpdateBlueprint_AsDifferentExpert_ReturnsForbiddenAndPreservesOwnerBlueprint()
     {
         var blueprintId = await CreateBlueprintAsOwnerAsync("L3 protected blueprint");
@@ -226,6 +267,72 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
         }
         """;
 
+    private static string MixedBlueprintRequestJson(string name) => $$"""
+        {
+          "blueprintName": "{{name}}",
+          "grade": 12,
+          "totalQuestions": 3,
+          "totalScore": 10.00,
+          "durationMinutes": 30,
+          "sections": [{
+            "sectionOrder": 1,
+            "sectionName": "Mixed section",
+            "questionType": "Mixed",
+            "scoringRule": null,
+            "totalQuestions": 3,
+            "scoreBudget": 10.00,
+            "details": [
+              {
+                "tagId": "l3-topic-12",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "SingleChoice",
+                "scoringRule": "AllOrNothing"
+              },
+              {
+                "tagId": "l3-topic-12",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "ShortAnswer",
+                "scoringRule": "AllOrNothing"
+              },
+              {
+                "tagId": "l3-topic-12",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "Composite",
+                "scoringRule": "WeightedParts"
+              }
+            ]
+          }]
+        }
+        """;
+
+    private static async Task AssertMixedResponseAsync(HttpResponseMessage response, string expectedName)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.Equal(expectedName, root.GetProperty("blueprintName").GetString());
+        var section = Assert.Single(root.GetProperty("sections").EnumerateArray().ToArray());
+        Assert.Equal("Mixed", section.GetProperty("questionType").GetString());
+        Assert.Equal(JsonValueKind.Null, section.GetProperty("scoringRule").ValueKind);
+        var policies = section.GetProperty("details")
+            .EnumerateArray()
+            .Select(detail => (
+                Type: detail.GetProperty("questionType").GetString(),
+                Rule: detail.GetProperty("scoringRule").GetString()))
+            .OrderBy(item => item.Type, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[]
+            {
+                ((string?)"Composite", (string?)"WeightedParts"),
+                ((string?)"ShortAnswer", (string?)"AllOrNothing"),
+                ((string?)"SingleChoice", (string?)"AllOrNothing")
+            },
+            policies);
+    }
+
     private static async Task<string> ReadBlueprintIdAsync(HttpResponseMessage response)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -261,6 +368,7 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "005_Align_TestGen_QuestionBank_Contract.sql")).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "006_MentorFollowUp_CompositePolicy.sql")).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "009_Fix_BlueprintSection_CompositePartCount.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "010_BlueprintMixedSections.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-expert-l3', N'Expert', N'L3 test role');
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-student-l3', N'Student', N'L3 test role');

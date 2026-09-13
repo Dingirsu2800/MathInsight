@@ -10,6 +10,7 @@ using MathInsight.Modules.TestGen.Queries.GetBlueprintExamOptions;
 using MathInsight.Modules.TestGen.Tests;
 using MathInsight.Shared.Recommendations;
 using MathInsight.Shared.Questions;
+using MathInsight.Shared.Scoring;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 
@@ -17,6 +18,210 @@ namespace MathInsight.Modules.TestGen.Tests;
 
 public sealed class BlueprintExamGenerationTests
 {
+    [Fact]
+    public void BuildRequirements_MixedSection_UsesTheEffectivePolicyOfEachDetail()
+    {
+        var blueprint = new Blueprint
+        {
+            BlueprintId = "mixed-requirements",
+            BlueprintName = "Mixed requirements",
+            Grade = 12,
+            TotalQuestions = 2,
+            TotalScore = 10m,
+            DurationMinutes = 30,
+            ExpertId = "expert-owner",
+            Status = BlueprintStatuses.Approved
+        };
+        var section = new BlueprintSection
+        {
+            BlueprintSectionId = "mixed-requirements-section",
+            BlueprintId = blueprint.BlueprintId,
+            SectionOrder = 1,
+            SectionName = "Mixed",
+            QuestionType = BlueprintQuestionTypes.Mixed,
+            ScoringRule = null,
+            TotalQuestions = 2,
+            ScoreBudget = 10m
+        };
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "detail-single",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = TopicA,
+            DifficultyId = EasyDifficultyId,
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.SingleChoice,
+            ScoringRule = ScoringRules.AllOrNothing
+        });
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "detail-composite",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = TopicA,
+            DifficultyId = EasyDifficultyId,
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.Composite,
+            ScoringRule = ScoringRules.WeightedParts
+        });
+        blueprint.Sections.Add(section);
+
+        var requirements = BlueprintExamGenerationPlanner.BuildRequirements(blueprint);
+
+        Assert.Equal(BlueprintExamStructureError.None,
+            BlueprintExamGenerationPlanner.ValidateStructure(blueprint, requirements));
+        Assert.Equal(
+            (BlueprintQuestionTypes.Composite, ScoringRules.WeightedParts),
+            (requirements.Single(item => item.BlueprintDetailId == "detail-composite").QuestionType,
+             requirements.Single(item => item.BlueprintDetailId == "detail-composite").ScoringRule));
+        Assert.Equal(
+            (BlueprintQuestionTypes.SingleChoice, ScoringRules.AllOrNothing),
+            (requirements.Single(item => item.BlueprintDetailId == "detail-single").QuestionType,
+             requirements.Single(item => item.BlueprintDetailId == "detail-single").ScoringRule));
+    }
+
+    [Fact]
+    public void PrepareQuestions_MixedSection_StoresEachDetailRuleInItsSnapshotPlan()
+    {
+        var blueprint = new Blueprint
+        {
+            BlueprintId = "mixed-prepared",
+            BlueprintName = "Mixed prepared",
+            Grade = 12,
+            TotalQuestions = 2,
+            TotalScore = 10m,
+            DurationMinutes = 30,
+            ExpertId = "expert-owner",
+            Status = BlueprintStatuses.Approved
+        };
+        var section = new BlueprintSection
+        {
+            BlueprintSectionId = "mixed-prepared-section",
+            BlueprintId = blueprint.BlueprintId,
+            SectionOrder = 1,
+            SectionName = "Mixed",
+            QuestionType = BlueprintQuestionTypes.Mixed,
+            ScoringRule = null,
+            TotalQuestions = 2,
+            ScoreBudget = 10m
+        };
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "detail-composite",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = TopicA,
+            DifficultyId = EasyDifficultyId,
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.Composite,
+            ScoringRule = ScoringRules.WeightedParts
+        });
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "detail-single",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = TopicB,
+            DifficultyId = EasyDifficultyId,
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.SingleChoice,
+            ScoringRule = ScoringRules.AllOrNothing
+        });
+        blueprint.Sections.Add(section);
+        var candidates = new[]
+        {
+            new BlueprintExamCandidate("composite-question", "composite-version", 1m, EasyDifficultyId,
+                BlueprintQuestionTypes.Composite, new HashSet<string>([TopicA]),
+                new HashSet<string>([ScoringRules.WeightedParts])),
+            new BlueprintExamCandidate("single-question", "single-version", 1m, EasyDifficultyId,
+                BlueprintQuestionTypes.SingleChoice, new HashSet<string>([TopicB]),
+                new HashSet<string>([ScoringRules.AllOrNothing]))
+        };
+        var selection = new BlueprintExamSelection(true,
+        [
+            new BlueprintExamAssignment("composite-question", "detail-composite", 1, 0, 1),
+            new BlueprintExamAssignment("single-question", "detail-single", 1, 1, 2)
+        ]);
+
+        var prepared = BlueprintExamGenerationPlanner.PrepareQuestions(blueprint, selection, candidates);
+
+        Assert.Equal(
+            new[] { ScoringRules.WeightedParts, ScoringRules.AllOrNothing },
+            prepared.OrderBy(item => item.QuestionOrder).Select(item => item.ScoringRule));
+        Assert.Equal(10m, prepared.Sum(item => item.MaxPoints));
+    }
+
+    [Fact]
+    public async Task Generate_MixedBlueprint_PersistsPerDetailScoringSnapshots()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        AddStudent(testContext, StudentId, 12);
+        var blueprint = new Blueprint
+        {
+            BlueprintId = "mixed-generated",
+            BlueprintName = "Mixed generated",
+            Grade = 12,
+            TotalQuestions = 2,
+            TotalScore = 10m,
+            DurationMinutes = 30,
+            ExpertId = "expert-owner",
+            Status = BlueprintStatuses.Approved
+        };
+        var section = new BlueprintSection
+        {
+            BlueprintSectionId = "mixed-generated-section",
+            BlueprintId = blueprint.BlueprintId,
+            SectionOrder = 1,
+            SectionName = "Mixed",
+            QuestionType = BlueprintQuestionTypes.Mixed,
+            ScoringRule = null,
+            TotalQuestions = 2,
+            ScoreBudget = 10m
+        };
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "generated-composite-detail",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = TopicA,
+            DifficultyId = EasyDifficultyId,
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.Composite,
+            ScoringRule = ScoringRules.WeightedParts
+        });
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "generated-single-detail",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = TopicB,
+            DifficultyId = EasyDifficultyId,
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.SingleChoice,
+            ScoringRule = ScoringRules.AllOrNothing
+        });
+        blueprint.Sections.Add(section);
+        testContext.Context.Blueprints.Add(blueprint);
+        AddQuestion(testContext, "generated-composite", TopicA, questionType: BlueprintQuestionTypes.Composite);
+        AddQuestion(testContext, "generated-single", TopicB, questionType: BlueprintQuestionTypes.SingleChoice);
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await CreateHandler(testContext).Handle(
+            new GenerateBlueprintExamCommand(blueprint.BlueprintId, StudentId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var questions = await testContext.Context.TestQuestions
+            .Where(item => item.TestId == result.Value!.TestId)
+            .OrderBy(item => item.QuestionOrder)
+            .ToListAsync();
+        Assert.Equal(2, questions.Count);
+        Assert.Contains(questions, item => item.QuestionId == "generated-composite" && item.ScoringRuleSnapshot == ScoringRules.WeightedParts);
+        Assert.Contains(questions, item => item.QuestionId == "generated-single" && item.ScoringRuleSnapshot == ScoringRules.AllOrNothing);
+        Assert.Equal(10m, questions.Sum(item => item.MaxPointsSnapshot));
+    }
+
     [Fact]
     public void Selector_TieredTrueFalse_RejectsCompositeVersionWithoutTieredSupport()
     {
