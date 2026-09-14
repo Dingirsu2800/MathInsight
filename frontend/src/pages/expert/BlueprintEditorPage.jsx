@@ -42,6 +42,9 @@ export default function BlueprintEditorPage() {
     if (blueprintId) {
       persistedBlueprintIdRef.current = blueprintId;
       setPersistedBlueprintId(blueprintId);
+    } else {
+      persistedBlueprintIdRef.current = null;
+      setPersistedBlueprintId(null);
     }
   }, [blueprintId]);
 
@@ -180,8 +183,12 @@ export default function BlueprintEditorPage() {
           setLoading(false);
         });
     } else {
-      // In create mode, initialize with one empty section if no draft has been created yet
-      if (persistedBlueprintIdRef.current) return;
+      // In create mode (/expert/blueprints/new), reset form and draft tracking if not already clean
+      loadedBlueprintIdRef.current = null;
+      persistedBlueprintIdRef.current = null;
+      setPersistedBlueprintId(null);
+      setPageError(null);
+      setFeedback(null);
       setForm({
         blueprintName: "",
         grade: "12",
@@ -508,7 +515,7 @@ export default function BlueprintEditorPage() {
         type: "error",
         message: getBlueprintErrorMessage(err, "Không thể lưu dữ liệu cấu trúc đề. Vui lòng thử lại.")
       });
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo?.({ top: 0, behavior: "smooth" });
     } finally {
       setIsMutating(false);
     }
@@ -542,12 +549,8 @@ export default function BlueprintEditorPage() {
         loadedBlueprintIdRef.current = targetId;
         setPersistedBlueprintId(targetId);
 
-        // Synchronize route and browser URL so that reloads open the saved draft
-        try {
-          window.history?.replaceState?.(null, "", `/expert/blueprints/${targetId}/edit`);
-        } catch {
-          // ignore in environments without history support
-        }
+        // Transition router to edit route while preserving in-memory draft edits and row IDs
+        navigate(`/expert/blueprints/${targetId}/edit`, { replace: true });
       }
 
       await testGeneratorApi.submitBlueprintForReview(targetId);

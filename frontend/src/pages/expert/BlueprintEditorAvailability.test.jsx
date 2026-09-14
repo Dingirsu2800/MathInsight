@@ -460,8 +460,12 @@ describe('BlueprintEditorPage Live Availability (Task 2)', () => {
       expect(testGeneratorApi.submitBlueprintForReview).toHaveBeenCalledWith('bp-sub-1');
     });
 
-    // Form data must be PRESERVED (no navigate away)
-    expect(mockNavigate).not.toHaveBeenCalled();
+    // Transitioned to edit route with replace: true, but no navigate away to detail page
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/blueprints/bp-sub-1/edit', { replace: true });
+    expect(mockNavigate).not.toHaveBeenCalledWith(
+      '/expert/blueprints/bp-sub-1',
+      expect.anything()
+    );
     expect(screen.getByDisplayValue('Cấu trúc đề kiểm tra submit 409')).toBeInTheDocument();
 
     // Error banner displays localized 409 message
@@ -587,7 +591,7 @@ describe('FE Task 2 Regressions: handleSaveAndSubmit draft identity preservation
     // 409 error banner shown, form data and client row IDs preserved
     expect(await screen.findByText(/Các phần thi bị xung đột trùng lặp câu hỏi/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue('Cấu trúc đề kiểm tra hồi quy X')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/expert/blueprints/bp-X/edit');
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/blueprints/bp-X/edit', { replace: true });
 
     // User edits form
     const nameInput = screen.getByDisplayValue('Cấu trúc đề kiểm tra hồi quy X');
@@ -702,8 +706,8 @@ describe('FE Task 2 Regressions: handleSaveAndSubmit draft identity preservation
       expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
     });
 
-    // Route was synchronized to edit route
-    expect(window.location.pathname).toBe('/expert/blueprints/bp-X/edit');
+    // Route was synchronized to edit route via navigate replace
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/blueprints/bp-X/edit', { replace: true });
 
     // Simulate reloading the route: unmount and remount at /expert/blueprints/bp-X/edit
     unmount();
@@ -785,7 +789,7 @@ describe('FE Task 2 Regressions: handleSaveAndSubmit draft identity preservation
 
     // Form data and route preserved
     expect(screen.getByDisplayValue('Cấu trúc đề kiểm tra hồi quy X')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/expert/blueprints/bp-X/edit');
+    expect(mockNavigate).toHaveBeenCalledWith('/expert/blueprints/bp-X/edit', { replace: true });
 
     // Next user action uses updateBlueprint on bp-X, never createBlueprint
     testGeneratorApi.updateBlueprint.mockResolvedValueOnce({
