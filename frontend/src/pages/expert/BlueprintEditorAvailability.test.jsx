@@ -5,14 +5,16 @@ import BlueprintEditorPage from './BlueprintEditorPage';
 import { testGeneratorApi } from '../../services/testGeneratorApi';
 import { questionBankApi } from '../../services/questionBankApi';
 
+let mockParams = {};
+let mockLocation = { pathname: '/expert/blueprints/new', state: null };
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useParams: () => ({}),
-    useLocation: () => ({ pathname: '/expert/blueprints/new', state: null }),
+    useParams: () => mockParams,
+    useLocation: () => mockLocation,
   };
 });
 
@@ -46,6 +48,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 beforeEach(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
   window.scrollTo = vi.fn();
+  localStorage.setItem('account_id', 'acc-test-expert');
   questionBankApi.getDifficulties.mockResolvedValue({
     data: [
       { difficultyId: 'diff-1', difficultyName: 'Nhận biết' },
@@ -64,6 +67,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  localStorage.clear();
+  mockParams = {};
+  mockLocation = { pathname: '/expert/blueprints/new', state: null };
 });
 
 describe('BlueprintEditorPage Live Availability (Task 2)', () => {
@@ -521,5 +527,277 @@ describe('BlueprintEditorPage Live Availability (Task 2)', () => {
     // Header row + 1 data row = 2 rows
     expect(remainingRows).toHaveLength(2);
     expect(within(table).getByText('9 câu')).toBeInTheDocument();
+  });
+});
+
+describe('FE Task 2 Regressions: handleSaveAndSubmit draft identity preservation and retry', () => {
+  const fillValidBlueprintForm = async (title = 'Cấu trúc đề kiểm tra hồi quy X') => {
+    const nameInput = await screen.findByPlaceholderText(/Ví dụ: Đề thi cuối kỳ 1 Toán học 12/i);
+    fireEvent.change(nameInput, { target: { value: title } });
+
+    const totalQuestionsInput = screen.getByPlaceholderText(/Ví dụ: 50/i);
+    fireEvent.change(totalQuestionsInput, { target: { value: '1' } });
+
+    const secNameInput = screen.getByPlaceholderText(/VD: Trắc nghiệm khách quan nhiều lựa chọn/i);
+    fireEvent.change(secNameInput, { target: { value: 'Phần 1' } });
+
+    const secTotalInput = screen.getByPlaceholderText(/VD: 10/i);
+    fireEvent.change(secTotalInput, { target: { value: '1' } });
+
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.click(selects[2]);
+    fireEvent.click(await screen.findByText('Hàm số và đồ thị'));
+
+    const diffSelects = screen.getAllByRole('combobox');
+    fireEvent.click(diffSelects[3]);
+    fireEvent.click(await screen.findByRole('option', { name: 'Nhận biết' }));
+  };
+
+  it('regression 1 & 2: create returns ID X, submit 409 -> user edits form and resubmits -> create called once, update and submit use X', async () => {
+    testGeneratorApi.createBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X', blueprintName: 'Cấu trúc đề kiểm tra hồi quy X' },
+    });
+    testGeneratorApi.submitBlueprintForReview.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          code: 'BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT',
+          message: 'The rows are individually available, but the same questions cannot satisfy the whole blueprint.',
+        },
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <BlueprintEditorPage />
+      </BrowserRouter>
+    );
+
+    await fillValidBlueprintForm('Cấu trúc đề kiểm tra hồi quy X');
+
+    // First submit -> create succeeds with bp-X, submit fails with 409
+    const submitBtn = screen.getByRole('button', { name: 'Lưu & gửi phản biện' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+      expect(testGeneratorApi.submitBlueprintForReview).toHaveBeenCalledWith('bp-X');
+    });
+
+    // 409 error banner shown, form data and client row IDs preserved
+    expect(await screen.findByText(/Các phần thi bị xung đột trùng lặp câu hỏi/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Cấu trúc đề kiểm tra hồi quy X')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/expert/blueprints/bp-X/edit');
+
+    // User edits form
+    const nameInput = screen.getByDisplayValue('Cấu trúc đề kiểm tra hồi quy X');
+    fireEvent.change(nameInput, { target: { value: 'Cấu trúc đề kiểm tra hồi quy X - Đã cập nhật' } });
+
+    // Configure update and second submit to succeed
+    testGeneratorApi.updateBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X', blueprintName: 'Cấu trúc đề kiểm tra hồi quy X - Đã cập nhật' },
+    });
+    testGeneratorApi.submitBlueprintForReview.mockResolvedValueOnce({
+      data: { success: true },
+    });
+
+    // Click submit again
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      // create must NOT be called again!
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+      // update must be called with bp-X
+      expect(testGeneratorApi.updateBlueprint).toHaveBeenCalledWith(
+        'bp-X',
+        expect.objectContaining({ blueprintName: 'Cấu trúc đề kiểm tra hồi quy X - Đã cập nhật' })
+      );
+      // submit must be called with bp-X
+      expect(testGeneratorApi.submitBlueprintForReview).toHaveBeenCalledWith('bp-X');
+    });
+
+    // Successful submit navigates to detail page
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/expert/blueprints/bp-X',
+      expect.objectContaining({
+        state: expect.objectContaining({ feedback: expect.objectContaining({ type: 'success' }) }),
+      })
+    );
+  });
+
+  it('regression 3: after submit 409, clicking save draft updates draft X rather than creating a new draft', async () => {
+    testGeneratorApi.createBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X' },
+    });
+    testGeneratorApi.submitBlueprintForReview.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { code: 'BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS' },
+      },
+    });
+
+    render(
+      <BrowserRouter>
+        <BlueprintEditorPage />
+      </BrowserRouter>
+    );
+
+    await fillValidBlueprintForm('Cấu trúc đề kiểm tra hồi quy X');
+
+    // Submit fails with 409
+    const submitBtn = screen.getByRole('button', { name: 'Lưu & gửi phản biện' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+      expect(testGeneratorApi.submitBlueprintForReview).toHaveBeenCalledWith('bp-X');
+    });
+
+    // User decides to save draft instead
+    testGeneratorApi.updateBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X' },
+    });
+
+    const saveDraftBtn = screen.getByRole('button', { name: /Lưu bản nháp|Lưu thay đổi/i });
+    fireEvent.click(saveDraftBtn);
+
+    await waitFor(() => {
+      // updateBlueprint must be called with bp-X
+      expect(testGeneratorApi.updateBlueprint).toHaveBeenCalledWith('bp-X', expect.any(Object));
+      // createBlueprint must NOT be called a second time
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/expert/blueprints/bp-X',
+      expect.objectContaining({
+        state: expect.objectContaining({ feedback: expect.objectContaining({ type: 'success' }) }),
+      })
+    );
+  });
+
+  it('regression 4: reload route after successful create synchronizes route and loads draft X', async () => {
+    testGeneratorApi.createBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X' },
+    });
+    testGeneratorApi.submitBlueprintForReview.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { code: 'BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS' },
+      },
+    });
+
+    const { unmount } = render(
+      <BrowserRouter>
+        <BlueprintEditorPage />
+      </BrowserRouter>
+    );
+
+    await fillValidBlueprintForm('Cấu trúc đề kiểm tra hồi quy X');
+
+    const submitBtn = screen.getByRole('button', { name: 'Lưu & gửi phản biện' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+    });
+
+    // Route was synchronized to edit route
+    expect(window.location.pathname).toBe('/expert/blueprints/bp-X/edit');
+
+    // Simulate reloading the route: unmount and remount at /expert/blueprints/bp-X/edit
+    unmount();
+
+    testGeneratorApi.getBlueprintDetail.mockResolvedValueOnce({
+      data: {
+        blueprintId: 'bp-X',
+        blueprintName: 'Cấu trúc đề đã lưu X từ máy chủ',
+        grade: 12,
+        totalQuestions: 1,
+        totalScore: 10,
+        durationMinutes: 90,
+        status: 'Draft',
+        expertId: 'acc-test-expert',
+        sections: [
+          {
+            sectionCode: 'SEC1',
+            sectionName: 'Phần 1',
+            questionType: 'SingleChoice',
+            scoringRule: 'AllOrNothing',
+            totalQuestions: 1,
+            scoreBudget: 10,
+            details: [
+              {
+                tagId: 'topic-1',
+                difficultyId: 'diff-1',
+                quantity: 1,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    mockParams = { blueprintId: 'bp-X' };
+    mockLocation = { pathname: '/expert/blueprints/bp-X/edit', state: null };
+
+    render(
+      <BrowserRouter>
+        <BlueprintEditorPage />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(testGeneratorApi.getBlueprintDetail).toHaveBeenCalledWith('bp-X');
+    });
+
+    expect(await screen.findByDisplayValue('Cấu trúc đề đã lưu X từ máy chủ')).toBeInTheDocument();
+  });
+
+  it('regression 5: submit network error after create success does not lose draft identity and does not auto-retry', async () => {
+    testGeneratorApi.createBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X' },
+    });
+    testGeneratorApi.submitBlueprintForReview.mockRejectedValueOnce(
+      new Error('Network Error: Failed to connect to server')
+    );
+
+    render(
+      <BrowserRouter>
+        <BlueprintEditorPage />
+      </BrowserRouter>
+    );
+
+    await fillValidBlueprintForm('Cấu trúc đề kiểm tra hồi quy X');
+
+    const submitBtn = screen.getByRole('button', { name: 'Lưu & gửi phản biện' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+      expect(testGeneratorApi.submitBlueprintForReview).toHaveBeenCalledWith('bp-X');
+    });
+
+    // Verify no automatic mutation retry occurred
+    await sleep(100);
+    expect(testGeneratorApi.submitBlueprintForReview).toHaveBeenCalledTimes(1);
+    expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+
+    // Form data and route preserved
+    expect(screen.getByDisplayValue('Cấu trúc đề kiểm tra hồi quy X')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/expert/blueprints/bp-X/edit');
+
+    // Next user action uses updateBlueprint on bp-X, never createBlueprint
+    testGeneratorApi.updateBlueprint.mockResolvedValueOnce({
+      data: { blueprintId: 'bp-X' },
+    });
+
+    const saveDraftBtn = screen.getByRole('button', { name: /Lưu bản nháp|Lưu thay đổi/i });
+    fireEvent.click(saveDraftBtn);
+
+    await waitFor(() => {
+      expect(testGeneratorApi.updateBlueprint).toHaveBeenCalledWith('bp-X', expect.any(Object));
+      expect(testGeneratorApi.createBlueprint).toHaveBeenCalledTimes(1);
+    });
   });
 });

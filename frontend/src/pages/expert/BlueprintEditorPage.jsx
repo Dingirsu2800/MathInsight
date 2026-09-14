@@ -29,8 +29,21 @@ export default function BlueprintEditorPage() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
   const location = useLocation();
-  const isEditMode = !!blueprintId;
   const currentAccountId = getAccountId();
+
+  // Track draft identity created in this session or loaded from route
+  const [persistedBlueprintId, setPersistedBlueprintId] = useState(blueprintId || null);
+  const persistedBlueprintIdRef = React.useRef(blueprintId || null);
+  const loadedBlueprintIdRef = React.useRef(null);
+  const activeBlueprintId = blueprintId || persistedBlueprintId;
+  const isEditMode = Boolean(activeBlueprintId);
+
+  useEffect(() => {
+    if (blueprintId) {
+      persistedBlueprintIdRef.current = blueprintId;
+      setPersistedBlueprintId(blueprintId);
+    }
+  }, [blueprintId]);
 
   // Form state
   const [form, setForm] = useState({
@@ -138,20 +151,24 @@ export default function BlueprintEditorPage() {
 
   // Load blueprint detail in Edit Mode
   useEffect(() => {
-    if (isEditMode) {
+    if (blueprintId) {
+      if (loadedBlueprintIdRef.current === blueprintId) {
+        return;
+      }
       setLoading(true);
-        setPageError(null);
-        testGeneratorApi.getBlueprintDetail(blueprintId)
-          .then((res) => {
-            const actions = getBlueprintActions(res.data, currentAccountId);
-            if (!actions.canEdit) {
-              setPageError("Bạn không có quyền chỉnh sửa cấu trúc đề này ở trạng thái hiện tại.");
-              return;
-            }
+      setPageError(null);
+      testGeneratorApi.getBlueprintDetail(blueprintId)
+        .then((res) => {
+          const actions = getBlueprintActions(res.data, currentAccountId);
+          if (!actions.canEdit) {
+            setPageError("Bạn không có quyền chỉnh sửa cấu trúc đề này ở trạng thái hiện tại.");
+            return;
+          }
 
-            const editorState = detailToEditorState(res.data);
+          const editorState = detailToEditorState(res.data);
           if (editorState) {
             setForm(editorState);
+            loadedBlueprintIdRef.current = blueprintId;
           } else {
             setPageError("Dữ liệu cấu trúc đề không hợp lệ.");
           }
@@ -163,7 +180,8 @@ export default function BlueprintEditorPage() {
           setLoading(false);
         });
     } else {
-      // In create mode, initialize with one empty section
+      // In create mode, initialize with one empty section if no draft has been created yet
+      if (persistedBlueprintIdRef.current) return;
       setForm({
         blueprintName: "",
         grade: "12",
@@ -173,7 +191,7 @@ export default function BlueprintEditorPage() {
         sections: [createEmptySection()]
       });
     }
-  }, [blueprintId, currentAccountId, isEditMode]);
+  }, [blueprintId, currentAccountId]);
 
   // Handle grade change with confirm safeguard
   const handleGradeChange = (newGrade) => {
@@ -469,9 +487,10 @@ export default function BlueprintEditorPage() {
       const payload = editorStateToBlueprintRequest(form);
 
       let response;
-      if (isEditMode) {
-        response = await testGeneratorApi.updateBlueprint(blueprintId, payload);
-        navigate(`/expert/blueprints/${blueprintId}`, {
+      const targetId = activeBlueprintId;
+      if (targetId) {
+        response = await testGeneratorApi.updateBlueprint(targetId, payload);
+        navigate(`/expert/blueprints/${targetId}`, {
           state: { feedback: { type: "success", message: "Cập nhật cấu trúc đề nháp thành công!" } }
         });
       } else {
@@ -511,14 +530,24 @@ export default function BlueprintEditorPage() {
     }
 
     setIsMutating(true);
-    let targetId = blueprintId;
+    let targetId = activeBlueprintId;
     try {
       const payload = editorStateToBlueprintRequest(form);
-      if (isEditMode) {
-        await testGeneratorApi.updateBlueprint(blueprintId, payload);
+      if (targetId) {
+        await testGeneratorApi.updateBlueprint(targetId, payload);
       } else {
         const createRes = await testGeneratorApi.createBlueprint(payload);
         targetId = createRes.data?.blueprintId || createRes.data?.id;
+        persistedBlueprintIdRef.current = targetId;
+        loadedBlueprintIdRef.current = targetId;
+        setPersistedBlueprintId(targetId);
+
+        // Synchronize route and browser URL so that reloads open the saved draft
+        try {
+          window.history?.replaceState?.(null, "", `/expert/blueprints/${targetId}/edit`);
+        } catch {
+          // ignore in environments without history support
+        }
       }
 
       await testGeneratorApi.submitBlueprintForReview(targetId);
@@ -526,7 +555,7 @@ export default function BlueprintEditorPage() {
         state: { feedback: { type: "success", message: "Gửi phản biện cấu trúc đề thành công!" } }
       });
     } catch (err) {
-      // Preserve form state and draft changes on submit 409 or any error
+      // Preserve form state, client row IDs, and draft identity on submit 409 or network error
       const errorMsg = getBlueprintErrorMessage(err, "Không thể gửi phản biện. Vui lòng thử lại.");
       setFeedback({
         type: "error",
@@ -689,7 +718,7 @@ export default function BlueprintEditorPage() {
             <Button
               variant="outline"
               disabled={isMutating}
-              onClick={() => navigate(isEditMode ? `/expert/blueprints/${blueprintId}` : "/expert/blueprints")}
+              onClick={() => navigate(activeBlueprintId ? `/expert/blueprints/${activeBlueprintId}` : "/expert/blueprints")}
             >
               Hủy
             </Button>
