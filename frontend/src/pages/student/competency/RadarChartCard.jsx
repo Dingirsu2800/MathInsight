@@ -1,13 +1,24 @@
 /**
  * Multi-dimensional competency radar chart (SVG-based).
- * Data: recommenderApi.getAllTagsMastery() — officialPoint across all topics (UC-55).
- * Takes the first 8 tags sorted by officialPoint ascending (weakest first for visibility).
+ * Data: recommenderApi.getAllTagsMastery() — ALL topics including NotLearned (UC-55).
+ * Tags with numberDone === 0 appear at the center (score = 0) with muted labels.
+ * Grade tabs (Tất cả / Lớp 10 / 11 / 12) filter axes to keep the chart readable.
  * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to no line).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getAllTagsMastery } from '../../../services/recommenderApi';
 import { getTargets } from '../../../services/gamificationApi';
+import { getTopicGrade } from './TopicMasteryGrid';
 
+// ─── Grade tabs ────────────────────────────────────────────────────────────────
+const GRADE_TABS = [
+  { label: 'Tất cả', grade: null },
+  { label: 'Lớp 10', grade: 10 },
+  { label: 'Lớp 11', grade: 11 },
+  { label: 'Lớp 12', grade: 12 },
+];
+
+// ─── Info popover ──────────────────────────────────────────────────────────────
 function InfoPopover({ content }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -53,11 +64,12 @@ function InfoPopover({ content }) {
   );
 }
 
+// ─── SVG constants ─────────────────────────────────────────────────────────────
 const SVG_WIDTH = 580;
 const SVG_HEIGHT = 400;
 const CENTER_X = SVG_WIDTH / 2;
 const CENTER_Y = SVG_HEIGHT / 2;
-const MAX_R = 120; // outermost polygon radius (leaves ample margin for text around polygon)
+const MAX_R = 120; // outermost polygon radius
 const LABEL_R = MAX_R + 18; // radius where label anchors sit
 
 /** Calculate SVG polygon point given angle & normalized value (0–1). */
@@ -115,10 +127,12 @@ function splitLabel(text, maxChars = 18) {
   return lines;
 }
 
+// ─── Main component ────────────────────────────────────────────────────────────
 export default function RadarChartCard() {
   const [tags, setTags] = useState([]);
   const [targetMap, setTargetMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [activeGrade, setActiveGrade] = useState(null); // null = Tất cả
 
   useEffect(() => {
     let cancelled = false;
@@ -138,14 +152,27 @@ export default function RadarChartCard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Filter to practiced tags only (numberDone > 0 — exclude lazy-created neutrals)
-  // Show all of them on the radar — no axis cap
-  const axes = useMemo(() => {
-    if (tags.length < 3) return [];
-    return tags.filter((t) => t.numberDone > 0);
+  // Determine available grades from data
+  const availableGrades = useMemo(() => {
+    const grades = new Set();
+    tags.forEach((t) => {
+      const g = getTopicGrade(t);
+      if (g) grades.add(g);
+    });
+    return [10, 11, 12].filter((g) => grades.has(g));
   }, [tags]);
 
+  // Filter axes by activeGrade; include ALL tags (practiced + unpracticed)
+  const axes = useMemo(() => {
+    const filtered = activeGrade === null
+      ? tags
+      : tags.filter((t) => getTopicGrade(t) === activeGrade);
+    // Need at least 3 axes for a valid radar
+    return filtered;
+  }, [tags, activeGrade]);
+
   const currentValues = axes.map((t) => Math.min(Number(t.officialPoint || 0) / 10, 1));
+
   // Target: only use explicitly set targets — null means no target for that axis
   const targetValues = axes.map((t) => {
     const tp = targetMap[t.tagId];
@@ -155,10 +182,14 @@ export default function RadarChartCard() {
 
   const n = axes.length;
 
+  // Check if any tab has data
+  const hasAnyData = tags.length > 0;
+
   return (
     <div className="bg-pure-surface border border-whisper-border rounded-xl p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-on-surface flex items-center">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+        <h3 className="text-lg font-semibold text-on-surface flex items-center flex-shrink-0">
           Bản đồ năng lực đa chiều
           <InfoPopover
             content={
@@ -172,6 +203,10 @@ export default function RadarChartCard() {
                   <li>
                     <span className="inline-block w-2 h-2 rounded-full bg-primary mr-1 align-middle" />
                     <strong>Hiện tại</strong> — kết quả thực tế của bạn.
+                  </li>
+                  <li>
+                    <span className="inline-block w-2 h-2 rounded-full bg-outline/40 border border-dashed border-outline mr-1 align-middle" />
+                    <strong>Chưa làm</strong> — chủ đề bạn chưa luyện tập (điểm = 0).
                   </li>
                   {hasAnyTarget && (
                     <li>
@@ -187,10 +222,16 @@ export default function RadarChartCard() {
             }
           />
         </h3>
-        <div className="flex gap-4">
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-primary" />
             <span className="font-mono text-xs text-on-surface-variant">Hiện tại</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-surface-container-high border border-dashed border-outline/50" />
+            <span className="font-mono text-xs text-on-surface-variant">Chưa làm</span>
           </div>
           {hasAnyTarget && (
             <div className="flex items-center gap-2">
@@ -201,14 +242,44 @@ export default function RadarChartCard() {
         </div>
       </div>
 
+      {/* ── Grade Tabs ── */}
+      {!loading && hasAnyData && (
+        <div className="flex gap-1 p-1 bg-surface-container-low rounded-xl border border-whisper-border w-fit mb-5">
+          {GRADE_TABS.filter((tab) =>
+            tab.grade === null || availableGrades.includes(tab.grade)
+          ).map((tab) => (
+            <button
+              key={tab.grade ?? 'all'}
+              type="button"
+              onClick={() => setActiveGrade(tab.grade)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                activeGrade === tab.grade
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Chart area ── */}
       <div className="h-[360px] sm:h-[400px] w-full relative flex items-center justify-center">
         {loading && (
           <div className="w-[280px] h-[280px] rounded-full bg-surface-container animate-pulse" />
         )}
 
-        {!loading && n < 3 && (
+        {!loading && n < 3 && hasAnyData && (
           <p className="text-sm text-outline text-center">
-            Cần ít nhất 3 chủ đề đã học để hiển thị biểu đồ radar.
+            Không có đủ chủ đề{activeGrade ? ` cho Lớp ${activeGrade}` : ''} để hiển thị biểu đồ radar
+            {n > 0 ? ` (cần ít nhất 3, hiện có ${n})` : ''}.
+          </p>
+        )}
+
+        {!loading && !hasAnyData && (
+          <p className="text-sm text-outline text-center">
+            Chưa có dữ liệu chủ đề nào.
           </p>
         )}
 
@@ -246,7 +317,7 @@ export default function RadarChartCard() {
               );
             })}
 
-            {/* Target markers — one per axis that has a target set (dashed circle) */}
+            {/* Target markers — dashed circle per axis that has a target */}
             {hasAnyTarget && axes.map((tag, i) => {
               const tv = targetValues[i];
               if (tv === null) return null;
@@ -275,19 +346,38 @@ export default function RadarChartCard() {
               className="text-primary"
             />
 
-            {/* Data dots */}
-            {currentValues.map((v, i) => {
+            {/* Data dots — practiced tags solid, unpracticed hollow/muted */}
+            {axes.map((tag, i) => {
+              const v = currentValues[i];
+              const isPracticed = tag.numberDone > 0;
               const { x, y } = polarToXY(i, n, v);
+
+              if (isPracticed) {
+                return (
+                  <circle
+                    key={tag.tagId}
+                    cx={x}
+                    cy={y}
+                    r="5"
+                    fill="white"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    className="text-primary"
+                  />
+                );
+              }
+              // Unpracticed: small muted dot at center (v=0)
               return (
                 <circle
-                  key={i}
+                  key={tag.tagId}
                   cx={x}
                   cy={y}
-                  r="5"
-                  fill="white"
+                  r="4"
+                  fill="currentColor"
                   stroke="currentColor"
-                  strokeWidth="2.5"
-                  className="text-primary"
+                  strokeWidth="1.5"
+                  strokeDasharray="2 1"
+                  className="text-outline/40"
                 />
               );
             })}
@@ -315,16 +405,23 @@ export default function RadarChartCard() {
               const lines = splitLabel(tag.tagName, 18);
               const isTop = sin < -0.55;
               const isBottom = sin > 0.55;
+              const isPracticed = tag.numberDone > 0;
 
               return (
                 <text
                   key={tag.tagId}
-                  className="fill-on-surface text-[11px] sm:text-xs font-medium select-none"
+                  className={`text-[11px] sm:text-xs font-medium select-none ${
+                    isPracticed ? 'fill-on-surface' : 'fill-outline'
+                  }`}
                   textAnchor={anchor}
                   x={x}
                   y={y}
                 >
-                  <title>{`${tag.tagName}: ${(Number(tag.officialPoint || 0)).toFixed(1)}/10`}</title>
+                  <title>{
+                    isPracticed
+                      ? `${tag.tagName}: ${Number(tag.officialPoint || 0).toFixed(1)}/10`
+                      : `${tag.tagName}: Chưa làm`
+                  }</title>
                   {lines.map((line, idx) => {
                     let dy = '0.35em';
                     if (lines.length > 1) {
