@@ -102,7 +102,8 @@ describe('BlueprintEditorPage Vietnamese terminology and validation', () => {
 
     // Expect validation failure message in feedback banner
     await waitFor(() => {
-      const banner = screen.getByText(/Dữ liệu không hợp lệ/i);
+      const banner = screen.getByRole('alert');
+      expect(banner).toHaveTextContent('Dữ liệu không hợp lệ');
       expect(banner).toHaveTextContent('Tổng số câu của các phần (0) phải bằng tổng số câu của cấu trúc đề (20)');
     });
 

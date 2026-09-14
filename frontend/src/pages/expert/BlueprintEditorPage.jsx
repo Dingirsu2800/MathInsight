@@ -743,29 +743,68 @@ export default function BlueprintEditorPage() {
         </DashboardPageHeader>
 
         {/* Feedback Alert Banner */}
-        {feedback && (
-          <div className={cn(
-            "p-4 rounded-xl border flex items-start gap-3 relative select-text whitespace-pre-line",
-            {
-              "bg-emerald-success/10 border-emerald-success/20 text-emerald-success": feedback.type === "success",
-              "bg-error/10 border-error/20 text-error": feedback.type === "error"
-            }
-          )}>
-            <span className="material-symbols-outlined mt-0.5 shrink-0">
-              {feedback.type === "success" ? "check_circle" : "warning"}
-            </span>
-            <div className="flex-1 pr-8">
-              <p className="text-xs font-bold leading-relaxed">{feedback.message}</p>
-            </div>
-            <button
-              onClick={() => setFeedback(null)}
-              aria-label="Đóng thông báo"
-              className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+        {feedback && (() => {
+          const rawMsg = feedback.message || "";
+          const lines = typeof rawMsg === "string"
+            ? rawMsg.split("\n").map((l) => l.trim()).filter(Boolean)
+            : [String(rawMsg)];
+          const isMultiLine = lines.length > 1;
+
+          return (
+            <div
+              role="alert"
+              className={cn(
+                "p-4 rounded-xl border flex gap-3 select-text transition-all",
+                isMultiLine ? "items-start" : "items-center",
+                {
+                  "bg-emerald-success/10 border-emerald-success/20 text-emerald-success": feedback.type === "success",
+                  "bg-error/10 border-error/20 text-error": feedback.type === "error",
+                }
+              )}
             >
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
-          </div>
-        )}
+              <span
+                className={cn(
+                  "material-symbols-outlined shrink-0 text-[22px]",
+                  isMultiLine ? "mt-0.5" : ""
+                )}
+              >
+                {feedback.type === "success" ? "check_circle" : "warning"}
+              </span>
+
+              <div className="flex-1 min-w-0">
+                {isMultiLine ? (
+                  <div className="space-y-1.5">
+                    <h4 className="text-[15px] font-bold leading-[1.5] text-current">
+                      {lines[0]}
+                    </h4>
+                    <ul className="list-disc pl-5 space-y-1 text-[14px] leading-[1.5] text-on-surface">
+                      {lines.slice(1).map((line, idx) => (
+                        <li key={idx} className="break-words">
+                          {line.replace(/^[-*•]\s*/, "")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-[14px] font-medium leading-[1.5] text-current break-words">
+                    {lines[0]}
+                  </p>
+                )}
+              </div>
+
+              <div className={cn("shrink-0", isMultiLine ? "self-start -mt-1 -mr-1" : "")}>
+                <button
+                  type="button"
+                  onClick={() => setFeedback(null)}
+                  aria-label="Đóng thông báo"
+                  className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Workspace Layout */}
         <div className="grid grid-cols-12 gap-6 items-start">
@@ -1252,26 +1291,26 @@ export default function BlueprintEditorPage() {
 
               {/* Live Warning Panels */}
               {validation.warnings.length > 0 && (
-                <div className="bg-amber-warning/10 border border-amber-warning/20 text-on-surface p-3 rounded-xl flex items-start gap-2 select-text">
-                  <span className="material-symbols-outlined text-amber-warning shrink-0 text-[18px]">warning</span>
-                  <div>
-                    <span className="block text-xs font-bold text-amber-warning">Cảnh báo chưa khớp cấu trúc</span>
-                    <ul className="list-disc pl-4 mt-1 text-[11px] text-on-surface-variant leading-relaxed flex flex-col gap-1">
+                <div className="bg-amber-warning/10 border border-amber-warning/20 text-on-surface p-3.5 rounded-xl flex items-start gap-2.5 select-text">
+                  <span className="material-symbols-outlined text-amber-warning shrink-0 text-[20px] mt-0.5">warning</span>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[15px] font-bold text-amber-warning leading-[1.5]">Cảnh báo chưa khớp cấu trúc</h4>
+                    <ul className="list-disc pl-5 mt-1.5 space-y-1 text-[14px] text-on-surface leading-[1.5]">
                       {validation.warnings.map((w, idx) => (
-                        <li key={idx}>{w}</li>
+                        <li key={idx} className="break-words">{w}</li>
                       ))}
                     </ul>
-                    <span className="block text-[10px] text-on-surface-variant font-medium mt-2 italic">
+                    <p className="text-xs text-on-surface-variant font-normal mt-2 leading-[1.5]">
                       * Cảnh báo trên không chặn việc lưu bản nháp nhưng sẽ cần điều chỉnh chính xác trước khi gửi phê duyệt.
-                    </span>
+                    </p>
                   </div>
                 </div>
               )}
 
               {/* Live Availability Status Card */}
-              <div className="border border-whisper-border rounded-xl p-3.5 bg-surface-container-low flex flex-col gap-2 select-text">
+              <div className="border border-whisper-border rounded-xl p-3.5 bg-surface-container-low flex flex-col gap-2.5 select-text">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[16px] text-primary">inventory_2</span>
                     Độ khả dụng ngân hàng
                   </span>
@@ -1281,60 +1320,63 @@ export default function BlueprintEditorPage() {
                 </div>
 
                 {availabilityLoading ? (
-                  <p className="text-xs text-on-surface-variant animate-pulse font-medium">
+                  <p className="text-[14px] leading-[1.5] text-on-surface-variant animate-pulse font-medium">
                     Đang đối chiếu số lượng câu hỏi khả dụng...
                   </p>
                 ) : availabilityError ? (
-                  <div className="bg-error/10 border border-error/20 p-2.5 rounded-lg text-error text-xs flex flex-col gap-1.5">
-                    <div className="flex items-start gap-1.5">
-                      <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">warning</span>
-                      <span className="font-semibold">{availabilityError}</span>
+                  <div className="bg-error/10 border border-error/20 p-3.5 rounded-xl text-error flex flex-col gap-2">
+                    <div className="flex items-start gap-2.5">
+                      <span className="material-symbols-outlined text-error shrink-0 text-[20px] mt-0.5">warning</span>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[15px] font-bold text-error leading-[1.5]">Kiểm tra khả dụng thất bại</h4>
+                        <p className="text-[14px] text-on-surface leading-[1.5] mt-0.5 break-words">{availabilityError}</p>
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => runAvailabilityCheck()}
-                      className="self-start text-[11px] font-bold text-primary underline cursor-pointer"
+                      className="self-start text-[14px] font-bold text-primary hover:underline cursor-pointer transition-colors pl-7.5"
                     >
                       Thử lại kiểm tra khả dụng
                     </button>
                   </div>
                 ) : hasIncompleteAllocationRows(form) ? (
-                  <div className="text-[11px] text-on-surface-variant leading-relaxed">
+                  <div className="text-[14px] text-on-surface-variant leading-[1.5]">
                     <span className="font-semibold text-on-surface">Chưa đủ thông tin:</span> Vui lòng hoàn tất chủ đề, độ khó và số lượng ở tất cả các dòng phân bổ để đánh giá toàn bộ cấu trúc đề.
                   </div>
                 ) : availabilityData.wholeBlueprintFeasible === true ? (
-                  <div className="bg-emerald-success/10 border border-emerald-success/20 p-2.5 rounded-lg text-emerald-success text-xs flex items-start gap-2">
-                    <span className="material-symbols-outlined text-[18px] shrink-0">check_circle</span>
-                    <div>
-                      <span className="font-bold block">Ngân hàng câu hỏi đáp ứng đủ</span>
-                      <span className="text-[11px] opacity-90 leading-tight block mt-0.5">
+                  <div className="bg-emerald-success/10 border border-emerald-success/20 p-3.5 rounded-xl text-emerald-success flex items-start gap-2.5">
+                    <span className="material-symbols-outlined text-emerald-success text-[20px] shrink-0 mt-0.5">check_circle</span>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[15px] font-bold leading-[1.5]">Ngân hàng câu hỏi đáp ứng đủ</h4>
+                      <p className="text-[14px] text-on-surface opacity-90 leading-[1.5] mt-0.5">
                         Tất cả các dòng phân bổ đều có đủ câu hỏi hợp lệ trong ngân hàng.
-                      </span>
+                      </p>
                     </div>
                   </div>
                 ) : availabilityData.wholeBlueprintFeasible === false ? (
-                  <div className="bg-error/10 border border-error/20 p-2.5 rounded-lg text-error text-xs flex flex-col gap-1">
-                    <div className="flex items-start gap-1.5">
-                      <span className="material-symbols-outlined text-[18px] shrink-0">cancel</span>
-                      <div>
-                        <span className="font-bold block">
+                  <div className="bg-error/10 border border-error/20 p-3.5 rounded-xl text-error flex flex-col gap-2">
+                    <div className="flex items-start gap-2.5">
+                      <span className="material-symbols-outlined text-error text-[20px] shrink-0 mt-0.5">cancel</span>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[15px] font-bold text-error leading-[1.5]">
                           {availabilityData.availabilityCode === "BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT"
                             ? "Xung đột trùng lặp câu hỏi"
                             : "Ngân hàng chưa đủ câu hỏi"}
-                        </span>
-                        <p className="text-[11px] leading-relaxed mt-0.5">
+                        </h4>
+                        <p className="text-[14px] text-on-surface leading-[1.5] mt-1 break-words">
                           {availabilityData.availabilityCode === "BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT"
                             ? "Các dòng phân bổ đủ câu hỏi riêng lẻ nhưng bị trùng lặp tập câu hỏi, không đủ câu hỏi riêng biệt cho toàn bộ đề thi."
                             : "Số lượng câu hỏi hợp lệ trong ngân hàng không đủ để đáp ứng toàn bộ cấu trúc đề thi này."}
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] text-on-surface-variant italic mt-1">
+                    <p className="text-xs text-on-surface-variant font-normal leading-[1.5] mt-0.5 pl-7.5">
                       * Vẫn có thể lưu bản nháp nhưng cần bổ sung câu hỏi trước khi gửi phê duyệt.
-                    </span>
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-xs text-on-surface-variant">
+                  <p className="text-[14px] leading-[1.5] text-on-surface-variant">
                     Chưa có thông tin kiểm tra khả dụng.
                   </p>
                 )}
