@@ -312,6 +312,14 @@ public class GradingEngine : IGradingEngine
     {
         var parts = question.Parts.OrderBy(p => p.PartOrder).ToList();
         decimal totalPartWeight = parts.Sum(p => p.DefaultWeight);
+        var partMaxPoints = parts.Count > 0 && maxPoints > 0m && parts.All(part => part.DefaultWeight > 0m)
+            ? ScoringAllocator.Allocate(
+                maxPoints,
+                parts.Select(part => new WeightedScoreItem(
+                    part.QuestionPartId,
+                    part.DefaultWeight,
+                    part.PartOrder)).ToList())
+            : new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         decimal totalPartPoints = 0m;
         int correctPartCount = 0;
 
@@ -348,10 +356,12 @@ public class GradingEngine : IGradingEngine
 
             answerPart.IsCorrect = partCorrect;
 
-            decimal partMaxPoints = totalPartWeight > 0
-                ? Math.Round(part.DefaultWeight / totalPartWeight * maxPoints, 2)
-                : 0m;
-            answerPart.PointsEarned = partCorrect ? partMaxPoints : 0m;
+            var allocatedPoints = partMaxPoints.TryGetValue(part.QuestionPartId, out var points)
+                ? points
+                : totalPartWeight > 0
+                    ? Math.Round(part.DefaultWeight / totalPartWeight * maxPoints, 2)
+                    : 0m;
+            answerPart.PointsEarned = partCorrect ? allocatedPoints : 0m;
 
             totalPartPoints += answerPart.PointsEarned;
             if (partCorrect) correctPartCount++;
