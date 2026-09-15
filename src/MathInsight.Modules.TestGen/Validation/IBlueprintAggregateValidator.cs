@@ -26,11 +26,13 @@ public sealed record ValidatedBlueprintSection(
     string? InstructionText,
     int TotalQuestions,
     decimal ScoreBudget,
-    string ScoringRule,
+    string? ScoringRule,
     int? PartCountPerQuestion,
     IReadOnlyList<ValidatedBlueprintDetail> Details);
 
 public sealed record ValidatedBlueprintDetail(
     string TagId,
     string DifficultyId,
-    int Quantity);
+    int Quantity,
+    string? QuestionType,
+    string? ScoringRule);

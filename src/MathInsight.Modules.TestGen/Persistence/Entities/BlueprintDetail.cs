@@ -12,6 +12,8 @@ public class BlueprintDetail
     public string TagId { get; set; } = string.Empty;
     public string DifficultyId { get; set; } = string.Empty;
     public int Quantity { get; set; }
+    public string? QuestionType { get; set; }
+    public string? ScoringRule { get; set; }
 
     public BlueprintSection? BlueprintSection { get; set; }
     public ICollection<TestQuestion> TestQuestions { get; set; } = new List<TestQuestion>();

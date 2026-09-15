@@ -1,4 +1,5 @@
 using MathInsight.Modules.TestGen.Persistence.Entities;
+using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Shared.Scoring;
 
 namespace MathInsight.Modules.TestGen.Generation;
@@ -74,6 +75,8 @@ public static class FixedBlueprintExamPlanner
     {
         var candidatesById = candidates.ToDictionary(x => x.QuestionId, StringComparer.OrdinalIgnoreCase);
         var sectionsByOrder = blueprint.Sections.ToDictionary(x => x.SectionOrder);
+        var requirementsById = BlueprintExamGenerationPlanner.BuildRequirements(blueprint)
+            .ToDictionary(x => x.BlueprintDetailId, StringComparer.OrdinalIgnoreCase);
         var maxPointsByQuestion = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var sectionAssignments in selection.Assignments.GroupBy(x => x.SectionOrder))
@@ -92,7 +95,7 @@ public static class FixedBlueprintExamPlanner
             .Select(x => new PreparedBlueprintExamQuestion(
                 x,
                 candidatesById[x.QuestionId],
-                sectionsByOrder[x.SectionOrder].ScoringRule,
+                requirementsById[x.BlueprintDetailId].ScoringRule,
                 x.CandidateOrder,
                 maxPointsByQuestion[x.QuestionId]))
             .ToList();

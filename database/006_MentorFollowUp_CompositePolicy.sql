@@ -406,10 +406,12 @@ IF EXISTS (
        OR (PartCountPerQuestion IS NOT NULL AND PartCountPerQuestion <= 0))
     THROW 50007, '006 cannot continue: BlueprintSection contains an invalid QuestionType/ScoringRule policy.', 1;
 
--- Avoid a schema-modification lock on every successful rerun. The semantic
--- markers below identify the target policy; an old 001 constraint lacks the
--- ScoringRule predicates and is replaced once. Valid legacy composite rows
--- are converted before the new WITH CHECK constraint is added.
+-- Avoid a schema-modification lock on every successful rerun. Recognize the
+-- target policy by its semantic predicates, not only by scoring-rule names:
+-- the Composite branch must explicitly require a NULL part count and the
+-- definition must not contain a Composite IS NOT NULL predicate. This also
+-- replaces production variants that mention the right scoring rules but keep
+-- the old fixed part-count requirement.
 IF NOT EXISTS (
     SELECT 1
     FROM sys.check_constraints
@@ -418,7 +420,9 @@ IF NOT EXISTS (
       AND definition LIKE N'%ScoringRule%'
       AND definition LIKE N'%TieredTrueFalse%'
       AND definition LIKE N'%WeightedParts%'
-      AND definition LIKE N'%AllOrNothing%')
+      AND definition LIKE N'%AllOrNothing%'
+      AND definition LIKE N'%PartCountPerQuestion%IS NULL%'
+      AND definition NOT LIKE N'%PartCountPerQuestion%IS NOT NULL%')
 BEGIN
     IF EXISTS (
         SELECT 1

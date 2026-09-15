@@ -326,6 +326,131 @@ public sealed class BlueprintCreateAndReadTests
     }
 
     [Fact]
+    public async Task Create_MixedSection_PersistsPerDetailQuestionTypeAndScoringRule()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = new BlueprintRequest
+        {
+            BlueprintName = "Mixed blueprint",
+            Grade = 12,
+            TotalQuestions = 3,
+            TotalScore = 3m,
+            DurationMinutes = 30,
+            Sections =
+            [
+                new BlueprintSectionRequest
+                {
+                    SectionOrder = 1,
+                    SectionName = "Mixed section",
+                    QuestionType = "Mixed",
+                    ScoringRule = null,
+                    TotalQuestions = 3,
+                    ScoreBudget = 3m,
+                    Details =
+                    [
+                        new BlueprintDetailRequest
+                        {
+                            TagId = Grade12TopicId,
+                            DifficultyId = EasyDifficultyId,
+                            Quantity = 1,
+                            QuestionType = BlueprintQuestionTypes.SingleChoice,
+                            ScoringRule = ScoringRules.AllOrNothing
+                        },
+                        new BlueprintDetailRequest
+                        {
+                            TagId = Grade12TopicId,
+                            DifficultyId = EasyDifficultyId,
+                            Quantity = 1,
+                            QuestionType = BlueprintQuestionTypes.ShortAnswer,
+                            ScoringRule = ScoringRules.AllOrNothing
+                        },
+                        new BlueprintDetailRequest
+                        {
+                            TagId = Grade12TopicId,
+                            DifficultyId = EasyDifficultyId,
+                            Quantity = 1,
+                            QuestionType = BlueprintQuestionTypes.Composite,
+                            ScoringRule = ScoringRules.WeightedParts
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = await CreateHandler(testContext).Handle(
+            new CreateBlueprintCommand(request, CurrentExpertId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var section = (await testContext.Context.BlueprintSections
+            .Include(item => item.Details)
+            .SingleAsync()).Details.OrderBy(item => item.QuestionType).ToList();
+        Assert.Equal("Mixed", (await testContext.Context.BlueprintSections.SingleAsync()).QuestionType);
+        Assert.Null((await testContext.Context.BlueprintSections.SingleAsync()).ScoringRule);
+        Assert.Equal(
+            [BlueprintQuestionTypes.Composite, BlueprintQuestionTypes.ShortAnswer, BlueprintQuestionTypes.SingleChoice],
+            section.Select(item => item.QuestionType));
+        Assert.Equal(
+            [ScoringRules.WeightedParts, ScoringRules.AllOrNothing, ScoringRules.AllOrNothing],
+            section.Select(item => item.ScoringRule));
+    }
+
+    [Fact]
+    public async Task Validator_MixedSectionRequiresExplicitPolicyOnEveryDetail()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = new BlueprintRequest
+        {
+            BlueprintName = "Invalid mixed blueprint",
+            Grade = 12,
+            TotalQuestions = 1,
+            TotalScore = 1m,
+            DurationMinutes = 15,
+            Sections =
+            [
+                new BlueprintSectionRequest
+                {
+                    SectionOrder = 1,
+                    SectionName = "Mixed section",
+                    QuestionType = "Mixed",
+                    ScoringRule = null,
+                    TotalQuestions = 1,
+                    ScoreBudget = 1m,
+                    Details =
+                    [new BlueprintDetailRequest
+                    {
+                        TagId = Grade12TopicId,
+                        DifficultyId = EasyDifficultyId,
+                        Quantity = 1
+                    }]
+                }
+            ]
+        };
+
+        var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.StructureInvalid, result.Error);
+    }
+
+    [Fact]
+    public async Task Validator_HomogeneousSectionRejectsContradictoryDetailPolicy()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferenceDataAsync(testContext);
+        var request = ValidRequest();
+        request.Sections[0].Details[0].QuestionType = BlueprintQuestionTypes.ShortAnswer;
+        request.Sections[0].Details[0].ScoringRule = ScoringRules.AllOrNothing;
+
+        var result = await CreateValidator(testContext).ValidateAsync(request, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.StructureInvalid, result.Error);
+    }
+
+    [Fact]
     public async Task Detail_DeactivatedBlueprint_ReturnsNotFound()
     {
         await using var testContext = TestGenInMemoryContext.Create();

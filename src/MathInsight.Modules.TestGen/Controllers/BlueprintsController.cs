@@ -15,6 +15,7 @@ using MathInsight.Modules.TestGen.Queries.GetBlueprintGeneratedTests;
 using MathInsight.Modules.TestGen.Commands.GenerateFixedBlueprintExam;
 using MathInsight.Modules.TestGen.Queries.GetFixedTestCandidates;
 using MathInsight.Modules.TestGen.Queries.GetPendingBlueprints;
+using MathInsight.Modules.TestGen.Queries.PreviewBlueprintAvailability;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -113,6 +114,25 @@ public sealed class BlueprintsController : ControllerBase
         return result.IsFailure
             ? ToErrorResult(result.Error!)
             : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
+    [HttpPost("availability")]
+    public async Task<IActionResult> PreviewBlueprintAvailability(
+        [FromBody] BlueprintAvailabilityRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+            return BadRequest(new ApiErrorResponse(BlueprintErrors.AvailabilityRequestInvalid));
+
+        var currentExpertId = GetCurrentExpertId();
+        if (currentExpertId is null)
+            return Unauthorized(new ApiErrorResponse(ApplicationErrors.AuthInvalidToken));
+
+        var result = await _mediator.Send(
+            new PreviewBlueprintAvailabilityQuery(request),
+            cancellationToken);
+
+        return result.IsFailure ? ToErrorResult(result.Error!) : Ok(result.Value);
     }
 
     [HttpPut("{blueprintId}")]
@@ -315,6 +335,13 @@ public sealed class BlueprintsController : ControllerBase
 
         if (error == BlueprintErrors.InUse)
             return Conflict(new ApiErrorResponse(error));
+
+        if (error.Code == BlueprintErrors.AvailabilityInsufficientQuestions.Code ||
+            error.Code == BlueprintErrors.AvailabilityOverlapConflict.Code)
+            return Conflict(new ApiErrorResponse(error));
+
+        if (error.Code == BlueprintErrors.AvailabilityRequestInvalid.Code)
+            return BadRequest(new ApiErrorResponse(error));
 
         if (error == TestGenerationErrors.QuestionPoolInsufficient ||
             error == TestGenerationErrors.GenerationConflict ||

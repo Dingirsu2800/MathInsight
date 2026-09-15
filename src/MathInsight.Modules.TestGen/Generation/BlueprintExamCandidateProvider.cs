@@ -1,4 +1,5 @@
 using MathInsight.Modules.TestGen.Persistence;
+using MathInsight.Modules.TestGen.Blueprints;
 
 namespace MathInsight.Modules.TestGen.Generation;
 
@@ -36,11 +37,16 @@ public sealed class BlueprintExamCandidateProvider : IBlueprintExamCandidateProv
     {
         var sections = blueprint.Sections.ToList();
         var details = sections.SelectMany(section => section.Details).ToList();
+        var questionTypes = BlueprintExamGenerationPlanner.BuildRequirements(blueprint)
+            .Select(requirement => requirement.QuestionType)
+            .Where(BlueprintQuestionTypes.IsActualQuestionType)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var filter = new QuestionCandidateCatalogFilter(
             blueprint.Grade,
             details.Select(detail => detail.TagId).Distinct().ToList(),
             difficultyIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            sections.Select(section => section.QuestionType).Distinct().ToList());
+            questionTypes);
 
         return _catalog.GetCandidatesAsync(filter, cancellationToken);
     }

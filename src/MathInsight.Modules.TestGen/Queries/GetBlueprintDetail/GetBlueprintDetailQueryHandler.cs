@@ -83,7 +83,9 @@ public sealed class GetBlueprintDetailQueryHandler
                                     .Where(difficulty => difficulty.DifficultyId == detail.DifficultyId)
                                     .Select(difficulty => (int?)difficulty.LevelValue)
                                     .FirstOrDefault(),
-                                detail.Quantity))
+                                detail.Quantity,
+                                detail.QuestionType,
+                                detail.ScoringRule))
                             .ToList()))
                     .ToList()))
             .FirstOrDefaultAsync(cancellationToken);

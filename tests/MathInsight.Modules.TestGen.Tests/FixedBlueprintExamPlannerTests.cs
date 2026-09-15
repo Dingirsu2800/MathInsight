@@ -1,3 +1,4 @@
+using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Modules.TestGen.Generation;
 using MathInsight.Shared.Scoring;
 
@@ -61,6 +62,80 @@ public sealed class FixedBlueprintExamPlannerTests
             ]);
 
         Assert.Equal(FixedBlueprintExamSelectionError.QuestionNotEligible, result.Error);
+    }
+
+    [Fact]
+    public void PrepareQuestions_MixedSection_UsesTheAssignedDetailScoringRule()
+    {
+        var blueprint = new Persistence.Entities.Blueprint
+        {
+            BlueprintId = "mixed-fixed",
+            BlueprintName = "Mixed fixed",
+            Grade = 12,
+            TotalQuestions = 2,
+            TotalScore = 10m,
+            DurationMinutes = 30,
+            ExpertId = "expert-owner",
+            Status = BlueprintStatuses.Approved
+        };
+        var section = new Persistence.Entities.BlueprintSection
+        {
+            BlueprintSectionId = "mixed-fixed-section",
+            BlueprintId = blueprint.BlueprintId,
+            SectionOrder = 1,
+            SectionName = "Mixed",
+            QuestionType = BlueprintQuestionTypes.Mixed,
+            ScoringRule = null,
+            TotalQuestions = 2,
+            ScoreBudget = 10m
+        };
+        section.Details.Add(new Persistence.Entities.BlueprintDetail
+        {
+            BlueprintDetailId = "fixed-composite",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = "topic-composite",
+            DifficultyId = "difficulty-1",
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.Composite,
+            ScoringRule = ScoringRules.WeightedParts
+        });
+        section.Details.Add(new Persistence.Entities.BlueprintDetail
+        {
+            BlueprintDetailId = "fixed-single",
+            BlueprintId = blueprint.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = "topic-single",
+            DifficultyId = "difficulty-1",
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.SingleChoice,
+            ScoringRule = ScoringRules.AllOrNothing
+        });
+        blueprint.Sections.Add(section);
+        var requirements = BlueprintExamGenerationPlanner.BuildRequirements(blueprint);
+        var candidates = new[]
+        {
+            new BlueprintExamCandidate("fixed-composite-question", "fixed-composite-version", 1m, "difficulty-1",
+                BlueprintQuestionTypes.Composite, new HashSet<string>(["topic-composite"]),
+                new HashSet<string>([ScoringRules.WeightedParts])),
+            new BlueprintExamCandidate("fixed-single-question", "fixed-single-version", 1m, "difficulty-1",
+                BlueprintQuestionTypes.SingleChoice, new HashSet<string>(["topic-single"]),
+                new HashSet<string>([ScoringRules.AllOrNothing]))
+        };
+        var selection = FixedBlueprintExamPlanner.Select(
+            requirements,
+            candidates,
+            [
+                new("fixed-composite-question", "fixed-composite", 1),
+                new("fixed-single-question", "fixed-single", 2)
+            ]);
+
+        Assert.Equal(FixedBlueprintExamSelectionError.None, selection.Error);
+        var prepared = FixedBlueprintExamPlanner.PrepareQuestions(blueprint, selection.Selection, candidates);
+
+        Assert.Equal(
+            new[] { ScoringRules.WeightedParts, ScoringRules.AllOrNothing },
+            prepared.OrderBy(item => item.QuestionOrder).Select(item => item.ScoringRule));
     }
 
     private static BlueprintExamCandidate Candidate(string questionId)

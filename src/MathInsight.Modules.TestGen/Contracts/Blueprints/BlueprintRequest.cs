@@ -19,7 +19,7 @@ public sealed class BlueprintSectionRequest
     public string? InstructionText { get; set; }
     public int TotalQuestions { get; set; }
     public decimal ScoreBudget { get; set; }
-    public string ScoringRule { get; set; } = "AllOrNothing";
+    public string? ScoringRule { get; set; } = "AllOrNothing";
     public int? PartCountPerQuestion { get; set; }
     public List<BlueprintDetailRequest> Details { get; set; } = [];
 }
@@ -29,4 +29,6 @@ public sealed class BlueprintDetailRequest
     public string TagId { get; set; } = string.Empty;
     public string DifficultyId { get; set; } = string.Empty;
     public int Quantity { get; set; }
+    public string? QuestionType { get; set; }
+    public string? ScoringRule { get; set; }
 }
