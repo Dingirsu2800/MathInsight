@@ -3,15 +3,20 @@ import ProgressBar from '../../../components/ui/ProgressBar';
 
 function getBarColor(level) {
   switch (level) {
-    case 'good': return 'bg-primary';
-    case 'improve': return 'bg-primary/70';
-    case 'weak': return 'bg-deep-rose';
-    default: return 'bg-primary';
+    case 'good':    return 'bg-emerald-success';
+    case 'improve': return 'bg-amber-warning';
+    case 'weak':    return 'bg-deep-rose';
+    default:        return 'bg-emerald-success';
   }
 }
 
 function getLabelColor(level) {
-  return level === 'weak' ? 'text-deep-rose' : 'text-primary';
+  switch (level) {
+    case 'good':    return 'text-emerald-success';
+    case 'improve': return 'text-amber-warning';
+    case 'weak':    return 'text-deep-rose';
+    default:        return 'text-emerald-success';
+  }
 }
 
 export default function TopicBreakdownCard({ answers = [] }) {
@@ -108,10 +113,10 @@ export default function TopicBreakdownCard({ answers = [] }) {
       {/* Legend */}
       <div className="mt-8 pt-6 border-t border-whisper-border flex items-center gap-4 text-sm text-on-surface-variant">
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-primary" /> Tốt (≥80%)
+          <span className="w-3 h-3 rounded-full bg-emerald-success" /> Tốt (≥80%)
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-primary/60" /> Cần cải thiện (50-79%)
+          <span className="w-3 h-3 rounded-full bg-amber-warning" /> Cần cải thiện (50-79%)
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded-full bg-deep-rose" /> Yếu (&lt;50%)
