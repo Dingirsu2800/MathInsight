@@ -2,17 +2,18 @@
  * Multi-dimensional competency radar chart (SVG-based).
  * Data: recommenderApi.getAllTagsMastery() — ALL topics including NotLearned (UC-55).
  * Tags with numberDone === 0 appear at the center (score = 0) with muted labels.
- * Grade tabs (Tất cả / Lớp 10 / 11 / 12) filter axes to keep the chart readable.
+ * Grade tabs (Lớp 10 / 11 / 12) filter axes to keep the chart readable.
+ * Only grades up to the student's current grade are shown.
  * Target line: gamificationApi.getTargets() — targetPoint per tagId (falls back to no line).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getAllTagsMastery } from '../../../services/recommenderApi';
 import { getTargets } from '../../../services/gamificationApi';
 import { getTopicGrade } from './TopicMasteryGrid';
+import useCurrentUser from '../../../hooks/useCurrentUser';
 
 // ─── Grade tabs ────────────────────────────────────────────────────────────────
-const GRADE_TABS = [
-  { label: 'Tất cả', grade: null },
+const ALL_GRADE_TABS = [
   { label: 'Lớp 10', grade: 10 },
   { label: 'Lớp 11', grade: 11 },
   { label: 'Lớp 12', grade: 12 },
@@ -129,10 +130,13 @@ function splitLabel(text, maxChars = 18) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 export default function RadarChartCard() {
+  const { profile } = useCurrentUser('Học sinh');
+  const currentGrade = profile?.student?.currentGrade ?? null;
+
   const [tags, setTags] = useState([]);
   const [targetMap, setTargetMap] = useState({});
   const [loading, setLoading] = useState(true);
-  const [activeGrade, setActiveGrade] = useState(null); // null = Tất cả
+  const [activeGrade, setActiveGrade] = useState(null); // will be set after data loads
 
   useEffect(() => {
     let cancelled = false;
@@ -152,23 +156,44 @@ export default function RadarChartCard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Determine available grades from data
+  // Determine available grades from data (intersected with student's current grade)
   const availableGrades = useMemo(() => {
     const grades = new Set();
     tags.forEach((t) => {
       const g = getTopicGrade(t);
       if (g) grades.add(g);
     });
-    return [10, 11, 12].filter((g) => grades.has(g));
-  }, [tags]);
+    // Only show grades that exist in data AND are <= student's current grade
+    return [10, 11, 12].filter((g) => {
+      if (!grades.has(g)) return false;
+      if (currentGrade != null && g > currentGrade) return false;
+      return true;
+    });
+  }, [tags, currentGrade]);
+
+  // Set default activeGrade once we know currentGrade and availableGrades
+  useEffect(() => {
+    if (availableGrades.length === 0) return;
+    // Default to currentGrade if available, otherwise the highest available grade
+    const preferred = currentGrade != null && availableGrades.includes(currentGrade)
+      ? currentGrade
+      : availableGrades[availableGrades.length - 1];
+    setActiveGrade((prev) => {
+      // Only reset if prev is not in the available list (handles grade change)
+      if (prev != null && availableGrades.includes(prev)) return prev;
+      return preferred;
+    });
+  }, [availableGrades, currentGrade]);
+
+  // Tabs to render: only grades <= student's current grade that have data
+  const visibleTabs = useMemo(() =>
+    ALL_GRADE_TABS.filter((tab) => availableGrades.includes(tab.grade)),
+  [availableGrades]);
 
   // Filter axes by activeGrade; include ALL tags (practiced + unpracticed)
   const axes = useMemo(() => {
-    const filtered = activeGrade === null
-      ? tags
-      : tags.filter((t) => getTopicGrade(t) === activeGrade);
-    // Need at least 3 axes for a valid radar
-    return filtered;
+    if (activeGrade == null) return [];
+    return tags.filter((t) => getTopicGrade(t) === activeGrade);
   }, [tags, activeGrade]);
 
   const currentValues = axes.map((t) => Math.min(Number(t.officialPoint || 0) / 10, 1));
@@ -243,13 +268,11 @@ export default function RadarChartCard() {
       </div>
 
       {/* ── Grade Tabs ── */}
-      {!loading && hasAnyData && (
+      {!loading && hasAnyData && visibleTabs.length > 1 && (
         <div className="flex gap-1 p-1 bg-surface-container-low rounded-xl border border-whisper-border w-fit mb-5">
-          {GRADE_TABS.filter((tab) =>
-            tab.grade === null || availableGrades.includes(tab.grade)
-          ).map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
-              key={tab.grade ?? 'all'}
+              key={tab.grade}
               type="button"
               onClick={() => setActiveGrade(tab.grade)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
