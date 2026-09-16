@@ -47,9 +47,38 @@ const questionTypeLabels = {
   MultipleChoice: "Trắc nghiệm nhiều đáp án",
   TrueFalse: "Đúng / Sai",
   ShortAnswer: "Trả lời ngắn",
-  Composite: "Câu hỏi nhiều mệnh đề"
+  Composite: "Câu hỏi nhiều mệnh đề",
+  Mixed: "Hỗn hợp"
 };
 
 export function getQuestionTypeLabel(questionType) {
   return questionTypeLabels[questionType] || questionType || "Chưa xác định";
 }
+
+export const scoringRuleLabels = {
+  AllOrNothing: "Tất cả hoặc không",
+  TieredTrueFalse: "Đúng / Sai phân bậc",
+  WeightedParts: "Theo trọng số phần",
+  ALL_OR_NOTHING: "Tất cả hoặc không",
+  TIERED_TRUE_FALSE: "Đúng / Sai phân bậc",
+  WEIGHTED_PARTS: "Theo trọng số phần"
+};
+
+export function getScoringRuleLabel(rule) {
+  if (!rule) return "Chưa thiết lập";
+  return scoringRuleLabels[rule] || rule;
+}
+
+export const ACTUAL_QUESTION_TYPES = [
+  "SingleChoice",
+  "MultipleChoice",
+  "TrueFalse",
+  "ShortAnswer",
+  "Composite"
+];
+
+export const SECTION_QUESTION_TYPES = [
+  ...ACTUAL_QUESTION_TYPES,
+  "Mixed"
+];
+

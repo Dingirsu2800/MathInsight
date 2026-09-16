@@ -39,6 +39,14 @@ public class BlueprintDetailConfiguration : IEntityTypeConfiguration<BlueprintDe
         builder.Property(x => x.Quantity)
             .HasColumnName("Quantity")
             .HasDefaultValue(0);
+        builder.Property(x => x.QuestionType)
+            .HasColumnName("QuestionType")
+            .HasMaxLength(30)
+            .IsUnicode(false);
+        builder.Property(x => x.ScoringRule)
+            .HasColumnName("ScoringRule")
+            .HasMaxLength(30)
+            .IsUnicode(false);
 
         builder.HasOne(x => x.BlueprintSection)
             .WithMany(x => x.Details)
@@ -57,9 +65,9 @@ public class BlueprintDetailConfiguration : IEntityTypeConfiguration<BlueprintDe
             .OnDelete(DeleteBehavior.NoAction)
             .HasConstraintName("FK_BlueprintDetail_TagDifficulty_DifficultyID");
 
-        builder.HasIndex(x => new { x.BlueprintSectionId, x.TagId, x.DifficultyId })
+        builder.HasIndex(x => new { x.BlueprintSectionId, x.TagId, x.DifficultyId, x.QuestionType, x.ScoringRule })
             .IsUnique()
-            .HasDatabaseName("UQ_BlueprintDetail_Section_Tag_Difficulty");
+            .HasDatabaseName("UQ_BlueprintDetail_Section_Tag_Difficulty_Type_Rule");
         builder.HasIndex(x => x.BlueprintSectionId)
             .HasDatabaseName("IX_BlueprintDetail_BlueprintSectionID");
     }

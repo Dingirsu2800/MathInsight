@@ -53,6 +53,7 @@ public sealed class TestGenModelMetadataTests
         Assert.False(Column(entity, nameof(BlueprintSection.ScoreBudget)).IsNullable);
         Assert.Equal(5, Column(entity, nameof(BlueprintSection.ScoreBudget)).GetPrecision());
         Assert.Equal(2, Column(entity, nameof(BlueprintSection.ScoreBudget)).GetScale());
+        AssertStringColumn(entity, nameof(BlueprintSection.ScoringRule), "ScoringRule", 30, nullable: true);
 
         Assert.Contains(
             entity.GetKeys(),
@@ -79,7 +80,9 @@ public sealed class TestGenModelMetadataTests
             foreignKey => foreignKey.GetConstraintName() == "FK_BlueprintDetail_BlueprintSection_BlueprintSectionID"
                 && PropertyNames(foreignKey.Properties).SequenceEqual(
                     [nameof(BlueprintDetail.BlueprintSectionId), nameof(BlueprintDetail.BlueprintId)]));
-        Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "UQ_BlueprintDetail_Section_Tag_Difficulty" && x.IsUnique);
+        AssertStringColumn(entity, nameof(BlueprintDetail.QuestionType), "QuestionType", 30, nullable: true);
+        AssertStringColumn(entity, nameof(BlueprintDetail.ScoringRule), "ScoringRule", 30, nullable: true);
+        Assert.Contains(entity.GetIndexes(), x => x.GetDatabaseName() == "UQ_BlueprintDetail_Section_Tag_Difficulty_Type_Rule" && x.IsUnique);
         Assert.Contains(entity.GetCheckConstraints(), x => x.Name == "CK_BlueprintDetail_Quantity");
     }
 

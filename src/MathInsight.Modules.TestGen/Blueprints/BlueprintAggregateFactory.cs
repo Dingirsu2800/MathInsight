@@ -75,7 +75,9 @@ internal static class BlueprintAggregateFactory
                     BlueprintSectionId = sectionId,
                     TagId = sourceDetail.TagId,
                     DifficultyId = sourceDetail.DifficultyId,
-                    Quantity = sourceDetail.Quantity
+                    Quantity = sourceDetail.Quantity,
+                    QuestionType = sourceDetail.QuestionType,
+                    ScoringRule = sourceDetail.ScoringRule
                 });
             }
 
@@ -128,7 +130,9 @@ internal static class BlueprintAggregateFactory
                     BlueprintSectionId = sectionId,
                     TagId = detailRequest.TagId,
                     DifficultyId = detailRequest.DifficultyId,
-                    Quantity = detailRequest.Quantity
+                    Quantity = detailRequest.Quantity,
+                    QuestionType = detailRequest.QuestionType,
+                    ScoringRule = detailRequest.ScoringRule
                 });
             }
 

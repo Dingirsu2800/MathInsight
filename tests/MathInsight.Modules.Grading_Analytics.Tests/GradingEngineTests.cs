@@ -637,6 +637,139 @@ public class GradingEngineTests
     }
 
     [Fact]
+    public void CompositeWeightedParts_EqualParts_PreserveOddCentMaxPoints()
+    {
+        var session = TestDataBuilder.CreateSession();
+        var answer = TestDataBuilder.AddCompositeGeneral(
+            session,
+            defaultPoint: 3.33m,
+            parts:
+            [
+                ("SHORT_ANSWER", "1", 1.0m, "1"),
+                ("SHORT_ANSWER", "2", 1.0m, "2"),
+            ]);
+
+        answer.TestQuestion = new Persistence.Entities.TestQuestion
+        {
+            TestId = session.TestId,
+            QuestionId = answer.QuestionId,
+            MaxPointsSnapshot = 3.33m,
+            ScoringRuleSnapshot = ScoringRules.WeightedParts,
+        };
+
+        _engine.Grade(session);
+
+        Assert.True(answer.IsCorrect);
+        Assert.Equal(3.33m, answer.PointsEarned);
+        Assert.Equal(3.33m, answer.AnswerParts.Sum(part => part.PointsEarned));
+    }
+
+    [Theory]
+    [InlineData("1", "wrong", 1.67)]
+    [InlineData("wrong", "2", 1.66)]
+    [InlineData("wrong", "wrong", 0.00)]
+    public void CompositeWeightedParts_PartialAnswersUseAllocatedPartPoints(
+        string firstAnswer,
+        string secondAnswer,
+        decimal expectedPoints)
+    {
+        var session = TestDataBuilder.CreateSession();
+        var answer = TestDataBuilder.AddCompositeGeneral(
+            session,
+            defaultPoint: 3.33m,
+            parts:
+            [
+                ("SHORT_ANSWER", "1", 1.0m, firstAnswer),
+                ("SHORT_ANSWER", "2", 1.0m, secondAnswer),
+            ]);
+        SetScoringSnapshot(answer, 3.33m, ScoringRules.WeightedParts);
+
+        _engine.Grade(session);
+
+        Assert.Equal(expectedPoints, answer.PointsEarned);
+        Assert.Equal(expectedPoints, answer.AnswerParts.Sum(part => part.PointsEarned));
+        Assert.All(answer.AnswerParts, part =>
+        {
+            Assert.InRange(part.PointsEarned, 0m, 3.33m);
+        });
+    }
+
+    [Fact]
+    public void CompositeWeightedParts_UnevenWeightsAndSmallMaxPoints_AreStableAndCapped()
+    {
+        var session = TestDataBuilder.CreateSession();
+        var answer = TestDataBuilder.AddCompositeGeneral(
+            session,
+            defaultPoint: 0.05m,
+            parts:
+            [
+                ("SHORT_ANSWER", "1", 1.0m, "1"),
+                ("SHORT_ANSWER", "2", 2.0m, "2"),
+                ("SHORT_ANSWER", "3", 3.0m, "3"),
+                ("SHORT_ANSWER", "4", 4.0m, "4"),
+            ]);
+        SetScoringSnapshot(answer, 0.05m, ScoringRules.WeightedParts);
+
+        _engine.Grade(session);
+        var firstRun = answer.AnswerParts
+            .OrderBy(part => part.QuestionPart.PartOrder)
+            .Select(part => part.PointsEarned)
+            .ToArray();
+
+        _engine.Grade(session);
+        var secondRun = answer.AnswerParts
+            .OrderBy(part => part.QuestionPart.PartOrder)
+            .Select(part => part.PointsEarned)
+            .ToArray();
+
+        Assert.Equal([0.01m, 0.01m, 0.01m, 0.02m], firstRun);
+        Assert.Equal(firstRun, secondRun);
+        Assert.Equal(0.05m, answer.PointsEarned);
+        Assert.Equal(0.05m, answer.AnswerParts.Sum(part => part.PointsEarned));
+        Assert.All(answer.AnswerParts, part => Assert.InRange(part.PointsEarned, 0m, 0.05m));
+    }
+
+    [Fact]
+    public void MixedTest_AllCorrect_PreservesQuestionAndTestTotals()
+    {
+        var session = TestDataBuilder.CreateSession();
+        var singleCorrectId = Guid.NewGuid().ToString("D");
+        var single = TestDataBuilder.AddSingleChoiceAnswer(
+            session,
+            defaultPoint: 3.34m,
+            correctAnswerId: singleCorrectId,
+            studentAnswerId: singleCorrectId);
+        var shortAnswer = TestDataBuilder.AddShortAnswer(
+            session,
+            defaultPoint: 3.33m,
+            correctAnswer: "pi",
+            studentAnswer: "pi");
+        var composite = TestDataBuilder.AddCompositeGeneral(
+            session,
+            defaultPoint: 3.33m,
+            parts:
+            [
+                ("SHORT_ANSWER", "1", 1.0m, "1"),
+                ("SHORT_ANSWER", "2", 1.0m, "2"),
+            ]);
+
+        SetScoringSnapshot(single, 3.34m, ScoringRules.AllOrNothing);
+        SetScoringSnapshot(shortAnswer, 3.33m, ScoringRules.AllOrNothing);
+        SetScoringSnapshot(composite, 3.33m, ScoringRules.WeightedParts);
+
+        var result = _engine.Grade(session);
+
+        Assert.Equal(10.00m, result.Score);
+        Assert.Equal(10.00m, session.TestAnswers.Sum(answer => answer.PointsEarned));
+        Assert.Equal(3.34m, single.PointsEarned);
+        Assert.Equal(3.33m, shortAnswer.PointsEarned);
+        Assert.Equal(3.33m, composite.PointsEarned);
+        Assert.Equal(3, result.NumCorrect);
+        Assert.Equal(0, result.NumIncorrect);
+        Assert.Equal(0, result.NumAbandoned);
+    }
+
+    [Fact]
     public void CompositeGeneral_PartPointsCappedAtDefaultWeight()
     {
         // Arrange: part point values sum to more than default_point
@@ -659,6 +792,20 @@ public class GradingEngineTests
     }
 
     // â”€â”€ SCORE CALCULATION (BR-20) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    private static void SetScoringSnapshot(
+        Persistence.Entities.TestAnswer answer,
+        decimal maxPoints,
+        string scoringRule)
+    {
+        answer.TestQuestion = new Persistence.Entities.TestQuestion
+        {
+            TestId = answer.SessionId,
+            QuestionId = answer.QuestionId,
+            MaxPointsSnapshot = maxPoints,
+            ScoringRuleSnapshot = scoringRule,
+        };
+    }
 
     [Fact]
     public void Score_IsSumPointsEarned_DivBySumMaxPoints_Times10()

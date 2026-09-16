@@ -7,6 +7,7 @@ public static class BlueprintQuestionTypes
     public const string TrueFalse = "TrueFalse";
     public const string ShortAnswer = "ShortAnswer";
     public const string Composite = "Composite";
+    public const string Mixed = "Mixed";
 
     public static string? Normalize(string? questionType)
     {
@@ -20,7 +21,11 @@ public static class BlueprintQuestionTypes
             "TRUEFALSE" or "TRUE_FALSE" => TrueFalse,
             "SHORTANSWER" or "SHORT_ANSWER" => ShortAnswer,
             "COMPOSITE" => Composite,
+            "MIXED" => Mixed,
             _ => string.Empty
         };
     }
+
+    public static bool IsActualQuestionType(string? questionType)
+        => questionType is SingleChoice or MultipleChoice or TrueFalse or ShortAnswer or Composite;
 }

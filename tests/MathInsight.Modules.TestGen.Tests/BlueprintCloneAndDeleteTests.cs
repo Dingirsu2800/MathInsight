@@ -58,6 +58,76 @@ public sealed class BlueprintCloneAndDeleteTests
     }
 
     [Fact]
+    public async Task Clone_MixedSection_PreservesPerDetailQuestionTypeAndScoringRule()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedExpertsAsync(testContext);
+        var source = new Blueprint
+        {
+            BlueprintId = "mixed-source",
+            BlueprintName = "Mixed source",
+            Grade = 12,
+            TotalQuestions = 2,
+            TotalScore = 10m,
+            DurationMinutes = 30,
+            ExpertId = OwnerId,
+            Status = BlueprintStatuses.Approved
+        };
+        var section = new BlueprintSection
+        {
+            BlueprintSectionId = "mixed-source-section",
+            BlueprintId = source.BlueprintId,
+            SectionOrder = 1,
+            SectionName = "Mixed",
+            QuestionType = BlueprintQuestionTypes.Mixed,
+            ScoringRule = null,
+            TotalQuestions = 2,
+            ScoreBudget = 10m
+        };
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "mixed-source-single",
+            BlueprintId = source.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = "mixed-topic",
+            DifficultyId = "mixed-difficulty",
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.SingleChoice,
+            ScoringRule = "AllOrNothing"
+        });
+        section.Details.Add(new BlueprintDetail
+        {
+            BlueprintDetailId = "mixed-source-composite",
+            BlueprintId = source.BlueprintId,
+            BlueprintSectionId = section.BlueprintSectionId,
+            TagId = "mixed-topic",
+            DifficultyId = "mixed-difficulty",
+            Quantity = 1,
+            QuestionType = BlueprintQuestionTypes.Composite,
+            ScoringRule = "WeightedParts"
+        });
+        source.Sections.Add(section);
+        testContext.Context.Blueprints.Add(source);
+        await testContext.Context.SaveChangesAsync();
+
+        var result = await new CloneBlueprintCommandHandler(testContext.Context).Handle(
+            new CloneBlueprintCommand(source.BlueprintId, ClonerId),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var cloneSection = await testContext.Context.BlueprintSections
+            .Include(item => item.Details)
+            .SingleAsync(item => item.BlueprintId == result.Value!.BlueprintId);
+        Assert.Equal(BlueprintQuestionTypes.Mixed, cloneSection.QuestionType);
+        Assert.Null(cloneSection.ScoringRule);
+        Assert.Equal(
+            new[] { (BlueprintQuestionTypes.Composite, "WeightedParts"), (BlueprintQuestionTypes.SingleChoice, "AllOrNothing") },
+            cloneSection.Details
+                .OrderBy(item => item.QuestionType)
+                .Select(item => (item.QuestionType!, item.ScoringRule!)));
+    }
+
+    [Fact]
     public async Task Clone_NameAtMaximumLength_TruncatesBaseBeforeCopySuffix()
     {
         await using var testContext = TestGenInMemoryContext.Create();

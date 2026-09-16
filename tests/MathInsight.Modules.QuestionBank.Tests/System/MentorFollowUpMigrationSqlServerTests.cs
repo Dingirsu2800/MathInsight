@@ -131,6 +131,119 @@ public sealed class MentorFollowUpMigrationSqlServerTests
     }
 
     [QuestionBankSqlServerFact]
+    public async Task Migration006_ReplacesProductionShapedCompositeConstraint()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync();
+        await database.SeedNonCompositeSectionsAsync();
+        await database.ReplaceCompositePartConstraintWithProductionShapeAsync();
+
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+
+        var state = await database.ReadLegacyCompositeStateAsync();
+        Assert.Equal(0, state.LegacyPartCountRows);
+        Assert.Equal(53, state.TieredRows);
+        Assert.Equal(1, state.WeightedRows);
+        Assert.Equal(0, state.InvalidPolicyRows);
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_BlueprintSection_CompositePartMetadata' AND definition LIKE '%PartCountPerQuestion%IS NULL%' AND definition NOT LIKE '%PartCountPerQuestion%IS NOT NULL%';"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task Migration009_NormalizesProductionCompositeRowsAndIsRerunnable()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync();
+        await database.SeedNonCompositeSectionsAsync();
+        await database.ReplaceCompositePartConstraintWithProductionShapeAsync();
+
+        await database.ApplyAsync("009_Fix_BlueprintSection_CompositePartCount.sql");
+        var firstState = await database.ReadLegacyCompositeStateAsync();
+        await database.ApplyAsync("009_Fix_BlueprintSection_CompositePartCount.sql");
+        var secondState = await database.ReadLegacyCompositeStateAsync();
+
+        Assert.Equal(firstState, secondState);
+        Assert.Equal(0, firstState.LegacyPartCountRows);
+        Assert.Equal(53, firstState.TieredRows);
+        Assert.Equal(1, firstState.WeightedRows);
+        Assert.Equal(0, firstState.InvalidPolicyRows);
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_BlueprintSection_CompositePartMetadata' AND definition LIKE '%PartCountPerQuestion%IS NULL%' AND definition NOT LIKE '%PartCountPerQuestion%IS NOT NULL%' AND is_not_trusted = 0;"));
+        Assert.Equal(3, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.BlueprintSection WHERE QuestionType <> 'Composite' AND PartCountPerQuestion IS NULL;"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task Migration009_InvalidCompositePolicy_RollsBackWithoutChangingRowsOrConstraint()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync(includeInvalidPolicy: true);
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() => database.ApplyAsync("009_Fix_BlueprintSection_CompositePartCount.sql"));
+
+        Assert.Contains("invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var state = await database.ReadLegacyCompositeStateAsync();
+        Assert.Equal(55, state.LegacyPartCountRows);
+        Assert.Equal(53, state.TieredRows);
+        Assert.Equal(1, state.WeightedRows);
+        Assert.Equal(1, state.InvalidPolicyRows);
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_BlueprintSection_CompositePartMetadata' AND definition LIKE '%DefaultPointPerPart%';"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task Migration010_AddsMixedPolicyColumnsAndIsRerunnable()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync();
+        await database.SeedNonCompositeSectionsAsync();
+        await database.ApplyAsync("006_MentorFollowUp_CompositePolicy.sql");
+        await database.ApplyAsync("009_Fix_BlueprintSection_CompositePartCount.sql");
+
+        var legacySessionScore = await database.ScalarAsync("SELECT Score FROM dbo.TestSession WHERE SessionID = 'migration-session-safe';");
+        await database.ApplyAsync("010_BlueprintMixedSections.sql");
+        await database.ApplyAsync("010_BlueprintMixedSections.sql");
+
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'QuestionType' AND is_nullable = 1;"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'ScoringRule' AND is_nullable = 1;"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.BlueprintSection') AND name = 'ScoringRule' AND is_nullable = 1;"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'UQ_BlueprintDetail_Section_Tag_Difficulty_Type_Rule' AND is_unique = 1;"));
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'UQ_BlueprintDetail_Section_Tag_Difficulty';"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('dbo.BlueprintSection') AND name = 'CK_BlueprintSection_QuestionType' AND definition LIKE '%Mixed%';"));
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.BlueprintSection WHERE QuestionType = 'Composite' AND PartCountPerQuestion IS NOT NULL;"));
+        Assert.Equal(legacySessionScore, await database.ScalarAsync("SELECT Score FROM dbo.TestSession WHERE SessionID = 'migration-session-safe';"));
+    }
+
+    [QuestionBankSqlServerFact]
+    public async Task Migration010_InvalidLegacyPolicy_RollsBackSchemaAndRows()
+    {
+        await using var database = await DisposableDatabase.CreateAsync();
+        await database.ApplyAsync("001_Create_MathInsight_Azure.sql");
+        await database.ApplyAsync("005_Align_TestGen_QuestionBank_Contract.sql");
+        await database.SeedLegacyReportsAsync(includeInvalidSnapshotPointers: false, includeDuplicateReport: false);
+        await database.SeedLegacyCompositeSectionsAsync(includeInvalidPolicy: true);
+        var beforeRows = await database.ScalarAsync("SELECT COUNT(*) FROM dbo.BlueprintSection WHERE BlueprintID = 'migration-blueprint';");
+        var beforePartCount = await database.ScalarAsync("SELECT COUNT(*) FROM dbo.BlueprintSection WHERE BlueprintID = 'migration-blueprint' AND PartCountPerQuestion IS NOT NULL;");
+
+        var exception = await Assert.ThrowsAsync<SqlException>(() => database.ApplyAsync("010_BlueprintMixedSections.sql"));
+
+        Assert.Contains("invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(beforeRows, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.BlueprintSection WHERE BlueprintID = 'migration-blueprint';"));
+        Assert.Equal(beforePartCount, await database.ScalarAsync("SELECT COUNT(*) FROM dbo.BlueprintSection WHERE BlueprintID = 'migration-blueprint' AND PartCountPerQuestion IS NOT NULL;"));
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'QuestionType';"));
+        Assert.Equal(0, await database.ScalarAsync("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'ScoringRule';"));
+        Assert.Equal(1, await database.ScalarAsync("SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.BlueprintDetail') AND name = 'UQ_BlueprintDetail_Section_Tag_Difficulty';"));
+    }
+
+    [QuestionBankSqlServerFact]
     public async Task ArchivedQuestionPartMigration_ReplacesLegacyUniquenessAndIsRerunnable()
     {
         await using var database = await DisposableDatabase.CreateAsync();
@@ -400,6 +513,26 @@ public sealed class MentorFollowUpMigrationSqlServerTests
         }
 
         public Task ExecuteAsync(string sql) => ExecuteAsync(_connectionString, sql);
+
+        public Task ReplaceCompositePartConstraintWithProductionShapeAsync() => ExecuteAsync(_connectionString, """
+            ALTER TABLE dbo.BlueprintSection DROP CONSTRAINT CK_BlueprintSection_CompositePartMetadata;
+            ALTER TABLE dbo.BlueprintSection WITH CHECK ADD CONSTRAINT CK_BlueprintSection_CompositePartMetadata CHECK (
+                ([QuestionType] = 'Composite' AND [PartCountPerQuestion] IS NOT NULL AND ([ScoringRule] = 'WeightedParts' OR [ScoringRule] = 'TieredTrueFalse')) OR
+                ([QuestionType] <> 'Composite' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] = 'AllOrNothing'));
+            """);
+
+        public Task SeedNonCompositeSectionsAsync() => ExecuteAsync(_connectionString, """
+                IF NOT EXISTS (SELECT 1 FROM dbo.Blueprint WHERE BlueprintID = 'migration-blueprint-non-composite')
+                    INSERT INTO dbo.Blueprint (BlueprintID, BlueprintName, Grade, TotalQuestions, DurationMinutes, ExpertID, Status)
+                    VALUES ('migration-blueprint-non-composite', N'Non-composite migration blueprint', 10, 3, 60, 'migration-expert', 'Draft');
+            INSERT INTO dbo.BlueprintSection
+                (BlueprintSectionID, BlueprintID, SectionOrder, SectionCode, SectionName, QuestionType,
+                 TotalQuestions, DefaultPointPerQuestion, PartCountPerQuestion, ScoreBudget, ScoringRule)
+            VALUES
+                ('migration-section-multiple', 'migration-blueprint-non-composite', 1, N'M1', N'Multiple', 'MultipleChoice', 1, 1.00, NULL, 1.00, 'AllOrNothing'),
+                ('migration-section-short', 'migration-blueprint-non-composite', 2, N'S2', N'Short', 'ShortAnswer', 1, 1.00, NULL, 1.00, 'AllOrNothing'),
+                ('migration-section-single', 'migration-blueprint-non-composite', 3, N'S3', N'Single', 'SingleChoice', 1, 1.00, NULL, 1.00, 'AllOrNothing');
+            """);
 
         public Task InsertVersionOnlyReportAsync(string reportId) => ExecuteAsync(_connectionString, $"""
             INSERT INTO dbo.QuestionReport

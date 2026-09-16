@@ -135,7 +135,7 @@ public sealed record ExpertTestPreviewSectionResponse(
     string QuestionType,
     string? InstructionText,
     decimal ScoreBudget,
-    string ScoringRule,
+    string? ScoringRule,
     IReadOnlyList<ExpertTestPreviewQuestionResponse> Questions);
 
 public sealed record ExpertTestPreviewQuestionResponse(
