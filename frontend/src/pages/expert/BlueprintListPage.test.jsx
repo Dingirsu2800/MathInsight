@@ -27,7 +27,7 @@ afterEach(() => {
 describe('BlueprintListPage pinning', () => {
   const sampleItems = [
     { blueprintId: 'bp-1', blueprintName: 'Đề thi khảo sát số 1', grade: 12, status: 'Draft', totalQuestions: 40, durationMinutes: 90, totalScore: 10 },
-    { blueprintId: 'bp-2', blueprintName: 'Đề thi vừa tạo mới', grade: 12, status: 'Draft', totalQuestions: 40, durationMinutes: 90, totalScore: 10 },
+    { blueprintId: 'bp-2', blueprintName: 'Đề thi vừa tạo mới', grade: 12, status: 'Draft', totalQuestions: 40, durationMinutes: 90, totalScore: 10, createdTime: '2026-09-23T08:30:00Z' },
     { blueprintId: 'bp-3', blueprintName: 'Đề thi khảo sát số 3', grade: 12, status: 'Draft', totalQuestions: 40, durationMinutes: 90, totalScore: 10 },
   ];
 
@@ -50,6 +50,8 @@ describe('BlueprintListPage pinning', () => {
 
     expect(await screen.findByText('Đề thi vừa tạo mới')).toBeInTheDocument();
     expect(screen.getByText('Vừa tạo')).toBeInTheDocument();
+    expect(screen.getByTitle(new Date('2026-09-23T08:30:00Z').toLocaleString('vi-VN')))
+      .toHaveTextContent('2026');
 
     const titleButtons = screen.getAllByRole('button', { name: /Đề thi/i });
     expect(titleButtons[0]).toHaveTextContent('Đề thi vừa tạo mới');

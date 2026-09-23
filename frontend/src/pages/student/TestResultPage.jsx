@@ -9,7 +9,7 @@ import ChatbotWidget from '../../components/student/ChatbotWidget';
 import { getSessionResult, reportSessionQuestion } from '../../services/gradingApi';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import ReportReasonChips from '../../components/question-reports/ReportReasonChips';
+import ReportReasonChips, { formatReportReason } from '../../components/question-reports/ReportReasonChips';
 import { normalizeQuestionType } from '../../utils/questionLabels';
 
 /** Map DifficultyLevel (1-4) to label and CSS class */
@@ -54,7 +54,9 @@ export default function TestResultPage() {
   const [error, setError] = useState(false);
   const [filter, setFilter] = useState('all');
   const [reportTarget, setReportTarget] = useState(null);
-  const [reportReason, setReportReason] = useState('');
+  const [selectedReportReasons, setSelectedReportReasons] = useState([]);
+  const [otherReportReason, setOtherReportReason] = useState('');
+  const reportReason = formatReportReason(selectedReportReasons, otherReportReason);
   const [reportError, setReportError] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
@@ -132,14 +134,19 @@ export default function TestResultPage() {
 
   const openReportDialog = (answer) => {
     setReportTarget(answer);
-    setReportReason('');
+    setSelectedReportReasons([]);
+    setOtherReportReason('');
     setReportError('');
   };
 
   const submitReport = async () => {
     const reason = reportReason.trim();
-    if (!reportTarget || reason.length < 10) {
-      setReportError('Lý do báo cáo phải có ít nhất 10 ký tự.');
+    if (selectedReportReasons.includes('Khác') && !otherReportReason.trim()) {
+      setReportError('Vui lòng nhập mô tả chi tiết cho mục Khác.');
+      return;
+    }
+    if (!reportTarget || reason.length < 10 || reason.length > 1000) {
+      setReportError('Lý do báo cáo phải từ 10 đến 1000 ký tự.');
       return;
     }
 
@@ -148,7 +155,8 @@ export default function TestResultPage() {
     try {
       await reportSessionQuestion(sessionId, reportTarget.questionId, reason);
       setReportTarget(null);
-      setReportReason('');
+      setSelectedReportReasons([]);
+      setOtherReportReason('');
       await loadResult();
     } catch (requestError) {
       const code = requestError.response?.data?.code;
@@ -357,21 +365,15 @@ export default function TestResultPage() {
           </DialogDescription>
         </DialogHeader>
         <DialogContent>
-          <label className="block text-sm font-bold text-on-surface mb-2" htmlFor="student-question-report-reason">
+          <p className="block text-sm font-bold text-on-surface mb-2">
             Lý do báo cáo
-          </label>
+          </p>
           <ReportReasonChips
-            value={reportReason}
-            onChange={setReportReason}
+            selectedReasons={selectedReportReasons}
+            onChange={setSelectedReportReasons}
+            otherText={otherReportReason}
+            onOtherTextChange={setOtherReportReason}
             className="mb-3"
-          />
-          <textarea
-            id="student-question-report-reason"
-            rows={5}
-            maxLength={1000}
-            value={reportReason}
-            onChange={(event) => setReportReason(event.target.value)}
-            className="mt-1 w-full resize-y rounded-lg border border-outline-variant bg-pure-surface p-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <div className="mt-1 flex justify-between text-xs text-on-surface-variant">
             <span>{reportError && <span className="text-error">{reportError}</span>}</span>
@@ -382,7 +384,7 @@ export default function TestResultPage() {
           <Button variant="outline" onClick={() => setReportTarget(null)} disabled={reportSubmitting}>
             Hủy
           </Button>
-          <Button onClick={submitReport} disabled={reportSubmitting || reportReason.trim().length < 10}>
+          <Button onClick={submitReport} disabled={reportSubmitting || reportReason.trim().length < 10 || reportReason.length > 1000 || (selectedReportReasons.includes('Khác') && !otherReportReason.trim())}>
             {reportSubmitting ? 'Đang gửi...' : 'Gửi báo cáo'}
           </Button>
         </DialogFooter>

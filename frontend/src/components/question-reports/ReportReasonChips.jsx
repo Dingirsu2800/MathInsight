@@ -9,53 +9,70 @@ export const REPORT_REASONS = [
   'Khác',
 ];
 
+export function formatReportReason(selectedReasons, otherText) {
+  const lines = selectedReasons
+    .filter((reason) => reason !== 'Khác')
+    .map((reason) => `• ${reason}`);
+  if (selectedReasons.includes('Khác') && otherText.trim()) {
+    lines.push(`Chi tiết: ${otherText.trim()}`);
+  }
+  return lines.join('\n');
+}
+
 export default function ReportReasonChips({
-  value = '',
+  selectedReasons = [],
   onChange,
-  onFocusTextarea,
-  textareaRef,
+  otherText = '',
+  onOtherTextChange,
+  maxLength = 1000,
   className = '',
 }) {
-  const handleChipClick = (reason) => {
-    if (reason === 'Khác') {
-      if (typeof onFocusTextarea === 'function') {
-        onFocusTextarea();
-      } else if (textareaRef?.current) {
-        textareaRef.current.focus();
-      } else if (typeof document !== 'undefined') {
-        const activeTextarea = document.querySelector('textarea:not([disabled])');
-        activeTextarea?.focus();
-      }
-      return;
+  const toggleReason = (reason) => {
+    if (reason === 'Khác' && selectedReasons.includes(reason)) {
+      onOtherTextChange('');
     }
-
-    const currentText = (value || '').trim();
-    if (!currentText) {
-      onChange(reason);
-      return;
-    }
-
-    const existingParts = currentText.split(';').map((s) => s.trim());
-    if (existingParts.includes(reason)) {
-      return;
-    }
-
-    const separator = currentText.endsWith(';') ? ' ' : '; ';
-    onChange(`${currentText}${separator}${reason}`);
+    onChange(selectedReasons.includes(reason)
+      ? selectedReasons.filter((item) => item !== reason)
+      : [...selectedReasons, reason]);
   };
 
+  const remainingLength = maxLength - (formatReportReason(selectedReasons, 'x').length - 1);
+
   return (
-    <div className={`flex flex-wrap gap-1.5 ${className}`}>
-      {REPORT_REASONS.map((reason) => (
-        <button
-          key={reason}
-          type="button"
-          onClick={() => handleChipClick(reason)}
-          className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-whisper-border bg-surface-container-low hover:bg-surface-container hover:border-primary/40 text-on-surface-variant transition-colors cursor-pointer select-none"
-        >
-          {reason}
-        </button>
-      ))}
+    <div className={className}>
+      <div className="flex flex-wrap gap-1.5">
+        {REPORT_REASONS.map((reason) => {
+          const selected = selectedReasons.includes(reason);
+          return (
+            <button
+              key={reason}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => toggleReason(reason)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors cursor-pointer select-none ${selected
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-whisper-border bg-surface-container-low hover:bg-surface-container hover:border-primary/40 text-on-surface-variant'}`}
+            >
+              {reason === 'Khác' ? 'Khác / bổ sung chi tiết' : reason}
+            </button>
+          );
+        })}
+      </div>
+      {selectedReasons.includes('Khác') && (
+        <div className="mt-3">
+          <label htmlFor="report-other-detail" className="block text-sm font-semibold text-on-surface mb-1">
+            Mô tả chi tiết
+          </label>
+          <textarea
+            id="report-other-detail"
+            rows={4}
+            maxLength={Math.max(0, remainingLength)}
+            value={otherText}
+            onChange={(event) => onOtherTextChange(event.target.value)}
+            className="w-full resize-y rounded-lg border border-outline-variant bg-pure-surface p-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      )}
     </div>
   );
 }

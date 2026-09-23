@@ -21,7 +21,7 @@ import {
 } from "../../utils/questionLabels";
 import LatexPreview from "../../components/expert/LatexPreview";
 import QuestionExcelImportDialog from "../../components/expert/QuestionExcelImportDialog";
-import ReportReasonChips from "../../components/question-reports/ReportReasonChips";
+import ReportReasonChips, { formatReportReason } from "../../components/question-reports/ReportReasonChips";
 
 export default function QuestionBankListPage({ mode = "expert" }) {
   const navigate = useNavigate();
@@ -94,7 +94,9 @@ export default function QuestionBankListPage({ mode = "expert" }) {
   // Report states
   const [isReportDialogOpen, setIsReportDialogOpen] = React.useState(false);
   const [reportTarget, setReportTarget] = React.useState(null);
-  const [reportReason, setReportReason] = React.useState("");
+  const [selectedReportReasons, setSelectedReportReasons] = React.useState([]);
+  const [otherReportReason, setOtherReportReason] = React.useState("");
+  const reportReason = formatReportReason(selectedReportReasons, otherReportReason);
   const [reportError, setReportError] = React.useState("");
   const [reportLoading, setReportLoading] = React.useState(false);
 
@@ -369,8 +371,12 @@ export default function QuestionBankListPage({ mode = "expert" }) {
   const handleProceedReport = async (e) => {
     if (e) e.preventDefault();
     if (!reportTarget) return;
-    if (!reportReason.trim()) {
-      setReportError("Vui lòng điền lý do báo cáo.");
+    if (selectedReportReasons.includes('Khác') && !otherReportReason.trim()) {
+      setReportError("Vui lòng nhập mô tả chi tiết cho mục Khác.");
+      return;
+    }
+    if (!reportReason.trim() || reportReason.length > 2000) {
+      setReportError("Lý do báo cáo phải từ 1 đến 2000 ký tự.");
       return;
     }
     setReportLoading(true);
@@ -379,7 +385,8 @@ export default function QuestionBankListPage({ mode = "expert" }) {
       await questionBankApi.reportQuestion(reportTarget.id, { reportReason: reportReason.trim() });
       setIsReportDialogOpen(false);
       setReportTarget(null);
-      setReportReason("");
+      setSelectedReportReasons([]);
+      setOtherReportReason("");
       fetchQuestions();
     } catch (err) {
       console.error(err);
@@ -956,7 +963,8 @@ export default function QuestionBankListPage({ mode = "expert" }) {
                     onClick={() => {
                       setIsPreviewOpen(false);
                       setReportTarget(selectedQuestion);
-                      setReportReason("");
+                      setSelectedReportReasons([]);
+                      setOtherReportReason("");
                       setReportError("");
                       setIsReportDialogOpen(true);
                     }}
@@ -1062,19 +1070,14 @@ export default function QuestionBankListPage({ mode = "expert" }) {
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Lý do báo cáo <span className="text-error">*</span></label>
+              <p className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Lý do báo cáo <span className="text-error">*</span></p>
               <ReportReasonChips
-                value={reportReason}
-                onChange={setReportReason}
+                selectedReasons={selectedReportReasons}
+                onChange={setSelectedReportReasons}
+                otherText={otherReportReason}
+                onOtherTextChange={setOtherReportReason}
+                maxLength={2000}
                 className="mb-2"
-              />
-              <textarea
-                value={reportReason}
-                onChange={(e) => setReportReason(e.target.value)}
-                placeholder="Ví dụ: Công thức Toán học hiển thị lỗi, sai đáp án trắc nghiệm hoặc phân loại sai chủ đề..."
-                rows="4"
-                className="w-full px-3 py-2 bg-transparent border border-outline-variant rounded-lg text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-semibold"
-                required
               />
             </div>
           </DialogContent>

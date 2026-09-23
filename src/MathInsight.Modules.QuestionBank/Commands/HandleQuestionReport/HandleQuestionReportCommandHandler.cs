@@ -4,6 +4,7 @@ using MathInsight.Modules.QuestionBank.Errors;
 using MathInsight.Modules.QuestionBank.Persistence;
 using MathInsight.Shared.Results;
 using MathInsight.Shared.Scoring;
+using MathInsight.Shared.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -16,13 +17,16 @@ public sealed class HandleQuestionReportCommandHandler
 {
     private readonly QuestionBankDbContext _context;
     private readonly IScoreAdjustmentService? _scoreAdjustmentService;
+    private readonly IPublisher? _publisher;
 
     public HandleQuestionReportCommandHandler(
         QuestionBankDbContext context,
-        IScoreAdjustmentService? scoreAdjustmentService = null)
+        IScoreAdjustmentService? scoreAdjustmentService = null,
+        IPublisher? publisher = null)
     {
         _context = context;
         _scoreAdjustmentService = scoreAdjustmentService;
+        _publisher = publisher;
     }
 
     public async Task<Result<QuestionReportResponse>> Handle(
@@ -171,6 +175,18 @@ public sealed class HandleQuestionReportCommandHandler
 
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
+
+        if (_publisher is not null)
+        {
+            await _publisher.Publish(new NotificationRequestedEvent(
+                report.ReporterAccountId,
+                "Báo cáo câu hỏi đã được xử lý",
+                targetStatus == "Dismissed"
+                    ? $"Báo cáo của bạn đã được xem xét và không được chấp nhận. Lý do: {report.ReviewNote}"
+                    : "Báo cáo của bạn đã được xử lý.",
+                $"/questions/{report.QuestionId}",
+                $"question-report:{report.ReportId}:{report.Status}"), cancellationToken);
+        }
 
         if (resolutionAction == "InvalidateAndAwardFull")
         {

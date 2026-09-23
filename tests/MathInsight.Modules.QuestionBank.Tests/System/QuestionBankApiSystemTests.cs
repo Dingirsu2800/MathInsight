@@ -615,6 +615,7 @@ public sealed class QuestionBankApiSystemTests : IClassFixture<QuestionBankApiFa
         var approveResponse = await _client.SendAsync(approveRequest);
         Assert.Equal(HttpStatusCode.OK, approveResponse.StatusCode);
         await _factory.AssertIncidentWasApprovedWithIndividualDispositionsAsync(incidentId, adminReportId!, expertReportId!);
+        await _factory.AssertDismissalNotificationIncludesReasonAsync(expertReportId!);
         await _factory.AssertNoScoreAdjustmentNotificationAsync(incidentId, studentSessionId);
 
         await _factory.RunScoreAdjustmentRecoveryAsync();
@@ -1011,6 +1012,15 @@ public sealed class QuestionBankApiFactory : WebApplicationFactory<Program>
         Assert.Equal("InvalidateAndAwardFull", incident.ApprovedResolutionAction);
         Assert.Contains(reports, item => item.ReportId == resolvedReportId && item.Status == "Resolved");
         Assert.Contains(reports, item => item.ReportId == dismissedReportId && item.Status == "Dismissed");
+    }
+
+    public async Task AssertDismissalNotificationIncludesReasonAsync(string reportId)
+    {
+        using var scope = Services.CreateScope();
+        var notifications = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
+        var notification = await notifications.Notifications.SingleAsync(item =>
+            item.DeduplicationKey == $"question-report:{reportId}:Dismissed");
+        Assert.Contains("Not reproducible.", notification.Content);
     }
 
     public async Task RunScoreAdjustmentRecoveryAsync()

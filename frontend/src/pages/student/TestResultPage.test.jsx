@@ -98,6 +98,7 @@ describe('TestResultPage score invalidation and reporting', () => {
 
   it('opens report dialog with quick-reason chips on reportable question', async () => {
     getSessionResult.mockResolvedValue(mockResultData);
+    reportSessionQuestion.mockResolvedValue({});
 
     render(
       <BrowserRouter>
@@ -115,8 +116,18 @@ describe('TestResultPage score invalidation and reporting', () => {
     expect(chip).toBeInTheDocument();
     fireEvent.click(chip);
 
-    const textarea = screen.getByLabelText(/Lý do báo cáo/i);
-    expect(textarea.value).toContain('Đáp án chưa chính xác');
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByLabelText('Mô tả chi tiết')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Công thức hoặc hình ảnh bị lỗi' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Khác / bổ sung chi tiết' }));
+    fireEvent.change(screen.getByLabelText('Mô tả chi tiết'), { target: { value: 'Hình không khớp đáp án B' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi báo cáo' }));
+
+    await waitFor(() => expect(reportSessionQuestion).toHaveBeenCalledWith(
+      'sess-123',
+      'q-2',
+      '• Đáp án chưa chính xác\n• Công thức hoặc hình ảnh bị lỗi\nChi tiết: Hình không khớp đáp án B'
+    ));
   });
 
   it('renders adjusted score banner with effectivePoints on invalidated COMPOSITE question', async () => {

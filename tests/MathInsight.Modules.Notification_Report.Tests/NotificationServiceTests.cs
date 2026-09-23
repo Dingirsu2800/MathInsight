@@ -1,4 +1,5 @@
 using MathInsight.Modules.Notification_Report.Errors;
+using MathInsight.Modules.Notification_Report.Entities;
 using MathInsight.Modules.Notification_Report.Hubs;
 using MathInsight.Modules.Notification_Report.Persistence;
 using MathInsight.Modules.Notification_Report.Services;
@@ -37,6 +38,16 @@ public class NotificationServiceTests : IDisposable
     }
 
     public void Dispose() => _db.Dispose();
+
+    [Fact]
+    public void NotificationContent_AllowsFullDismissalReason()
+    {
+        var contentLength = _db.Model.FindEntityType(typeof(Notification))!
+            .FindProperty(nameof(Notification.Content))!
+            .GetMaxLength();
+
+        Assert.True(contentLength >= 2100);
+    }
 
     [Fact]
     public async Task SendAsync_InsertsNotificationRow()

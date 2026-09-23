@@ -43,7 +43,8 @@ public sealed class GetPendingBlueprintsQueryHandler
             : (int)Math.Ceiling(totalCount / (double)pageSize);
 
         var items = await query
-            .OrderBy(blueprint => blueprint.BlueprintName)
+            .OrderByDescending(blueprint => blueprint.CreatedTime)
+            .ThenBy(blueprint => blueprint.BlueprintName)
             .ThenBy(blueprint => blueprint.BlueprintId)
             .Skip((pageIndex - 1) * pageSize)
             .Take(pageSize)
@@ -61,7 +62,8 @@ public sealed class GetPendingBlueprintsQueryHandler
                     .FirstOrDefault(),
                 blueprint.Status,
                 blueprint.Sections.Count,
-                blueprint.Sections.SelectMany(section => section.Details).Count()))
+                blueprint.Sections.SelectMany(section => section.Details).Count(),
+                blueprint.CreatedTime))
             .ToListAsync(cancellationToken);
 
         return Result<PagedResponse<BlueprintListItemResponse>>.Success(
