@@ -14,6 +14,7 @@ public class Blueprint
     public int DurationMinutes { get; set; }
     public string ExpertId { get; set; } = string.Empty;
     public string Status { get; set; } = "Draft";
+    public DateTime? CreatedTime { get; set; }
     public string? ApprovedBy { get; set; }
     public string? ReviewNote { get; set; }
     public DateTime? ReviewTime { get; set; }

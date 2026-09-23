@@ -1,69 +1,61 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import React, { createRef } from 'react';
+import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import ReportReasonChips from './ReportReasonChips';
+import ReportReasonChips, { formatReportReason } from './ReportReasonChips';
 
 afterEach(() => cleanup());
 
 describe('ReportReasonChips component', () => {
   it('renders all 6 approved Vietnamese quick-reason chips', () => {
-    render(<ReportReasonChips value="" onChange={vi.fn()} />);
+    render(<ReportReasonChips selectedReasons={[]} onChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Nội dung sai hoặc thiếu' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Đáp án chưa chính xác' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lời giải chưa phù hợp' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Công thức hoặc hình ảnh bị lỗi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sai chủ đề hoặc độ khó' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Khác' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Khác / bổ sung chi tiết' })).toBeInTheDocument();
   });
 
-  it('populates empty reason value when a chip is clicked without submitting', () => {
+  it('selects a reason without submitting', () => {
     const onChange = vi.fn();
-    render(<ReportReasonChips value="" onChange={onChange} />);
+    render(<ReportReasonChips selectedReasons={[]} onChange={onChange} />);
 
     const chip = screen.getByRole('button', { name: 'Đáp án chưa chính xác' });
     expect(chip).toHaveAttribute('type', 'button');
     fireEvent.click(chip);
 
-    expect(onChange).toHaveBeenCalledWith('Đáp án chưa chính xác');
+    expect(onChange).toHaveBeenCalledWith(['Đáp án chưa chính xác']);
   });
 
-  it('appends with semicolon without duplicating already-selected reason', () => {
+  it('toggles choices and formats all selected reasons on separate lines', () => {
     const onChange = vi.fn();
-    const { rerender } = render(
-      <ReportReasonChips value="Nội dung sai hoặc thiếu" onChange={onChange} />
+    render(
+      <ReportReasonChips selectedReasons={['Nội dung sai hoặc thiếu']} onChange={onChange} />
     );
 
-    // Clicking already existing reason does not duplicate
     const chip1 = screen.getByRole('button', { name: 'Nội dung sai hoặc thiếu' });
+    expect(chip1).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(chip1);
-    expect(onChange).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith([]);
 
-    // Clicking another reason appends with semicolon
     const chip2 = screen.getByRole('button', { name: 'Công thức hoặc hình ảnh bị lỗi' });
     fireEvent.click(chip2);
-    expect(onChange).toHaveBeenCalledWith('Nội dung sai hoặc thiếu; Công thức hoặc hình ảnh bị lỗi');
+    expect(onChange).toHaveBeenCalledWith(['Nội dung sai hoặc thiếu', 'Công thức hoặc hình ảnh bị lỗi']);
+    expect(formatReportReason(['Nội dung sai hoặc thiếu', 'Công thức hoặc hình ảnh bị lỗi'], ''))
+      .toBe('• Nội dung sai hoặc thiếu\n• Công thức hoặc hình ảnh bị lỗi');
   });
 
-  it('clicking "Khác" focuses the textarea without appending text', () => {
+  it('shows custom input without clearing selected reasons', () => {
     const onChange = vi.fn();
-    const onFocusTextarea = vi.fn();
     render(
-      <div>
-        <ReportReasonChips
-          value="Ghi chú ban đầu"
-          onChange={onChange}
-          onFocusTextarea={onFocusTextarea}
-        />
-        <textarea data-testid="custom-textarea" />
-      </div>
+      <ReportReasonChips selectedReasons={['Đáp án chưa chính xác']} onChange={onChange} />
     );
 
-    const otherChip = screen.getByRole('button', { name: 'Khác' });
-    expect(otherChip).toHaveAttribute('type', 'button');
-    fireEvent.click(otherChip);
-
-    expect(onChange).not.toHaveBeenCalled();
-    expect(onFocusTextarea).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Mô tả chi tiết')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Khác / bổ sung chi tiết' }));
+    expect(onChange).toHaveBeenCalledWith(['Đáp án chưa chính xác', 'Khác']);
+    expect(formatReportReason(['Đáp án chưa chính xác', 'Khác'], 'Đáp án B sai'))
+      .toBe('• Đáp án chưa chính xác\nChi tiết: Đáp án B sai');
   });
 });

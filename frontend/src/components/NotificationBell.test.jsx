@@ -49,12 +49,12 @@ describe('NotificationBell notification behavior', () => {
     });
   });
 
-  it('renders a processed question report as informational without navigation', async () => {
+  it('opens a processed question report in a detail dialog without navigation', async () => {
     getNotifications.mockResolvedValue({
       items: [{
         notificationId: 'notification-2',
         title: 'Báo cáo câu hỏi đã được xử lý',
-        content: 'Báo cáo của bạn đã được xử lý.',
+        content: 'Báo cáo của bạn không được chấp nhận. Lý do: Đáp án đúng.',
         link: '/questions/question-101',
         isRead: false,
         createdTime: '2026-09-10T00:00:00Z'
@@ -66,10 +66,11 @@ describe('NotificationBell notification behavior', () => {
     render(<MemoryRouter><NotificationBell /><LocationProbe /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole('button', { name: /Thông báo/i }));
-    expect(screen.queryByRole('button', { name: /Báo cáo câu hỏi đã được xử lý/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Báo cáo câu hỏi đã được xử lý'));
 
     expect(screen.getByTestId('location')).toHaveTextContent('/');
+    expect(screen.getByText(/Lý do: Đáp án đúng/)).toBeInTheDocument();
+    expect(markNotificationRead).toHaveBeenCalledWith('notification-2');
   });
 
   it('keeps notifications without links clickable as detail dialogs', async () => {

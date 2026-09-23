@@ -47,6 +47,7 @@ public sealed class BlueprintCreateAndReadTests
             .SingleAsync();
 
         Assert.Equal(CurrentExpertId, blueprint.ExpertId);
+        Assert.NotNull(blueprint.CreatedTime);
         Assert.Equal("Blueprint THPT", blueprint.BlueprintName);
         Assert.Equal(BlueprintQuestionTypes.SingleChoice, blueprint.Sections.Single().QuestionType);
         Assert.All(blueprint.Sections, section => Assert.Equal(36, section.BlueprintSectionId.Length));
@@ -252,8 +253,10 @@ public sealed class BlueprintCreateAndReadTests
     {
         await using var testContext = TestGenInMemoryContext.Create();
         await SeedReferenceDataAsync(testContext);
-        AddBlueprint(testContext, "active-b", "B Blueprint", OtherExpertId, BlueprintStatuses.Draft, sectionCount: 1);
-        AddBlueprint(testContext, "active-a", "A Blueprint", OtherExpertId, BlueprintStatuses.Approved, sectionCount: 2);
+        AddBlueprint(testContext, "active-b", "B Blueprint", OtherExpertId, BlueprintStatuses.Draft, sectionCount: 1)
+            .CreatedTime = new DateTime(2026, 8, 2, 0, 0, 0, DateTimeKind.Utc);
+        AddBlueprint(testContext, "active-a", "A Blueprint", OtherExpertId, BlueprintStatuses.Approved, sectionCount: 2)
+            .CreatedTime = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
         AddBlueprint(testContext, "own-hidden", "Own Hidden", CurrentExpertId, BlueprintStatuses.Deactivated, sectionCount: 1);
         AddBlueprint(testContext, "other-hidden", "Other Hidden", OtherExpertId, BlueprintStatuses.Deactivated, sectionCount: 1);
         await testContext.Context.SaveChangesAsync();
@@ -265,9 +268,10 @@ public sealed class BlueprintCreateAndReadTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(3, result.Value!.TotalCount);
-        Assert.Equal(["active-a", "active-b", "own-hidden"], result.Value.Items.Select(item => item.BlueprintId));
-        Assert.Equal(2, result.Value.Items[0].SectionCount);
-        Assert.Equal(2, result.Value.Items[0].DetailSlotCount);
+        Assert.Equal(["active-b", "active-a", "own-hidden"], result.Value.Items.Select(item => item.BlueprintId));
+        Assert.Equal(new DateTime(2026, 8, 2, 0, 0, 0, DateTimeKind.Utc), result.Value.Items[0].CreatedTime);
+        Assert.Equal(2, result.Value.Items[1].SectionCount);
+        Assert.Equal(2, result.Value.Items[1].DetailSlotCount);
         Assert.Equal("Other Expert", result.Value.Items[0].ExpertName);
         Assert.DoesNotContain(result.Value.Items, item => item.BlueprintId == "other-hidden");
     }

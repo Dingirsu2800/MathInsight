@@ -39,7 +39,8 @@ public sealed record BlueprintListItemResponse(
     string? ExpertName,
     string Status,
     int SectionCount,
-    int DetailSlotCount);
+    int DetailSlotCount,
+    DateTime? CreatedTime);
 
 public sealed record BlueprintDetailResponse(
     string BlueprintId,

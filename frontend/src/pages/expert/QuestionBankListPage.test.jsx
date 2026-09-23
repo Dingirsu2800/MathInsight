@@ -35,6 +35,7 @@ afterEach(() => {
 describe('QuestionBankListPage report modal', () => {
   const sampleQuestion = {
     id: 101,
+    questionId: 'q-101',
     content: 'Tìm giá trị x thỏa mãn phương trình...',
     topic: 'Đại số 10',
     grade: '10',
@@ -46,7 +47,8 @@ describe('QuestionBankListPage report modal', () => {
     answers: [{ content: 'x = 1', isCorrect: true }],
   };
 
-  it('renders report reason chips and populates reason textarea when reporting a question', async () => {
+  it('selects report reasons and only shows free text after choosing Other', async () => {
+    questionBankApi.reportQuestion.mockResolvedValue({ data: {} });
     questionBankApi.getQuestions.mockResolvedValue({
       data: {
         items: [sampleQuestion],
@@ -83,7 +85,16 @@ describe('QuestionBankListPage report modal', () => {
     expect(chip).toBeInTheDocument();
     fireEvent.click(chip);
 
-    const textarea = screen.getByPlaceholderText(/Ví dụ: Công thức Toán học hiển thị lỗi/i);
-    expect(textarea.value).toBe('Công thức hoặc hình ảnh bị lỗi');
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByLabelText('Mô tả chi tiết')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Khác / bổ sung chi tiết' }));
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Mô tả chi tiết')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Mô tả chi tiết'), { target: { value: 'Hình vẽ mờ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi báo cáo' }));
+
+    await waitFor(() => expect(questionBankApi.reportQuestion).toHaveBeenCalledWith('q-101', {
+      reportReason: '• Công thức hoặc hình ảnh bị lỗi\nChi tiết: Hình vẽ mờ'
+    }));
   });
 });
