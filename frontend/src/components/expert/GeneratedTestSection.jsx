@@ -36,11 +36,14 @@ export default function GeneratedTestSection({ section, sectionIndex }) {
           <span className="bg-primary/10 text-primary border border-primary/20 font-bold px-3 py-1 rounded-lg">
             Quỹ điểm: <strong className="font-mono">{section.scoreBudget} điểm</strong>
           </span>
-          <span className="bg-surface-container-low border border-whisper-border text-on-surface-variant font-semibold px-3 py-1 rounded-lg">
-            Quy tắc phần: <strong className="text-on-surface">{section.scoringRule}</strong>
-          </span>
+          {section.scoringRule && (
+            <span className="bg-surface-container-low border border-whisper-border text-on-surface-variant font-semibold px-3 py-1 rounded-lg">
+              Quy tắc phần: <strong className="text-on-surface">{section.scoringRule}</strong>
+            </span>
+          )}
         </div>
       </div>
+
 
       {/* Instruction text */}
       {section.instructionText && (

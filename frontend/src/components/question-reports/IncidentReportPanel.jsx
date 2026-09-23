@@ -355,8 +355,8 @@ function ReportItemCard({
       </div>
 
       {/* Report reason */}
-      <div className="text-on-surface font-normal leading-relaxed italic bg-surface-container-low/50 p-2 rounded border border-outline-variant/20">
-        &ldquo;{report.reportReason || report.reason || "Không cung cấp lý do chi tiết."}&rdquo;
+      <div className="text-on-surface font-normal leading-relaxed whitespace-pre-wrap break-words bg-surface-container-low/50 p-2 rounded border border-outline-variant/20">
+        {report.reportReason || report.reason || "Không cung cấp lý do chi tiết."}
       </div>
 
       {/* Admin Prior Rejection Review Note (if any) */}

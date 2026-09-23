@@ -31,6 +31,15 @@ function getPaginationItems(totalPages, currentPage) {
   return items;
 }
 
+function formatBlueprintDate(value) {
+  if (!value) return "Không có dữ liệu";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Không có dữ liệu";
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+  });
+}
+
 export default function BlueprintListPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -394,6 +403,9 @@ export default function BlueprintListPage() {
                     Người tạo
                   </th>
                   <th className="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider w-36">
+                    Ngày tạo
+                  </th>
+                  <th className="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider w-36">
                     Trạng thái
                   </th>
                   <th className="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider w-24 text-right">
@@ -404,7 +416,7 @@ export default function BlueprintListPage() {
               <tbody className="divide-y divide-whisper-border text-xs select-text">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-20 text-center text-on-surface-variant">
+                    <td colSpan={9} className="py-20 text-center text-on-surface-variant">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                         <span>Đang tải danh sách cấu trúc đề...</span>
@@ -413,7 +425,7 @@ export default function BlueprintListPage() {
                   </tr>
                 ) : displayedBlueprints.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-on-surface-variant">
+                    <td colSpan={9} className="py-16 text-center text-on-surface-variant">
                       <div className="flex flex-col items-center gap-2">
                         <span className="material-symbols-outlined text-[36px] text-outline-variant">search_off</span>
                         Chưa có cấu trúc đề nào phù hợp.
@@ -458,6 +470,9 @@ export default function BlueprintListPage() {
                         </td>
                         <td className="py-3 px-4 text-on-surface-variant truncate max-w-[140px]" title={bp.expertName || "Chưa cập nhật"}>
                           {bp.expertName || "Chưa cập nhật"}
+                        </td>
+                        <td className="py-3 px-4 text-on-surface-variant" title={bp.createdTime ? new Date(bp.createdTime).toLocaleString("vi-VN") : "Không có dữ liệu ngày tạo"}>
+                          {formatBlueprintDate(bp.createdTime)}
                         </td>
                         <td className="py-3 px-4">
                           <Badge variant={getStatusBadgeVariant(bp.status)}>

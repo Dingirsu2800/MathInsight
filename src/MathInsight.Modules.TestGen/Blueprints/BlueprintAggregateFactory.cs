@@ -14,7 +14,8 @@ internal static class BlueprintAggregateFactory
         {
             BlueprintId = Guid.NewGuid().ToString(),
             ExpertId = expertId,
-            Status = BlueprintStatuses.Draft
+            Status = BlueprintStatuses.Draft,
+            CreatedTime = DateTime.UtcNow
         };
 
         Apply(blueprint, validated);
@@ -43,6 +44,7 @@ internal static class BlueprintAggregateFactory
             DurationMinutes = source.DurationMinutes,
             ExpertId = expertId,
             Status = BlueprintStatuses.Draft,
+            CreatedTime = DateTime.UtcNow,
             ApprovedBy = null,
             ReviewNote = null,
             ReviewTime = null
@@ -75,7 +77,9 @@ internal static class BlueprintAggregateFactory
                     BlueprintSectionId = sectionId,
                     TagId = sourceDetail.TagId,
                     DifficultyId = sourceDetail.DifficultyId,
-                    Quantity = sourceDetail.Quantity
+                    Quantity = sourceDetail.Quantity,
+                    QuestionType = sourceDetail.QuestionType,
+                    ScoringRule = sourceDetail.ScoringRule
                 });
             }
 
@@ -128,7 +132,9 @@ internal static class BlueprintAggregateFactory
                     BlueprintSectionId = sectionId,
                     TagId = detailRequest.TagId,
                     DifficultyId = detailRequest.DifficultyId,
-                    Quantity = detailRequest.Quantity
+                    Quantity = detailRequest.Quantity,
+                    QuestionType = detailRequest.QuestionType,
+                    ScoringRule = detailRequest.ScoringRule
                 });
             }
 

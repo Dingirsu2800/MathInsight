@@ -199,7 +199,7 @@ public sealed class SubmitQuestionReportIncidentCommandHandler
                             "Báo cáo câu hỏi đã được xử lý",
                             finalizedReport.Status == "Resolved"
                                 ? "Báo cáo của bạn đã được xử lý."
-                                : "Báo cáo của bạn đã được xem xét và không được chấp nhận.",
+                                : $"Báo cáo của bạn đã được xem xét và không được chấp nhận. Lý do: {finalizedReport.ReviewNote}",
                             $"/questions/{incident.QuestionId}",
                             $"question-report:{finalizedReport.ReportId}:{finalizedReport.Status}"), cancellationToken);
                     }

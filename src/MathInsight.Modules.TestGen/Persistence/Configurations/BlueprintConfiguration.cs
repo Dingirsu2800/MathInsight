@@ -63,6 +63,9 @@ public class BlueprintConfiguration : IEntityTypeConfiguration<Blueprint>
         builder.Property(x => x.ReviewTime)
             .HasColumnName("ReviewTime")
             .HasColumnType("datetime2(0)");
+        builder.Property(x => x.CreatedTime)
+            .HasColumnName("CreatedTime")
+            .HasColumnType("datetime2(0)");
 
         builder.HasOne<ExpertReadModel>()
             .WithMany()

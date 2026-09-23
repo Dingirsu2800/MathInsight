@@ -36,7 +36,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 
         builder.Property(notification => notification.Content)
             .HasColumnName("Content")
-            .HasMaxLength(255)
+            .HasMaxLength(2500)
             .IsRequired();
 
         builder.Property(notification => notification.Link)

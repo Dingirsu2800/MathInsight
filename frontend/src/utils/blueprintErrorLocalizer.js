@@ -16,8 +16,11 @@ export function getBlueprintErrorMessage(err, fallback = "Có lỗi xảy ra. Vu
     "BLUEPRINT_REVIEW_NOTE_REQUIRED": "Vui lòng nhập lý do từ chối.",
     "BLUEPRINT_REVIEW_NOTE_TOO_LONG": "Lý do từ chối không được vượt quá 2000 ký tự.",
     "BLUEPRINT_TAXONOMY_INVALID": "Chủ đề hoặc độ khó không còn hợp lệ với khối lớp.",
-    "BLUEPRINT_IN_USE": "Cấu trúc đang chờ phản biện hoặc đã có lịch sử sử dụng."
+    "BLUEPRINT_IN_USE": "Cấu trúc đang chờ phản biện hoặc đã có lịch sử sử dụng.",
+    "BLUEPRINT_AVAILABILITY_OVERLAP_CONFLICT": "Các phần thi bị xung đột trùng lặp câu hỏi, không đủ câu hỏi riêng biệt để tạo đề thi hoàn chỉnh.",
+    "BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS": "Số lượng câu hỏi trong ngân hàng không đủ để đáp ứng cấu trúc đề thi.",
+    "BLUEPRINT_AVAILABILITY_REQUEST_INVALID": "Dữ liệu kiểm tra độ khả dụng của câu hỏi không hợp lệ."
   };
 
-  return mappings[code] || fallback;
+  return mappings[code] || err.response?.data?.message || fallback;
 }

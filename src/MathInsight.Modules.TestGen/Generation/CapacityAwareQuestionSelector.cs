@@ -35,7 +35,7 @@ public sealed class CapacityAwareQuestionSelector : IBlueprintExamQuestionSelect
             network.AddEdge(source, candidateNode, 1);
 
             var matchingRequirements = Enumerable.Range(0, requirements.Count)
-                .Where(requirementIndex => Matches(
+                .Where(requirementIndex => BlueprintExamCandidateMatcher.Matches(
                     shuffledCandidates[candidateIndex],
                     requirements[requirementIndex]))
                 .ToList();
@@ -82,14 +82,6 @@ public sealed class CapacityAwareQuestionSelector : IBlueprintExamQuestionSelect
 
         return new BlueprintExamSelection(true, assignments);
     }
-
-    private static bool Matches(
-        BlueprintExamCandidate candidate,
-        BlueprintExamRequirement requirement)
-        => string.Equals(candidate.DifficultyId, requirement.DifficultyId, StringComparison.OrdinalIgnoreCase) &&
-           string.Equals(candidate.QuestionType, requirement.QuestionType, StringComparison.OrdinalIgnoreCase) &&
-           candidate.SupportedScoringRules.Contains(requirement.ScoringRule) &&
-           candidate.TagIds.Contains(requirement.TagId);
 
     private sealed record AssignmentEdge(
         int CandidateIndex,

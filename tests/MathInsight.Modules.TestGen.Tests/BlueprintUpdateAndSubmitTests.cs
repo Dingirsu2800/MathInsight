@@ -6,6 +6,7 @@ using MathInsight.Modules.TestGen.Errors;
 using MathInsight.Modules.TestGen.Persistence.Entities;
 using MathInsight.Modules.TestGen.Persistence.ReadModels;
 using MathInsight.Modules.TestGen.Validation;
+using MathInsight.Modules.TestGen.Generation;
 using Microsoft.EntityFrameworkCore;
 
 namespace MathInsight.Modules.TestGen.Tests;
@@ -204,11 +205,86 @@ public sealed class BlueprintUpdateAndSubmitTests
         Assert.Equal(BlueprintStatuses.Draft, blueprint.Status);
     }
 
+    [Fact]
+    public async Task Submit_InsufficientInventory_ReturnsAvailabilityConflictAndKeepsDraft()
+    {
+        await using var testContext = TestGenInMemoryContext.Create();
+        await SeedReferencesAsync(testContext);
+        var blueprint = AddBlueprint(testContext, BlueprintStatuses.Draft);
+        await testContext.Context.SaveChangesAsync();
+
+        var checker = new UnavailableAvailabilityChecker(
+            new BlueprintAvailabilityResponse(
+                DateTimeOffset.UtcNow,
+                [new BlueprintAvailabilitySectionResponse(
+                    blueprint.Sections.Single().BlueprintSectionId,
+                    [new BlueprintAvailabilityRowResponse(
+                        blueprint.Sections.Single().Details.Single().BlueprintDetailId,
+                        0,
+                        2,
+                        2)])],
+                false,
+                BlueprintAvailabilityCodes.InsufficientQuestions));
+        var handler = new SubmitBlueprintForReviewCommandHandler(
+            testContext.Context,
+            new BlueprintAggregateValidator(testContext.Context),
+            checker);
+
+        var result = await handler.Handle(
+            new SubmitBlueprintForReviewCommand(blueprint.BlueprintId, OwnerId),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(BlueprintErrors.AvailabilityInsufficientQuestions.Code, result.Error!.Code);
+        Assert.Equal(BlueprintStatuses.Draft, blueprint.Status);
+        Assert.NotNull(result.Error.Details);
+    }
+
     private static UpdateBlueprintCommandHandler CreateUpdateHandler(TestGenInMemoryContext testContext)
         => new(testContext.Context, new BlueprintAggregateValidator(testContext.Context));
 
     private static SubmitBlueprintForReviewCommandHandler CreateSubmitHandler(TestGenInMemoryContext testContext)
-        => new(testContext.Context, new BlueprintAggregateValidator(testContext.Context));
+        => new(
+            testContext.Context,
+            new BlueprintAggregateValidator(testContext.Context),
+            new AlwaysFeasibleAvailabilityChecker());
+
+    private sealed class AlwaysFeasibleAvailabilityChecker : IBlueprintAvailabilityChecker
+    {
+        public Task<BlueprintAvailabilityCheck> CheckAsync(
+            Blueprint blueprint,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new BlueprintAvailabilityCheck(
+                new BlueprintAvailabilityResponse(
+                    DateTimeOffset.UtcNow,
+                    [],
+                    true,
+                    null)));
+
+        public Task<MathInsight.Shared.Results.Result<BlueprintAvailabilityResponse>> PreviewAsync(
+            BlueprintAvailabilityRequest request,
+            CancellationToken cancellationToken)
+            => Task.FromResult(MathInsight.Shared.Results.Result<BlueprintAvailabilityResponse>.Success(
+                new BlueprintAvailabilityResponse(DateTimeOffset.UtcNow, [], true, null)));
+    }
+
+    private sealed class UnavailableAvailabilityChecker : IBlueprintAvailabilityChecker
+    {
+        private readonly BlueprintAvailabilityCheck _check;
+
+        public UnavailableAvailabilityChecker(BlueprintAvailabilityResponse response)
+            => _check = new BlueprintAvailabilityCheck(response);
+
+        public Task<BlueprintAvailabilityCheck> CheckAsync(
+            Blueprint blueprint,
+            CancellationToken cancellationToken)
+            => Task.FromResult(_check);
+
+        public Task<MathInsight.Shared.Results.Result<BlueprintAvailabilityResponse>> PreviewAsync(
+            BlueprintAvailabilityRequest request,
+            CancellationToken cancellationToken)
+            => Task.FromResult(MathInsight.Shared.Results.Result<BlueprintAvailabilityResponse>.Success(_check.Response));
+    }
 
     private static BlueprintRequest ValidRequest()
         => new()

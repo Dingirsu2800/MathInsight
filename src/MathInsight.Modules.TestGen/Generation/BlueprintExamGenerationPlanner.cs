@@ -1,4 +1,5 @@
 using MathInsight.Modules.TestGen.Persistence.Entities;
+using MathInsight.Modules.TestGen.Blueprints;
 using MathInsight.Shared.Scoring;
 
 namespace MathInsight.Modules.TestGen.Generation;
@@ -23,14 +24,19 @@ public static class BlueprintExamGenerationPlanner
                          .ThenBy(detail => detail.DifficultyId, StringComparer.OrdinalIgnoreCase)
                          .ThenBy(detail => detail.BlueprintDetailId, StringComparer.OrdinalIgnoreCase))
             {
+                var hasPolicy = BlueprintPolicies.TryResolveEffectivePolicy(
+                    section,
+                    detail,
+                    out var effectiveQuestionType,
+                    out var effectiveScoringRule);
                 requirements.Add(new BlueprintExamRequirement(
                     detail.BlueprintDetailId,
                     section.SectionOrder,
                     detailOrder++,
                     detail.TagId,
                     detail.DifficultyId,
-                    section.QuestionType,
-                    section.ScoringRule,
+                    hasPolicy ? effectiveQuestionType : string.Empty,
+                    hasPolicy ? effectiveScoringRule : string.Empty,
                     detail.Quantity));
             }
         }
@@ -49,11 +55,16 @@ public static class BlueprintExamGenerationPlanner
             blueprint.Sections.Any(section =>
                 section.TotalQuestions <= 0 ||
                 section.ScoreBudget <= 0m ||
-                !ScoringRules.IsSupported(section.ScoringRule) ||
+                (section.QuestionType == BlueprintQuestionTypes.Mixed
+                    ? section.ScoringRule is not null
+                    : !BlueprintQuestionTypes.IsActualQuestionType(section.QuestionType) ||
+                      !BlueprintPolicies.IsValidPair(section.QuestionType, section.ScoringRule)) ||
                 section.Details.Count == 0 ||
                 section.Details.Sum(detail => detail.Quantity) != section.TotalQuestions) ||
             blueprint.Sections.Sum(section => section.TotalQuestions) != blueprint.TotalQuestions ||
-            requirements.Any(requirement => requirement.Quantity <= 0) ||
+            requirements.Any(requirement => requirement.Quantity <= 0 ||
+                !BlueprintQuestionTypes.IsActualQuestionType(requirement.QuestionType) ||
+                !BlueprintPolicies.IsValidPair(requirement.QuestionType, requirement.ScoringRule)) ||
             requirements.Sum(requirement => requirement.Quantity) != blueprint.TotalQuestions)
         {
             return BlueprintExamStructureError.Invalid;
@@ -73,6 +84,8 @@ public static class BlueprintExamGenerationPlanner
             candidate => candidate.QuestionId,
             StringComparer.OrdinalIgnoreCase);
         var sectionsByOrder = blueprint.Sections.ToDictionary(section => section.SectionOrder);
+        var requirementsByDetailId = BuildRequirements(blueprint)
+            .ToDictionary(requirement => requirement.BlueprintDetailId, StringComparer.OrdinalIgnoreCase);
         var orderedAssignments = selection.Assignments
             .OrderBy(assignment => assignment.SectionOrder)
             .ThenBy(assignment => assignment.DetailOrder)
@@ -100,7 +113,7 @@ public static class BlueprintExamGenerationPlanner
             .Select(assignment => new PreparedBlueprintExamQuestion(
                 assignment,
                 candidatesById[assignment.QuestionId],
-                sectionsByOrder[assignment.SectionOrder].ScoringRule,
+                requirementsByDetailId[assignment.BlueprintDetailId].ScoringRule,
                 questionOrderById[assignment.QuestionId],
                 maxPointsByQuestion[assignment.QuestionId]))
             .ToList();

@@ -44,6 +44,53 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
     }
 
     [TestGenSqlServerFact]
+    public async Task AvailabilityPreview_MixedRequest_ReturnsCountsAndDoesNotPersist()
+    {
+        var tagId = await _factory.SeedAvailabilityQuestionsAsync();
+        var before = await _factory.CountBlueprintsAsync();
+        using var request = CreateJsonRequest(
+            HttpMethod.Post,
+            "/api/test-generator/blueprints/availability",
+            MixedAvailabilityRequestJson(tagId));
+        request.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.False(root.GetProperty("wholeBlueprintFeasible").GetBoolean());
+        Assert.Equal("BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS", root.GetProperty("availabilityCode").GetString());
+        var rows = root.GetProperty("sections").EnumerateArray().Single().GetProperty("rows")
+            .EnumerateArray().ToDictionary(row => row.GetProperty("clientRowId").GetString()!);
+        Assert.Equal(2, rows["client-single"].GetProperty("availableCount").GetInt32());
+        Assert.Equal(0, rows["client-short"].GetProperty("availableCount").GetInt32());
+        Assert.Equal(before, await _factory.CountBlueprintsAsync());
+    }
+
+    [TestGenSqlServerFact]
+    public async Task SubmitBlueprint_WithInsufficientInventory_ReturnsConflictAndKeepsDraft()
+    {
+        var tagId = await _factory.SeedAvailabilityQuestionsAsync();
+        using var createRequest = CreateJsonRequest(
+            HttpMethod.Post,
+            "/api/test-generator/blueprints",
+            InsufficientBlueprintRequestJson(tagId));
+        createRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var createResponse = await _client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var blueprintId = await ReadBlueprintIdAsync(createResponse);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/test-generator/blueprints/{blueprintId}/submit");
+        request.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await AssertErrorCodeAsync(response, "BLUEPRINT_AVAILABILITY_INSUFFICIENT_QUESTIONS");
+        await _factory.AssertBlueprintStatusAsync(blueprintId, "Draft");
+    }
+
+    [TestGenSqlServerFact]
     public async Task CreateBlueprint_AsOwner_PersistsDraftSectionsAndDetailsThroughHostedApi()
     {
         using var request = CreateJsonRequest(HttpMethod.Post, "/api/test-generator/blueprints", ValidBlueprintRequestJson("L3 persisted blueprint"));
@@ -60,6 +107,69 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
         var getResponse = await _client.SendAsync(getRequest);
 
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+    }
+
+    [TestGenSqlServerFact]
+    public async Task CreateCompositeBlueprint_WithBothScoringRules_PersistsThroughHostedApi()
+    {
+        foreach (var scoringRule in new[] { "TieredTrueFalse", "WeightedParts" })
+        {
+            using var request = CreateJsonRequest(
+                HttpMethod.Post,
+                "/api/test-generator/blueprints",
+                ValidBlueprintRequestJson(
+                    $"L3 {scoringRule} composite blueprint",
+                    questionType: "Composite",
+                    scoringRule: scoringRule));
+            request.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+            var response = await _client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var blueprintId = await ReadBlueprintIdAsync(response);
+            await _factory.AssertBlueprintSectionPolicyAsync(blueprintId, "Composite", scoringRule);
+        }
+    }
+
+    [TestGenSqlServerFact]
+    public async Task MixedBlueprint_CreateReadUpdateAndClone_PreservesEachDetailPolicyThroughHostedApi()
+    {
+        using var createRequest = CreateJsonRequest(
+            HttpMethod.Post,
+            "/api/test-generator/blueprints",
+            MixedBlueprintRequestJson("L3 mixed blueprint"));
+        createRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+
+        var createResponse = await _client.SendAsync(createRequest);
+
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var blueprintId = await ReadBlueprintIdAsync(createResponse);
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/test-generator/blueprints/{blueprintId}");
+        getRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var getResponse = await _client.SendAsync(getRequest);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        await AssertMixedResponseAsync(getResponse, "L3 mixed blueprint");
+
+        using var updateRequest = CreateJsonRequest(
+            HttpMethod.Put,
+            $"/api/test-generator/blueprints/{blueprintId}",
+            MixedBlueprintRequestJson("L3 mixed blueprint updated"));
+        updateRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var updateResponse = await _client.SendAsync(updateRequest);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        using var cloneRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/test-generator/blueprints/{blueprintId}/clone");
+        cloneRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var cloneResponse = await _client.SendAsync(cloneRequest);
+        Assert.Equal(HttpStatusCode.Created, cloneResponse.StatusCode);
+        var cloneId = await ReadBlueprintIdAsync(cloneResponse);
+
+        using var cloneGetRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/test-generator/blueprints/{cloneId}");
+        cloneGetRequest.Headers.Add(BlueprintTestAuthHandler.AccountHeader, "expert_l3_owner");
+        var cloneGetResponse = await _client.SendAsync(cloneGetRequest);
+        Assert.Equal(HttpStatusCode.OK, cloneGetResponse.StatusCode);
+        await AssertMixedResponseAsync(cloneGetResponse, "L3 mixed blueprint updated (Copy)");
     }
 
     [TestGenSqlServerFact]
@@ -177,7 +287,11 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
         Content = new StringContent(body, Encoding.UTF8, "application/json")
     };
 
-    private static string ValidBlueprintRequestJson(string name, string tagId = "l3-topic-12") => $$"""
+    private static string ValidBlueprintRequestJson(
+        string name,
+        string tagId = "l3-topic-12",
+        string questionType = "SingleChoice",
+        string scoringRule = "AllOrNothing") => $$"""
         {
           "blueprintName": "{{name}}",
           "grade": 12,
@@ -187,10 +301,10 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
           "sections": [{
             "sectionOrder": 1,
             "sectionName": "Section I",
-            "questionType": "SingleChoice",
+            "questionType": "{{questionType}}",
             "totalQuestions": 1,
             "scoreBudget": 10.00,
-            "scoringRule": "AllOrNothing",
+            "scoringRule": "{{scoringRule}}",
             "details": [{
               "tagId": "{{tagId}}",
               "difficultyId": "l3-difficulty-1",
@@ -199,6 +313,124 @@ public sealed class BlueprintApiSystemTests : IClassFixture<BlueprintApiFactory>
           }]
         }
         """;
+
+    private static string MixedBlueprintRequestJson(string name) => $$"""
+        {
+          "blueprintName": "{{name}}",
+          "grade": 12,
+          "totalQuestions": 3,
+          "totalScore": 10.00,
+          "durationMinutes": 30,
+          "sections": [{
+            "sectionOrder": 1,
+            "sectionName": "Mixed section",
+            "questionType": "Mixed",
+            "scoringRule": null,
+            "totalQuestions": 3,
+            "scoreBudget": 10.00,
+            "details": [
+              {
+                "tagId": "l3-topic-12",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "SingleChoice",
+                "scoringRule": "AllOrNothing"
+              },
+              {
+                "tagId": "l3-topic-12",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "ShortAnswer",
+                "scoringRule": "AllOrNothing"
+              },
+              {
+                "tagId": "l3-topic-12",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "Composite",
+                "scoringRule": "WeightedParts"
+              }
+            ]
+          }]
+        }
+        """;
+
+    private static string MixedAvailabilityRequestJson(string tagId) => $$"""
+        {
+          "grade": 12,
+          "sections": [{
+            "clientSectionId": "client-section",
+            "questionType": "Mixed",
+            "scoringRule": null,
+            "rows": [
+              {
+                "clientRowId": "client-single",
+                "tagId": "{{tagId}}",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 2,
+                "questionType": "SingleChoice",
+                "scoringRule": "AllOrNothing"
+              },
+              {
+                "clientRowId": "client-short",
+                "tagId": "{{tagId}}",
+                "difficultyId": "l3-difficulty-1",
+                "quantity": 1,
+                "questionType": "ShortAnswer",
+                "scoringRule": "AllOrNothing"
+              }
+            ]
+          }]
+        }
+        """;
+
+    private static string InsufficientBlueprintRequestJson(string tagId) => $$"""
+        {
+          "blueprintName": "L3 unavailable submit",
+          "grade": 12,
+          "totalQuestions": 3,
+          "totalScore": 10.00,
+          "durationMinutes": 15,
+          "sections": [{
+            "sectionOrder": 1,
+            "sectionName": "Section I",
+            "questionType": "SingleChoice",
+            "totalQuestions": 3,
+            "scoreBudget": 10.00,
+            "scoringRule": "AllOrNothing",
+            "details": [{
+              "tagId": "{{tagId}}",
+              "difficultyId": "l3-difficulty-1",
+              "quantity": 3
+            }]
+          }]
+        }
+        """;
+
+    private static async Task AssertMixedResponseAsync(HttpResponseMessage response, string expectedName)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.Equal(expectedName, root.GetProperty("blueprintName").GetString());
+        var section = Assert.Single(root.GetProperty("sections").EnumerateArray().ToArray());
+        Assert.Equal("Mixed", section.GetProperty("questionType").GetString());
+        Assert.Equal(JsonValueKind.Null, section.GetProperty("scoringRule").ValueKind);
+        var policies = section.GetProperty("details")
+            .EnumerateArray()
+            .Select(detail => (
+                Type: detail.GetProperty("questionType").GetString(),
+                Rule: detail.GetProperty("scoringRule").GetString()))
+            .OrderBy(item => item.Type, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[]
+            {
+                ((string?)"Composite", (string?)"WeightedParts"),
+                ((string?)"ShortAnswer", (string?)"AllOrNothing"),
+                ((string?)"SingleChoice", (string?)"AllOrNothing")
+            },
+            policies);
+    }
 
     private static async Task<string> ReadBlueprintIdAsync(HttpResponseMessage response)
     {
@@ -233,6 +465,9 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         ExecuteNonQueryAsync(_masterConnectionString, $"CREATE DATABASE [{_databaseName}]").GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "001_Create_MathInsight_Azure.sql")).GetAwaiter().GetResult();
         ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "005_Align_TestGen_QuestionBank_Contract.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "006_MentorFollowUp_CompositePolicy.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "009_Fix_BlueprintSection_CompositePartCount.sql")).GetAwaiter().GetResult();
+        ExecuteSqlScriptAsync(_sqlConnectionString, FindRepositoryFile("database", "010_BlueprintMixedSections.sql")).GetAwaiter().GetResult();
         ExecuteNonQueryAsync(_sqlConnectionString, """
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-expert-l3', N'Expert', N'L3 test role');
             INSERT INTO dbo.[Role] (RoleID, RoleName, Description) VALUES ('role-student-l3', N'Student', N'L3 test role');
@@ -244,8 +479,11 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
                 ('expert_l3_owner', N'Mathematics'), ('expert_l3_other', N'Mathematics');
             INSERT INTO dbo.Student (StudentID, CurrentGrade) VALUES ('student_l3_topic', 12);
             INSERT INTO dbo.TagTopic (TagID, TagName, Grade, DisplayOrder, IsActive) VALUES
-                ('l3-topic-12', N'L3 grade 12 topic', 12, 1, 1),
-                ('l3-topic-11', N'L3 grade 11 topic', 11, 2, 1);
+                ('l3-parent-12', N'L3 grade 12 parent topic', 12, 1, 1),
+                ('l3-parent-11', N'L3 grade 11 parent topic', 11, 2, 1);
+            INSERT INTO dbo.TagTopic (TagID, ParentTagID, TagName, Grade, DisplayOrder, IsActive) VALUES
+                ('l3-topic-12', 'l3-parent-12', N'L3 grade 12 topic', 12, 3, 1),
+                ('l3-topic-11', 'l3-parent-11', N'L3 grade 11 topic', 11, 4, 1);
             INSERT INTO dbo.TagDifficulty (DifficultyID, DifficultyName, LevelValue, DisplayOrder, IsActive) VALUES
                 ('l3-difficulty-1', N'L3 Foundation', 1, 1, 1);
             """).GetAwaiter().GetResult();
@@ -283,6 +521,19 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         Assert.Equal("l3-difficulty-1", detail.DifficultyId);
     }
 
+    public async Task AssertBlueprintSectionPolicyAsync(
+        string blueprintId,
+        string expectedQuestionType,
+        string expectedScoringRule)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TestGenDbContext>();
+        var section = await db.BlueprintSections.SingleAsync(item => item.BlueprintId == blueprintId);
+        Assert.Equal(expectedQuestionType, section.QuestionType);
+        Assert.Equal(expectedScoringRule, section.ScoringRule);
+        Assert.Null(section.PartCountPerQuestion);
+    }
+
     public async Task AssertBlueprintRemainsOwnedAndUnchangedAsync(string blueprintId, string expectedOwner, string expectedName)
     {
         using var scope = Services.CreateScope();
@@ -290,6 +541,16 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
         var blueprint = await db.Blueprints.SingleAsync(item => item.BlueprintId == blueprintId);
         Assert.Equal(expectedOwner, blueprint.ExpertId);
         Assert.Equal(expectedName, blueprint.BlueprintName);
+    }
+
+    public async Task AssertBlueprintStatusAsync(string blueprintId, string expectedStatus)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TestGenDbContext>();
+        Assert.Equal(expectedStatus, await db.Blueprints
+            .Where(item => item.BlueprintId == blueprintId)
+            .Select(item => item.Status)
+            .SingleAsync());
     }
 
     public async Task<int> CountBlueprintsAsync()
@@ -315,6 +576,38 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
             await SeedTopicPracticeQuestionAsync(_sqlConnectionString!, questionId, answerId, $"l3tp-v-{index:00}", tagId, JsonSerializer.Serialize(snapshot));
         }
         return (studentId, tagId);
+    }
+
+    public async Task<string> SeedAvailabilityQuestionsAsync()
+    {
+        var tagId = $"b2t{Guid.NewGuid():N}"[..23];
+        await ExecuteNonQueryAsync(
+            _sqlConnectionString!,
+            $"INSERT INTO dbo.TagTopic (TagID, ParentTagID, TagName, Grade, DisplayOrder, IsActive) VALUES ('{tagId}', 'l3-parent-12', N'BE-2 availability {tagId}', 12, 50, 1);");
+        for (var index = 1; index <= 2; index++)
+        {
+            var questionId = $"b2-{Guid.NewGuid():N}"[..20];
+            var answerId = Guid.NewGuid().ToString();
+            var snapshot = new QuestionSnapshotV2(
+                questionId,
+                "SingleChoice",
+                "l3-difficulty-1",
+                12,
+                1m,
+                [new QuestionTopicSnapshot(tagId, true)],
+                [new QuestionAnswerSnapshot(answerId, "Correct", true)],
+                [],
+                $"L3 availability question {index}",
+                "Solution");
+            await SeedTopicPracticeQuestionAsync(
+                _sqlConnectionString!,
+                questionId,
+                answerId,
+                Guid.NewGuid().ToString(),
+                tagId,
+                JsonSerializer.Serialize(snapshot));
+        }
+        return tagId;
     }
 
     public async Task<(string StudentId, string TagId)> SeedInsufficientTopicPracticeScenarioAsync()
@@ -370,8 +663,17 @@ public sealed class BlueprintApiFactory : WebApplicationFactory<Program>
     private static async Task ExecuteSqlScriptAsync(string connectionString, string scriptPath)
     {
         var script = await File.ReadAllTextAsync(scriptPath);
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
         foreach (var batch in global::System.Text.RegularExpressions.Regex.Split(script, @"(?im)^\s*GO\s*(?:--.*)?$"))
-            if (!string.IsNullOrWhiteSpace(batch)) await ExecuteNonQueryAsync(connectionString, batch);
+        {
+            if (string.IsNullOrWhiteSpace(batch))
+                continue;
+
+            await using var command = new SqlCommand(batch, connection);
+            command.CommandTimeout = 120;
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     private static async Task ExecuteNonQueryAsync(string connectionString, string commandText)

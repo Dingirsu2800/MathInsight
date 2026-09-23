@@ -13,21 +13,22 @@ public class BlueprintSectionConfiguration : IEntityTypeConfiguration<BlueprintS
             table.HasCheckConstraint("CK_BlueprintSection_Order", "[SectionOrder] > 0");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_QuestionType",
-                "[QuestionType] IN ('SingleChoice', 'MultipleChoice', 'TrueFalse', 'ShortAnswer', 'Composite')");
+                "[QuestionType] IN ('SingleChoice', 'MultipleChoice', 'TrueFalse', 'ShortAnswer', 'Composite', 'Mixed')");
             table.HasCheckConstraint("CK_BlueprintSection_TotalQuestions", "[TotalQuestions] >= 0");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_ScoreBudget",
                 "[ScoreBudget] > 0 AND [ScoreBudget] <= 100");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_ScoringRule",
-                "[ScoringRule] IN ('AllOrNothing', 'TieredTrueFalse', 'WeightedParts')");
+                "[ScoringRule] IS NULL OR [ScoringRule] IN ('AllOrNothing', 'TieredTrueFalse', 'WeightedParts')");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_PartCountPerQuestion",
                 "[PartCountPerQuestion] IS NULL OR [PartCountPerQuestion] > 0");
             table.HasCheckConstraint(
                 "CK_BlueprintSection_CompositePartMetadata",
+                "([QuestionType] = 'Mixed' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] IS NULL) OR " +
                 "([QuestionType] = 'Composite' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] IN ('TieredTrueFalse', 'WeightedParts')) OR " +
-                "([QuestionType] <> 'Composite' AND [PartCountPerQuestion] IS NULL AND [ScoringRule] = 'AllOrNothing')");
+                "([QuestionType] NOT IN ('Mixed', 'Composite') AND [PartCountPerQuestion] IS NULL AND [ScoringRule] = 'AllOrNothing')");
         });
 
         builder.HasKey(x => x.BlueprintSectionId).HasName("PK_BlueprintSection");
@@ -71,8 +72,7 @@ public class BlueprintSectionConfiguration : IEntityTypeConfiguration<BlueprintS
         builder.Property(x => x.ScoringRule)
             .HasColumnName("ScoringRule")
             .HasMaxLength(30)
-            .IsUnicode(false)
-            .HasDefaultValue("AllOrNothing");
+            .IsUnicode(false);
         builder.Property(x => x.PartCountPerQuestion)
             .HasColumnName("PartCountPerQuestion");
 

@@ -30,10 +30,6 @@ function resolveNotificationLink(link) {
   return link;
 }
 
-function isInformationalQuestionReport(notification) {
-  return /^\/questions\/[^/?#]+$/.test(notification?.link || "");
-}
-
 /**
  * Real-time notification bell — mounted in DashboardTopbar for every authenticated role.
  * Loads the recent unread list on mount, then subscribes to the /hubs/notification SignalR
@@ -107,7 +103,7 @@ export default function NotificationBell() {
     setIsOpen(false);
     
     const targetLink = resolveNotificationLink(notification.link);
-    if (targetLink) {
+    if (targetLink && !/^\/questions\/[^/?#]+$/.test(targetLink)) {
       navigate(targetLink);
     } else {
       setSelectedNotification(notification);
@@ -146,14 +142,10 @@ export default function NotificationBell() {
               const content = (
                 <>
                   <span className="font-semibold text-on-surface">{notification.title}</span>
-                  <span className="text-on-surface-variant">{notification.content}</span>
+                  <span className="text-on-surface-variant line-clamp-2">{notification.content}</span>
                   <span className="text-[11px] text-outline">{formatRelativeTime(notification.createdTime)}</span>
                 </>
               );
-
-              if (isInformationalQuestionReport(notification)) {
-                return <div key={notification.notificationId} className={itemClassName}>{content}</div>;
-              }
 
               return (
                 <button

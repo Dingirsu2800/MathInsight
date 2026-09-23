@@ -144,14 +144,14 @@ public sealed class AdminApproveQuestionReportCommandHandler
                 $"/expert/questions/{report.QuestionId}/reports",
                 $"question-report:{report.Incident.IncidentId}:review:{report.Incident.Revision}:approved"), cancellationToken);
 
-            foreach (var relatedReport in report.Incident.Reports)
+            foreach (var relatedReport in activeIncidentReports)
             {
                 await _publisher.Publish(new NotificationRequestedEvent(
                     relatedReport.ReporterAccountId,
                     "Báo cáo câu hỏi đã được xử lý",
                     relatedReport.Status == "Resolved"
                         ? "Báo cáo của bạn đã được xử lý."
-                        : "Báo cáo của bạn đã được xem xét và không được chấp nhận.",
+                        : $"Báo cáo của bạn đã được xem xét và không được chấp nhận. Lý do: {relatedReport.ReviewNote}",
                     $"/questions/{report.QuestionId}",
                     $"question-report:{relatedReport.ReportId}:{relatedReport.Status}"), cancellationToken);
             }

@@ -9,6 +9,7 @@ using MathInsight.Modules.TestGen.Commands.ReviewBlueprint;
 using MathInsight.Modules.TestGen.Contracts.Blueprints;
 using MathInsight.Modules.TestGen.Controllers;
 using MathInsight.Modules.TestGen.Errors;
+using MathInsight.Modules.TestGen.Queries.PreviewBlueprintAvailability;
 using MathInsight.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -190,6 +191,69 @@ public sealed class BlueprintControllerTests
 
         var objectResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
         Assert.Equal(StatusCodes.Status422UnprocessableEntity, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task PreviewAvailability_InsufficientCapacityMapsTo200BecauseItIsAdvisory()
+    {
+        var response = new BlueprintAvailabilityResponse(
+            DateTimeOffset.UtcNow,
+            [],
+            false,
+            BlueprintAvailabilityCodes.InsufficientQuestions);
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(x => x.Send(It.IsAny<PreviewBlueprintAvailabilityQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<BlueprintAvailabilityResponse>.Success(response));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.PreviewBlueprintAvailability(
+            new BlueprintAvailabilityRequest(),
+            CancellationToken.None);
+
+        var objectResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(response, objectResult.Value);
+    }
+
+    [Fact]
+    public async Task PreviewAvailability_InvalidRequestMapsTo400()
+    {
+        var mediator = new Mock<IMediator>();
+        mediator
+            .Setup(x => x.Send(It.IsAny<PreviewBlueprintAvailabilityQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<BlueprintAvailabilityResponse>.Failure(BlueprintErrors.AvailabilityRequestInvalid));
+        var controller = CreateController(mediator.Object);
+
+        var result = await controller.PreviewBlueprintAvailability(
+            new BlueprintAvailabilityRequest(),
+            CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(BlueprintErrors.AvailabilityRequestInvalid.Code,
+            Assert.IsType<ApiErrorResponse>(badRequest.Value).Code);
+    }
+
+    [Fact]
+    public async Task PreviewAvailability_WithoutAccountIdentityReturns401()
+    {
+        var controller = new BlueprintsController(new Mock<IMediator>().Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity())
+                }
+            }
+        };
+
+        var result = await controller.PreviewBlueprintAvailability(
+            new BlueprintAvailabilityRequest(),
+            CancellationToken.None);
+
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Equal(ApplicationErrors.AuthInvalidToken.Code,
+            Assert.IsType<ApiErrorResponse>(unauthorized.Value).Code);
     }
 
     private static BlueprintsController CreateController(IMediator mediator)
