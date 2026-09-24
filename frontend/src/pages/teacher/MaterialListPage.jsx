@@ -121,15 +121,7 @@ export default function MaterialListPage() {
         <DashboardPageHeader
           title="Tài liệu của tôi"
           subtitle="Tải lên, quản lý và gắn tài liệu vào bài giảng."
-        >
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 bg-primary text-on-primary py-2 px-4 rounded-lg font-medium text-[16px] hover:opacity-90 transition-opacity"
-          >
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>add</span>
-            Tải lên tài liệu
-          </button>
-        </DashboardPageHeader>
+        />
 
         <div className="bg-pure-surface border border-whisper-border rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
