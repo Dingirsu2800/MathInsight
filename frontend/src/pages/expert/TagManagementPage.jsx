@@ -31,7 +31,7 @@ function flattenBackendTopics(nodes, parentId = null) {
 }
 
 export default function TagManagementPage() {
-  const [activeTab, setActiveTab] = React.useState("topic"); // "topic" or "difficulty"
+  const activeTab = "topic";
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [successMessage, setSuccessMessage] = React.useState("");
@@ -543,12 +543,12 @@ export default function TagManagementPage() {
 
         {/* Page Header */}
         <DashboardPageHeader
-          title="Quản lý chủ đề và độ khó"
-          subtitle="Quản lý hệ thống chủ đề và độ khó dùng để phân loại, sinh đề và gợi ý bài luyện."
+          title="Quản lý chủ đề"
+          subtitle="Quản lý các chủ đề dùng để phân loại câu hỏi và bài luyện."
         >
           <Button onClick={handleOpenCreateDialog}>
             <span className="material-symbols-outlined text-[18px] mr-1.5">add</span>
-            {activeTab === "topic" ? "Tạo chủ đề" : "Tạo độ khó"}
+            Tạo chủ đề
           </Button>
         </DashboardPageHeader>
 
@@ -573,28 +573,6 @@ export default function TagManagementPage() {
             </button>
           </div>
         )}
-
-        {/* Tab Selection Navigation */}
-        <div className="flex border-b border-whisper-border">
-          <button
-            onClick={() => setActiveTab("topic")}
-            className={cn(
-              "px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none",
-              activeTab === "topic" ? "text-primary border-primary" : "text-on-surface-variant border-transparent hover:text-primary"
-            )}
-          >
-            Chủ đề
-          </button>
-          <button
-            onClick={() => setActiveTab("difficulty")}
-            className={cn(
-              "px-6 py-3 font-bold text-sm -mb-[1px] transition-colors border-b-2 outline-none",
-              activeTab === "difficulty" ? "text-primary border-primary" : "text-on-surface-variant border-transparent hover:text-primary"
-            )}
-          >
-            Độ khó
-          </button>
-        </div>
 
         {/* TOPIC TAB VIEW */}
         {activeTab === "topic" && (
@@ -778,16 +756,6 @@ export default function TagManagementPage() {
                               >
                                 <span className="material-symbols-outlined text-[18px]">edit</span>
                               </button>
-                              {isAct && (
-                                <button
-                                  onClick={() => openDeleteTagDialog(t, "topic")}
-                                  className="p-1.5 rounded text-error hover:bg-error/10 transition-colors cursor-pointer"
-                                  aria-label={`Xóa chủ đề ${t.tagName}`}
-                                  title="Xóa chủ đề"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
-                              )}
                             </div>
                           </td>
                         </tr>
