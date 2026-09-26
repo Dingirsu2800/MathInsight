@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace MathInsight.Modules.QuestionBank.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Expert")]
+[Authorize]
 [Route("api/question-bank/tags")]
 public class TagsController : ControllerBase
 {
@@ -28,6 +28,7 @@ public class TagsController : ControllerBase
         _mediator = mediator;
     }
 
+    [Authorize(Roles = "Expert,Admin")]
     [HttpGet("difficulties")]
     public async Task<IActionResult> GetDifficulties(
         CancellationToken cancellationToken,
@@ -37,6 +38,7 @@ public class TagsController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost("difficulties")]
     public async Task<IActionResult> CreateDifficulty(
         [FromBody] CreateTagDifficultyRequest? request,
@@ -53,6 +55,7 @@ public class TagsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPut("difficulties/{difficultyId}")]
     public async Task<IActionResult> UpdateDifficulty(
         string difficultyId,
@@ -70,6 +73,7 @@ public class TagsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpDelete("difficulties/{difficultyId}")]
     public async Task<IActionResult> DeleteDifficulty(
         string difficultyId,
@@ -83,6 +87,7 @@ public class TagsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert,Admin")]
     [HttpGet("topics")]
     public async Task<IActionResult> GetTopics(
         [FromQuery] int? grade,
@@ -93,6 +98,7 @@ public class TagsController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPost("topics")]
     public async Task<IActionResult> CreateTopic(
         [FromBody] CreateTagTopicRequest? request,
@@ -109,6 +115,7 @@ public class TagsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpPut("topics/{tagId}")]
     public async Task<IActionResult> UpdateTopic(
         string tagId,
@@ -126,6 +133,7 @@ public class TagsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Roles = "Expert")]
     [HttpDelete("topics/{tagId}")]
     public async Task<IActionResult> DeleteTopic(
         string tagId,
