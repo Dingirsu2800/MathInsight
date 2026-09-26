@@ -32,6 +32,9 @@ export default function TargetScorePage() {
   const targetedTagIds = useMemo(() => new Set(targets.map((t) => t.tagId)), [targets]);
   const availableTags = allTags.filter((tag) => {
     if (targetedTagIds.has(tag.tagId)) return false;
+    if (currentGrade && tag.grade) {
+      return tag.grade === currentGrade;
+    }
     if (currentGrade && tag.tagName) {
       return tag.tagName.includes(`Lớp ${currentGrade}`);
     }
